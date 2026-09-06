@@ -133,6 +133,10 @@ func RegisterUserRoutes(
 			subscriptions.GET("/active", h.Subscription.GetActive)
 			subscriptions.GET("/progress", h.Subscription.GetProgress)
 			subscriptions.GET("/summary", h.Subscription.GetSummary)
+			subscriptions.GET("/:id/daily-reset-state", h.Subscription.GetDailyResetState)
+			subscriptions.GET("/:id/daily-reset-operations/:operationId", h.Subscription.GetDailyResetOperation)
+			subscriptions.POST("/:id/reset-daily", h.Subscription.ResetDaily)
+			subscriptions.PUT("/:id/auto-daily-reset", h.Subscription.SetAutoDailyReset)
 		}
 
 		// 渠道监控（用户只读）

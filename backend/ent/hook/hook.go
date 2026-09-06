@@ -357,6 +357,18 @@ func (f SettingFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, err
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.SettingMutation", m)
 }
 
+// The SubscriptionDailyResetEventFunc type is an adapter to allow the use of ordinary
+// function as SubscriptionDailyResetEvent mutator.
+type SubscriptionDailyResetEventFunc func(context.Context, *ent.SubscriptionDailyResetEventMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f SubscriptionDailyResetEventFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.SubscriptionDailyResetEventMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.SubscriptionDailyResetEventMutation", m)
+}
+
 // The SubscriptionPlanFunc type is an adapter to allow the use of ordinary
 // function as SubscriptionPlan mutator.
 type SubscriptionPlanFunc func(context.Context, *ent.SubscriptionPlanMutation) (ent.Value, error)

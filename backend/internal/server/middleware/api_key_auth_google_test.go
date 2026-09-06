@@ -184,7 +184,7 @@ func (f fakeGoogleSubscriptionRepo) GetByIDIncludeDeleted(ctx context.Context, i
 	return nil, errors.New("not implemented")
 }
 func (f fakeGoogleSubscriptionRepo) GetByUserIDAndGroupID(ctx context.Context, userID, groupID int64) (*service.UserSubscription, error) {
-	return nil, errors.New("not implemented")
+	return f.GetActiveByUserIDAndGroupID(ctx, userID, groupID)
 }
 func (f fakeGoogleSubscriptionRepo) GetActiveByUserIDAndGroupID(ctx context.Context, userID, groupID int64) (*service.UserSubscription, error) {
 	if f.getActive != nil {
@@ -877,7 +877,7 @@ func TestApiKeyAuthWithSubscriptionGoogle_SubscriptionLimitExceededReturns429(t 
 		DailyWindowStart: &now,
 		DailyUsageUSD:    10,
 	}
-	subscriptionService := service.NewSubscriptionService(nil, fakeGoogleSubscriptionRepo{
+	subscriptionService := service.NewSubscriptionService(&admissionGroupRepo{group: group}, fakeGoogleSubscriptionRepo{
 		getActive: func(ctx context.Context, userID, groupID int64) (*service.UserSubscription, error) {
 			if userID != user.ID || groupID != group.ID {
 				return nil, service.ErrSubscriptionNotFound

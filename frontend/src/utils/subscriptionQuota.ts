@@ -15,8 +15,9 @@ export interface RemainingDurationParts {
 }
 
 export function isOneTimeDailyQuota(
-  subscription: Pick<UserSubscription, 'starts_at' | 'expires_at'>
+  subscription: Pick<UserSubscription, 'starts_at' | 'expires_at' | 'preserve_calendar_daily_reset'>
 ): boolean {
+  if (subscription.preserve_calendar_daily_reset) return false
   if (!subscription.starts_at || !subscription.expires_at) return false
 
   const startsAt = new Date(subscription.starts_at).getTime()

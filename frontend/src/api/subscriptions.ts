@@ -4,7 +4,10 @@
  */
 
 import { apiClient } from './client'
-import type { UserSubscription, SubscriptionProgress } from '@/types'
+import type { UserSubscription, SubscriptionProgress, DailyResetMutationResult } from '@/types'
+
+export interface DailyResetRequest { expected_version: number; expected_date: string }
+export interface AutoDailyResetRequest extends DailyResetRequest { enabled: boolean }
 
 /**
  * Subscription summary for user dashboard
@@ -67,10 +70,50 @@ export async function getSubscriptionProgress(
   return response.data
 }
 
+export async function resetDailyQuota(
+  subscriptionId: number,
+  request: DailyResetRequest,
+  operationId: string
+): Promise<DailyResetMutationResult> {
+  const response = await apiClient.post<DailyResetMutationResult>(
+    `/subscriptions/${subscriptionId}/reset-daily`, request,
+    { headers: { 'Idempotency-Key': operationId } }
+  )
+  return response.data
+}
+
+export async function setAutoDailyReset(
+  subscriptionId: number,
+  request: AutoDailyResetRequest,
+  operationId: string
+): Promise<DailyResetMutationResult> {
+  const response = await apiClient.put<DailyResetMutationResult>(
+    `/subscriptions/${subscriptionId}/auto-daily-reset`, request,
+    { headers: { 'Idempotency-Key': operationId } }
+  )
+  return response.data
+}
+
+export async function getDailyResetState(subscriptionId: number): Promise<UserSubscription> {
+  const response = await apiClient.get<UserSubscription>(`/subscriptions/${subscriptionId}/daily-reset-state`)
+  return response.data
+}
+
+export async function getDailyResetOperation(subscriptionId: number, operationId: string): Promise<DailyResetMutationResult> {
+  const response = await apiClient.get<DailyResetMutationResult>(
+    `/subscriptions/${subscriptionId}/daily-reset-operations/${encodeURIComponent(operationId)}`
+  )
+  return response.data
+}
+
 export default {
   getMySubscriptions,
   getActiveSubscriptions,
   getSubscriptionsProgress,
   getSubscriptionSummary,
-  getSubscriptionProgress
+  getSubscriptionProgress,
+  resetDailyQuota,
+  setAutoDailyReset,
+  getDailyResetState,
+  getDailyResetOperation
 }

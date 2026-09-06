@@ -345,6 +345,9 @@ func (s *adminServiceImpl) CreateGroup(ctx context.Context, input *CreateGroupIn
 	dailyLimit := normalizeLimit(input.DailyLimitUSD)
 	weeklyLimit := normalizeLimit(input.WeeklyLimitUSD)
 	monthlyLimit := normalizeLimit(input.MonthlyLimitUSD)
+	if input.AllowSubscriptionDayReset && (subscriptionType != SubscriptionTypeSubscription || dailyLimit == nil || *dailyLimit <= 0 || !finiteNonnegative(*dailyLimit)) {
+		return nil, ErrResetNotAllowed
+	}
 
 	// 图片价格：负数表示清除（使用默认价格），0 保留（表示免费）
 	imagePrice1K := normalizePrice(input.ImagePrice1K)
@@ -482,6 +485,7 @@ func (s *adminServiceImpl) CreateGroup(ctx context.Context, input *CreateGroupIn
 		IsExclusive:                     input.IsExclusive,
 		Status:                          StatusActive,
 		SubscriptionType:                subscriptionType,
+		AllowSubscriptionDayReset:       input.AllowSubscriptionDayReset,
 		DailyLimitUSD:                   dailyLimit,
 		WeeklyLimitUSD:                  weeklyLimit,
 		MonthlyLimitUSD:                 monthlyLimit,
@@ -718,6 +722,12 @@ func (s *adminServiceImpl) UpdateGroup(ctx context.Context, id int64, input *Upd
 	}
 	if input.MonthlyLimitUSD != nil {
 		group.MonthlyLimitUSD = normalizeLimit(input.MonthlyLimitUSD)
+	}
+	if input.AllowSubscriptionDayReset != nil {
+		group.AllowSubscriptionDayReset = *input.AllowSubscriptionDayReset
+	}
+	if group.AllowSubscriptionDayReset && (!group.IsSubscriptionType() || group.DailyLimitUSD == nil || *group.DailyLimitUSD <= 0 || !finiteNonnegative(*group.DailyLimitUSD)) {
+		return nil, ErrResetNotAllowed
 	}
 	// 图片生成计费配置：负数表示清除（使用默认价格）
 	if input.AllowImageGeneration != nil {

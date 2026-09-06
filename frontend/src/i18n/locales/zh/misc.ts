@@ -109,6 +109,15 @@ export default {
 
   // User Subscriptions Page
   userSubscriptions: {
+    resetDaily: '重置',
+    autoDailyReset: '自动重置日额度',
+    dailyResetCount: '今日已重置 {count}/{limit} 次',
+    verifyingReset: '正在核实',
+    verifyReset: '核实重置结果',
+    dailyResetSuccess: '日额度已重置，有效期已扣减 24 小时',
+    dailyResetFailed: '重置日额度失败',
+    autoDailyResetSaved: '自动重置设置已保存',
+    autoDailyResetSavedCheckFailed: '自动重置已开启，本次额度重置暂未完成',
     title: '我的订阅',
     description: '查看您的订阅计划和用量',
     noActiveSubscriptions: '暂无有效订阅',

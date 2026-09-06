@@ -669,6 +669,11 @@ func (s *RedeemService) reduceOrCancelSubscription(ctx context.Context, userID, 
 		return ErrSubscriptionNotFound
 	}
 
+	sub, err = s.subscriptionService.userSubRepo.GetByIDForUpdate(ctx, sub.ID)
+	if err != nil {
+		return ErrSubscriptionNotFound
+	}
+
 	now := time.Now()
 	remaining := int(sub.ExpiresAt.Sub(now).Hours() / 24)
 	if remaining < 0 {

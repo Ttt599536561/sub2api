@@ -44,6 +44,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/redeemcode"
 	"github.com/Wei-Shaw/sub2api/ent/securitysecret"
 	"github.com/Wei-Shaw/sub2api/ent/setting"
+	"github.com/Wei-Shaw/sub2api/ent/subscriptiondailyresetevent"
 	"github.com/Wei-Shaw/sub2api/ent/subscriptionplan"
 	"github.com/Wei-Shaw/sub2api/ent/tlsfingerprintprofile"
 	"github.com/Wei-Shaw/sub2api/ent/usagecleanuptask"
@@ -121,6 +122,8 @@ type Client struct {
 	SecuritySecret *SecuritySecretClient
 	// Setting is the client for interacting with the Setting builders.
 	Setting *SettingClient
+	// SubscriptionDailyResetEvent is the client for interacting with the SubscriptionDailyResetEvent builders.
+	SubscriptionDailyResetEvent *SubscriptionDailyResetEventClient
 	// SubscriptionPlan is the client for interacting with the SubscriptionPlan builders.
 	SubscriptionPlan *SubscriptionPlanClient
 	// TLSFingerprintProfile is the client for interacting with the TLSFingerprintProfile builders.
@@ -181,6 +184,7 @@ func (c *Client) init() {
 	c.RedeemCode = NewRedeemCodeClient(c.config)
 	c.SecuritySecret = NewSecuritySecretClient(c.config)
 	c.Setting = NewSettingClient(c.config)
+	c.SubscriptionDailyResetEvent = NewSubscriptionDailyResetEventClient(c.config)
 	c.SubscriptionPlan = NewSubscriptionPlanClient(c.config)
 	c.TLSFingerprintProfile = NewTLSFingerprintProfileClient(c.config)
 	c.UsageCleanupTask = NewUsageCleanupTaskClient(c.config)
@@ -312,6 +316,7 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		RedeemCode:                    NewRedeemCodeClient(cfg),
 		SecuritySecret:                NewSecuritySecretClient(cfg),
 		Setting:                       NewSettingClient(cfg),
+		SubscriptionDailyResetEvent:   NewSubscriptionDailyResetEventClient(cfg),
 		SubscriptionPlan:              NewSubscriptionPlanClient(cfg),
 		TLSFingerprintProfile:         NewTLSFingerprintProfileClient(cfg),
 		UsageCleanupTask:              NewUsageCleanupTaskClient(cfg),
@@ -370,6 +375,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		RedeemCode:                    NewRedeemCodeClient(cfg),
 		SecuritySecret:                NewSecuritySecretClient(cfg),
 		Setting:                       NewSettingClient(cfg),
+		SubscriptionDailyResetEvent:   NewSubscriptionDailyResetEventClient(cfg),
 		SubscriptionPlan:              NewSubscriptionPlanClient(cfg),
 		TLSFingerprintProfile:         NewTLSFingerprintProfileClient(cfg),
 		UsageCleanupTask:              NewUsageCleanupTaskClient(cfg),
@@ -416,10 +422,11 @@ func (c *Client) Use(hooks ...Hook) {
 		c.CompositeModelRoute, c.ErrorPassthroughRule, c.Group, c.IdempotencyRecord,
 		c.IdentityAdoptionDecision, c.PaymentAuditLog, c.PaymentOrder,
 		c.PaymentProviderInstance, c.PendingAuthSession, c.PromoCode, c.PromoCodeUsage,
-		c.Proxy, c.RedeemCode, c.SecuritySecret, c.Setting, c.SubscriptionPlan,
-		c.TLSFingerprintProfile, c.UsageCleanupTask, c.UsageLog, c.User,
-		c.UserAllowedGroup, c.UserAttributeDefinition, c.UserAttributeValue,
-		c.UserPlatformQuota, c.UserSubscription,
+		c.Proxy, c.RedeemCode, c.SecuritySecret, c.Setting,
+		c.SubscriptionDailyResetEvent, c.SubscriptionPlan, c.TLSFingerprintProfile,
+		c.UsageCleanupTask, c.UsageLog, c.User, c.UserAllowedGroup,
+		c.UserAttributeDefinition, c.UserAttributeValue, c.UserPlatformQuota,
+		c.UserSubscription,
 	} {
 		n.Use(hooks...)
 	}
@@ -436,10 +443,11 @@ func (c *Client) Intercept(interceptors ...Interceptor) {
 		c.CompositeModelRoute, c.ErrorPassthroughRule, c.Group, c.IdempotencyRecord,
 		c.IdentityAdoptionDecision, c.PaymentAuditLog, c.PaymentOrder,
 		c.PaymentProviderInstance, c.PendingAuthSession, c.PromoCode, c.PromoCodeUsage,
-		c.Proxy, c.RedeemCode, c.SecuritySecret, c.Setting, c.SubscriptionPlan,
-		c.TLSFingerprintProfile, c.UsageCleanupTask, c.UsageLog, c.User,
-		c.UserAllowedGroup, c.UserAttributeDefinition, c.UserAttributeValue,
-		c.UserPlatformQuota, c.UserSubscription,
+		c.Proxy, c.RedeemCode, c.SecuritySecret, c.Setting,
+		c.SubscriptionDailyResetEvent, c.SubscriptionPlan, c.TLSFingerprintProfile,
+		c.UsageCleanupTask, c.UsageLog, c.User, c.UserAllowedGroup,
+		c.UserAttributeDefinition, c.UserAttributeValue, c.UserPlatformQuota,
+		c.UserSubscription,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -506,6 +514,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.SecuritySecret.mutate(ctx, m)
 	case *SettingMutation:
 		return c.Setting.mutate(ctx, m)
+	case *SubscriptionDailyResetEventMutation:
+		return c.SubscriptionDailyResetEvent.mutate(ctx, m)
 	case *SubscriptionPlanMutation:
 		return c.SubscriptionPlan.mutate(ctx, m)
 	case *TLSFingerprintProfileMutation:
@@ -5069,6 +5079,139 @@ func (c *SettingClient) mutate(ctx context.Context, m *SettingMutation) (Value, 
 	}
 }
 
+// SubscriptionDailyResetEventClient is a client for the SubscriptionDailyResetEvent schema.
+type SubscriptionDailyResetEventClient struct {
+	config
+}
+
+// NewSubscriptionDailyResetEventClient returns a client for the SubscriptionDailyResetEvent from the given config.
+func NewSubscriptionDailyResetEventClient(c config) *SubscriptionDailyResetEventClient {
+	return &SubscriptionDailyResetEventClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `subscriptiondailyresetevent.Hooks(f(g(h())))`.
+func (c *SubscriptionDailyResetEventClient) Use(hooks ...Hook) {
+	c.hooks.SubscriptionDailyResetEvent = append(c.hooks.SubscriptionDailyResetEvent, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `subscriptiondailyresetevent.Intercept(f(g(h())))`.
+func (c *SubscriptionDailyResetEventClient) Intercept(interceptors ...Interceptor) {
+	c.inters.SubscriptionDailyResetEvent = append(c.inters.SubscriptionDailyResetEvent, interceptors...)
+}
+
+// Create returns a builder for creating a SubscriptionDailyResetEvent entity.
+func (c *SubscriptionDailyResetEventClient) Create() *SubscriptionDailyResetEventCreate {
+	mutation := newSubscriptionDailyResetEventMutation(c.config, OpCreate)
+	return &SubscriptionDailyResetEventCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of SubscriptionDailyResetEvent entities.
+func (c *SubscriptionDailyResetEventClient) CreateBulk(builders ...*SubscriptionDailyResetEventCreate) *SubscriptionDailyResetEventCreateBulk {
+	return &SubscriptionDailyResetEventCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *SubscriptionDailyResetEventClient) MapCreateBulk(slice any, setFunc func(*SubscriptionDailyResetEventCreate, int)) *SubscriptionDailyResetEventCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &SubscriptionDailyResetEventCreateBulk{err: fmt.Errorf("calling to SubscriptionDailyResetEventClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*SubscriptionDailyResetEventCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &SubscriptionDailyResetEventCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for SubscriptionDailyResetEvent.
+func (c *SubscriptionDailyResetEventClient) Update() *SubscriptionDailyResetEventUpdate {
+	mutation := newSubscriptionDailyResetEventMutation(c.config, OpUpdate)
+	return &SubscriptionDailyResetEventUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *SubscriptionDailyResetEventClient) UpdateOne(_m *SubscriptionDailyResetEvent) *SubscriptionDailyResetEventUpdateOne {
+	mutation := newSubscriptionDailyResetEventMutation(c.config, OpUpdateOne, withSubscriptionDailyResetEvent(_m))
+	return &SubscriptionDailyResetEventUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *SubscriptionDailyResetEventClient) UpdateOneID(id int64) *SubscriptionDailyResetEventUpdateOne {
+	mutation := newSubscriptionDailyResetEventMutation(c.config, OpUpdateOne, withSubscriptionDailyResetEventID(id))
+	return &SubscriptionDailyResetEventUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for SubscriptionDailyResetEvent.
+func (c *SubscriptionDailyResetEventClient) Delete() *SubscriptionDailyResetEventDelete {
+	mutation := newSubscriptionDailyResetEventMutation(c.config, OpDelete)
+	return &SubscriptionDailyResetEventDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *SubscriptionDailyResetEventClient) DeleteOne(_m *SubscriptionDailyResetEvent) *SubscriptionDailyResetEventDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *SubscriptionDailyResetEventClient) DeleteOneID(id int64) *SubscriptionDailyResetEventDeleteOne {
+	builder := c.Delete().Where(subscriptiondailyresetevent.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &SubscriptionDailyResetEventDeleteOne{builder}
+}
+
+// Query returns a query builder for SubscriptionDailyResetEvent.
+func (c *SubscriptionDailyResetEventClient) Query() *SubscriptionDailyResetEventQuery {
+	return &SubscriptionDailyResetEventQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeSubscriptionDailyResetEvent},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a SubscriptionDailyResetEvent entity by its id.
+func (c *SubscriptionDailyResetEventClient) Get(ctx context.Context, id int64) (*SubscriptionDailyResetEvent, error) {
+	return c.Query().Where(subscriptiondailyresetevent.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *SubscriptionDailyResetEventClient) GetX(ctx context.Context, id int64) *SubscriptionDailyResetEvent {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *SubscriptionDailyResetEventClient) Hooks() []Hook {
+	return c.hooks.SubscriptionDailyResetEvent
+}
+
+// Interceptors returns the client interceptors.
+func (c *SubscriptionDailyResetEventClient) Interceptors() []Interceptor {
+	return c.inters.SubscriptionDailyResetEvent
+}
+
+func (c *SubscriptionDailyResetEventClient) mutate(ctx context.Context, m *SubscriptionDailyResetEventMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&SubscriptionDailyResetEventCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&SubscriptionDailyResetEventUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&SubscriptionDailyResetEventUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&SubscriptionDailyResetEventDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown SubscriptionDailyResetEvent mutation op: %q", m.Op())
+	}
+}
+
 // SubscriptionPlanClient is a client for the SubscriptionPlan schema.
 type SubscriptionPlanClient struct {
 	config
@@ -6831,10 +6974,10 @@ type (
 		ChannelMonitorRequestTemplate, CompositeModelRoute, ErrorPassthroughRule,
 		Group, IdempotencyRecord, IdentityAdoptionDecision, PaymentAuditLog,
 		PaymentOrder, PaymentProviderInstance, PendingAuthSession, PromoCode,
-		PromoCodeUsage, Proxy, RedeemCode, SecuritySecret, Setting, SubscriptionPlan,
-		TLSFingerprintProfile, UsageCleanupTask, UsageLog, User, UserAllowedGroup,
-		UserAttributeDefinition, UserAttributeValue, UserPlatformQuota,
-		UserSubscription []ent.Hook
+		PromoCodeUsage, Proxy, RedeemCode, SecuritySecret, Setting,
+		SubscriptionDailyResetEvent, SubscriptionPlan, TLSFingerprintProfile,
+		UsageCleanupTask, UsageLog, User, UserAllowedGroup, UserAttributeDefinition,
+		UserAttributeValue, UserPlatformQuota, UserSubscription []ent.Hook
 	}
 	inters struct {
 		APIKey, Account, AccountGroup, Announcement, AnnouncementRead, AuthIdentity,
@@ -6843,10 +6986,10 @@ type (
 		ChannelMonitorRequestTemplate, CompositeModelRoute, ErrorPassthroughRule,
 		Group, IdempotencyRecord, IdentityAdoptionDecision, PaymentAuditLog,
 		PaymentOrder, PaymentProviderInstance, PendingAuthSession, PromoCode,
-		PromoCodeUsage, Proxy, RedeemCode, SecuritySecret, Setting, SubscriptionPlan,
-		TLSFingerprintProfile, UsageCleanupTask, UsageLog, User, UserAllowedGroup,
-		UserAttributeDefinition, UserAttributeValue, UserPlatformQuota,
-		UserSubscription []ent.Interceptor
+		PromoCodeUsage, Proxy, RedeemCode, SecuritySecret, Setting,
+		SubscriptionDailyResetEvent, SubscriptionPlan, TLSFingerprintProfile,
+		UsageCleanupTask, UsageLog, User, UserAllowedGroup, UserAttributeDefinition,
+		UserAttributeValue, UserPlatformQuota, UserSubscription []ent.Interceptor
 	}
 )
 

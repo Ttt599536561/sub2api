@@ -105,6 +105,48 @@ func (_c *UserSubscriptionCreate) SetNillableStatus(v *string) *UserSubscription
 	return _c
 }
 
+// SetAutoDailyResetEnabled sets the "auto_daily_reset_enabled" field.
+func (_c *UserSubscriptionCreate) SetAutoDailyResetEnabled(v bool) *UserSubscriptionCreate {
+	_c.mutation.SetAutoDailyResetEnabled(v)
+	return _c
+}
+
+// SetNillableAutoDailyResetEnabled sets the "auto_daily_reset_enabled" field if the given value is not nil.
+func (_c *UserSubscriptionCreate) SetNillableAutoDailyResetEnabled(v *bool) *UserSubscriptionCreate {
+	if v != nil {
+		_c.SetAutoDailyResetEnabled(*v)
+	}
+	return _c
+}
+
+// SetDailyResetVersion sets the "daily_reset_version" field.
+func (_c *UserSubscriptionCreate) SetDailyResetVersion(v int64) *UserSubscriptionCreate {
+	_c.mutation.SetDailyResetVersion(v)
+	return _c
+}
+
+// SetNillableDailyResetVersion sets the "daily_reset_version" field if the given value is not nil.
+func (_c *UserSubscriptionCreate) SetNillableDailyResetVersion(v *int64) *UserSubscriptionCreate {
+	if v != nil {
+		_c.SetDailyResetVersion(*v)
+	}
+	return _c
+}
+
+// SetPreserveCalendarDailyReset sets the "preserve_calendar_daily_reset" field.
+func (_c *UserSubscriptionCreate) SetPreserveCalendarDailyReset(v bool) *UserSubscriptionCreate {
+	_c.mutation.SetPreserveCalendarDailyReset(v)
+	return _c
+}
+
+// SetNillablePreserveCalendarDailyReset sets the "preserve_calendar_daily_reset" field if the given value is not nil.
+func (_c *UserSubscriptionCreate) SetNillablePreserveCalendarDailyReset(v *bool) *UserSubscriptionCreate {
+	if v != nil {
+		_c.SetPreserveCalendarDailyReset(*v)
+	}
+	return _c
+}
+
 // SetDailyWindowStart sets the "daily_window_start" field.
 func (_c *UserSubscriptionCreate) SetDailyWindowStart(v time.Time) *UserSubscriptionCreate {
 	_c.mutation.SetDailyWindowStart(v)
@@ -330,6 +372,18 @@ func (_c *UserSubscriptionCreate) defaults() error {
 		v := usersubscription.DefaultStatus
 		_c.mutation.SetStatus(v)
 	}
+	if _, ok := _c.mutation.AutoDailyResetEnabled(); !ok {
+		v := usersubscription.DefaultAutoDailyResetEnabled
+		_c.mutation.SetAutoDailyResetEnabled(v)
+	}
+	if _, ok := _c.mutation.DailyResetVersion(); !ok {
+		v := usersubscription.DefaultDailyResetVersion
+		_c.mutation.SetDailyResetVersion(v)
+	}
+	if _, ok := _c.mutation.PreserveCalendarDailyReset(); !ok {
+		v := usersubscription.DefaultPreserveCalendarDailyReset
+		_c.mutation.SetPreserveCalendarDailyReset(v)
+	}
 	if _, ok := _c.mutation.DailyUsageUsd(); !ok {
 		v := usersubscription.DefaultDailyUsageUsd
 		_c.mutation.SetDailyUsageUsd(v)
@@ -379,6 +433,20 @@ func (_c *UserSubscriptionCreate) check() error {
 		if err := usersubscription.StatusValidator(v); err != nil {
 			return &ValidationError{Name: "status", err: fmt.Errorf(`ent: validator failed for field "UserSubscription.status": %w`, err)}
 		}
+	}
+	if _, ok := _c.mutation.AutoDailyResetEnabled(); !ok {
+		return &ValidationError{Name: "auto_daily_reset_enabled", err: errors.New(`ent: missing required field "UserSubscription.auto_daily_reset_enabled"`)}
+	}
+	if _, ok := _c.mutation.DailyResetVersion(); !ok {
+		return &ValidationError{Name: "daily_reset_version", err: errors.New(`ent: missing required field "UserSubscription.daily_reset_version"`)}
+	}
+	if v, ok := _c.mutation.DailyResetVersion(); ok {
+		if err := usersubscription.DailyResetVersionValidator(v); err != nil {
+			return &ValidationError{Name: "daily_reset_version", err: fmt.Errorf(`ent: validator failed for field "UserSubscription.daily_reset_version": %w`, err)}
+		}
+	}
+	if _, ok := _c.mutation.PreserveCalendarDailyReset(); !ok {
+		return &ValidationError{Name: "preserve_calendar_daily_reset", err: errors.New(`ent: missing required field "UserSubscription.preserve_calendar_daily_reset"`)}
 	}
 	if _, ok := _c.mutation.DailyUsageUsd(); !ok {
 		return &ValidationError{Name: "daily_usage_usd", err: errors.New(`ent: missing required field "UserSubscription.daily_usage_usd"`)}
@@ -448,6 +516,18 @@ func (_c *UserSubscriptionCreate) createSpec() (*UserSubscription, *sqlgraph.Cre
 	if value, ok := _c.mutation.Status(); ok {
 		_spec.SetField(usersubscription.FieldStatus, field.TypeString, value)
 		_node.Status = value
+	}
+	if value, ok := _c.mutation.AutoDailyResetEnabled(); ok {
+		_spec.SetField(usersubscription.FieldAutoDailyResetEnabled, field.TypeBool, value)
+		_node.AutoDailyResetEnabled = value
+	}
+	if value, ok := _c.mutation.DailyResetVersion(); ok {
+		_spec.SetField(usersubscription.FieldDailyResetVersion, field.TypeInt64, value)
+		_node.DailyResetVersion = value
+	}
+	if value, ok := _c.mutation.PreserveCalendarDailyReset(); ok {
+		_spec.SetField(usersubscription.FieldPreserveCalendarDailyReset, field.TypeBool, value)
+		_node.PreserveCalendarDailyReset = value
 	}
 	if value, ok := _c.mutation.DailyWindowStart(); ok {
 		_spec.SetField(usersubscription.FieldDailyWindowStart, field.TypeTime, value)
@@ -687,6 +767,48 @@ func (u *UserSubscriptionUpsert) SetStatus(v string) *UserSubscriptionUpsert {
 // UpdateStatus sets the "status" field to the value that was provided on create.
 func (u *UserSubscriptionUpsert) UpdateStatus() *UserSubscriptionUpsert {
 	u.SetExcluded(usersubscription.FieldStatus)
+	return u
+}
+
+// SetAutoDailyResetEnabled sets the "auto_daily_reset_enabled" field.
+func (u *UserSubscriptionUpsert) SetAutoDailyResetEnabled(v bool) *UserSubscriptionUpsert {
+	u.Set(usersubscription.FieldAutoDailyResetEnabled, v)
+	return u
+}
+
+// UpdateAutoDailyResetEnabled sets the "auto_daily_reset_enabled" field to the value that was provided on create.
+func (u *UserSubscriptionUpsert) UpdateAutoDailyResetEnabled() *UserSubscriptionUpsert {
+	u.SetExcluded(usersubscription.FieldAutoDailyResetEnabled)
+	return u
+}
+
+// SetDailyResetVersion sets the "daily_reset_version" field.
+func (u *UserSubscriptionUpsert) SetDailyResetVersion(v int64) *UserSubscriptionUpsert {
+	u.Set(usersubscription.FieldDailyResetVersion, v)
+	return u
+}
+
+// UpdateDailyResetVersion sets the "daily_reset_version" field to the value that was provided on create.
+func (u *UserSubscriptionUpsert) UpdateDailyResetVersion() *UserSubscriptionUpsert {
+	u.SetExcluded(usersubscription.FieldDailyResetVersion)
+	return u
+}
+
+// AddDailyResetVersion adds v to the "daily_reset_version" field.
+func (u *UserSubscriptionUpsert) AddDailyResetVersion(v int64) *UserSubscriptionUpsert {
+	u.Add(usersubscription.FieldDailyResetVersion, v)
+	return u
+}
+
+// SetPreserveCalendarDailyReset sets the "preserve_calendar_daily_reset" field.
+func (u *UserSubscriptionUpsert) SetPreserveCalendarDailyReset(v bool) *UserSubscriptionUpsert {
+	u.Set(usersubscription.FieldPreserveCalendarDailyReset, v)
+	return u
+}
+
+// UpdatePreserveCalendarDailyReset sets the "preserve_calendar_daily_reset" field to the value that was provided on create.
+func (u *UserSubscriptionUpsert) UpdatePreserveCalendarDailyReset() *UserSubscriptionUpsert {
+	u.SetExcluded(usersubscription.FieldPreserveCalendarDailyReset)
 	return u
 }
 
@@ -993,6 +1115,55 @@ func (u *UserSubscriptionUpsertOne) SetStatus(v string) *UserSubscriptionUpsertO
 func (u *UserSubscriptionUpsertOne) UpdateStatus() *UserSubscriptionUpsertOne {
 	return u.Update(func(s *UserSubscriptionUpsert) {
 		s.UpdateStatus()
+	})
+}
+
+// SetAutoDailyResetEnabled sets the "auto_daily_reset_enabled" field.
+func (u *UserSubscriptionUpsertOne) SetAutoDailyResetEnabled(v bool) *UserSubscriptionUpsertOne {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.SetAutoDailyResetEnabled(v)
+	})
+}
+
+// UpdateAutoDailyResetEnabled sets the "auto_daily_reset_enabled" field to the value that was provided on create.
+func (u *UserSubscriptionUpsertOne) UpdateAutoDailyResetEnabled() *UserSubscriptionUpsertOne {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.UpdateAutoDailyResetEnabled()
+	})
+}
+
+// SetDailyResetVersion sets the "daily_reset_version" field.
+func (u *UserSubscriptionUpsertOne) SetDailyResetVersion(v int64) *UserSubscriptionUpsertOne {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.SetDailyResetVersion(v)
+	})
+}
+
+// AddDailyResetVersion adds v to the "daily_reset_version" field.
+func (u *UserSubscriptionUpsertOne) AddDailyResetVersion(v int64) *UserSubscriptionUpsertOne {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.AddDailyResetVersion(v)
+	})
+}
+
+// UpdateDailyResetVersion sets the "daily_reset_version" field to the value that was provided on create.
+func (u *UserSubscriptionUpsertOne) UpdateDailyResetVersion() *UserSubscriptionUpsertOne {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.UpdateDailyResetVersion()
+	})
+}
+
+// SetPreserveCalendarDailyReset sets the "preserve_calendar_daily_reset" field.
+func (u *UserSubscriptionUpsertOne) SetPreserveCalendarDailyReset(v bool) *UserSubscriptionUpsertOne {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.SetPreserveCalendarDailyReset(v)
+	})
+}
+
+// UpdatePreserveCalendarDailyReset sets the "preserve_calendar_daily_reset" field to the value that was provided on create.
+func (u *UserSubscriptionUpsertOne) UpdatePreserveCalendarDailyReset() *UserSubscriptionUpsertOne {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.UpdatePreserveCalendarDailyReset()
 	})
 }
 
@@ -1491,6 +1662,55 @@ func (u *UserSubscriptionUpsertBulk) SetStatus(v string) *UserSubscriptionUpsert
 func (u *UserSubscriptionUpsertBulk) UpdateStatus() *UserSubscriptionUpsertBulk {
 	return u.Update(func(s *UserSubscriptionUpsert) {
 		s.UpdateStatus()
+	})
+}
+
+// SetAutoDailyResetEnabled sets the "auto_daily_reset_enabled" field.
+func (u *UserSubscriptionUpsertBulk) SetAutoDailyResetEnabled(v bool) *UserSubscriptionUpsertBulk {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.SetAutoDailyResetEnabled(v)
+	})
+}
+
+// UpdateAutoDailyResetEnabled sets the "auto_daily_reset_enabled" field to the value that was provided on create.
+func (u *UserSubscriptionUpsertBulk) UpdateAutoDailyResetEnabled() *UserSubscriptionUpsertBulk {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.UpdateAutoDailyResetEnabled()
+	})
+}
+
+// SetDailyResetVersion sets the "daily_reset_version" field.
+func (u *UserSubscriptionUpsertBulk) SetDailyResetVersion(v int64) *UserSubscriptionUpsertBulk {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.SetDailyResetVersion(v)
+	})
+}
+
+// AddDailyResetVersion adds v to the "daily_reset_version" field.
+func (u *UserSubscriptionUpsertBulk) AddDailyResetVersion(v int64) *UserSubscriptionUpsertBulk {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.AddDailyResetVersion(v)
+	})
+}
+
+// UpdateDailyResetVersion sets the "daily_reset_version" field to the value that was provided on create.
+func (u *UserSubscriptionUpsertBulk) UpdateDailyResetVersion() *UserSubscriptionUpsertBulk {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.UpdateDailyResetVersion()
+	})
+}
+
+// SetPreserveCalendarDailyReset sets the "preserve_calendar_daily_reset" field.
+func (u *UserSubscriptionUpsertBulk) SetPreserveCalendarDailyReset(v bool) *UserSubscriptionUpsertBulk {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.SetPreserveCalendarDailyReset(v)
+	})
+}
+
+// UpdatePreserveCalendarDailyReset sets the "preserve_calendar_daily_reset" field to the value that was provided on create.
+func (u *UserSubscriptionUpsertBulk) UpdatePreserveCalendarDailyReset() *UserSubscriptionUpsertBulk {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.UpdatePreserveCalendarDailyReset()
 	})
 }
 

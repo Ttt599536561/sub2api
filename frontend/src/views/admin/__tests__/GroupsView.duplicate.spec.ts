@@ -7,6 +7,7 @@ import GroupsView from '@/views/admin/GroupsView.vue'
 
 const {
   listGroups,
+  createGroup,
   duplicateGroup,
   updateGroup,
   getModelsListCandidates,
@@ -17,6 +18,7 @@ const {
   showError
 } = vi.hoisted(() => ({
   listGroups: vi.fn(),
+  createGroup: vi.fn(),
   duplicateGroup: vi.fn(),
   updateGroup: vi.fn(),
   getModelsListCandidates: vi.fn(),
@@ -37,7 +39,7 @@ vi.mock('@/api/admin', () => ({
       getCapacitySummary,
       getLiveCapability,
       getAll: vi.fn(),
-      create: vi.fn(),
+      create: createGroup,
       update: updateGroup,
       delete: vi.fn(),
       updateSortOrder: vi.fn()
@@ -174,6 +176,7 @@ describe('GroupsView duplicate action', () => {
     vi.spyOn(console, 'error').mockImplementation(() => {})
     for (const fn of [
       listGroups,
+      createGroup,
       duplicateGroup,
       updateGroup,
       getModelsListCandidates,
@@ -300,6 +303,44 @@ describe('GroupsView duplicate action', () => {
 
     expect(updateGroup).toHaveBeenCalledTimes(1)
     expect(showError).toHaveBeenCalledWith('group name already exists')
+    wrapper.unmount()
+  })
+
+  it('loads and submits the monthly reset permission through the group edit checkbox', async () => {
+    listGroups.mockResolvedValue({ items: [{
+      ...sourceGroup, subscription_type: 'subscription', daily_limit_usd: 100,
+      allow_subscription_day_reset: true
+    }], total: 1, page: 1, page_size: 20, pages: 1 })
+    updateGroup.mockResolvedValue(sourceGroup)
+    const wrapper = mountView()
+    await flushPromises()
+    await wrapper.findAll('button').find(button => button.text() === 'common.edit')!.trigger('click')
+    await flushPromises()
+
+    const checkbox = wrapper.get<HTMLInputElement>('[data-testid="edit-allow-subscription-day-reset"]')
+    expect(checkbox.element.checked).toBe(true)
+    await checkbox.setValue(false)
+    await wrapper.get('#edit-group-form').trigger('submit')
+    await flushPromises()
+    expect(updateGroup).toHaveBeenCalledWith(42, expect.objectContaining({ allow_subscription_day_reset: false }))
+    wrapper.unmount()
+  })
+
+  it('normalizes the reset permission off when a group no longer has a positive daily limit', async () => {
+    listGroups.mockResolvedValue({ items: [{
+      ...sourceGroup, subscription_type: 'subscription', daily_limit_usd: null,
+      allow_subscription_day_reset: true
+    }], total: 1, page: 1, page_size: 20, pages: 1 })
+    updateGroup.mockResolvedValue(sourceGroup)
+    const wrapper = mountView()
+    await flushPromises()
+    await wrapper.findAll('button').find(button => button.text() === 'common.edit')!.trigger('click')
+    await flushPromises()
+
+    expect(wrapper.get('[data-testid="edit-allow-subscription-day-reset"]').attributes('disabled')).toBeDefined()
+    await wrapper.get('#edit-group-form').trigger('submit')
+    await flushPromises()
+    expect(updateGroup).toHaveBeenCalledWith(42, expect.objectContaining({ allow_subscription_day_reset: false }))
     wrapper.unmount()
   })
 })

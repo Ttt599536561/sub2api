@@ -143,6 +143,9 @@ func (r *userSubscriptionRepository) Update(ctx context.Context, sub *service.Us
 		SetStartsAt(sub.StartsAt).
 		SetExpiresAt(sub.ExpiresAt).
 		SetStatus(sub.Status).
+		AddDailyResetVersion(1).
+		SetAutoDailyResetEnabled(sub.AutoDailyResetEnabled).
+		SetPreserveCalendarDailyReset(sub.PreserveCalendarDailyReset).
 		SetNillableDailyWindowStart(sub.DailyWindowStart).
 		SetNillableWeeklyWindowStart(sub.WeeklyWindowStart).
 		SetNillableMonthlyWindowStart(sub.MonthlyWindowStart).
@@ -173,6 +176,7 @@ func (r *userSubscriptionRepository) Restore(ctx context.Context, subscriptionID
 	queryCtx := mixins.SkipSoftDelete(ctx)
 	_, err := client.UserSubscription.UpdateOneID(subscriptionID).
 		SetStatus(restoredStatus).
+		AddDailyResetVersion(1).
 		ClearDeletedAt().
 		SetUpdatedAt(time.Now()).
 		Save(queryCtx)
@@ -348,6 +352,7 @@ func (r *userSubscriptionRepository) ExtendExpiry(ctx context.Context, subscript
 	client := clientFromContext(ctx, r.client)
 	_, err := client.UserSubscription.UpdateOneID(subscriptionID).
 		SetExpiresAt(newExpiresAt).
+		AddDailyResetVersion(1).
 		Save(ctx)
 	return translatePersistenceError(err, service.ErrSubscriptionNotFound, nil)
 }
@@ -356,6 +361,7 @@ func (r *userSubscriptionRepository) UpdateStatus(ctx context.Context, subscript
 	client := clientFromContext(ctx, r.client)
 	_, err := client.UserSubscription.UpdateOneID(subscriptionID).
 		SetStatus(status).
+		AddDailyResetVersion(1).
 		Save(ctx)
 	return translatePersistenceError(err, service.ErrSubscriptionNotFound, nil)
 }
@@ -380,6 +386,7 @@ func (r *userSubscriptionRepository) ActivateWindows(ctx context.Context, id int
 		SetDailyWindowStart(dailyStart).
 		SetWeeklyWindowStart(periodicStart).
 		SetMonthlyWindowStart(periodicStart).
+		AddDailyResetVersion(1).
 		Save(ctx)
 	return r.translateConditionalWindowReset(ctx, client, id, n, err)
 }
@@ -396,6 +403,9 @@ func (r *userSubscriptionRepository) ResetUsageWindows(ctx context.Context, id i
 	if resetMonthly {
 		update.SetMonthlyUsageUsd(0).SetMonthlyWindowStart(periodicStart)
 	}
+	if resetDaily || resetWeekly || resetMonthly {
+		update.AddDailyResetVersion(1)
+	}
 	_, err := update.Save(ctx)
 	return translatePersistenceError(err, service.ErrSubscriptionNotFound, nil)
 }
@@ -411,6 +421,7 @@ func (r *userSubscriptionRepository) ResetDailyUsage(ctx context.Context, id int
 	n, err := query.
 		SetDailyUsageUsd(0).
 		SetDailyWindowStart(newWindowStart).
+		AddDailyResetVersion(1).
 		Save(ctx)
 	return r.translateConditionalWindowReset(ctx, client, id, n, err)
 }
@@ -426,6 +437,7 @@ func (r *userSubscriptionRepository) ResetWeeklyUsage(ctx context.Context, id in
 	n, err := query.
 		SetWeeklyUsageUsd(0).
 		SetWeeklyWindowStart(newWindowStart).
+		AddDailyResetVersion(1).
 		Save(ctx)
 	return r.translateConditionalWindowReset(ctx, client, id, n, err)
 }
@@ -441,6 +453,7 @@ func (r *userSubscriptionRepository) ResetMonthlyUsage(ctx context.Context, id i
 	n, err := query.
 		SetMonthlyUsageUsd(0).
 		SetMonthlyWindowStart(newWindowStart).
+		AddDailyResetVersion(1).
 		Save(ctx)
 	return r.translateConditionalWindowReset(ctx, client, id, n, err)
 }
@@ -510,6 +523,7 @@ func (r *userSubscriptionRepository) BatchUpdateExpiredStatus(ctx context.Contex
 			usersubscription.ExpiresAtLTE(time.Now()),
 		).
 		SetStatus(service.SubscriptionStatusExpired).
+		AddDailyResetVersion(1).
 		Save(ctx)
 	return int64(n), err
 }
@@ -641,24 +655,27 @@ func userSubscriptionEntityToServiceWithStatusMapping(m *dbent.UserSubscription,
 		status = service.SubscriptionStatusRevoked
 	}
 	out := &service.UserSubscription{
-		ID:                 m.ID,
-		UserID:             m.UserID,
-		GroupID:            m.GroupID,
-		StartsAt:           m.StartsAt,
-		ExpiresAt:          m.ExpiresAt,
-		Status:             status,
-		DailyWindowStart:   m.DailyWindowStart,
-		WeeklyWindowStart:  m.WeeklyWindowStart,
-		MonthlyWindowStart: m.MonthlyWindowStart,
-		DailyUsageUSD:      m.DailyUsageUsd,
-		WeeklyUsageUSD:     m.WeeklyUsageUsd,
-		MonthlyUsageUSD:    m.MonthlyUsageUsd,
-		AssignedBy:         m.AssignedBy,
-		AssignedAt:         m.AssignedAt,
-		Notes:              derefString(m.Notes),
-		CreatedAt:          m.CreatedAt,
-		UpdatedAt:          m.UpdatedAt,
-		DeletedAt:          m.DeletedAt,
+		ID:                         m.ID,
+		UserID:                     m.UserID,
+		GroupID:                    m.GroupID,
+		StartsAt:                   m.StartsAt,
+		ExpiresAt:                  m.ExpiresAt,
+		Status:                     status,
+		AutoDailyResetEnabled:      m.AutoDailyResetEnabled,
+		DailyResetVersion:          m.DailyResetVersion,
+		PreserveCalendarDailyReset: m.PreserveCalendarDailyReset,
+		DailyWindowStart:           m.DailyWindowStart,
+		WeeklyWindowStart:          m.WeeklyWindowStart,
+		MonthlyWindowStart:         m.MonthlyWindowStart,
+		DailyUsageUSD:              m.DailyUsageUsd,
+		WeeklyUsageUSD:             m.WeeklyUsageUsd,
+		MonthlyUsageUSD:            m.MonthlyUsageUsd,
+		AssignedBy:                 m.AssignedBy,
+		AssignedAt:                 m.AssignedAt,
+		Notes:                      derefString(m.Notes),
+		CreatedAt:                  m.CreatedAt,
+		UpdatedAt:                  m.UpdatedAt,
+		DeletedAt:                  m.DeletedAt,
 	}
 	if m.Edges.User != nil {
 		out.User = userEntityToService(m.Edges.User)
@@ -689,4 +706,5 @@ func applyUserSubscriptionEntityToService(dst *service.UserSubscription, src *db
 	dst.ID = src.ID
 	dst.CreatedAt = src.CreatedAt
 	dst.UpdatedAt = src.UpdatedAt
+	dst.DailyResetVersion = src.DailyResetVersion
 }

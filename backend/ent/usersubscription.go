@@ -35,6 +35,12 @@ type UserSubscription struct {
 	ExpiresAt time.Time `json:"expires_at,omitempty"`
 	// Status holds the value of the "status" field.
 	Status string `json:"status,omitempty"`
+	// AutoDailyResetEnabled holds the value of the "auto_daily_reset_enabled" field.
+	AutoDailyResetEnabled bool `json:"auto_daily_reset_enabled,omitempty"`
+	// DailyResetVersion holds the value of the "daily_reset_version" field.
+	DailyResetVersion int64 `json:"daily_reset_version,omitempty"`
+	// PreserveCalendarDailyReset holds the value of the "preserve_calendar_daily_reset" field.
+	PreserveCalendarDailyReset bool `json:"preserve_calendar_daily_reset,omitempty"`
 	// DailyWindowStart holds the value of the "daily_window_start" field.
 	DailyWindowStart *time.Time `json:"daily_window_start,omitempty"`
 	// WeeklyWindowStart holds the value of the "weekly_window_start" field.
@@ -121,9 +127,11 @@ func (*UserSubscription) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
+		case usersubscription.FieldAutoDailyResetEnabled, usersubscription.FieldPreserveCalendarDailyReset:
+			values[i] = new(sql.NullBool)
 		case usersubscription.FieldDailyUsageUsd, usersubscription.FieldWeeklyUsageUsd, usersubscription.FieldMonthlyUsageUsd:
 			values[i] = new(sql.NullFloat64)
-		case usersubscription.FieldID, usersubscription.FieldUserID, usersubscription.FieldGroupID, usersubscription.FieldAssignedBy:
+		case usersubscription.FieldID, usersubscription.FieldUserID, usersubscription.FieldGroupID, usersubscription.FieldDailyResetVersion, usersubscription.FieldAssignedBy:
 			values[i] = new(sql.NullInt64)
 		case usersubscription.FieldStatus, usersubscription.FieldNotes:
 			values[i] = new(sql.NullString)
@@ -198,6 +206,24 @@ func (_m *UserSubscription) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field status", values[i])
 			} else if value.Valid {
 				_m.Status = value.String
+			}
+		case usersubscription.FieldAutoDailyResetEnabled:
+			if value, ok := values[i].(*sql.NullBool); !ok {
+				return fmt.Errorf("unexpected type %T for field auto_daily_reset_enabled", values[i])
+			} else if value.Valid {
+				_m.AutoDailyResetEnabled = value.Bool
+			}
+		case usersubscription.FieldDailyResetVersion:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field daily_reset_version", values[i])
+			} else if value.Valid {
+				_m.DailyResetVersion = value.Int64
+			}
+		case usersubscription.FieldPreserveCalendarDailyReset:
+			if value, ok := values[i].(*sql.NullBool); !ok {
+				return fmt.Errorf("unexpected type %T for field preserve_calendar_daily_reset", values[i])
+			} else if value.Valid {
+				_m.PreserveCalendarDailyReset = value.Bool
 			}
 		case usersubscription.FieldDailyWindowStart:
 			if value, ok := values[i].(*sql.NullTime); !ok {
@@ -339,6 +365,15 @@ func (_m *UserSubscription) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("status=")
 	builder.WriteString(_m.Status)
+	builder.WriteString(", ")
+	builder.WriteString("auto_daily_reset_enabled=")
+	builder.WriteString(fmt.Sprintf("%v", _m.AutoDailyResetEnabled))
+	builder.WriteString(", ")
+	builder.WriteString("daily_reset_version=")
+	builder.WriteString(fmt.Sprintf("%v", _m.DailyResetVersion))
+	builder.WriteString(", ")
+	builder.WriteString("preserve_calendar_daily_reset=")
+	builder.WriteString(fmt.Sprintf("%v", _m.PreserveCalendarDailyReset))
 	builder.WriteString(", ")
 	if v := _m.DailyWindowStart; v != nil {
 		builder.WriteString("daily_window_start=")

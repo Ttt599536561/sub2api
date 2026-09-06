@@ -33,13 +33,13 @@
         >
           <!-- Header -->
           <div
-            class="flex items-center justify-between border-b border-gray-100 p-4 dark:border-dark-700"
+            class="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 p-4 dark:border-dark-700"
           >
-            <div class="flex items-center gap-3">
+            <div class="flex min-w-0 items-center gap-3">
               <div :class="['h-1.5 w-1.5 shrink-0 rounded-full', platformAccentDotClass(subscription.group?.platform || '')]" />
-              <div>
-                <div class="flex items-center gap-2">
-                  <h3 class="font-semibold text-gray-900 dark:text-white">
+              <div class="min-w-0">
+                <div class="flex flex-wrap items-center gap-2">
+                  <h3 class="break-words font-semibold text-gray-900 dark:text-white">
                     {{ subscription.group?.name || `Group #${subscription.group_id}` }}
                   </h3>
                   <span :class="['rounded-md border px-2 py-0.5 text-[11px] font-medium', platformBadgeClass(subscription.group?.platform || '')]">
@@ -83,7 +83,7 @@
           <!-- Usage Progress -->
           <div class="space-y-4 p-4">
             <!-- Expiration Info -->
-            <div v-if="subscription.expires_at" class="flex items-center justify-between text-sm">
+            <div v-if="subscription.expires_at" class="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-sm">
               <span class="text-gray-500 dark:text-dark-400">{{
                 t('userSubscriptions.expires')
               }}</span>
@@ -102,15 +102,28 @@
 
             <!-- Daily Usage -->
             <div v-if="subscription.group?.daily_limit_usd" class="space-y-2">
-              <div class="flex items-center justify-between">
+              <div class="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
                 <span class="text-sm font-medium text-gray-700 dark:text-gray-300">
                   {{ t('userSubscriptions.daily') }}
                 </span>
-                <span class="text-sm text-gray-500 dark:text-dark-400">
-                  ${{ (subscription.daily_usage_usd || 0).toFixed(2) }} / ${{
-                    subscription.group.daily_limit_usd.toFixed(2)
-                  }}
-                </span>
+                <div class="flex min-w-0 flex-wrap items-center gap-2">
+                  <span class="break-words text-sm tabular-nums text-gray-500 dark:text-dark-400">
+                    ${{ (subscription.daily_usage_usd || 0).toFixed(2) }} / ${{
+                      subscription.group.daily_limit_usd.toFixed(2)
+                    }}
+                  </span>
+                  <button
+                    v-if="subscription.daily_reset?.eligible"
+                    type="button"
+                    data-testid="reset-daily"
+                    :disabled="!subscription.daily_reset.can_reset || !!pendingDailyResets[subscription.id]"
+                    class="inline-flex h-8 shrink-0 items-center justify-center gap-1 rounded-md border border-gray-300 px-2 text-xs font-medium text-gray-700 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400 dark:border-dark-600 dark:text-gray-200 dark:hover:bg-dark-700 dark:disabled:bg-dark-700 dark:disabled:text-gray-500"
+                    @click="resetDaily(subscription)"
+                  >
+                    <Icon name="refresh" size="sm" :class="{ 'animate-spin': pendingDailyResets[subscription.id]?.status === 'pending' }" />
+                    {{ t('userSubscriptions.resetDaily') }}
+                  </button>
+                </div>
               </div>
               <div class="relative h-2 overflow-hidden rounded-full bg-gray-200 dark:bg-dark-600">
                 <div
@@ -240,6 +253,44 @@
                 </div>
               </div>
             </div>
+
+            <div
+              v-if="subscription.daily_reset && (subscription.daily_reset.eligible || subscription.daily_reset.auto_daily_reset_enabled || pendingDailyResets[subscription.id])"
+              class="space-y-2 border-t border-gray-100 pt-4 dark:border-dark-700"
+            >
+              <div class="flex items-center justify-between gap-3">
+                <label :for="`auto-daily-reset-${subscription.id}`" class="min-w-0 text-sm text-gray-700 dark:text-gray-300">
+                  {{ t('userSubscriptions.autoDailyReset') }}
+                </label>
+                <Toggle
+                  :id="`auto-daily-reset-${subscription.id}`"
+                  :model-value="subscription.daily_reset.auto_daily_reset_enabled"
+                  :aria-label="t('userSubscriptions.autoDailyReset')"
+                  :disabled="!!pendingDailyResets[subscription.id]"
+                  class="disabled:cursor-not-allowed disabled:opacity-50"
+                  @update:model-value="setAutoDailyReset(subscription, $event)"
+                />
+              </div>
+              <div class="flex min-h-7 flex-wrap items-center justify-between gap-x-3 gap-y-1 text-xs text-gray-500 dark:text-dark-400">
+                <span class="tabular-nums">{{ t('userSubscriptions.dailyResetCount', {
+                  count: subscription.daily_reset.today_reset_count,
+                  limit: subscription.daily_reset.daily_reset_limit
+                }) }}</span>
+                <div v-if="pendingDailyResets[subscription.id]?.status === 'checking'" class="flex items-center gap-1">
+                  <span role="status">{{ t('userSubscriptions.verifyingReset') }}</span>
+                  <button
+                    type="button"
+                    data-testid="verify-daily-reset"
+                    :aria-label="t('userSubscriptions.verifyReset')"
+                    :title="t('userSubscriptions.verifyReset')"
+                    class="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md hover:bg-gray-100 dark:hover:bg-dark-700"
+                    @click="verifyReset(subscription.id)"
+                  >
+                    <Icon name="refresh" size="sm" />
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -248,14 +299,16 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
+import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { useAppStore } from '@/stores/app'
-import subscriptionsAPI from '@/api/subscriptions'
+import { useSubscriptionStore } from '@/stores/subscriptions'
 import type { UserSubscription } from '@/types'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import Icon from '@/components/icons/Icon.vue'
+import Toggle from '@/components/common/Toggle.vue'
 import { formatDateTimeToMinute } from '@/utils/format'
 import { hasPeakRate, formatPeakRateWindow, serverTimezoneLabel } from '@/utils/peak-rate'
 import { platformBorderClass, platformBadgeClass, platformButtonClass, platformLabel } from '@/utils/platformColors'
@@ -279,9 +332,11 @@ function platformAccentDotClass(p: string): string {
 const { t } = useI18n()
 const router = useRouter()
 const appStore = useAppStore()
+const subscriptionStore = useSubscriptionStore()
 
-const subscriptions = ref<UserSubscription[]>([])
+const { subscriptions, pendingDailyResets } = storeToRefs(subscriptionStore)
 const loading = ref(true)
+let refreshInterval: ReturnType<typeof setInterval> | null = null
 
 function subscriptionHasPeakRate(subscription: UserSubscription): boolean {
   return hasPeakRate(subscription.group)
@@ -294,12 +349,57 @@ function subscriptionPeakRateLabel(subscription: UserSubscription): string {
 async function loadSubscriptions() {
   try {
     loading.value = true
-    subscriptions.value = await subscriptionsAPI.getMySubscriptions()
+    await subscriptionStore.fetchSubscriptions()
   } catch (error) {
     console.error('Failed to load subscriptions:', error)
     appStore.showError(t('userSubscriptions.failedToLoad'))
   } finally {
     loading.value = false
+  }
+}
+
+function showResetError(error: unknown) {
+  const message = (error as { message?: string })?.message
+  appStore.showError(message || t('userSubscriptions.dailyResetFailed'))
+}
+
+async function resetDaily(subscription: UserSubscription) {
+  try {
+    const result = await subscriptionStore.resetDailyQuota(subscription)
+    if (result?.reset_performed) appStore.showSuccess(t('userSubscriptions.dailyResetSuccess'))
+  } catch (error) {
+    showResetError(error)
+  }
+}
+
+async function setAutoDailyReset(subscription: UserSubscription, enabled: boolean) {
+  try {
+    const result = await subscriptionStore.setAutoDailyReset(subscription, enabled)
+    if (result?.preference_saved) {
+      appStore.showSuccess(t(result.check_error
+        ? 'userSubscriptions.autoDailyResetSavedCheckFailed'
+        : 'userSubscriptions.autoDailyResetSaved'))
+    }
+  } catch (error) {
+    showResetError(error)
+  }
+}
+
+async function verifyReset(id: number) {
+  try {
+    await subscriptionStore.recoverDailyReset(id)
+  } catch (error) {
+    showResetError(error)
+  }
+}
+
+async function refreshSubscriptions() {
+  if (document.hidden) return
+  await Promise.allSettled(Object.keys(pendingDailyResets.value).map(id => verifyReset(Number(id))))
+  try {
+    await subscriptionStore.fetchSubscriptions()
+  } catch {
+    // Keep the current cards during a transient polling failure.
   }
 }
 
@@ -388,7 +488,13 @@ function formatResetTime(windowStart: string | null, windowHours: number): strin
   return parts ? formatDurationParts(parts) : t('userSubscriptions.windowNotActive')
 }
 
-onMounted(() => {
-  loadSubscriptions()
+onMounted(async () => {
+  refreshInterval = setInterval(() => { void refreshSubscriptions() }, 30_000)
+  await loadSubscriptions()
+  await Promise.allSettled(Object.keys(pendingDailyResets.value).map(id => verifyReset(Number(id))))
+})
+
+onUnmounted(() => {
+  if (refreshInterval) clearInterval(refreshInterval)
 })
 </script>

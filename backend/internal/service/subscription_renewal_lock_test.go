@@ -69,6 +69,48 @@ func (r *lockingRenewalRepo) Update(_ context.Context, sub *UserSubscription) er
 	return nil
 }
 
+func TestExtendSubscriptionExpiredResetsAutomaticPreference(t *testing.T) {
+	now := time.Date(2026, 9, 6, 12, 0, 0, 0, time.UTC)
+	for _, offset := range []time.Duration{-time.Hour, 0, time.Hour} {
+		t.Run(offset.String(), func(t *testing.T) {
+			repo := &lockingRenewalRepo{current: UserSubscription{
+				ID: 7, UserID: 11, GroupID: 13, StartsAt: now.Add(-30 * 24 * time.Hour),
+				ExpiresAt: now.Add(offset), Status: SubscriptionStatusActive,
+				AutoDailyResetEnabled: true, PreserveCalendarDailyReset: true, DailyUsageUSD: 100,
+			}}
+			svc := NewSubscriptionService(nil, repo, nil, nil, nil)
+			svc.now = func() time.Time { return now }
+			sub, err := svc.ExtendSubscription(context.Background(), 7, 30)
+			require.NoError(t, err)
+			require.Equal(t, 1, repo.lockReads)
+			if offset <= 0 {
+				require.False(t, sub.AutoDailyResetEnabled)
+				require.False(t, sub.PreserveCalendarDailyReset)
+				require.Equal(t, now, sub.StartsAt)
+				require.Zero(t, sub.DailyUsageUSD)
+			} else {
+				require.True(t, sub.AutoDailyResetEnabled)
+				require.True(t, sub.PreserveCalendarDailyReset)
+				require.Equal(t, 100.0, sub.DailyUsageUSD)
+			}
+		})
+	}
+}
+
+func TestNegativeSubscriptionRedemptionUsesLockedExpiry(t *testing.T) {
+	now := time.Now()
+	current := UserSubscription{ID: 7, UserID: 11, GroupID: 13, Status: SubscriptionStatusActive, ExpiresAt: now.Add(20 * 24 * time.Hour)}
+	stale := current
+	stale.ExpiresAt = stale.ExpiresAt.Add(24 * time.Hour)
+	repo := &lockingRenewalRepo{stale: stale, current: current}
+	subscriptionService := NewSubscriptionService(nil, repo, nil, nil, nil)
+	svc := &RedeemService{subscriptionService: subscriptionService}
+	err := svc.reduceOrCancelSubscription(context.Background(), 11, 13, 2, "refund")
+	require.NoError(t, err)
+	require.Equal(t, 1, repo.lockReads)
+	require.Equal(t, current.ExpiresAt.AddDate(0, 0, -2), repo.current.ExpiresAt)
+}
+
 func TestAssignOrExtendSubscriptionUsesLockedCurrentRow(t *testing.T) {
 	now := time.Date(2026, 8, 2, 12, 0, 0, 0, time.UTC)
 	lockedExpiry := now.AddDate(0, 0, 20)

@@ -45,6 +45,9 @@ func (UserSubscription) Fields() []ent.Field {
 		field.String("status").
 			MaxLen(20).
 			Default(domain.SubscriptionStatusActive),
+		field.Bool("auto_daily_reset_enabled").Default(false),
+		field.Int64("daily_reset_version").Default(0).NonNegative(),
+		field.Bool("preserve_calendar_daily_reset").Default(false),
 
 		field.Time("daily_window_start").
 			Optional().

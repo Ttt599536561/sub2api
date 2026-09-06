@@ -135,7 +135,7 @@ func TestSimpleModeBypassesQuotaCheck(t *testing.T) {
 				return nil
 			},
 		}
-		subscriptionService := service.NewSubscriptionService(nil, subscriptionRepo, nil, nil, cfg)
+		subscriptionService := service.NewSubscriptionService(&admissionGroupRepo{group: group}, subscriptionRepo, nil, nil, cfg)
 		t.Cleanup(subscriptionService.Stop)
 
 		router := newAuthTestRouter(apiKeyService, subscriptionService, cfg)
@@ -190,7 +190,7 @@ func TestSimpleModeBypassesQuotaCheck(t *testing.T) {
 			resetWeekly:  func(context.Context, int64, time.Time) error { return nil },
 			resetMonthly: func(context.Context, int64, time.Time) error { return nil },
 		}
-		subscriptionService := service.NewSubscriptionService(nil, subscriptionRepo, nil, nil, cfg)
+		subscriptionService := service.NewSubscriptionService(&admissionGroupRepo{group: group}, subscriptionRepo, nil, nil, cfg)
 		router := newAuthTestRouter(apiKeyService, subscriptionService, cfg)
 
 		w := httptest.NewRecorder()
@@ -257,7 +257,7 @@ func TestSimpleModeBypassesQuotaCheck(t *testing.T) {
 			resetWeekly:    func(ctx context.Context, id int64, start time.Time) error { return nil },
 			resetMonthly:   func(ctx context.Context, id int64, start time.Time) error { return nil },
 		}
-		subscriptionService := service.NewSubscriptionService(nil, subscriptionRepo, nil, nil, cfg)
+		subscriptionService := service.NewSubscriptionService(&admissionGroupRepo{group: group}, subscriptionRepo, nil, nil, cfg)
 		router := newAuthTestRouter(apiKeyService, subscriptionService, cfg)
 
 		w := httptest.NewRecorder()
@@ -1269,7 +1269,7 @@ func TestAPIKeyAuthBillingInfoSkipsBillingAndSideEffects(t *testing.T) {
 	}
 	cfg := &config.Config{RunMode: config.RunModeStandard}
 	apiKeyService := service.NewAPIKeyService(apiKeyRepo, nil, nil, nil, nil, nil, cfg)
-	subscriptionService := service.NewSubscriptionService(nil, subscriptionRepo, nil, nil, cfg)
+	subscriptionService := service.NewSubscriptionService(&admissionGroupRepo{group: group}, subscriptionRepo, nil, nil, cfg)
 	t.Cleanup(subscriptionService.Stop)
 	router := newAuthTestRouter(apiKeyService, subscriptionService, cfg)
 
@@ -1692,7 +1692,7 @@ func (r *stubUserSubscriptionRepo) GetByIDIncludeDeleted(ctx context.Context, id
 }
 
 func (r *stubUserSubscriptionRepo) GetByUserIDAndGroupID(ctx context.Context, userID, groupID int64) (*service.UserSubscription, error) {
-	return nil, errors.New("not implemented")
+	return r.GetActiveByUserIDAndGroupID(ctx, userID, groupID)
 }
 
 func (r *stubUserSubscriptionRepo) GetActiveByUserIDAndGroupID(ctx context.Context, userID, groupID int64) (*service.UserSubscription, error) {

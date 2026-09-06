@@ -113,6 +113,7 @@ type BillingCacheService struct {
 	cfg                   *config.Config
 	circuitBreaker        *billingCircuitBreaker
 	userPlatformQuotaRepo UserPlatformQuotaRepository
+	subscriptionService   subscriptionAdmissionService
 
 	cacheWriteChan     chan cacheWriteTask
 	cacheWriteWg       sync.WaitGroup
@@ -126,6 +127,26 @@ type BillingCacheService struct {
 	cacheWriteDropFullLastLog   int64
 	cacheWriteDropClosedCount   uint64
 	cacheWriteDropClosedLastLog int64
+}
+
+type subscriptionAdmissionService interface {
+	GetSubscriptionForAdmission(context.Context, int64, int64) (*UserSubscription, *Group, error)
+	TriggerAutoDailyReset(context.Context, int64) error
+}
+
+// SetSubscriptionService is called during service construction, before requests
+// or usage workers can access subscription admission and reset processing.
+func (s *BillingCacheService) SetSubscriptionService(service subscriptionAdmissionService) {
+	s.subscriptionService = service
+}
+
+func (s *BillingCacheService) triggerSubscriptionAutoDailyReset(ctx context.Context, userID, subscriptionID int64) {
+	if s == nil || s.subscriptionService == nil {
+		return
+	}
+	if err := s.subscriptionService.TriggerAutoDailyReset(ctx, subscriptionID); err != nil {
+		logger.LegacyPrintf("service.billing_cache", "Warning: auto daily reset after billing failed for subscription %d: %v", subscriptionID, err)
+	}
 }
 
 // NewBillingCacheService 创建计费缓存服务
@@ -740,15 +761,36 @@ func (s *BillingCacheService) CheckBillingEligibility(ctx context.Context, user 
 	if s.circuitBreaker != nil && !s.circuitBreaker.Allow() {
 		return ErrBillingServiceUnavailable
 	}
+	if group != nil && group.IsSubscriptionType() && s.subscriptionService == nil {
+		return ErrBillingServiceUnavailable
+	}
+	var groupID int64
+	if apiKey != nil && apiKey.GroupID != nil {
+		groupID = *apiKey.GroupID
+	} else if group != nil {
+		groupID = group.ID
+	}
+	if s.subscriptionService != nil && groupID > 0 {
+		freshSub, freshGroup, err := s.subscriptionService.GetSubscriptionForAdmission(ctx, user.ID, groupID)
+		if err != nil {
+			return err
+		}
+		// A billing-mode change while queued requires a new request so the
+		// downstream settlement cannot retain the previous mode or subscription.
+		if (subscription == nil) != (freshSub == nil) {
+			return ErrSubscriptionInvalid
+		}
+		group = freshGroup
+		if subscription != nil && freshSub != nil {
+			*subscription = *freshSub
+		}
+		subscription = freshSub
+	}
 
 	// 判断计费模式
 	isSubscriptionMode := group != nil && group.IsSubscriptionType() && subscription != nil
 
-	if isSubscriptionMode {
-		if err := s.checkSubscriptionEligibility(ctx, user.ID, group, subscription); err != nil {
-			return err
-		}
-	} else {
+	if !isSubscriptionMode {
 		if err := s.checkBalanceEligibility(ctx, user.ID); err != nil {
 			return err
 		}
@@ -773,6 +815,25 @@ func (s *BillingCacheService) CheckBillingEligibility(ctx context.Context, user 
 		return err
 	}
 
+	return nil
+}
+
+// RevalidateSubscription checks a queued request or a new WebSocket turn without
+// consuming another RPM admission or mutating a snapshot used by async billing.
+func (s *BillingCacheService) RevalidateSubscription(ctx context.Context, subscription *UserSubscription) error {
+	if subscription == nil || (s != nil && s.cfg != nil && s.cfg.RunMode == config.RunModeSimple) {
+		return nil
+	}
+	if s == nil || s.subscriptionService == nil {
+		return ErrBillingServiceUnavailable
+	}
+	fresh, _, err := s.subscriptionService.GetSubscriptionForAdmission(ctx, subscription.UserID, subscription.GroupID)
+	if err != nil {
+		return err
+	}
+	if fresh == nil || fresh.ID != subscription.ID {
+		return ErrSubscriptionInvalid
+	}
 	return nil
 }
 
@@ -891,47 +952,6 @@ func (s *BillingCacheService) checkBalanceEligibility(ctx context.Context, userI
 
 	if s.balanceBelowEligibilityThreshold(balance) {
 		return ErrInsufficientBalance
-	}
-
-	return nil
-}
-
-// checkSubscriptionEligibility 检查订阅模式资格
-func (s *BillingCacheService) checkSubscriptionEligibility(ctx context.Context, userID int64, group *Group, subscription *UserSubscription) error {
-	// 获取订阅缓存数据
-	subData, err := s.GetSubscriptionStatus(ctx, userID, group.ID)
-	if err != nil {
-		if s.circuitBreaker != nil {
-			s.circuitBreaker.OnFailure(err)
-		}
-		logger.LegacyPrintf("service.billing_cache", "ALERT: billing subscription check failed for user %d group %d: %v", userID, group.ID, err)
-		return ErrBillingServiceUnavailable.WithCause(err)
-	}
-	if s.circuitBreaker != nil {
-		s.circuitBreaker.OnSuccess()
-	}
-
-	// 检查订阅状态
-	if subData.Status != SubscriptionStatusActive {
-		return ErrSubscriptionInvalid
-	}
-
-	// 检查是否过期
-	if time.Now().After(subData.ExpiresAt) {
-		return ErrSubscriptionInvalid
-	}
-
-	// 检查限额（使用传入的Group限额配置）
-	if group.HasDailyLimit() && subData.DailyUsage >= *group.DailyLimitUSD {
-		return ErrDailyLimitExceeded
-	}
-
-	if group.HasWeeklyLimit() && subData.WeeklyUsage >= *group.WeeklyLimitUSD {
-		return ErrWeeklyLimitExceeded
-	}
-
-	if group.HasMonthlyLimit() && subData.MonthlyUsage >= *group.MonthlyLimitUSD {
-		return ErrMonthlyLimitExceeded
 	}
 
 	return nil

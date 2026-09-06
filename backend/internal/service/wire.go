@@ -17,6 +17,13 @@ import (
 	"go.uber.org/zap"
 )
 
+func ProvideSubscriptionService(groupRepo GroupRepository, userSubRepo UserSubscriptionRepository, billingCache *BillingCacheService, client *dbent.Client, cfg *config.Config, resetRepo SubscriptionDailyResetRepository) *SubscriptionService {
+	svc := NewSubscriptionService(groupRepo, userSubRepo, billingCache, client, cfg)
+	svc.dailyResetRepo = resetRepo
+	svc.startAutoDailyResetScanner()
+	return svc
+}
+
 func ProvideGrokOAuthService(proxyRepo ProxyRepository, oauthClient GrokOAuthClient, cfg *config.Config, redisClient *redis.Client) *GrokOAuthService {
 	svc := NewGrokOAuthService(proxyRepo, oauthClient, cfg)
 	// wire.go is depguard-exempt for redis; construct the Redis session store here.
@@ -895,7 +902,7 @@ var ProviderSet = wire.NewSet(
 	NewTurnstileService,
 	NewTencentCaptchaService,
 	NewAliyunCaptchaService,
-	NewSubscriptionService,
+	ProvideSubscriptionService,
 	wire.Bind(new(DefaultSubscriptionAssigner), new(*SubscriptionService)),
 	ProvideConcurrencyService,
 	ProvideUserMessageQueueService,

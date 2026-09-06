@@ -100,6 +100,7 @@ type Group struct {
 	Status         string  `json:"status"`
 
 	SubscriptionType          string   `json:"subscription_type"`
+	AllowSubscriptionDayReset bool     `json:"allow_subscription_day_reset"`
 	DailyLimitUSD             *float64 `json:"daily_limit_usd"`
 	WeeklyLimitUSD            *float64 `json:"weekly_limit_usd"`
 	MonthlyLimitUSD           *float64 `json:"monthly_limit_usd"`
@@ -758,9 +759,11 @@ type UserSubscription struct {
 	WeeklyWindowStart  *time.Time `json:"weekly_window_start"`
 	MonthlyWindowStart *time.Time `json:"monthly_window_start"`
 
-	DailyUsageUSD   float64 `json:"daily_usage_usd"`
-	WeeklyUsageUSD  float64 `json:"weekly_usage_usd"`
-	MonthlyUsageUSD float64 `json:"monthly_usage_usd"`
+	DailyUsageUSD              float64                  `json:"daily_usage_usd"`
+	WeeklyUsageUSD             float64                  `json:"weekly_usage_usd"`
+	MonthlyUsageUSD            float64                  `json:"monthly_usage_usd"`
+	PreserveCalendarDailyReset bool                     `json:"preserve_calendar_daily_reset"`
+	DailyResetState            *service.DailyResetState `json:"daily_reset,omitempty"`
 
 	CreatedAt time.Time  `json:"created_at"`
 	UpdatedAt time.Time  `json:"updated_at"`

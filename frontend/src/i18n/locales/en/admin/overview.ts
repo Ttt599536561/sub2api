@@ -987,6 +987,7 @@ export default {
         standard: 'Standard (Balance)',
         subscription: 'Subscription (Quota)',
         dailyLimit: 'Daily Limit (USD)',
+        allowDayReset: 'Allow monthly subscriptions to reset daily quota (costs 24 hours of validity)',
         weeklyLimit: 'Weekly Limit (USD)',
         monthlyLimit: 'Monthly Limit (USD)',
         defaultValidityDays: 'Default Validity (Days)',

@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest'
 
-import { getExpirationDateRelation, getRemainingExpiryDuration } from '../subscriptionQuota'
+import { getExpirationDateRelation, getRemainingExpiryDuration, isOneTimeDailyQuota } from '../subscriptionQuota'
+
+describe('subscription daily quota lifetime', () => {
+  it('preserves calendar refresh after early reset shortens a monthly subscription to one day', () => {
+    const subscription = { starts_at: '2026-09-06T00:00:00Z', expires_at: '2026-09-07T00:00:00Z' }
+    expect(isOneTimeDailyQuota(subscription)).toBe(true)
+    expect(isOneTimeDailyQuota({ ...subscription, preserve_calendar_daily_reset: true })).toBe(false)
+  })
+})
 
 describe('subscription expiry timing', () => {
   it('uses local calendar dates for today and tomorrow', () => {

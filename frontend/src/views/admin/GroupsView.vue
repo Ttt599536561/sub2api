@@ -742,6 +742,16 @@
                 :placeholder="t('admin.groups.subscription.noLimit')"
               />
             </div>
+            <label class="flex items-start gap-2 text-sm text-gray-700 dark:text-gray-300">
+              <input
+                v-model="createForm.allow_subscription_day_reset"
+                type="checkbox"
+                data-testid="create-allow-subscription-day-reset"
+                :disabled="!(Number(createForm.daily_limit_usd) > 0)"
+                class="mt-0.5 rounded border-gray-300 text-primary-600 focus:ring-primary-500 disabled:opacity-50"
+              />
+              <span>{{ t("admin.groups.subscription.allowDayReset") }}</span>
+            </label>
             <div>
               <label class="input-label">{{
                 t("admin.groups.subscription.weeklyLimit")
@@ -2543,6 +2553,16 @@
                 :placeholder="t('admin.groups.subscription.noLimit')"
               />
             </div>
+            <label class="flex items-start gap-2 text-sm text-gray-700 dark:text-gray-300">
+              <input
+                v-model="editForm.allow_subscription_day_reset"
+                type="checkbox"
+                data-testid="edit-allow-subscription-day-reset"
+                :disabled="!(Number(editForm.daily_limit_usd) > 0)"
+                class="mt-0.5 rounded border-gray-300 text-primary-600 focus:ring-primary-500 disabled:opacity-50"
+              />
+              <span>{{ t("admin.groups.subscription.allowDayReset") }}</span>
+            </label>
             <div>
               <label class="input-label">{{
                 t("admin.groups.subscription.weeklyLimit")
@@ -5218,6 +5238,7 @@ const createForm = reactive({
   is_exclusive: false,
   subscription_type: "standard" as SubscriptionType,
   daily_limit_usd: null as number | null,
+  allow_subscription_day_reset: false,
   weekly_limit_usd: null as number | null,
   monthly_limit_usd: null as number | null,
   long_context_pricing_enabled: true,
@@ -5582,6 +5603,7 @@ const editForm = reactive({
   status: "active" as "active" | "inactive",
   subscription_type: "standard" as SubscriptionType,
   daily_limit_usd: null as number | null,
+  allow_subscription_day_reset: false,
   weekly_limit_usd: null as number | null,
   monthly_limit_usd: null as number | null,
   long_context_pricing_enabled: true,
@@ -6044,6 +6066,7 @@ const closeCreateModal = () => {
   createForm.is_exclusive = false;
   createForm.subscription_type = "standard";
   createForm.daily_limit_usd = null;
+  createForm.allow_subscription_day_reset = false;
   createForm.weekly_limit_usd = null;
   createForm.monthly_limit_usd = null;
   createForm.allow_image_generation = false;
@@ -6165,6 +6188,10 @@ const handleCreateGroup = async () => {
     // 构建请求数据，包含模型路由配置
     const requestData = {
       ...createGroupForm,
+      allow_subscription_day_reset:
+        createForm.subscription_type === "subscription" &&
+        Number(createForm.daily_limit_usd) > 0 &&
+        createForm.allow_subscription_day_reset,
       force_openai_fast: normalizeGroupOpenAIFast(
         createForm.platform,
         createForm.force_openai_fast,
@@ -6299,6 +6326,7 @@ const handleEdit = async (group: AdminGroup) => {
   editForm.status = group.status;
   editForm.subscription_type = group.subscription_type || "standard";
   editForm.daily_limit_usd = group.daily_limit_usd;
+  editForm.allow_subscription_day_reset = group.allow_subscription_day_reset ?? false;
   editForm.weekly_limit_usd = group.weekly_limit_usd;
   editForm.monthly_limit_usd = group.monthly_limit_usd;
   editForm.long_context_pricing_enabled =
@@ -6485,6 +6513,10 @@ const handleUpdateGroup = async () => {
     // 转换 fallback_group_id: null -> 0 (后端使用 0 表示清除)
     const payload = {
       ...editForm,
+      allow_subscription_day_reset:
+        editForm.subscription_type === "subscription" &&
+        Number(editForm.daily_limit_usd) > 0 &&
+        editForm.allow_subscription_day_reset,
       force_openai_fast: normalizeGroupOpenAIFast(
         editForm.platform,
         editForm.force_openai_fast,

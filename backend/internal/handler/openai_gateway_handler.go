@@ -2103,12 +2103,25 @@ func (h *OpenAIGatewayHandler) acquireOpenAIAccountSlot(
 	streamStarted *bool,
 	reqLog *zap.Logger,
 	writeError openAISlotErrorWriter,
-) (func(), openAISlotAcquireResult) {
+) (release func(), outcome openAISlotAcquireResult) {
 	if writeError == nil {
 		writeError = func(status int, errType, code, message string) {
 			h.handleStreamingAwareErrorWithCode(c, status, errType, code, message, *streamStarted, false)
 		}
 	}
+	defer func() {
+		if outcome != openAISlotAcquireOK {
+			return
+		}
+		if err := revalidateGatewaySubscription(c, h.billingCacheService); err != nil {
+			if release != nil {
+				release()
+			}
+			release, outcome = nil, openAISlotAcquireFailed
+			status, code, message, _ := billingErrorDetails(err)
+			writeError(status, code, "", message)
+		}
+	}()
 	if selection == nil || selection.Account == nil {
 		markOpsRoutingCapacityLimited(c)
 		writeError(http.StatusServiceUnavailable, "api_error", "", "No available accounts")
@@ -2740,6 +2753,9 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 			ReasoningEffortMappings:     reasoningEffortMappings,
 			TurnStarted:                 recordTurnStart,
 			BeforeRequest: func(turn int, payload []byte, originalModel string) error {
+				if err := revalidateGatewaySubscription(c, h.billingCacheService); err != nil {
+					return service.NewOpenAIWSClientCloseError(coderws.StatusPolicyViolation, "subscription is no longer eligible", err)
+				}
 				c.Set(securityAuditWSTurnContextKey, turn)
 				service.BeginOpsStreamTurn(c, turn)
 				setCyberTurnBody(turn, payload)

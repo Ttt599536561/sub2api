@@ -111,6 +111,15 @@ export default {
 
   // User Subscriptions Page
   userSubscriptions: {
+    resetDaily: 'Reset',
+    autoDailyReset: 'Auto-reset daily quota',
+    dailyResetCount: 'Today: {count}/{limit} resets',
+    verifyingReset: 'Verifying',
+    verifyReset: 'Check reset result',
+    dailyResetSuccess: 'Daily quota reset; validity reduced by 24 hours',
+    dailyResetFailed: 'Unable to reset daily quota',
+    autoDailyResetSaved: 'Automatic reset preference saved',
+    autoDailyResetSavedCheckFailed: 'Automatic reset enabled; the quota reset could not be completed yet',
     title: 'My Subscriptions',
     description: 'View your subscription plans and usage',
     noActiveSubscriptions: 'No Active Subscriptions',

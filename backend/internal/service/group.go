@@ -35,11 +35,12 @@ type Group struct {
 	// an already committed one-click copy. It must never be mapped to API DTOs.
 	DuplicateOperationID string
 
-	SubscriptionType    string
-	DailyLimitUSD       *float64
-	WeeklyLimitUSD      *float64
-	MonthlyLimitUSD     *float64
-	DefaultValidityDays int
+	SubscriptionType          string
+	AllowSubscriptionDayReset bool
+	DailyLimitUSD             *float64
+	WeeklyLimitUSD            *float64
+	MonthlyLimitUSD           *float64
+	DefaultValidityDays       int
 
 	// 图片生成计费配置（antigravity 和 gemini 平台使用）
 	AllowImageGeneration         bool

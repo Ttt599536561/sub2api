@@ -82,6 +82,7 @@ func (Group) Fields() []ent.Field {
 		field.String("subscription_type").
 			MaxLen(20).
 			Default(domain.SubscriptionTypeStandard),
+		field.Bool("allow_subscription_day_reset").Default(false),
 		field.Float("daily_limit_usd").
 			Optional().
 			Nillable().

@@ -273,6 +273,17 @@ func (h *GatewayHandler) acquireWebSearchAccountSlot(
 	c *gin.Context,
 	selected *service.AccountSelectionResult,
 ) (release func(), ok bool, acquireErr error) {
+	defer func() {
+		if !ok {
+			return
+		}
+		if err := revalidateGatewaySubscription(c, h.billingCacheService); err != nil {
+			if release != nil {
+				release()
+			}
+			release, ok, acquireErr = nil, false, err
+		}
+	}()
 	if selected == nil || selected.Account == nil {
 		return nil, false, nil
 	}

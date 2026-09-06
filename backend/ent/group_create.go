@@ -232,6 +232,20 @@ func (_c *GroupCreate) SetNillableSubscriptionType(v *string) *GroupCreate {
 	return _c
 }
 
+// SetAllowSubscriptionDayReset sets the "allow_subscription_day_reset" field.
+func (_c *GroupCreate) SetAllowSubscriptionDayReset(v bool) *GroupCreate {
+	_c.mutation.SetAllowSubscriptionDayReset(v)
+	return _c
+}
+
+// SetNillableAllowSubscriptionDayReset sets the "allow_subscription_day_reset" field if the given value is not nil.
+func (_c *GroupCreate) SetNillableAllowSubscriptionDayReset(v *bool) *GroupCreate {
+	if v != nil {
+		_c.SetAllowSubscriptionDayReset(*v)
+	}
+	return _c
+}
+
 // SetDailyLimitUsd sets the "daily_limit_usd" field.
 func (_c *GroupCreate) SetDailyLimitUsd(v float64) *GroupCreate {
 	_c.mutation.SetDailyLimitUsd(v)
@@ -1083,6 +1097,10 @@ func (_c *GroupCreate) defaults() error {
 		v := group.DefaultSubscriptionType
 		_c.mutation.SetSubscriptionType(v)
 	}
+	if _, ok := _c.mutation.AllowSubscriptionDayReset(); !ok {
+		v := group.DefaultAllowSubscriptionDayReset
+		_c.mutation.SetAllowSubscriptionDayReset(v)
+	}
 	if _, ok := _c.mutation.DefaultValidityDays(); !ok {
 		v := group.DefaultDefaultValidityDays
 		_c.mutation.SetDefaultValidityDays(v)
@@ -1286,6 +1304,9 @@ func (_c *GroupCreate) check() error {
 		if err := group.SubscriptionTypeValidator(v); err != nil {
 			return &ValidationError{Name: "subscription_type", err: fmt.Errorf(`ent: validator failed for field "Group.subscription_type": %w`, err)}
 		}
+	}
+	if _, ok := _c.mutation.AllowSubscriptionDayReset(); !ok {
+		return &ValidationError{Name: "allow_subscription_day_reset", err: errors.New(`ent: missing required field "Group.allow_subscription_day_reset"`)}
 	}
 	if _, ok := _c.mutation.DefaultValidityDays(); !ok {
 		return &ValidationError{Name: "default_validity_days", err: errors.New(`ent: missing required field "Group.default_validity_days"`)}
@@ -1504,6 +1525,10 @@ func (_c *GroupCreate) createSpec() (*Group, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.SubscriptionType(); ok {
 		_spec.SetField(group.FieldSubscriptionType, field.TypeString, value)
 		_node.SubscriptionType = value
+	}
+	if value, ok := _c.mutation.AllowSubscriptionDayReset(); ok {
+		_spec.SetField(group.FieldAllowSubscriptionDayReset, field.TypeBool, value)
+		_node.AllowSubscriptionDayReset = value
 	}
 	if value, ok := _c.mutation.DailyLimitUsd(); ok {
 		_spec.SetField(group.FieldDailyLimitUsd, field.TypeFloat64, value)
@@ -2042,6 +2067,18 @@ func (u *GroupUpsert) SetSubscriptionType(v string) *GroupUpsert {
 // UpdateSubscriptionType sets the "subscription_type" field to the value that was provided on create.
 func (u *GroupUpsert) UpdateSubscriptionType() *GroupUpsert {
 	u.SetExcluded(group.FieldSubscriptionType)
+	return u
+}
+
+// SetAllowSubscriptionDayReset sets the "allow_subscription_day_reset" field.
+func (u *GroupUpsert) SetAllowSubscriptionDayReset(v bool) *GroupUpsert {
+	u.Set(group.FieldAllowSubscriptionDayReset, v)
+	return u
+}
+
+// UpdateAllowSubscriptionDayReset sets the "allow_subscription_day_reset" field to the value that was provided on create.
+func (u *GroupUpsert) UpdateAllowSubscriptionDayReset() *GroupUpsert {
+	u.SetExcluded(group.FieldAllowSubscriptionDayReset)
 	return u
 }
 
@@ -3176,6 +3213,20 @@ func (u *GroupUpsertOne) SetSubscriptionType(v string) *GroupUpsertOne {
 func (u *GroupUpsertOne) UpdateSubscriptionType() *GroupUpsertOne {
 	return u.Update(func(s *GroupUpsert) {
 		s.UpdateSubscriptionType()
+	})
+}
+
+// SetAllowSubscriptionDayReset sets the "allow_subscription_day_reset" field.
+func (u *GroupUpsertOne) SetAllowSubscriptionDayReset(v bool) *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.SetAllowSubscriptionDayReset(v)
+	})
+}
+
+// UpdateAllowSubscriptionDayReset sets the "allow_subscription_day_reset" field to the value that was provided on create.
+func (u *GroupUpsertOne) UpdateAllowSubscriptionDayReset() *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.UpdateAllowSubscriptionDayReset()
 	})
 }
 
@@ -4622,6 +4673,20 @@ func (u *GroupUpsertBulk) SetSubscriptionType(v string) *GroupUpsertBulk {
 func (u *GroupUpsertBulk) UpdateSubscriptionType() *GroupUpsertBulk {
 	return u.Update(func(s *GroupUpsert) {
 		s.UpdateSubscriptionType()
+	})
+}
+
+// SetAllowSubscriptionDayReset sets the "allow_subscription_day_reset" field.
+func (u *GroupUpsertBulk) SetAllowSubscriptionDayReset(v bool) *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.SetAllowSubscriptionDayReset(v)
+	})
+}
+
+// UpdateAllowSubscriptionDayReset sets the "allow_subscription_day_reset" field to the value that was provided on create.
+func (u *GroupUpsertBulk) UpdateAllowSubscriptionDayReset() *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.UpdateAllowSubscriptionDayReset()
 	})
 }
 

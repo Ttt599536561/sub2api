@@ -42,6 +42,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/redeemcode"
 	"github.com/Wei-Shaw/sub2api/ent/securitysecret"
 	"github.com/Wei-Shaw/sub2api/ent/setting"
+	"github.com/Wei-Shaw/sub2api/ent/subscriptiondailyresetevent"
 	"github.com/Wei-Shaw/sub2api/ent/subscriptionplan"
 	"github.com/Wei-Shaw/sub2api/ent/tlsfingerprintprofile"
 	"github.com/Wei-Shaw/sub2api/ent/usagecleanuptask"
@@ -93,6 +94,7 @@ const (
 	TypeRedeemCode                    = "RedeemCode"
 	TypeSecuritySecret                = "SecuritySecret"
 	TypeSetting                       = "Setting"
+	TypeSubscriptionDailyResetEvent   = "SubscriptionDailyResetEvent"
 	TypeSubscriptionPlan              = "SubscriptionPlan"
 	TypeTLSFingerprintProfile         = "TLSFingerprintProfile"
 	TypeUsageCleanupTask              = "UsageCleanupTask"
@@ -22098,6 +22100,7 @@ type GroupMutation struct {
 	duplicate_operation_id                  *string
 	platform                                *string
 	subscription_type                       *string
+	allow_subscription_day_reset            *bool
 	daily_limit_usd                         *float64
 	adddaily_limit_usd                      *float64
 	weekly_limit_usd                        *float64
@@ -22916,6 +22919,42 @@ func (m *GroupMutation) OldSubscriptionType(ctx context.Context) (v string, err 
 // ResetSubscriptionType resets all changes to the "subscription_type" field.
 func (m *GroupMutation) ResetSubscriptionType() {
 	m.subscription_type = nil
+}
+
+// SetAllowSubscriptionDayReset sets the "allow_subscription_day_reset" field.
+func (m *GroupMutation) SetAllowSubscriptionDayReset(b bool) {
+	m.allow_subscription_day_reset = &b
+}
+
+// AllowSubscriptionDayReset returns the value of the "allow_subscription_day_reset" field in the mutation.
+func (m *GroupMutation) AllowSubscriptionDayReset() (r bool, exists bool) {
+	v := m.allow_subscription_day_reset
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAllowSubscriptionDayReset returns the old "allow_subscription_day_reset" field's value of the Group entity.
+// If the Group object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *GroupMutation) OldAllowSubscriptionDayReset(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAllowSubscriptionDayReset is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAllowSubscriptionDayReset requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAllowSubscriptionDayReset: %w", err)
+	}
+	return oldValue.AllowSubscriptionDayReset, nil
+}
+
+// ResetAllowSubscriptionDayReset resets all changes to the "allow_subscription_day_reset" field.
+func (m *GroupMutation) ResetAllowSubscriptionDayReset() {
+	m.allow_subscription_day_reset = nil
 }
 
 // SetDailyLimitUsd sets the "daily_limit_usd" field.
@@ -25921,7 +25960,7 @@ func (m *GroupMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *GroupMutation) Fields() []string {
-	fields := make([]string, 0, 66)
+	fields := make([]string, 0, 67)
 	if m.created_at != nil {
 		fields = append(fields, group.FieldCreatedAt)
 	}
@@ -25966,6 +26005,9 @@ func (m *GroupMutation) Fields() []string {
 	}
 	if m.subscription_type != nil {
 		fields = append(fields, group.FieldSubscriptionType)
+	}
+	if m.allow_subscription_day_reset != nil {
+		fields = append(fields, group.FieldAllowSubscriptionDayReset)
 	}
 	if m.daily_limit_usd != nil {
 		fields = append(fields, group.FieldDailyLimitUsd)
@@ -26158,6 +26200,8 @@ func (m *GroupMutation) Field(name string) (ent.Value, bool) {
 		return m.Platform()
 	case group.FieldSubscriptionType:
 		return m.SubscriptionType()
+	case group.FieldAllowSubscriptionDayReset:
+		return m.AllowSubscriptionDayReset()
 	case group.FieldDailyLimitUsd:
 		return m.DailyLimitUsd()
 	case group.FieldWeeklyLimitUsd:
@@ -26299,6 +26343,8 @@ func (m *GroupMutation) OldField(ctx context.Context, name string) (ent.Value, e
 		return m.OldPlatform(ctx)
 	case group.FieldSubscriptionType:
 		return m.OldSubscriptionType(ctx)
+	case group.FieldAllowSubscriptionDayReset:
+		return m.OldAllowSubscriptionDayReset(ctx)
 	case group.FieldDailyLimitUsd:
 		return m.OldDailyLimitUsd(ctx)
 	case group.FieldWeeklyLimitUsd:
@@ -26514,6 +26560,13 @@ func (m *GroupMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetSubscriptionType(v)
+		return nil
+	case group.FieldAllowSubscriptionDayReset:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAllowSubscriptionDayReset(v)
 		return nil
 	case group.FieldDailyLimitUsd:
 		v, ok := value.(float64)
@@ -27427,6 +27480,9 @@ func (m *GroupMutation) ResetField(name string) error {
 		return nil
 	case group.FieldSubscriptionType:
 		m.ResetSubscriptionType()
+		return nil
+	case group.FieldAllowSubscriptionDayReset:
+		m.ResetAllowSubscriptionDayReset()
 		return nil
 	case group.FieldDailyLimitUsd:
 		m.ResetDailyLimitUsd()
@@ -40763,6 +40819,1583 @@ func (m *SettingMutation) ClearEdge(name string) error {
 // It returns an error if the edge is not defined in the schema.
 func (m *SettingMutation) ResetEdge(name string) error {
 	return fmt.Errorf("unknown Setting edge %s", name)
+}
+
+// SubscriptionDailyResetEventMutation represents an operation that mutates the SubscriptionDailyResetEvent nodes in the graph.
+type SubscriptionDailyResetEventMutation struct {
+	config
+	op                        Op
+	typ                       string
+	id                        *int64
+	subscription_id           *int64
+	addsubscription_id        *int64
+	user_id                   *int64
+	adduser_id                *int64
+	group_id                  *int64
+	addgroup_id               *int64
+	source                    *string
+	operation_id              *string
+	request_fingerprint       *string
+	before_version            *int64
+	addbefore_version         *int64
+	after_version             *int64
+	addafter_version          *int64
+	timezone                  *string
+	count_date                *time.Time
+	day_sequence              *int
+	addday_sequence           *int
+	before_daily_usage_usd    *float64
+	addbefore_daily_usage_usd *float64
+	after_daily_usage_usd     *float64
+	addafter_daily_usage_usd  *float64
+	daily_limit_usd           *float64
+	adddaily_limit_usd        *float64
+	before_expires_at         *time.Time
+	after_expires_at          *time.Time
+	deducted_seconds          *int
+	adddeducted_seconds       *int
+	decided_at                *time.Time
+	clearedFields             map[string]struct{}
+	done                      bool
+	oldValue                  func(context.Context) (*SubscriptionDailyResetEvent, error)
+	predicates                []predicate.SubscriptionDailyResetEvent
+}
+
+var _ ent.Mutation = (*SubscriptionDailyResetEventMutation)(nil)
+
+// subscriptiondailyreseteventOption allows management of the mutation configuration using functional options.
+type subscriptiondailyreseteventOption func(*SubscriptionDailyResetEventMutation)
+
+// newSubscriptionDailyResetEventMutation creates new mutation for the SubscriptionDailyResetEvent entity.
+func newSubscriptionDailyResetEventMutation(c config, op Op, opts ...subscriptiondailyreseteventOption) *SubscriptionDailyResetEventMutation {
+	m := &SubscriptionDailyResetEventMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeSubscriptionDailyResetEvent,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withSubscriptionDailyResetEventID sets the ID field of the mutation.
+func withSubscriptionDailyResetEventID(id int64) subscriptiondailyreseteventOption {
+	return func(m *SubscriptionDailyResetEventMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *SubscriptionDailyResetEvent
+		)
+		m.oldValue = func(ctx context.Context) (*SubscriptionDailyResetEvent, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().SubscriptionDailyResetEvent.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withSubscriptionDailyResetEvent sets the old SubscriptionDailyResetEvent of the mutation.
+func withSubscriptionDailyResetEvent(node *SubscriptionDailyResetEvent) subscriptiondailyreseteventOption {
+	return func(m *SubscriptionDailyResetEventMutation) {
+		m.oldValue = func(context.Context) (*SubscriptionDailyResetEvent, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m SubscriptionDailyResetEventMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m SubscriptionDailyResetEventMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *SubscriptionDailyResetEventMutation) ID() (id int64, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *SubscriptionDailyResetEventMutation) IDs(ctx context.Context) ([]int64, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []int64{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().SubscriptionDailyResetEvent.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetSubscriptionID sets the "subscription_id" field.
+func (m *SubscriptionDailyResetEventMutation) SetSubscriptionID(i int64) {
+	m.subscription_id = &i
+	m.addsubscription_id = nil
+}
+
+// SubscriptionID returns the value of the "subscription_id" field in the mutation.
+func (m *SubscriptionDailyResetEventMutation) SubscriptionID() (r int64, exists bool) {
+	v := m.subscription_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSubscriptionID returns the old "subscription_id" field's value of the SubscriptionDailyResetEvent entity.
+// If the SubscriptionDailyResetEvent object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SubscriptionDailyResetEventMutation) OldSubscriptionID(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSubscriptionID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSubscriptionID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSubscriptionID: %w", err)
+	}
+	return oldValue.SubscriptionID, nil
+}
+
+// AddSubscriptionID adds i to the "subscription_id" field.
+func (m *SubscriptionDailyResetEventMutation) AddSubscriptionID(i int64) {
+	if m.addsubscription_id != nil {
+		*m.addsubscription_id += i
+	} else {
+		m.addsubscription_id = &i
+	}
+}
+
+// AddedSubscriptionID returns the value that was added to the "subscription_id" field in this mutation.
+func (m *SubscriptionDailyResetEventMutation) AddedSubscriptionID() (r int64, exists bool) {
+	v := m.addsubscription_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetSubscriptionID resets all changes to the "subscription_id" field.
+func (m *SubscriptionDailyResetEventMutation) ResetSubscriptionID() {
+	m.subscription_id = nil
+	m.addsubscription_id = nil
+}
+
+// SetUserID sets the "user_id" field.
+func (m *SubscriptionDailyResetEventMutation) SetUserID(i int64) {
+	m.user_id = &i
+	m.adduser_id = nil
+}
+
+// UserID returns the value of the "user_id" field in the mutation.
+func (m *SubscriptionDailyResetEventMutation) UserID() (r int64, exists bool) {
+	v := m.user_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUserID returns the old "user_id" field's value of the SubscriptionDailyResetEvent entity.
+// If the SubscriptionDailyResetEvent object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SubscriptionDailyResetEventMutation) OldUserID(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUserID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUserID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUserID: %w", err)
+	}
+	return oldValue.UserID, nil
+}
+
+// AddUserID adds i to the "user_id" field.
+func (m *SubscriptionDailyResetEventMutation) AddUserID(i int64) {
+	if m.adduser_id != nil {
+		*m.adduser_id += i
+	} else {
+		m.adduser_id = &i
+	}
+}
+
+// AddedUserID returns the value that was added to the "user_id" field in this mutation.
+func (m *SubscriptionDailyResetEventMutation) AddedUserID() (r int64, exists bool) {
+	v := m.adduser_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetUserID resets all changes to the "user_id" field.
+func (m *SubscriptionDailyResetEventMutation) ResetUserID() {
+	m.user_id = nil
+	m.adduser_id = nil
+}
+
+// SetGroupID sets the "group_id" field.
+func (m *SubscriptionDailyResetEventMutation) SetGroupID(i int64) {
+	m.group_id = &i
+	m.addgroup_id = nil
+}
+
+// GroupID returns the value of the "group_id" field in the mutation.
+func (m *SubscriptionDailyResetEventMutation) GroupID() (r int64, exists bool) {
+	v := m.group_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldGroupID returns the old "group_id" field's value of the SubscriptionDailyResetEvent entity.
+// If the SubscriptionDailyResetEvent object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SubscriptionDailyResetEventMutation) OldGroupID(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldGroupID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldGroupID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldGroupID: %w", err)
+	}
+	return oldValue.GroupID, nil
+}
+
+// AddGroupID adds i to the "group_id" field.
+func (m *SubscriptionDailyResetEventMutation) AddGroupID(i int64) {
+	if m.addgroup_id != nil {
+		*m.addgroup_id += i
+	} else {
+		m.addgroup_id = &i
+	}
+}
+
+// AddedGroupID returns the value that was added to the "group_id" field in this mutation.
+func (m *SubscriptionDailyResetEventMutation) AddedGroupID() (r int64, exists bool) {
+	v := m.addgroup_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetGroupID resets all changes to the "group_id" field.
+func (m *SubscriptionDailyResetEventMutation) ResetGroupID() {
+	m.group_id = nil
+	m.addgroup_id = nil
+}
+
+// SetSource sets the "source" field.
+func (m *SubscriptionDailyResetEventMutation) SetSource(s string) {
+	m.source = &s
+}
+
+// Source returns the value of the "source" field in the mutation.
+func (m *SubscriptionDailyResetEventMutation) Source() (r string, exists bool) {
+	v := m.source
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSource returns the old "source" field's value of the SubscriptionDailyResetEvent entity.
+// If the SubscriptionDailyResetEvent object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SubscriptionDailyResetEventMutation) OldSource(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSource is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSource requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSource: %w", err)
+	}
+	return oldValue.Source, nil
+}
+
+// ResetSource resets all changes to the "source" field.
+func (m *SubscriptionDailyResetEventMutation) ResetSource() {
+	m.source = nil
+}
+
+// SetOperationID sets the "operation_id" field.
+func (m *SubscriptionDailyResetEventMutation) SetOperationID(s string) {
+	m.operation_id = &s
+}
+
+// OperationID returns the value of the "operation_id" field in the mutation.
+func (m *SubscriptionDailyResetEventMutation) OperationID() (r string, exists bool) {
+	v := m.operation_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldOperationID returns the old "operation_id" field's value of the SubscriptionDailyResetEvent entity.
+// If the SubscriptionDailyResetEvent object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SubscriptionDailyResetEventMutation) OldOperationID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldOperationID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldOperationID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldOperationID: %w", err)
+	}
+	return oldValue.OperationID, nil
+}
+
+// ResetOperationID resets all changes to the "operation_id" field.
+func (m *SubscriptionDailyResetEventMutation) ResetOperationID() {
+	m.operation_id = nil
+}
+
+// SetRequestFingerprint sets the "request_fingerprint" field.
+func (m *SubscriptionDailyResetEventMutation) SetRequestFingerprint(s string) {
+	m.request_fingerprint = &s
+}
+
+// RequestFingerprint returns the value of the "request_fingerprint" field in the mutation.
+func (m *SubscriptionDailyResetEventMutation) RequestFingerprint() (r string, exists bool) {
+	v := m.request_fingerprint
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRequestFingerprint returns the old "request_fingerprint" field's value of the SubscriptionDailyResetEvent entity.
+// If the SubscriptionDailyResetEvent object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SubscriptionDailyResetEventMutation) OldRequestFingerprint(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRequestFingerprint is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRequestFingerprint requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRequestFingerprint: %w", err)
+	}
+	return oldValue.RequestFingerprint, nil
+}
+
+// ResetRequestFingerprint resets all changes to the "request_fingerprint" field.
+func (m *SubscriptionDailyResetEventMutation) ResetRequestFingerprint() {
+	m.request_fingerprint = nil
+}
+
+// SetBeforeVersion sets the "before_version" field.
+func (m *SubscriptionDailyResetEventMutation) SetBeforeVersion(i int64) {
+	m.before_version = &i
+	m.addbefore_version = nil
+}
+
+// BeforeVersion returns the value of the "before_version" field in the mutation.
+func (m *SubscriptionDailyResetEventMutation) BeforeVersion() (r int64, exists bool) {
+	v := m.before_version
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldBeforeVersion returns the old "before_version" field's value of the SubscriptionDailyResetEvent entity.
+// If the SubscriptionDailyResetEvent object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SubscriptionDailyResetEventMutation) OldBeforeVersion(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldBeforeVersion is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldBeforeVersion requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldBeforeVersion: %w", err)
+	}
+	return oldValue.BeforeVersion, nil
+}
+
+// AddBeforeVersion adds i to the "before_version" field.
+func (m *SubscriptionDailyResetEventMutation) AddBeforeVersion(i int64) {
+	if m.addbefore_version != nil {
+		*m.addbefore_version += i
+	} else {
+		m.addbefore_version = &i
+	}
+}
+
+// AddedBeforeVersion returns the value that was added to the "before_version" field in this mutation.
+func (m *SubscriptionDailyResetEventMutation) AddedBeforeVersion() (r int64, exists bool) {
+	v := m.addbefore_version
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetBeforeVersion resets all changes to the "before_version" field.
+func (m *SubscriptionDailyResetEventMutation) ResetBeforeVersion() {
+	m.before_version = nil
+	m.addbefore_version = nil
+}
+
+// SetAfterVersion sets the "after_version" field.
+func (m *SubscriptionDailyResetEventMutation) SetAfterVersion(i int64) {
+	m.after_version = &i
+	m.addafter_version = nil
+}
+
+// AfterVersion returns the value of the "after_version" field in the mutation.
+func (m *SubscriptionDailyResetEventMutation) AfterVersion() (r int64, exists bool) {
+	v := m.after_version
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAfterVersion returns the old "after_version" field's value of the SubscriptionDailyResetEvent entity.
+// If the SubscriptionDailyResetEvent object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SubscriptionDailyResetEventMutation) OldAfterVersion(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAfterVersion is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAfterVersion requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAfterVersion: %w", err)
+	}
+	return oldValue.AfterVersion, nil
+}
+
+// AddAfterVersion adds i to the "after_version" field.
+func (m *SubscriptionDailyResetEventMutation) AddAfterVersion(i int64) {
+	if m.addafter_version != nil {
+		*m.addafter_version += i
+	} else {
+		m.addafter_version = &i
+	}
+}
+
+// AddedAfterVersion returns the value that was added to the "after_version" field in this mutation.
+func (m *SubscriptionDailyResetEventMutation) AddedAfterVersion() (r int64, exists bool) {
+	v := m.addafter_version
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetAfterVersion resets all changes to the "after_version" field.
+func (m *SubscriptionDailyResetEventMutation) ResetAfterVersion() {
+	m.after_version = nil
+	m.addafter_version = nil
+}
+
+// SetTimezone sets the "timezone" field.
+func (m *SubscriptionDailyResetEventMutation) SetTimezone(s string) {
+	m.timezone = &s
+}
+
+// Timezone returns the value of the "timezone" field in the mutation.
+func (m *SubscriptionDailyResetEventMutation) Timezone() (r string, exists bool) {
+	v := m.timezone
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTimezone returns the old "timezone" field's value of the SubscriptionDailyResetEvent entity.
+// If the SubscriptionDailyResetEvent object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SubscriptionDailyResetEventMutation) OldTimezone(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTimezone is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTimezone requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTimezone: %w", err)
+	}
+	return oldValue.Timezone, nil
+}
+
+// ResetTimezone resets all changes to the "timezone" field.
+func (m *SubscriptionDailyResetEventMutation) ResetTimezone() {
+	m.timezone = nil
+}
+
+// SetCountDate sets the "count_date" field.
+func (m *SubscriptionDailyResetEventMutation) SetCountDate(t time.Time) {
+	m.count_date = &t
+}
+
+// CountDate returns the value of the "count_date" field in the mutation.
+func (m *SubscriptionDailyResetEventMutation) CountDate() (r time.Time, exists bool) {
+	v := m.count_date
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCountDate returns the old "count_date" field's value of the SubscriptionDailyResetEvent entity.
+// If the SubscriptionDailyResetEvent object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SubscriptionDailyResetEventMutation) OldCountDate(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCountDate is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCountDate requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCountDate: %w", err)
+	}
+	return oldValue.CountDate, nil
+}
+
+// ResetCountDate resets all changes to the "count_date" field.
+func (m *SubscriptionDailyResetEventMutation) ResetCountDate() {
+	m.count_date = nil
+}
+
+// SetDaySequence sets the "day_sequence" field.
+func (m *SubscriptionDailyResetEventMutation) SetDaySequence(i int) {
+	m.day_sequence = &i
+	m.addday_sequence = nil
+}
+
+// DaySequence returns the value of the "day_sequence" field in the mutation.
+func (m *SubscriptionDailyResetEventMutation) DaySequence() (r int, exists bool) {
+	v := m.day_sequence
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDaySequence returns the old "day_sequence" field's value of the SubscriptionDailyResetEvent entity.
+// If the SubscriptionDailyResetEvent object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SubscriptionDailyResetEventMutation) OldDaySequence(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDaySequence is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDaySequence requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDaySequence: %w", err)
+	}
+	return oldValue.DaySequence, nil
+}
+
+// AddDaySequence adds i to the "day_sequence" field.
+func (m *SubscriptionDailyResetEventMutation) AddDaySequence(i int) {
+	if m.addday_sequence != nil {
+		*m.addday_sequence += i
+	} else {
+		m.addday_sequence = &i
+	}
+}
+
+// AddedDaySequence returns the value that was added to the "day_sequence" field in this mutation.
+func (m *SubscriptionDailyResetEventMutation) AddedDaySequence() (r int, exists bool) {
+	v := m.addday_sequence
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetDaySequence resets all changes to the "day_sequence" field.
+func (m *SubscriptionDailyResetEventMutation) ResetDaySequence() {
+	m.day_sequence = nil
+	m.addday_sequence = nil
+}
+
+// SetBeforeDailyUsageUsd sets the "before_daily_usage_usd" field.
+func (m *SubscriptionDailyResetEventMutation) SetBeforeDailyUsageUsd(f float64) {
+	m.before_daily_usage_usd = &f
+	m.addbefore_daily_usage_usd = nil
+}
+
+// BeforeDailyUsageUsd returns the value of the "before_daily_usage_usd" field in the mutation.
+func (m *SubscriptionDailyResetEventMutation) BeforeDailyUsageUsd() (r float64, exists bool) {
+	v := m.before_daily_usage_usd
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldBeforeDailyUsageUsd returns the old "before_daily_usage_usd" field's value of the SubscriptionDailyResetEvent entity.
+// If the SubscriptionDailyResetEvent object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SubscriptionDailyResetEventMutation) OldBeforeDailyUsageUsd(ctx context.Context) (v float64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldBeforeDailyUsageUsd is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldBeforeDailyUsageUsd requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldBeforeDailyUsageUsd: %w", err)
+	}
+	return oldValue.BeforeDailyUsageUsd, nil
+}
+
+// AddBeforeDailyUsageUsd adds f to the "before_daily_usage_usd" field.
+func (m *SubscriptionDailyResetEventMutation) AddBeforeDailyUsageUsd(f float64) {
+	if m.addbefore_daily_usage_usd != nil {
+		*m.addbefore_daily_usage_usd += f
+	} else {
+		m.addbefore_daily_usage_usd = &f
+	}
+}
+
+// AddedBeforeDailyUsageUsd returns the value that was added to the "before_daily_usage_usd" field in this mutation.
+func (m *SubscriptionDailyResetEventMutation) AddedBeforeDailyUsageUsd() (r float64, exists bool) {
+	v := m.addbefore_daily_usage_usd
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetBeforeDailyUsageUsd resets all changes to the "before_daily_usage_usd" field.
+func (m *SubscriptionDailyResetEventMutation) ResetBeforeDailyUsageUsd() {
+	m.before_daily_usage_usd = nil
+	m.addbefore_daily_usage_usd = nil
+}
+
+// SetAfterDailyUsageUsd sets the "after_daily_usage_usd" field.
+func (m *SubscriptionDailyResetEventMutation) SetAfterDailyUsageUsd(f float64) {
+	m.after_daily_usage_usd = &f
+	m.addafter_daily_usage_usd = nil
+}
+
+// AfterDailyUsageUsd returns the value of the "after_daily_usage_usd" field in the mutation.
+func (m *SubscriptionDailyResetEventMutation) AfterDailyUsageUsd() (r float64, exists bool) {
+	v := m.after_daily_usage_usd
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAfterDailyUsageUsd returns the old "after_daily_usage_usd" field's value of the SubscriptionDailyResetEvent entity.
+// If the SubscriptionDailyResetEvent object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SubscriptionDailyResetEventMutation) OldAfterDailyUsageUsd(ctx context.Context) (v float64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAfterDailyUsageUsd is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAfterDailyUsageUsd requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAfterDailyUsageUsd: %w", err)
+	}
+	return oldValue.AfterDailyUsageUsd, nil
+}
+
+// AddAfterDailyUsageUsd adds f to the "after_daily_usage_usd" field.
+func (m *SubscriptionDailyResetEventMutation) AddAfterDailyUsageUsd(f float64) {
+	if m.addafter_daily_usage_usd != nil {
+		*m.addafter_daily_usage_usd += f
+	} else {
+		m.addafter_daily_usage_usd = &f
+	}
+}
+
+// AddedAfterDailyUsageUsd returns the value that was added to the "after_daily_usage_usd" field in this mutation.
+func (m *SubscriptionDailyResetEventMutation) AddedAfterDailyUsageUsd() (r float64, exists bool) {
+	v := m.addafter_daily_usage_usd
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetAfterDailyUsageUsd resets all changes to the "after_daily_usage_usd" field.
+func (m *SubscriptionDailyResetEventMutation) ResetAfterDailyUsageUsd() {
+	m.after_daily_usage_usd = nil
+	m.addafter_daily_usage_usd = nil
+}
+
+// SetDailyLimitUsd sets the "daily_limit_usd" field.
+func (m *SubscriptionDailyResetEventMutation) SetDailyLimitUsd(f float64) {
+	m.daily_limit_usd = &f
+	m.adddaily_limit_usd = nil
+}
+
+// DailyLimitUsd returns the value of the "daily_limit_usd" field in the mutation.
+func (m *SubscriptionDailyResetEventMutation) DailyLimitUsd() (r float64, exists bool) {
+	v := m.daily_limit_usd
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDailyLimitUsd returns the old "daily_limit_usd" field's value of the SubscriptionDailyResetEvent entity.
+// If the SubscriptionDailyResetEvent object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SubscriptionDailyResetEventMutation) OldDailyLimitUsd(ctx context.Context) (v float64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDailyLimitUsd is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDailyLimitUsd requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDailyLimitUsd: %w", err)
+	}
+	return oldValue.DailyLimitUsd, nil
+}
+
+// AddDailyLimitUsd adds f to the "daily_limit_usd" field.
+func (m *SubscriptionDailyResetEventMutation) AddDailyLimitUsd(f float64) {
+	if m.adddaily_limit_usd != nil {
+		*m.adddaily_limit_usd += f
+	} else {
+		m.adddaily_limit_usd = &f
+	}
+}
+
+// AddedDailyLimitUsd returns the value that was added to the "daily_limit_usd" field in this mutation.
+func (m *SubscriptionDailyResetEventMutation) AddedDailyLimitUsd() (r float64, exists bool) {
+	v := m.adddaily_limit_usd
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetDailyLimitUsd resets all changes to the "daily_limit_usd" field.
+func (m *SubscriptionDailyResetEventMutation) ResetDailyLimitUsd() {
+	m.daily_limit_usd = nil
+	m.adddaily_limit_usd = nil
+}
+
+// SetBeforeExpiresAt sets the "before_expires_at" field.
+func (m *SubscriptionDailyResetEventMutation) SetBeforeExpiresAt(t time.Time) {
+	m.before_expires_at = &t
+}
+
+// BeforeExpiresAt returns the value of the "before_expires_at" field in the mutation.
+func (m *SubscriptionDailyResetEventMutation) BeforeExpiresAt() (r time.Time, exists bool) {
+	v := m.before_expires_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldBeforeExpiresAt returns the old "before_expires_at" field's value of the SubscriptionDailyResetEvent entity.
+// If the SubscriptionDailyResetEvent object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SubscriptionDailyResetEventMutation) OldBeforeExpiresAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldBeforeExpiresAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldBeforeExpiresAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldBeforeExpiresAt: %w", err)
+	}
+	return oldValue.BeforeExpiresAt, nil
+}
+
+// ResetBeforeExpiresAt resets all changes to the "before_expires_at" field.
+func (m *SubscriptionDailyResetEventMutation) ResetBeforeExpiresAt() {
+	m.before_expires_at = nil
+}
+
+// SetAfterExpiresAt sets the "after_expires_at" field.
+func (m *SubscriptionDailyResetEventMutation) SetAfterExpiresAt(t time.Time) {
+	m.after_expires_at = &t
+}
+
+// AfterExpiresAt returns the value of the "after_expires_at" field in the mutation.
+func (m *SubscriptionDailyResetEventMutation) AfterExpiresAt() (r time.Time, exists bool) {
+	v := m.after_expires_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAfterExpiresAt returns the old "after_expires_at" field's value of the SubscriptionDailyResetEvent entity.
+// If the SubscriptionDailyResetEvent object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SubscriptionDailyResetEventMutation) OldAfterExpiresAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAfterExpiresAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAfterExpiresAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAfterExpiresAt: %w", err)
+	}
+	return oldValue.AfterExpiresAt, nil
+}
+
+// ResetAfterExpiresAt resets all changes to the "after_expires_at" field.
+func (m *SubscriptionDailyResetEventMutation) ResetAfterExpiresAt() {
+	m.after_expires_at = nil
+}
+
+// SetDeductedSeconds sets the "deducted_seconds" field.
+func (m *SubscriptionDailyResetEventMutation) SetDeductedSeconds(i int) {
+	m.deducted_seconds = &i
+	m.adddeducted_seconds = nil
+}
+
+// DeductedSeconds returns the value of the "deducted_seconds" field in the mutation.
+func (m *SubscriptionDailyResetEventMutation) DeductedSeconds() (r int, exists bool) {
+	v := m.deducted_seconds
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDeductedSeconds returns the old "deducted_seconds" field's value of the SubscriptionDailyResetEvent entity.
+// If the SubscriptionDailyResetEvent object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SubscriptionDailyResetEventMutation) OldDeductedSeconds(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDeductedSeconds is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDeductedSeconds requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDeductedSeconds: %w", err)
+	}
+	return oldValue.DeductedSeconds, nil
+}
+
+// AddDeductedSeconds adds i to the "deducted_seconds" field.
+func (m *SubscriptionDailyResetEventMutation) AddDeductedSeconds(i int) {
+	if m.adddeducted_seconds != nil {
+		*m.adddeducted_seconds += i
+	} else {
+		m.adddeducted_seconds = &i
+	}
+}
+
+// AddedDeductedSeconds returns the value that was added to the "deducted_seconds" field in this mutation.
+func (m *SubscriptionDailyResetEventMutation) AddedDeductedSeconds() (r int, exists bool) {
+	v := m.adddeducted_seconds
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetDeductedSeconds resets all changes to the "deducted_seconds" field.
+func (m *SubscriptionDailyResetEventMutation) ResetDeductedSeconds() {
+	m.deducted_seconds = nil
+	m.adddeducted_seconds = nil
+}
+
+// SetDecidedAt sets the "decided_at" field.
+func (m *SubscriptionDailyResetEventMutation) SetDecidedAt(t time.Time) {
+	m.decided_at = &t
+}
+
+// DecidedAt returns the value of the "decided_at" field in the mutation.
+func (m *SubscriptionDailyResetEventMutation) DecidedAt() (r time.Time, exists bool) {
+	v := m.decided_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDecidedAt returns the old "decided_at" field's value of the SubscriptionDailyResetEvent entity.
+// If the SubscriptionDailyResetEvent object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SubscriptionDailyResetEventMutation) OldDecidedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDecidedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDecidedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDecidedAt: %w", err)
+	}
+	return oldValue.DecidedAt, nil
+}
+
+// ResetDecidedAt resets all changes to the "decided_at" field.
+func (m *SubscriptionDailyResetEventMutation) ResetDecidedAt() {
+	m.decided_at = nil
+}
+
+// Where appends a list predicates to the SubscriptionDailyResetEventMutation builder.
+func (m *SubscriptionDailyResetEventMutation) Where(ps ...predicate.SubscriptionDailyResetEvent) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the SubscriptionDailyResetEventMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *SubscriptionDailyResetEventMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.SubscriptionDailyResetEvent, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *SubscriptionDailyResetEventMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *SubscriptionDailyResetEventMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (SubscriptionDailyResetEvent).
+func (m *SubscriptionDailyResetEventMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *SubscriptionDailyResetEventMutation) Fields() []string {
+	fields := make([]string, 0, 18)
+	if m.subscription_id != nil {
+		fields = append(fields, subscriptiondailyresetevent.FieldSubscriptionID)
+	}
+	if m.user_id != nil {
+		fields = append(fields, subscriptiondailyresetevent.FieldUserID)
+	}
+	if m.group_id != nil {
+		fields = append(fields, subscriptiondailyresetevent.FieldGroupID)
+	}
+	if m.source != nil {
+		fields = append(fields, subscriptiondailyresetevent.FieldSource)
+	}
+	if m.operation_id != nil {
+		fields = append(fields, subscriptiondailyresetevent.FieldOperationID)
+	}
+	if m.request_fingerprint != nil {
+		fields = append(fields, subscriptiondailyresetevent.FieldRequestFingerprint)
+	}
+	if m.before_version != nil {
+		fields = append(fields, subscriptiondailyresetevent.FieldBeforeVersion)
+	}
+	if m.after_version != nil {
+		fields = append(fields, subscriptiondailyresetevent.FieldAfterVersion)
+	}
+	if m.timezone != nil {
+		fields = append(fields, subscriptiondailyresetevent.FieldTimezone)
+	}
+	if m.count_date != nil {
+		fields = append(fields, subscriptiondailyresetevent.FieldCountDate)
+	}
+	if m.day_sequence != nil {
+		fields = append(fields, subscriptiondailyresetevent.FieldDaySequence)
+	}
+	if m.before_daily_usage_usd != nil {
+		fields = append(fields, subscriptiondailyresetevent.FieldBeforeDailyUsageUsd)
+	}
+	if m.after_daily_usage_usd != nil {
+		fields = append(fields, subscriptiondailyresetevent.FieldAfterDailyUsageUsd)
+	}
+	if m.daily_limit_usd != nil {
+		fields = append(fields, subscriptiondailyresetevent.FieldDailyLimitUsd)
+	}
+	if m.before_expires_at != nil {
+		fields = append(fields, subscriptiondailyresetevent.FieldBeforeExpiresAt)
+	}
+	if m.after_expires_at != nil {
+		fields = append(fields, subscriptiondailyresetevent.FieldAfterExpiresAt)
+	}
+	if m.deducted_seconds != nil {
+		fields = append(fields, subscriptiondailyresetevent.FieldDeductedSeconds)
+	}
+	if m.decided_at != nil {
+		fields = append(fields, subscriptiondailyresetevent.FieldDecidedAt)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *SubscriptionDailyResetEventMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case subscriptiondailyresetevent.FieldSubscriptionID:
+		return m.SubscriptionID()
+	case subscriptiondailyresetevent.FieldUserID:
+		return m.UserID()
+	case subscriptiondailyresetevent.FieldGroupID:
+		return m.GroupID()
+	case subscriptiondailyresetevent.FieldSource:
+		return m.Source()
+	case subscriptiondailyresetevent.FieldOperationID:
+		return m.OperationID()
+	case subscriptiondailyresetevent.FieldRequestFingerprint:
+		return m.RequestFingerprint()
+	case subscriptiondailyresetevent.FieldBeforeVersion:
+		return m.BeforeVersion()
+	case subscriptiondailyresetevent.FieldAfterVersion:
+		return m.AfterVersion()
+	case subscriptiondailyresetevent.FieldTimezone:
+		return m.Timezone()
+	case subscriptiondailyresetevent.FieldCountDate:
+		return m.CountDate()
+	case subscriptiondailyresetevent.FieldDaySequence:
+		return m.DaySequence()
+	case subscriptiondailyresetevent.FieldBeforeDailyUsageUsd:
+		return m.BeforeDailyUsageUsd()
+	case subscriptiondailyresetevent.FieldAfterDailyUsageUsd:
+		return m.AfterDailyUsageUsd()
+	case subscriptiondailyresetevent.FieldDailyLimitUsd:
+		return m.DailyLimitUsd()
+	case subscriptiondailyresetevent.FieldBeforeExpiresAt:
+		return m.BeforeExpiresAt()
+	case subscriptiondailyresetevent.FieldAfterExpiresAt:
+		return m.AfterExpiresAt()
+	case subscriptiondailyresetevent.FieldDeductedSeconds:
+		return m.DeductedSeconds()
+	case subscriptiondailyresetevent.FieldDecidedAt:
+		return m.DecidedAt()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *SubscriptionDailyResetEventMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case subscriptiondailyresetevent.FieldSubscriptionID:
+		return m.OldSubscriptionID(ctx)
+	case subscriptiondailyresetevent.FieldUserID:
+		return m.OldUserID(ctx)
+	case subscriptiondailyresetevent.FieldGroupID:
+		return m.OldGroupID(ctx)
+	case subscriptiondailyresetevent.FieldSource:
+		return m.OldSource(ctx)
+	case subscriptiondailyresetevent.FieldOperationID:
+		return m.OldOperationID(ctx)
+	case subscriptiondailyresetevent.FieldRequestFingerprint:
+		return m.OldRequestFingerprint(ctx)
+	case subscriptiondailyresetevent.FieldBeforeVersion:
+		return m.OldBeforeVersion(ctx)
+	case subscriptiondailyresetevent.FieldAfterVersion:
+		return m.OldAfterVersion(ctx)
+	case subscriptiondailyresetevent.FieldTimezone:
+		return m.OldTimezone(ctx)
+	case subscriptiondailyresetevent.FieldCountDate:
+		return m.OldCountDate(ctx)
+	case subscriptiondailyresetevent.FieldDaySequence:
+		return m.OldDaySequence(ctx)
+	case subscriptiondailyresetevent.FieldBeforeDailyUsageUsd:
+		return m.OldBeforeDailyUsageUsd(ctx)
+	case subscriptiondailyresetevent.FieldAfterDailyUsageUsd:
+		return m.OldAfterDailyUsageUsd(ctx)
+	case subscriptiondailyresetevent.FieldDailyLimitUsd:
+		return m.OldDailyLimitUsd(ctx)
+	case subscriptiondailyresetevent.FieldBeforeExpiresAt:
+		return m.OldBeforeExpiresAt(ctx)
+	case subscriptiondailyresetevent.FieldAfterExpiresAt:
+		return m.OldAfterExpiresAt(ctx)
+	case subscriptiondailyresetevent.FieldDeductedSeconds:
+		return m.OldDeductedSeconds(ctx)
+	case subscriptiondailyresetevent.FieldDecidedAt:
+		return m.OldDecidedAt(ctx)
+	}
+	return nil, fmt.Errorf("unknown SubscriptionDailyResetEvent field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *SubscriptionDailyResetEventMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case subscriptiondailyresetevent.FieldSubscriptionID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSubscriptionID(v)
+		return nil
+	case subscriptiondailyresetevent.FieldUserID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUserID(v)
+		return nil
+	case subscriptiondailyresetevent.FieldGroupID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetGroupID(v)
+		return nil
+	case subscriptiondailyresetevent.FieldSource:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSource(v)
+		return nil
+	case subscriptiondailyresetevent.FieldOperationID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetOperationID(v)
+		return nil
+	case subscriptiondailyresetevent.FieldRequestFingerprint:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRequestFingerprint(v)
+		return nil
+	case subscriptiondailyresetevent.FieldBeforeVersion:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetBeforeVersion(v)
+		return nil
+	case subscriptiondailyresetevent.FieldAfterVersion:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAfterVersion(v)
+		return nil
+	case subscriptiondailyresetevent.FieldTimezone:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTimezone(v)
+		return nil
+	case subscriptiondailyresetevent.FieldCountDate:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCountDate(v)
+		return nil
+	case subscriptiondailyresetevent.FieldDaySequence:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDaySequence(v)
+		return nil
+	case subscriptiondailyresetevent.FieldBeforeDailyUsageUsd:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetBeforeDailyUsageUsd(v)
+		return nil
+	case subscriptiondailyresetevent.FieldAfterDailyUsageUsd:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAfterDailyUsageUsd(v)
+		return nil
+	case subscriptiondailyresetevent.FieldDailyLimitUsd:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDailyLimitUsd(v)
+		return nil
+	case subscriptiondailyresetevent.FieldBeforeExpiresAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetBeforeExpiresAt(v)
+		return nil
+	case subscriptiondailyresetevent.FieldAfterExpiresAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAfterExpiresAt(v)
+		return nil
+	case subscriptiondailyresetevent.FieldDeductedSeconds:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDeductedSeconds(v)
+		return nil
+	case subscriptiondailyresetevent.FieldDecidedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDecidedAt(v)
+		return nil
+	}
+	return fmt.Errorf("unknown SubscriptionDailyResetEvent field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *SubscriptionDailyResetEventMutation) AddedFields() []string {
+	var fields []string
+	if m.addsubscription_id != nil {
+		fields = append(fields, subscriptiondailyresetevent.FieldSubscriptionID)
+	}
+	if m.adduser_id != nil {
+		fields = append(fields, subscriptiondailyresetevent.FieldUserID)
+	}
+	if m.addgroup_id != nil {
+		fields = append(fields, subscriptiondailyresetevent.FieldGroupID)
+	}
+	if m.addbefore_version != nil {
+		fields = append(fields, subscriptiondailyresetevent.FieldBeforeVersion)
+	}
+	if m.addafter_version != nil {
+		fields = append(fields, subscriptiondailyresetevent.FieldAfterVersion)
+	}
+	if m.addday_sequence != nil {
+		fields = append(fields, subscriptiondailyresetevent.FieldDaySequence)
+	}
+	if m.addbefore_daily_usage_usd != nil {
+		fields = append(fields, subscriptiondailyresetevent.FieldBeforeDailyUsageUsd)
+	}
+	if m.addafter_daily_usage_usd != nil {
+		fields = append(fields, subscriptiondailyresetevent.FieldAfterDailyUsageUsd)
+	}
+	if m.adddaily_limit_usd != nil {
+		fields = append(fields, subscriptiondailyresetevent.FieldDailyLimitUsd)
+	}
+	if m.adddeducted_seconds != nil {
+		fields = append(fields, subscriptiondailyresetevent.FieldDeductedSeconds)
+	}
+	return fields
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *SubscriptionDailyResetEventMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	case subscriptiondailyresetevent.FieldSubscriptionID:
+		return m.AddedSubscriptionID()
+	case subscriptiondailyresetevent.FieldUserID:
+		return m.AddedUserID()
+	case subscriptiondailyresetevent.FieldGroupID:
+		return m.AddedGroupID()
+	case subscriptiondailyresetevent.FieldBeforeVersion:
+		return m.AddedBeforeVersion()
+	case subscriptiondailyresetevent.FieldAfterVersion:
+		return m.AddedAfterVersion()
+	case subscriptiondailyresetevent.FieldDaySequence:
+		return m.AddedDaySequence()
+	case subscriptiondailyresetevent.FieldBeforeDailyUsageUsd:
+		return m.AddedBeforeDailyUsageUsd()
+	case subscriptiondailyresetevent.FieldAfterDailyUsageUsd:
+		return m.AddedAfterDailyUsageUsd()
+	case subscriptiondailyresetevent.FieldDailyLimitUsd:
+		return m.AddedDailyLimitUsd()
+	case subscriptiondailyresetevent.FieldDeductedSeconds:
+		return m.AddedDeductedSeconds()
+	}
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *SubscriptionDailyResetEventMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	case subscriptiondailyresetevent.FieldSubscriptionID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddSubscriptionID(v)
+		return nil
+	case subscriptiondailyresetevent.FieldUserID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddUserID(v)
+		return nil
+	case subscriptiondailyresetevent.FieldGroupID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddGroupID(v)
+		return nil
+	case subscriptiondailyresetevent.FieldBeforeVersion:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddBeforeVersion(v)
+		return nil
+	case subscriptiondailyresetevent.FieldAfterVersion:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddAfterVersion(v)
+		return nil
+	case subscriptiondailyresetevent.FieldDaySequence:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddDaySequence(v)
+		return nil
+	case subscriptiondailyresetevent.FieldBeforeDailyUsageUsd:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddBeforeDailyUsageUsd(v)
+		return nil
+	case subscriptiondailyresetevent.FieldAfterDailyUsageUsd:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddAfterDailyUsageUsd(v)
+		return nil
+	case subscriptiondailyresetevent.FieldDailyLimitUsd:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddDailyLimitUsd(v)
+		return nil
+	case subscriptiondailyresetevent.FieldDeductedSeconds:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddDeductedSeconds(v)
+		return nil
+	}
+	return fmt.Errorf("unknown SubscriptionDailyResetEvent numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *SubscriptionDailyResetEventMutation) ClearedFields() []string {
+	return nil
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *SubscriptionDailyResetEventMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *SubscriptionDailyResetEventMutation) ClearField(name string) error {
+	return fmt.Errorf("unknown SubscriptionDailyResetEvent nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *SubscriptionDailyResetEventMutation) ResetField(name string) error {
+	switch name {
+	case subscriptiondailyresetevent.FieldSubscriptionID:
+		m.ResetSubscriptionID()
+		return nil
+	case subscriptiondailyresetevent.FieldUserID:
+		m.ResetUserID()
+		return nil
+	case subscriptiondailyresetevent.FieldGroupID:
+		m.ResetGroupID()
+		return nil
+	case subscriptiondailyresetevent.FieldSource:
+		m.ResetSource()
+		return nil
+	case subscriptiondailyresetevent.FieldOperationID:
+		m.ResetOperationID()
+		return nil
+	case subscriptiondailyresetevent.FieldRequestFingerprint:
+		m.ResetRequestFingerprint()
+		return nil
+	case subscriptiondailyresetevent.FieldBeforeVersion:
+		m.ResetBeforeVersion()
+		return nil
+	case subscriptiondailyresetevent.FieldAfterVersion:
+		m.ResetAfterVersion()
+		return nil
+	case subscriptiondailyresetevent.FieldTimezone:
+		m.ResetTimezone()
+		return nil
+	case subscriptiondailyresetevent.FieldCountDate:
+		m.ResetCountDate()
+		return nil
+	case subscriptiondailyresetevent.FieldDaySequence:
+		m.ResetDaySequence()
+		return nil
+	case subscriptiondailyresetevent.FieldBeforeDailyUsageUsd:
+		m.ResetBeforeDailyUsageUsd()
+		return nil
+	case subscriptiondailyresetevent.FieldAfterDailyUsageUsd:
+		m.ResetAfterDailyUsageUsd()
+		return nil
+	case subscriptiondailyresetevent.FieldDailyLimitUsd:
+		m.ResetDailyLimitUsd()
+		return nil
+	case subscriptiondailyresetevent.FieldBeforeExpiresAt:
+		m.ResetBeforeExpiresAt()
+		return nil
+	case subscriptiondailyresetevent.FieldAfterExpiresAt:
+		m.ResetAfterExpiresAt()
+		return nil
+	case subscriptiondailyresetevent.FieldDeductedSeconds:
+		m.ResetDeductedSeconds()
+		return nil
+	case subscriptiondailyresetevent.FieldDecidedAt:
+		m.ResetDecidedAt()
+		return nil
+	}
+	return fmt.Errorf("unknown SubscriptionDailyResetEvent field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *SubscriptionDailyResetEventMutation) AddedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *SubscriptionDailyResetEventMutation) AddedIDs(name string) []ent.Value {
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *SubscriptionDailyResetEventMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *SubscriptionDailyResetEventMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *SubscriptionDailyResetEventMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *SubscriptionDailyResetEventMutation) EdgeCleared(name string) bool {
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *SubscriptionDailyResetEventMutation) ClearEdge(name string) error {
+	return fmt.Errorf("unknown SubscriptionDailyResetEvent unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *SubscriptionDailyResetEventMutation) ResetEdge(name string) error {
+	return fmt.Errorf("unknown SubscriptionDailyResetEvent edge %s", name)
 }
 
 // SubscriptionPlanMutation represents an operation that mutates the SubscriptionPlan nodes in the graph.
@@ -55282,39 +56915,43 @@ func (m *UserPlatformQuotaMutation) ResetEdge(name string) error {
 // UserSubscriptionMutation represents an operation that mutates the UserSubscription nodes in the graph.
 type UserSubscriptionMutation struct {
 	config
-	op                      Op
-	typ                     string
-	id                      *int64
-	created_at              *time.Time
-	updated_at              *time.Time
-	deleted_at              *time.Time
-	starts_at               *time.Time
-	expires_at              *time.Time
-	status                  *string
-	daily_window_start      *time.Time
-	weekly_window_start     *time.Time
-	monthly_window_start    *time.Time
-	daily_usage_usd         *float64
-	adddaily_usage_usd      *float64
-	weekly_usage_usd        *float64
-	addweekly_usage_usd     *float64
-	monthly_usage_usd       *float64
-	addmonthly_usage_usd    *float64
-	assigned_at             *time.Time
-	notes                   *string
-	clearedFields           map[string]struct{}
-	user                    *int64
-	cleareduser             bool
-	group                   *int64
-	clearedgroup            bool
-	assigned_by_user        *int64
-	clearedassigned_by_user bool
-	usage_logs              map[int64]struct{}
-	removedusage_logs       map[int64]struct{}
-	clearedusage_logs       bool
-	done                    bool
-	oldValue                func(context.Context) (*UserSubscription, error)
-	predicates              []predicate.UserSubscription
+	op                            Op
+	typ                           string
+	id                            *int64
+	created_at                    *time.Time
+	updated_at                    *time.Time
+	deleted_at                    *time.Time
+	starts_at                     *time.Time
+	expires_at                    *time.Time
+	status                        *string
+	auto_daily_reset_enabled      *bool
+	daily_reset_version           *int64
+	adddaily_reset_version        *int64
+	preserve_calendar_daily_reset *bool
+	daily_window_start            *time.Time
+	weekly_window_start           *time.Time
+	monthly_window_start          *time.Time
+	daily_usage_usd               *float64
+	adddaily_usage_usd            *float64
+	weekly_usage_usd              *float64
+	addweekly_usage_usd           *float64
+	monthly_usage_usd             *float64
+	addmonthly_usage_usd          *float64
+	assigned_at                   *time.Time
+	notes                         *string
+	clearedFields                 map[string]struct{}
+	user                          *int64
+	cleareduser                   bool
+	group                         *int64
+	clearedgroup                  bool
+	assigned_by_user              *int64
+	clearedassigned_by_user       bool
+	usage_logs                    map[int64]struct{}
+	removedusage_logs             map[int64]struct{}
+	clearedusage_logs             bool
+	done                          bool
+	oldValue                      func(context.Context) (*UserSubscription, error)
+	predicates                    []predicate.UserSubscription
 }
 
 var _ ent.Mutation = (*UserSubscriptionMutation)(nil)
@@ -55714,6 +57351,134 @@ func (m *UserSubscriptionMutation) OldStatus(ctx context.Context) (v string, err
 // ResetStatus resets all changes to the "status" field.
 func (m *UserSubscriptionMutation) ResetStatus() {
 	m.status = nil
+}
+
+// SetAutoDailyResetEnabled sets the "auto_daily_reset_enabled" field.
+func (m *UserSubscriptionMutation) SetAutoDailyResetEnabled(b bool) {
+	m.auto_daily_reset_enabled = &b
+}
+
+// AutoDailyResetEnabled returns the value of the "auto_daily_reset_enabled" field in the mutation.
+func (m *UserSubscriptionMutation) AutoDailyResetEnabled() (r bool, exists bool) {
+	v := m.auto_daily_reset_enabled
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAutoDailyResetEnabled returns the old "auto_daily_reset_enabled" field's value of the UserSubscription entity.
+// If the UserSubscription object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UserSubscriptionMutation) OldAutoDailyResetEnabled(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAutoDailyResetEnabled is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAutoDailyResetEnabled requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAutoDailyResetEnabled: %w", err)
+	}
+	return oldValue.AutoDailyResetEnabled, nil
+}
+
+// ResetAutoDailyResetEnabled resets all changes to the "auto_daily_reset_enabled" field.
+func (m *UserSubscriptionMutation) ResetAutoDailyResetEnabled() {
+	m.auto_daily_reset_enabled = nil
+}
+
+// SetDailyResetVersion sets the "daily_reset_version" field.
+func (m *UserSubscriptionMutation) SetDailyResetVersion(i int64) {
+	m.daily_reset_version = &i
+	m.adddaily_reset_version = nil
+}
+
+// DailyResetVersion returns the value of the "daily_reset_version" field in the mutation.
+func (m *UserSubscriptionMutation) DailyResetVersion() (r int64, exists bool) {
+	v := m.daily_reset_version
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDailyResetVersion returns the old "daily_reset_version" field's value of the UserSubscription entity.
+// If the UserSubscription object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UserSubscriptionMutation) OldDailyResetVersion(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDailyResetVersion is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDailyResetVersion requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDailyResetVersion: %w", err)
+	}
+	return oldValue.DailyResetVersion, nil
+}
+
+// AddDailyResetVersion adds i to the "daily_reset_version" field.
+func (m *UserSubscriptionMutation) AddDailyResetVersion(i int64) {
+	if m.adddaily_reset_version != nil {
+		*m.adddaily_reset_version += i
+	} else {
+		m.adddaily_reset_version = &i
+	}
+}
+
+// AddedDailyResetVersion returns the value that was added to the "daily_reset_version" field in this mutation.
+func (m *UserSubscriptionMutation) AddedDailyResetVersion() (r int64, exists bool) {
+	v := m.adddaily_reset_version
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetDailyResetVersion resets all changes to the "daily_reset_version" field.
+func (m *UserSubscriptionMutation) ResetDailyResetVersion() {
+	m.daily_reset_version = nil
+	m.adddaily_reset_version = nil
+}
+
+// SetPreserveCalendarDailyReset sets the "preserve_calendar_daily_reset" field.
+func (m *UserSubscriptionMutation) SetPreserveCalendarDailyReset(b bool) {
+	m.preserve_calendar_daily_reset = &b
+}
+
+// PreserveCalendarDailyReset returns the value of the "preserve_calendar_daily_reset" field in the mutation.
+func (m *UserSubscriptionMutation) PreserveCalendarDailyReset() (r bool, exists bool) {
+	v := m.preserve_calendar_daily_reset
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPreserveCalendarDailyReset returns the old "preserve_calendar_daily_reset" field's value of the UserSubscription entity.
+// If the UserSubscription object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UserSubscriptionMutation) OldPreserveCalendarDailyReset(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPreserveCalendarDailyReset is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPreserveCalendarDailyReset requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPreserveCalendarDailyReset: %w", err)
+	}
+	return oldValue.PreserveCalendarDailyReset, nil
+}
+
+// ResetPreserveCalendarDailyReset resets all changes to the "preserve_calendar_daily_reset" field.
+func (m *UserSubscriptionMutation) ResetPreserveCalendarDailyReset() {
+	m.preserve_calendar_daily_reset = nil
 }
 
 // SetDailyWindowStart sets the "daily_window_start" field.
@@ -56347,7 +58112,7 @@ func (m *UserSubscriptionMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *UserSubscriptionMutation) Fields() []string {
-	fields := make([]string, 0, 17)
+	fields := make([]string, 0, 20)
 	if m.created_at != nil {
 		fields = append(fields, usersubscription.FieldCreatedAt)
 	}
@@ -56371,6 +58136,15 @@ func (m *UserSubscriptionMutation) Fields() []string {
 	}
 	if m.status != nil {
 		fields = append(fields, usersubscription.FieldStatus)
+	}
+	if m.auto_daily_reset_enabled != nil {
+		fields = append(fields, usersubscription.FieldAutoDailyResetEnabled)
+	}
+	if m.daily_reset_version != nil {
+		fields = append(fields, usersubscription.FieldDailyResetVersion)
+	}
+	if m.preserve_calendar_daily_reset != nil {
+		fields = append(fields, usersubscription.FieldPreserveCalendarDailyReset)
 	}
 	if m.daily_window_start != nil {
 		fields = append(fields, usersubscription.FieldDailyWindowStart)
@@ -56423,6 +58197,12 @@ func (m *UserSubscriptionMutation) Field(name string) (ent.Value, bool) {
 		return m.ExpiresAt()
 	case usersubscription.FieldStatus:
 		return m.Status()
+	case usersubscription.FieldAutoDailyResetEnabled:
+		return m.AutoDailyResetEnabled()
+	case usersubscription.FieldDailyResetVersion:
+		return m.DailyResetVersion()
+	case usersubscription.FieldPreserveCalendarDailyReset:
+		return m.PreserveCalendarDailyReset()
 	case usersubscription.FieldDailyWindowStart:
 		return m.DailyWindowStart()
 	case usersubscription.FieldWeeklyWindowStart:
@@ -56466,6 +58246,12 @@ func (m *UserSubscriptionMutation) OldField(ctx context.Context, name string) (e
 		return m.OldExpiresAt(ctx)
 	case usersubscription.FieldStatus:
 		return m.OldStatus(ctx)
+	case usersubscription.FieldAutoDailyResetEnabled:
+		return m.OldAutoDailyResetEnabled(ctx)
+	case usersubscription.FieldDailyResetVersion:
+		return m.OldDailyResetVersion(ctx)
+	case usersubscription.FieldPreserveCalendarDailyReset:
+		return m.OldPreserveCalendarDailyReset(ctx)
 	case usersubscription.FieldDailyWindowStart:
 		return m.OldDailyWindowStart(ctx)
 	case usersubscription.FieldWeeklyWindowStart:
@@ -56549,6 +58335,27 @@ func (m *UserSubscriptionMutation) SetField(name string, value ent.Value) error 
 		}
 		m.SetStatus(v)
 		return nil
+	case usersubscription.FieldAutoDailyResetEnabled:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAutoDailyResetEnabled(v)
+		return nil
+	case usersubscription.FieldDailyResetVersion:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDailyResetVersion(v)
+		return nil
+	case usersubscription.FieldPreserveCalendarDailyReset:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPreserveCalendarDailyReset(v)
+		return nil
 	case usersubscription.FieldDailyWindowStart:
 		v, ok := value.(time.Time)
 		if !ok {
@@ -56620,6 +58427,9 @@ func (m *UserSubscriptionMutation) SetField(name string, value ent.Value) error 
 // this mutation.
 func (m *UserSubscriptionMutation) AddedFields() []string {
 	var fields []string
+	if m.adddaily_reset_version != nil {
+		fields = append(fields, usersubscription.FieldDailyResetVersion)
+	}
 	if m.adddaily_usage_usd != nil {
 		fields = append(fields, usersubscription.FieldDailyUsageUsd)
 	}
@@ -56637,6 +58447,8 @@ func (m *UserSubscriptionMutation) AddedFields() []string {
 // was not set, or was not defined in the schema.
 func (m *UserSubscriptionMutation) AddedField(name string) (ent.Value, bool) {
 	switch name {
+	case usersubscription.FieldDailyResetVersion:
+		return m.AddedDailyResetVersion()
 	case usersubscription.FieldDailyUsageUsd:
 		return m.AddedDailyUsageUsd()
 	case usersubscription.FieldWeeklyUsageUsd:
@@ -56652,6 +58464,13 @@ func (m *UserSubscriptionMutation) AddedField(name string) (ent.Value, bool) {
 // type.
 func (m *UserSubscriptionMutation) AddField(name string, value ent.Value) error {
 	switch name {
+	case usersubscription.FieldDailyResetVersion:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddDailyResetVersion(v)
+		return nil
 	case usersubscription.FieldDailyUsageUsd:
 		v, ok := value.(float64)
 		if !ok {
@@ -56762,6 +58581,15 @@ func (m *UserSubscriptionMutation) ResetField(name string) error {
 		return nil
 	case usersubscription.FieldStatus:
 		m.ResetStatus()
+		return nil
+	case usersubscription.FieldAutoDailyResetEnabled:
+		m.ResetAutoDailyResetEnabled()
+		return nil
+	case usersubscription.FieldDailyResetVersion:
+		m.ResetDailyResetVersion()
+		return nil
+	case usersubscription.FieldPreserveCalendarDailyReset:
+		m.ResetPreserveCalendarDailyReset()
 		return nil
 	case usersubscription.FieldDailyWindowStart:
 		m.ResetDailyWindowStart()

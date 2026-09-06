@@ -237,6 +237,20 @@ func (_u *GroupUpdate) SetNillableSubscriptionType(v *string) *GroupUpdate {
 	return _u
 }
 
+// SetAllowSubscriptionDayReset sets the "allow_subscription_day_reset" field.
+func (_u *GroupUpdate) SetAllowSubscriptionDayReset(v bool) *GroupUpdate {
+	_u.mutation.SetAllowSubscriptionDayReset(v)
+	return _u
+}
+
+// SetNillableAllowSubscriptionDayReset sets the "allow_subscription_day_reset" field if the given value is not nil.
+func (_u *GroupUpdate) SetNillableAllowSubscriptionDayReset(v *bool) *GroupUpdate {
+	if v != nil {
+		_u.SetAllowSubscriptionDayReset(*v)
+	}
+	return _u
+}
+
 // SetDailyLimitUsd sets the "daily_limit_usd" field.
 func (_u *GroupUpdate) SetDailyLimitUsd(v float64) *GroupUpdate {
 	_u.mutation.ResetDailyLimitUsd()
@@ -1617,6 +1631,9 @@ func (_u *GroupUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if value, ok := _u.mutation.SubscriptionType(); ok {
 		_spec.SetField(group.FieldSubscriptionType, field.TypeString, value)
 	}
+	if value, ok := _u.mutation.AllowSubscriptionDayReset(); ok {
+		_spec.SetField(group.FieldAllowSubscriptionDayReset, field.TypeBool, value)
+	}
 	if value, ok := _u.mutation.DailyLimitUsd(); ok {
 		_spec.SetField(group.FieldDailyLimitUsd, field.TypeFloat64, value)
 	}
@@ -2427,6 +2444,20 @@ func (_u *GroupUpdateOne) SetSubscriptionType(v string) *GroupUpdateOne {
 func (_u *GroupUpdateOne) SetNillableSubscriptionType(v *string) *GroupUpdateOne {
 	if v != nil {
 		_u.SetSubscriptionType(*v)
+	}
+	return _u
+}
+
+// SetAllowSubscriptionDayReset sets the "allow_subscription_day_reset" field.
+func (_u *GroupUpdateOne) SetAllowSubscriptionDayReset(v bool) *GroupUpdateOne {
+	_u.mutation.SetAllowSubscriptionDayReset(v)
+	return _u
+}
+
+// SetNillableAllowSubscriptionDayReset sets the "allow_subscription_day_reset" field if the given value is not nil.
+func (_u *GroupUpdateOne) SetNillableAllowSubscriptionDayReset(v *bool) *GroupUpdateOne {
+	if v != nil {
+		_u.SetAllowSubscriptionDayReset(*v)
 	}
 	return _u
 }
@@ -3840,6 +3871,9 @@ func (_u *GroupUpdateOne) sqlSave(ctx context.Context) (_node *Group, err error)
 	}
 	if value, ok := _u.mutation.SubscriptionType(); ok {
 		_spec.SetField(group.FieldSubscriptionType, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.AllowSubscriptionDayReset(); ok {
+		_spec.SetField(group.FieldAllowSubscriptionDayReset, field.TypeBool, value)
 	}
 	if value, ok := _u.mutation.DailyLimitUsd(); ok {
 		_spec.SetField(group.FieldDailyLimitUsd, field.TypeFloat64, value)

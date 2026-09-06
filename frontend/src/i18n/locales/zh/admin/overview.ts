@@ -984,6 +984,7 @@ export default {
         standard: '标准（余额）',
         subscription: '订阅（配额）',
         dailyLimit: '每日限额（USD）',
+        allowDayReset: '允许月卡提前重置日额度（每次扣减 24 小时有效期）',
         weeklyLimit: '每周限额（USD）',
         monthlyLimit: '每月限额（USD）',
         defaultValidityDays: '默认有效期（天）',

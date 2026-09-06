@@ -25,6 +25,11 @@ type UserSubscription struct {
 	WeeklyUsageUSD  float64
 	MonthlyUsageUSD float64
 
+	AutoDailyResetEnabled      bool
+	DailyResetVersion          int64
+	PreserveCalendarDailyReset bool
+	DailyResetState            *DailyResetState
+
 	AssignedBy *int64
 	AssignedAt time.Time
 	Notes      string
@@ -68,7 +73,7 @@ func (s *UserSubscription) IsWindowActivated() bool {
 }
 
 func (s *UserSubscription) HasOneTimeDailyQuota() bool {
-	if s == nil || s.StartsAt.IsZero() || s.ExpiresAt.IsZero() {
+	if s == nil || s.PreserveCalendarDailyReset || s.StartsAt.IsZero() || s.ExpiresAt.IsZero() {
 		return false
 	}
 	return !s.ExpiresAt.After(s.StartsAt.AddDate(0, 0, 1))

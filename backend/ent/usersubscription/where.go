@@ -95,6 +95,21 @@ func Status(v string) predicate.UserSubscription {
 	return predicate.UserSubscription(sql.FieldEQ(FieldStatus, v))
 }
 
+// AutoDailyResetEnabled applies equality check predicate on the "auto_daily_reset_enabled" field. It's identical to AutoDailyResetEnabledEQ.
+func AutoDailyResetEnabled(v bool) predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldEQ(FieldAutoDailyResetEnabled, v))
+}
+
+// DailyResetVersion applies equality check predicate on the "daily_reset_version" field. It's identical to DailyResetVersionEQ.
+func DailyResetVersion(v int64) predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldEQ(FieldDailyResetVersion, v))
+}
+
+// PreserveCalendarDailyReset applies equality check predicate on the "preserve_calendar_daily_reset" field. It's identical to PreserveCalendarDailyResetEQ.
+func PreserveCalendarDailyReset(v bool) predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldEQ(FieldPreserveCalendarDailyReset, v))
+}
+
 // DailyWindowStart applies equality check predicate on the "daily_window_start" field. It's identical to DailyWindowStartEQ.
 func DailyWindowStart(v time.Time) predicate.UserSubscription {
 	return predicate.UserSubscription(sql.FieldEQ(FieldDailyWindowStart, v))
@@ -453,6 +468,66 @@ func StatusEqualFold(v string) predicate.UserSubscription {
 // StatusContainsFold applies the ContainsFold predicate on the "status" field.
 func StatusContainsFold(v string) predicate.UserSubscription {
 	return predicate.UserSubscription(sql.FieldContainsFold(FieldStatus, v))
+}
+
+// AutoDailyResetEnabledEQ applies the EQ predicate on the "auto_daily_reset_enabled" field.
+func AutoDailyResetEnabledEQ(v bool) predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldEQ(FieldAutoDailyResetEnabled, v))
+}
+
+// AutoDailyResetEnabledNEQ applies the NEQ predicate on the "auto_daily_reset_enabled" field.
+func AutoDailyResetEnabledNEQ(v bool) predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldNEQ(FieldAutoDailyResetEnabled, v))
+}
+
+// DailyResetVersionEQ applies the EQ predicate on the "daily_reset_version" field.
+func DailyResetVersionEQ(v int64) predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldEQ(FieldDailyResetVersion, v))
+}
+
+// DailyResetVersionNEQ applies the NEQ predicate on the "daily_reset_version" field.
+func DailyResetVersionNEQ(v int64) predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldNEQ(FieldDailyResetVersion, v))
+}
+
+// DailyResetVersionIn applies the In predicate on the "daily_reset_version" field.
+func DailyResetVersionIn(vs ...int64) predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldIn(FieldDailyResetVersion, vs...))
+}
+
+// DailyResetVersionNotIn applies the NotIn predicate on the "daily_reset_version" field.
+func DailyResetVersionNotIn(vs ...int64) predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldNotIn(FieldDailyResetVersion, vs...))
+}
+
+// DailyResetVersionGT applies the GT predicate on the "daily_reset_version" field.
+func DailyResetVersionGT(v int64) predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldGT(FieldDailyResetVersion, v))
+}
+
+// DailyResetVersionGTE applies the GTE predicate on the "daily_reset_version" field.
+func DailyResetVersionGTE(v int64) predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldGTE(FieldDailyResetVersion, v))
+}
+
+// DailyResetVersionLT applies the LT predicate on the "daily_reset_version" field.
+func DailyResetVersionLT(v int64) predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldLT(FieldDailyResetVersion, v))
+}
+
+// DailyResetVersionLTE applies the LTE predicate on the "daily_reset_version" field.
+func DailyResetVersionLTE(v int64) predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldLTE(FieldDailyResetVersion, v))
+}
+
+// PreserveCalendarDailyResetEQ applies the EQ predicate on the "preserve_calendar_daily_reset" field.
+func PreserveCalendarDailyResetEQ(v bool) predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldEQ(FieldPreserveCalendarDailyReset, v))
+}
+
+// PreserveCalendarDailyResetNEQ applies the NEQ predicate on the "preserve_calendar_daily_reset" field.
+func PreserveCalendarDailyResetNEQ(v bool) predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldNEQ(FieldPreserveCalendarDailyReset, v))
 }
 
 // DailyWindowStartEQ applies the EQ predicate on the "daily_window_start" field.

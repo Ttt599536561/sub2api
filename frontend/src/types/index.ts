@@ -569,6 +569,7 @@ export interface Group {
   daily_limit_usd: number | null
   weekly_limit_usd: number | null
   monthly_limit_usd: number | null
+  allow_subscription_day_reset?: boolean
   long_context_pricing_enabled: boolean
   // 图片生成计费配置
   allow_image_generation: boolean
@@ -789,6 +790,7 @@ export interface CreateGroupRequest {
   daily_limit_usd?: number | null
   weekly_limit_usd?: number | null
   monthly_limit_usd?: number | null
+  allow_subscription_day_reset?: boolean
   long_context_pricing_enabled?: boolean
   force_openai_fast?: boolean
   free_openai_fast?: boolean
@@ -855,6 +857,7 @@ export interface UpdateGroupRequest {
   daily_limit_usd?: number | null
   weekly_limit_usd?: number | null
   monthly_limit_usd?: number | null
+  allow_subscription_day_reset?: boolean
   long_context_pricing_enabled?: boolean
   force_openai_fast?: boolean
   free_openai_fast?: boolean
@@ -2049,6 +2052,29 @@ export interface UserSubscription {
   expires_at: string | null
   user?: User
   group?: Group
+  preserve_calendar_daily_reset?: boolean
+  daily_reset?: SubscriptionDailyResetState
+}
+
+export interface SubscriptionDailyResetState {
+  eligible: boolean
+  can_reset: boolean
+  auto_daily_reset_enabled: boolean
+  today_reset_count: number
+  daily_reset_limit: number
+  daily_reset_version: number
+  server_date: string
+  server_time: string
+  reason?: string
+}
+
+export interface DailyResetMutationResult {
+  operation_id: string
+  replayed: boolean
+  subscription: UserSubscription
+  reset_performed: boolean
+  preference_saved?: boolean
+  check_error?: string
 }
 
 export interface SubscriptionProgress {
