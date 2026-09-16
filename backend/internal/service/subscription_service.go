@@ -675,6 +675,8 @@ func (s *SubscriptionService) ExtendSubscription(ctx context.Context, subscripti
 	var sub *UserSubscription
 	err := s.withSubscriptionUpdateTx(ctx, func(txCtx context.Context) error {
 		var err error
+		// Read the current expiry under the row lock so concurrent adjustments
+		// and paid daily resets cannot overwrite each other's duration changes.
 		sub, err = s.userSubRepo.GetByIDForUpdate(txCtx, subscriptionID)
 		if err != nil {
 			return ErrSubscriptionNotFound
@@ -727,6 +729,8 @@ func (s *SubscriptionService) ExtendSubscription(ctx context.Context, subscripti
 		}()
 	}
 
+	// Repository writes do not mutate the locked snapshot. Return the updated
+	// expiry and renewal preferences, also when called inside a bulk transaction.
 	return s.userSubRepo.GetByID(ctx, subscriptionID)
 }
 
