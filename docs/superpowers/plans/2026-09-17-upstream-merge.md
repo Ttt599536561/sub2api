@@ -37,5 +37,5 @@
 
 - [x] Update `docs/MONTHLY_SUBSCRIPTION_DAILY_RESET.md` and write an integration record listing actual custom changes, resolved conflicts, current verification and any limitations.
 - [x] Confirm there are no unresolved conflicts or whitespace errors in changes relative to upstream, the exact upstream head is included, and historical migration bytes are unchanged. All 282 existing SQL migration blobs are unchanged. Preserve upstream prompt text verbatim even though its newly added lines contain inherited trailing spaces.
-- [ ] Commit the validated merge and fast-forward the user's original feature branch to it, preserving unrelated untracked files.
-- [ ] Report local commit IDs, review outcome, test results and deployment status. Do not push or deploy unless separately requested.
+- [x] Commit the validated merge and fast-forward the user's original feature branch to it, preserving unrelated untracked files. Merge commit: `83fee7462cd0ba0ab6f12f341f8db6252cd750a1`.
+- [x] Prepare the handoff with local commit IDs, review outcome, test results and deployment status. Details are recorded in `docs/UPSTREAM_MERGE_2026-09-17.md`; no push or deployment was performed.

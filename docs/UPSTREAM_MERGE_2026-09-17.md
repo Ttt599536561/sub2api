@@ -8,6 +8,7 @@
 - 本地功能提交：`b0ba68f93`（设计）、`0be85e950`（实现）、`bff587089`（说明）。
 - 开始整合时未提交的两轮审查修复及两个回归测试已保存为 `08d72d5bd`。整合依据包含该提交，不能只使用旧的 `bff587089`。
 - 原项目分支为 `feature/monthly-subscription-daily-reset`，实际 origin 为 `https://github.com/Ttt599536561/sub2api.git`。旧 `DEV_GUIDE.md` 的 fork 名称不是识别本次定制的可靠依据。
+- 已完成的合并提交：`83fee7462cd0ba0ab6f12f341f8db6252cd750a1`，两个父提交分别是本地 `08d72d5bd` 和上游 `881f32026`；原项目功能分支已快进到该合并结果。
 
 ## 确认的二次开发
 
