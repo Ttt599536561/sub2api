@@ -18,6 +18,8 @@
 
 </div>
 
+> 本分支包含月卡日额度提前重置及第三轮审查修复。已有 Docker Compose 服务切换到个人仓库版本，请阅读 [GitHub 源码部署指南](docs/GITHUB_DOCKER_COMPOSE_SWITCH.md)，按固定提交构建镜像并保留原数据库和配置。
+
 
 ## ⚠️ 重要提醒
 
