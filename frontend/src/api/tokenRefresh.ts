@@ -1,6 +1,7 @@
 import axios from 'axios'
 import type { ApiResponse } from '@/types'
 import { getAPIBaseURL } from './url'
+import { getAuthSessionID } from './authSession'
 
 const AUTH_TOKEN_KEY = 'auth_token'
 const AUTH_USER_KEY = 'auth_user'
@@ -25,6 +26,7 @@ export interface RefreshAuthTokensOptions {
 }
 
 interface AuthSnapshot {
+  sessionID: string | null
   accessToken: string | null
   refreshToken: string
   expiresAt: number
@@ -32,6 +34,7 @@ interface AuthSnapshot {
 }
 
 let inFlightRefresh: Promise<RefreshTokenResponse> | null = null
+let inFlightSessionID: string | null = null
 
 function getStoredUserID(): number | null {
   const rawUser = localStorage.getItem(AUTH_USER_KEY)
@@ -54,6 +57,7 @@ function readAuthSnapshot(): AuthSnapshot {
   }
 
   return {
+    sessionID: getAuthSessionID(),
     accessToken: localStorage.getItem(AUTH_TOKEN_KEY),
     refreshToken,
     expiresAt: Number(localStorage.getItem(TOKEN_EXPIRES_AT_KEY)),
@@ -71,7 +75,8 @@ function readStoredTokenPair(snapshot: AuthSnapshot): RefreshTokenResponse | nul
     !refreshToken ||
     !Number.isFinite(expiresAt) ||
     expiresAt <= Date.now() ||
-    getStoredUserID() !== snapshot.userID
+    getStoredUserID() !== snapshot.userID ||
+    getAuthSessionID() !== snapshot.sessionID
   ) {
     return null
   }
@@ -154,7 +159,8 @@ async function requestTokenPair(
 
     if (
       localStorage.getItem(REFRESH_TOKEN_KEY) !== snapshot.refreshToken ||
-      getStoredUserID() !== snapshot.userID
+      getStoredUserID() !== snapshot.userID ||
+      getAuthSessionID() !== snapshot.sessionID
     ) {
       const peerResult = readPeerRefreshResult(snapshot, failedAccessToken)
       if (peerResult) {
@@ -213,11 +219,13 @@ async function runRefresh(options: RefreshAuthTokensOptions): Promise<RefreshTok
 export function refreshAuthTokens(
   options: RefreshAuthTokensOptions = {}
 ): Promise<RefreshTokenResponse> {
-  if (inFlightRefresh) {
+  const sessionID = getAuthSessionID()
+  if (inFlightRefresh && sessionID === inFlightSessionID) {
     return inFlightRefresh
   }
 
   const pending = runRefresh(options)
+  inFlightSessionID = sessionID
   inFlightRefresh = pending
   const clearPending = (): void => {
     if (inFlightRefresh === pending) {

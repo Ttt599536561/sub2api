@@ -24,7 +24,7 @@ vi.mock('@/components/common/NavigationProgress.vue', () => ({ default: { templa
 vi.mock('@/components/common/AnnouncementPopup.vue', () => ({ default: { template: '<div />' } }))
 vi.mock('@/components/admin/AdminComplianceDialog.vue', () => ({ default: { template: '<div />' } }))
 
-const auth = reactive({ isAuthenticated: true, isAdmin: false, user: { id: 7 } })
+const auth = reactive({ isAuthenticated: true, isAdmin: false, user: { id: 7 }, sessionRevision: 0 })
 vi.mock('@/stores', () => ({
   useAuthStore: () => auth,
   useSubscriptionStore: () => useSubscriptionStore(),
@@ -55,6 +55,7 @@ describe('subscription identity isolation', () => {
     vi.clearAllMocks()
     auth.isAuthenticated = true
     auth.user = { id: 7 }
+    auth.sessionRevision = 0
     api.getActiveSubscriptions.mockImplementation(() => Promise.resolve([subscription(auth.user.id)]))
   })
 
@@ -103,6 +104,28 @@ describe('subscription identity isolation', () => {
       await flushPromises()
       expect(api.getActiveSubscriptions).toHaveBeenCalledTimes(1)
       expect(useSubscriptionStore().activeSubscriptions[0].user_id).toBe(7)
+    } finally { wrapper.unmount() }
+  })
+
+  it.each(['same-user-login', 'identity-roundtrip'] as const)('invalidates pending subscriptions after %s', async transition => {
+    let completeReset!: (value: unknown) => void
+    api.resetDailyQuota.mockImplementation(() => new Promise(resolve => { completeReset = resolve }))
+    const wrapper = mount(App)
+    try {
+      await flushPromises()
+      const store = useSubscriptionStore()
+      const oldReset = store.resetDailyQuota(subscription(7))
+      if (transition === 'same-user-login') auth.sessionRevision++
+      else {
+        auth.user = { id: 8 }
+        auth.user = { id: 7 }
+      }
+      await flushPromises()
+      completeReset({ operation_id: 'old-reset', reset_performed: true, subscription: subscription(7) })
+
+      await expect(oldReset).resolves.toBeNull()
+      expect(store.subscriptions).toEqual([])
+      expect(store.pendingDailyResets).toEqual({})
     } finally { wrapper.unmount() }
   })
 })

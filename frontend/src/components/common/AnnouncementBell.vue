@@ -347,7 +347,7 @@ const selectedAnnouncement = ref<UserAnnouncement | null>(null)
 let identityGeneration = 0
 
 watch(
-  [() => authStore.isAuthenticated, () => authStore.user?.id],
+  [() => authStore.isAuthenticated, () => authStore.user?.id, () => authStore.sessionRevision],
   () => {
     identityGeneration++
     closeModal()
@@ -388,16 +388,18 @@ async function markAsRead(id: number) {
   const generation = identityGeneration
   try {
     await announcementStore.markAsRead(id)
+    return true
   } catch (err: any) {
     if (generation !== identityGeneration) return
     appStore.showError(err?.message || t('common.unknownError'))
+    return false
   }
 }
 
 async function markAsReadAndClose(id: number) {
   const generation = identityGeneration
-  await markAsRead(id)
-  if (generation !== identityGeneration) return
+  const marked = await markAsRead(id)
+  if (!marked || generation !== identityGeneration) return
   appStore.showSuccess(t('announcements.markedAsRead'))
   closeDetail()
 }

@@ -82,7 +82,7 @@ export const useAnnouncementStore = defineStore('announcements', () => {
     currentPopup.value = null
 
     // Mark as read (fire-and-forget, UI already updated)
-    markAsRead(id)
+    void markAsRead(id).catch(() => undefined)
 
     // Show next popup after a short delay
     if (popupQueue.value.length > 0) {
@@ -103,6 +103,7 @@ export const useAnnouncementStore = defineStore('announcements', () => {
       }
     } catch (err: any) {
       console.error('Failed to mark announcement as read:', err)
+      throw err
     }
   }
 

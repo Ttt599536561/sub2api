@@ -118,7 +118,7 @@ const attemptedSubmit = ref(false)
 let identityGeneration = 0
 
 watch(
-  [() => authStore.isAuthenticated, () => authStore.user?.id],
+  [() => authStore.isAuthenticated, () => authStore.user?.id, () => authStore.sessionRevision],
   () => {
     identityGeneration++
     typedPhrase.value = ''

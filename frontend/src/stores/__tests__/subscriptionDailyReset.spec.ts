@@ -46,6 +46,63 @@ describe('subscription daily reset state', () => {
     api.getDailyResetState.mockResolvedValue(subscription())
   })
 
+  it.each(['success', 'failure'] as const)('ignores an old rejection after its state refresh completes with %s for another identity', async outcome => {
+    const store = useSubscriptionStore()
+    let finish!: (value: UserSubscription) => void
+    let fail!: (error: Error) => void
+    let started!: () => void
+    const refreshing = new Promise<void>(resolve => { started = resolve })
+    api.resetDailyQuota.mockRejectedValueOnce({ status: 409, message: 'old identity conflict' })
+    api.getDailyResetState.mockImplementationOnce(() => new Promise<UserSubscription>((resolve, reject) => {
+      finish = resolve
+      fail = reject
+      started()
+    }))
+    const operation = store.resetDailyQuota(subscription())
+    await refreshing
+    store.clear()
+    const current = { ...subscription(2), user_id: 8 }
+    api.getMySubscriptions.mockResolvedValueOnce([current])
+    await store.fetchSubscriptions()
+
+    if (outcome === 'success') finish(subscription())
+    else fail(new Error('old identity refresh failed'))
+
+    await expect(operation).resolves.toBeNull()
+    expect(store.subscriptions.map(item => item.user_id)).toEqual([8])
+    expect(store.pendingDailyResets).toEqual({})
+  })
+
+  it.each(['manual', 'auto'] as const)('does not resubmit an uncertain %s request after the identity changes during recovery', async kind => {
+    const store = useSubscriptionStore()
+    let finish!: (value: UserSubscription) => void
+    let fail!: (error: unknown) => void
+    let started!: () => void
+    const checking = new Promise<void>(resolve => { started = resolve })
+    const mutation = kind === 'manual' ? api.resetDailyQuota : api.setAutoDailyReset
+    const lookup = kind === 'manual' ? api.getDailyResetOperation : api.getDailyResetState
+    mutation.mockRejectedValueOnce({ code: 'NETWORK_ERROR' })
+    lookup.mockImplementationOnce(() => new Promise<UserSubscription>((resolve, reject) => {
+      finish = resolve
+      fail = reject
+      started()
+    }))
+    const operation = kind === 'manual'
+      ? store.resetDailyQuota(subscription())
+      : store.setAutoDailyReset(subscription(), true)
+    await checking
+    const operationID = store.pendingDailyResets[1].operation_id
+    store.clear()
+    if (kind === 'manual') fail({ status: 404 })
+    else finish(subscription())
+
+    await expect(operation).resolves.toBeNull()
+    expect(mutation).toHaveBeenCalledTimes(1)
+    expect(store.subscriptions).toEqual([])
+    expect(store.pendingDailyResets).toEqual({})
+    expect(JSON.parse(sessionStorage.getItem('subscription-daily-reset:7:1')!).operation_id).toBe(operationID)
+  })
+
   it.each(['manual', 'auto'] as const)('submits and retries %s operations when randomUUID is unavailable', async (kind) => {
     vi.stubGlobal('crypto', {})
     try {

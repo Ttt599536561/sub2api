@@ -208,8 +208,9 @@ export const useSubscriptionStore = defineStore('subscriptions', () => {
       const current = await subscriptionsAPI.getDailyResetState(pending.subscription_id)
       if (generation === sessionGeneration) applySubscription(current)
     } catch {
-      invalidateCache()
+      if (generation === sessionGeneration) invalidateCache()
     }
+    if (generation !== sessionGeneration) return null
     throw error
   }
 

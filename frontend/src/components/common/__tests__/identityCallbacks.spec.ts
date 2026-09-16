@@ -11,7 +11,7 @@ import type { UserAnnouncement } from '@/types'
 
 const api = vi.hoisted(() => ({ accept: vi.fn(), markRead: vi.fn(), list: vi.fn() }))
 const feedback = vi.hoisted(() => ({ showSuccess: vi.fn(), showError: vi.fn() }))
-const auth = reactive({ isAuthenticated: true, isAdmin: true, user: { id: 7 } })
+const auth = reactive({ isAuthenticated: true, isAdmin: true, user: { id: 7 }, sessionRevision: 0 })
 vi.mock('@/api/admin/compliance', () => ({ default: { accept: api.accept } }))
 vi.mock('@/api', () => ({ announcementsAPI: { list: api.list, markRead: api.markRead } }))
 vi.mock('@/stores/auth', () => ({ useAuthStore: () => auth }))
@@ -41,16 +41,17 @@ function announcement(id: number, read = false): UserAnnouncement {
     notify_mode: 'silent', created_at: '', updated_at: '', read_at: read ? '2026-09-17' : undefined }
 }
 
-type Transition = 'switch' | 'roundtrip' | 'logout' | 'unmount'
+type Transition = 'switch' | 'roundtrip' | 'logout' | 'unmount' | 'same-user-login'
 function changeIdentity(kind: Transition) {
   if (kind === 'logout') auth.isAuthenticated = false
+  else if (kind === 'same-user-login') auth.sessionRevision++
   else {
     auth.user = { id: 8 }
     if (kind === 'roundtrip') auth.user = { id: 7 }
   }
 }
 
-const cases = (['switch', 'roundtrip', 'logout', 'unmount'] as const)
+const cases = (['switch', 'roundtrip', 'logout', 'unmount', 'same-user-login'] as const)
   .flatMap(transition => (['success', 'failure'] as const).map(outcome => ({ transition, outcome })))
 
 const dialogStub = defineComponent({ props: ['show'], template: '<div v-if="show"><slot /><slot name="footer" /></div>' })
@@ -61,6 +62,7 @@ beforeEach(() => {
   vi.resetAllMocks()
   auth.isAuthenticated = true
   auth.user = { id: 7 }
+  auth.sessionRevision = 0
   api.markRead.mockResolvedValue({ message: 'ok' })
 })
 
@@ -120,6 +122,33 @@ describe('administrator acknowledgement callbacks', () => {
 })
 
 describe('announcement callbacks and details', () => {
+  it.each(['success', 'failure'] as const)('only closes details after a successful current-identity mark-read: %s', async outcome => {
+    api.markRead.mockRejectedValueOnce(new Error('initial automatic mark failed'))
+    useAnnouncementStore().announcements = [announcement(1)]
+    const wrapper = mount(AnnouncementBell, { global: { stubs: bellStubs } })
+    const errorLog = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    try {
+      await wrapper.get('[aria-label="announcements.title"]').trigger('click')
+      await wrapper.get('h3').trigger('click')
+      await flushPromises()
+      feedback.showError.mockClear()
+      if (outcome === 'failure') api.markRead.mockRejectedValueOnce(new Error('mark read failed'))
+
+      await wrapper.findAll('button').find(button => button.text() === 'announcements.markRead')!.trigger('click')
+      await flushPromises()
+
+      if (outcome === 'success') {
+        expect(feedback.showSuccess).toHaveBeenCalledWith('announcements.markedAsRead')
+        expect(wrapper.text()).not.toContain('Private details 1')
+      } else {
+        expect(feedback.showSuccess).not.toHaveBeenCalled()
+        expect(feedback.showError).toHaveBeenCalledWith('mark read failed')
+        expect(wrapper.text()).toContain('Private details 1')
+        expect(useAnnouncementStore().unreadCount).toBe(1)
+      }
+    } finally { wrapper.unmount(); errorLog.mockRestore() }
+  })
+
   it.each(cases)('ignores mark-all $outcome after $transition', async ({ transition, outcome }) => {
     const pending = deferred<{ message: string }>()
     api.markRead.mockReturnValue(pending.promise)

@@ -90,13 +90,13 @@ watch(subscriptionFeatureEnabled, (enabled) => {
 })
 
 watch(
-  [() => authStore.isAuthenticated, () => authStore.user?.id],
-  ([isAuthenticated, userID], [oldValue, previousUserID]) => {
+  [() => authStore.isAuthenticated, () => authStore.user?.id, () => authStore.sessionRevision],
+  ([isAuthenticated, userID, session], [oldValue, previousUserID, previousSession]) => {
     if (isAuthenticated) {
       // An OAuth/account switch can replace the user without passing through
       // a logged-out render. Invalidate pending responses before loading the
       // new user's subscriptions; recovery records remain scoped by user ID.
-      if (oldValue && userID !== previousUserID) {
+      if (oldValue && (userID !== previousUserID || session !== previousSession)) {
         subscriptionStore.clear()
         announcementStore.reset()
         adminComplianceStore.reset()
@@ -132,7 +132,7 @@ watch(
       document.removeEventListener('visibilitychange', onVisibilityChange)
     }
   },
-  { immediate: true }
+  { immediate: true, flush: 'sync' }
 )
 
 // Route change trigger (throttled by store)

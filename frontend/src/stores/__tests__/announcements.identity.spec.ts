@@ -27,6 +27,29 @@ describe('announcement identity isolation', () => {
 
   afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks() })
 
+  it('reports a failed explicit mark-read without marking the announcement read', async () => {
+    const error = new Error('mark read failed')
+    api.markRead.mockRejectedValueOnce(error)
+    const store = useAnnouncementStore()
+    store.announcements = [announcement(1)]
+
+    await expect(store.markAsRead(1)).rejects.toBe(error)
+    expect(store.unreadCount).toBe(1)
+  })
+
+  it('can dismiss a popup even when its background mark-read fails', async () => {
+    vi.useFakeTimers()
+    api.list.mockResolvedValueOnce([announcement(1), announcement(2)])
+    api.markRead.mockRejectedValueOnce(new Error('background mark read failed'))
+    const store = useAnnouncementStore()
+    await store.fetchAnnouncements()
+
+    await expect(store.dismissPopup()).resolves.toBeUndefined()
+    await vi.advanceTimersByTimeAsync(300)
+    expect(store.currentPopup?.id).toBe(2)
+    expect(store.announcements[0].read_at).toBeUndefined()
+  })
+
   it('does not replace the new identity announcements or popup queue with an old response', async () => {
     const old = deferred<UserAnnouncement[]>()
     api.list.mockReturnValueOnce(old.promise).mockResolvedValueOnce([announcement(8)])

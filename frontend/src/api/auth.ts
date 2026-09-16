@@ -4,6 +4,7 @@
  */
 
 import { apiClient } from './client'
+import { getAuthSessionID } from './authSession'
 import { refreshAuthTokens, type RefreshTokenResponse } from './tokenRefresh'
 export type { RefreshTokenResponse } from './tokenRefresh'
 import type {
@@ -202,6 +203,7 @@ export async function getCurrentUser() {
  * Optionally revokes the refresh token on the server
  */
 export async function logout(): Promise<void> {
+  const sessionID = getAuthSessionID()
   const refreshToken = getRefreshToken()
 
   // Try to revoke the refresh token on the server
@@ -213,7 +215,7 @@ export async function logout(): Promise<void> {
     }
   }
 
-  clearAuthToken()
+  if (sessionID === getAuthSessionID()) clearAuthToken()
 }
 
 /**

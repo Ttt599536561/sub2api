@@ -133,6 +133,8 @@ deploy/docker-compose.override.yml
 .gocache/
 vite.config.js
 docs/*
+!docs/REVIEW3_2026-09-17.md
+!docs/DOCKER_COMPOSE_CUSTOM_UPGRADE_2026-09-17.md
 !docs/PAYMENT.md
 !docs/PAYMENT_CN.md
 !docs/ADMIN_PAYMENT_INTEGRATION_API.md

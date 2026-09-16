@@ -13,6 +13,7 @@ import {
   shouldMarkUserUIRequest,
 } from './adminUIRequest'
 import { refreshAuthTokens } from './tokenRefresh'
+import { getAuthSessionID } from './authSession'
 import { getAPIBaseURL } from './url'
 export { buildApiUrl, buildGatewayUrl } from './url'
 
@@ -29,6 +30,19 @@ export const apiClient: AxiosInstance = axios.create({
 
 // ==================== Request Interceptor ====================
 
+// Keep request ownership outside the HTTP payload so delayed global UI events
+// cannot cross account boundaries. A token refresh retains the same user ID.
+const requestIdentities = new WeakMap<InternalAxiosRequestConfig, { userID: number | null; sessionID: string | null }>()
+
+function getStoredUserID(): number | null {
+  try {
+    const id = JSON.parse(localStorage.getItem('auth_user') || 'null')?.id
+    return typeof id === 'number' && Number.isSafeInteger(id) ? id : null
+  } catch {
+    return null
+  }
+}
+
 // Get user's timezone
 const getUserTimezone = (): string => {
   try {
@@ -40,6 +54,7 @@ const getUserTimezone = (): string => {
 
 apiClient.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
+    requestIdentities.set(config, { userID: getStoredUserID(), sessionID: getAuthSessionID() })
     // Attach token from localStorage
     const token = localStorage.getItem('auth_token')
     if (token && config.headers) {
@@ -116,6 +131,17 @@ apiClient.interceptors.response.use(
 
       // Validate `data` shape to avoid HTML error pages breaking our error handling.
       const apiData = (typeof data === 'object' && data !== null ? data : {}) as Record<string, any>
+      const requestIdentity = requestIdentities.get(originalRequest)
+      const sessionChanged = () => requestIdentity != null && (
+        requestIdentity.sessionID !== getAuthSessionID() ||
+        (requestIdentity.userID != null && requestIdentity.userID !== getStoredUserID())
+      )
+
+      // Never retry an old operation using a newly logged-in user's credentials,
+      // or let its authentication failure clear that user's session.
+      if (status === 401 && sessionChanged()) {
+        return Promise.reject({ status, code: 'AUTH_SESSION_CHANGED', message: 'Authentication session changed before the request completed.' })
+      }
 
       // Ops monitoring disabled: treat as feature-flagged 404, and proactively redirect away
       // from ops pages to avoid broken UI states.
@@ -145,9 +171,17 @@ apiClient.interceptors.response.use(
 
       if (status === 423 && apiData.code === 'ADMIN_COMPLIANCE_ACK_REQUIRED') {
         try {
-          window.dispatchEvent(new CustomEvent('admin-compliance-required', {
-            detail: apiData.metadata || {}
-          }))
+          const token = localStorage.getItem('auth_token')
+          const requestUserID = requestIdentity?.userID
+          const headers = originalRequest?.headers
+          const sameIdentity = requestUserID != null
+            ? requestUserID === getStoredUserID()
+            : (headers?.Authorization ?? headers?.authorization) === `Bearer ${token}`
+          if (token && sameIdentity && !sessionChanged()) {
+            window.dispatchEvent(new CustomEvent('admin-compliance-required', {
+              detail: apiData.metadata || {}
+            }))
+          }
         } catch {
           // ignore event failures
         }
@@ -180,6 +214,9 @@ apiClient.interceptors.response.use(
                 ? authHeader.slice('Bearer '.length)
                 : null
             const tokens = await refreshAuthTokens({ failedAccessToken })
+            if (sessionChanged()) {
+              return Promise.reject({ status: 401, code: 'AUTH_SESSION_CHANGED', message: 'Authentication session changed while refreshing.' })
+            }
 
             // Retry the original request with the refreshed token
             if (originalRequest.headers) {
@@ -189,10 +226,10 @@ apiClient.interceptors.response.use(
           } catch (refreshError) {
             // A stale request must never destroy a session that was logged out or replaced while
             // its refresh was in flight (for example, when another tab signs in as another user).
-            const sessionChanged =
+            const refreshSessionChanged = sessionChanged() ||
               localStorage.getItem('refresh_token') !== refreshToken ||
               localStorage.getItem('auth_user') !== refreshSessionUser
-            if (sessionChanged) {
+            if (refreshSessionChanged) {
               return Promise.reject({
                 status: 401,
                 code: 'AUTH_SESSION_CHANGED',

@@ -16,6 +16,9 @@ func (s *SubscriptionService) GetSubscriptionForAdmission(ctx context.Context, u
 		}
 		group, err := s.groupRepo.GetByID(ctx, groupID)
 		if err != nil {
+			if errors.Is(err, ErrGroupNotFound) {
+				return nil, nil, ErrSubscriptionInvalid
+			}
 			return nil, nil, ErrBillingServiceUnavailable.WithCause(err)
 		}
 		if group == nil || !group.IsActive() {

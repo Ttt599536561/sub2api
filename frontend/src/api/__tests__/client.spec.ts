@@ -260,6 +260,38 @@ describe('API Client', () => {
       )
     })
 
+    it.each(['switch', 'logout', 'refresh'] as const)('isolates a delayed compliance requirement after %s', async transition => {
+      localStorage.setItem('auth_token', 'old-token')
+      localStorage.setItem('auth_user', JSON.stringify({ id: 7, role: 'admin' }))
+      const listener = vi.fn()
+      window.addEventListener('admin-compliance-required', listener)
+      let finish!: () => void
+      let started!: () => void
+      const dispatched = new Promise<void>(resolve => { started = resolve })
+      apiClient.defaults.adapter = config => new Promise((_resolve, reject) => {
+        finish = () => reject({
+          response: { status: 423, data: { code: 'ADMIN_COMPLIANCE_ACK_REQUIRED', metadata: { version: 'old-version' } } },
+          config, code: 'ERR_BAD_REQUEST'
+        })
+        started()
+      })
+      try {
+        const request = apiClient.get('/admin/users')
+        const rejection = expect(request).rejects.toMatchObject({ status: 423, code: 'ADMIN_COMPLIANCE_ACK_REQUIRED' })
+        await dispatched
+        if (transition === 'logout') localStorage.clear()
+        else {
+          localStorage.setItem('auth_token', 'new-token')
+          localStorage.setItem('auth_user', JSON.stringify({ id: transition === 'switch' ? 8 : 7, role: 'admin', username: 'refreshed' }))
+        }
+        finish()
+        await rejection
+
+        expect(listener).toHaveBeenCalledTimes(transition === 'refresh' ? 1 : 0)
+        expect(localStorage.getItem('auth_token')).toBe(transition === 'logout' ? null : 'new-token')
+      } finally { window.removeEventListener('admin-compliance-required', listener) }
+    })
+
     it('部署与运营合规未确认时广播事件且保留登录态', async () => {
       localStorage.setItem('auth_token', 'admin-token')
       const listener = vi.fn()
