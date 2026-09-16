@@ -1,0 +1,60 @@
+name: Publish reviewed Docker image
+
+on:
+  push:
+    branches: [codex/publish-version-badge-r4]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: publish-version-badge-r4
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: github.repository == 'Ttt599536561/sub2api'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      SOURCE_IMAGE: sub2api-custom:0.2.5-r4
+      TARGET_IMAGE: ghcr.io/ttt599536561/sub2api-custom:0.2.5-r4
+      SOURCE_COMMIT: f89835007dc4b87d08b7143f8dad619708ec7bf5
+    steps:
+      - name: Download the tested image and verify its checksum
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --location --retry 3 \
+            https://github.com/Ttt599536561/sub2api/releases/download/custom-r4-20260917/sub2api-custom-r4.tar \
+            --output image.tar
+          printf '%s  image.tar\n' 6d0c37c3493448a914dc6f3c1a150347152a2ce1f8a815553f8f3695c9fcb98e | sha256sum --check
+          docker load --input image.tar
+          test "$(docker image inspect "$SOURCE_IMAGE" --format '{{.Os}}/{{.Architecture}}')" = linux/amd64
+          docker run --rm --pull never "$SOURCE_IMAGE" -version
+
+      - name: Add package provenance without changing application files
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf 'FROM %s\nLABEL org.opencontainers.image.source="https://github.com/Ttt599536561/sub2api"\nLABEL org.opencontainers.image.revision="%s"\n' \
+            "$SOURCE_IMAGE" "$SOURCE_COMMIT" | docker build --pull=false --tag "$TARGET_IMAGE" -
+          test "$(docker image inspect "$SOURCE_IMAGE" --format '{{json .RootFS.Layers}}')" = \
+            "$(docker image inspect "$TARGET_IMAGE" --format '{{json .RootFS.Layers}}')"
+
+      - name: Publish to GitHub Container Registry
+        shell: bash
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$GHCR_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+          if docker manifest inspect "$TARGET_IMAGE" >/dev/null 2>&1; then
+            echo 'This version already exists; refusing to overwrite it.' >&2
+            exit 1
+          fi
+          docker push "$TARGET_IMAGE"
+          docker logout ghcr.io
+          printf 'Published `%s` from the checksum-verified Release archive.\n' "$TARGET_IMAGE" >> "$GITHUB_STEP_SUMMARY"
