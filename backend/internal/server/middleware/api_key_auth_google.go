@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
+	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/googleapi"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/ip"
 	"github.com/Wei-Shaw/sub2api/internal/service"
@@ -174,7 +175,7 @@ func APIKeyAuthWithSubscriptionGoogle(apiKeyService *service.APIKeyService, subs
 			)
 			if err != nil {
 				status, _ := subscriptionAdmissionErrorDetails(err)
-				abortWithGoogleError(c, status, err.Error())
+				abortWithGoogleError(c, status, infraerrors.Message(err))
 				return
 			}
 			apiKey.Group = group

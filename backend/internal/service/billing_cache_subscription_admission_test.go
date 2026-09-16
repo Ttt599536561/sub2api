@@ -123,6 +123,54 @@ func TestBillingEligibilityUsesLatestSubscriptionAdmission(t *testing.T) {
 	}
 }
 
+func TestBillingSubscriptionAdmissionCompletesCircuitBreakerProbe(t *testing.T) {
+	for _, tt := range []struct {
+		name    string
+		expired bool
+		dbError bool
+		wantErr error
+	}{
+		{name: "healthy subscription"},
+		{name: "business rejection", expired: true, wantErr: ErrSubscriptionExpired},
+		{name: "database failure", dbError: true, wantErr: ErrBillingServiceUnavailable},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			now := time.Now()
+			sub := resetTestSubscription(now)
+			sub.WeeklyWindowStart, sub.MonthlyWindowStart = &now, &now
+			if tt.expired {
+				sub.ExpiresAt = now.Add(-time.Second)
+			}
+			repo := &subscriptionAdmissionRepo{sub: sub}
+			if tt.dbError {
+				repo.err = errors.New("database unavailable")
+			}
+			svc := &SubscriptionService{
+				groupRepo:   &subscriptionAdmissionGroupRepo{group: sub.Group},
+				userSubRepo: repo, now: func() time.Time { return now },
+			}
+			breaker := newBillingCircuitBreaker(config.CircuitBreakerConfig{
+				Enabled: true, FailureThreshold: 1, ResetTimeoutSeconds: 1, HalfOpenRequests: 1,
+			})
+			breaker.OnFailure(errors.New("temporary billing outage"))
+			breaker.openedAt = now.Add(-2 * time.Second)
+			billing := &BillingCacheService{cfg: &config.Config{}, subscriptionService: svc, circuitBreaker: breaker}
+			key := &APIKey{User: sub.User, UserID: sub.UserID, GroupID: &sub.GroupID, Group: sub.Group}
+
+			err := billing.CheckBillingEligibility(context.Background(), sub.User, key, sub.Group, sub, "")
+			require.ErrorIs(t, err, tt.wantErr)
+			if tt.dbError {
+				require.Equal(t, billingCircuitOpen, breaker.state)
+				require.False(t, breaker.Allow())
+			} else {
+				require.Equal(t, billingCircuitClosed, breaker.state)
+				require.True(t, breaker.Allow(), "healthy admission must release later billing requests")
+				require.True(t, breaker.Allow(), "the half-open probe must not remain consumed")
+			}
+		})
+	}
+}
+
 func TestRevalidateSubscriptionAfterAccountWait(t *testing.T) {
 	now := time.Now()
 	sub := resetTestSubscription(now)

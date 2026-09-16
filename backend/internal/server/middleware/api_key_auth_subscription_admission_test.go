@@ -23,11 +23,13 @@ func TestAPIKeyAuthUsesDatabaseSubscriptionAdmission(t *testing.T) {
 			name       string
 			usage      float64
 			dbError    bool
+			subDBError bool
 			expired    bool
 			wantStatus int
 		}{
 			{name: "fresh permission and limit", usage: 60, wantStatus: http.StatusTooManyRequests},
 			{name: "database unavailable", dbError: true, wantStatus: http.StatusServiceUnavailable},
+			{name: "subscription database unavailable", subDBError: true, wantStatus: http.StatusServiceUnavailable},
 			{name: "previously reset subscription expired", expired: true, wantStatus: http.StatusForbidden},
 			{name: "valid subscription replaces cached group", usage: 10, wantStatus: http.StatusOK},
 		} {
@@ -45,10 +47,14 @@ func TestAPIKeyAuthUsesDatabaseSubscriptionAdmission(t *testing.T) {
 					sub.ExpiresAt = now.Add(-time.Second)
 				}
 				groupRepo := &admissionGroupRepo{group: group}
+				const internalError = "internal database endpoint 192.0.2.44:5432 is unavailable"
 				if scenario.dbError {
-					groupRepo.err = errors.New("database unavailable")
+					groupRepo.err = errors.New(internalError)
 				}
 				subRepo := &stubUserSubscriptionRepo{getActive: func(context.Context, int64, int64) (*service.UserSubscription, error) {
+					if scenario.subDBError {
+						return nil, errors.New(internalError)
+					}
 					copy := *sub
 					return &copy, nil
 				}}
@@ -76,6 +82,10 @@ func TestAPIKeyAuthUsesDatabaseSubscriptionAdmission(t *testing.T) {
 				response := httptest.NewRecorder()
 				router.ServeHTTP(response, request)
 				require.Equal(t, scenario.wantStatus, response.Code, response.Body.String())
+				if scenario.dbError || scenario.subDBError {
+					require.NotContains(t, response.Body.String(), internalError)
+					require.Contains(t, response.Body.String(), service.ErrBillingServiceUnavailable.Message)
+				}
 				require.Positive(t, groupRepo.reads)
 			})
 		}

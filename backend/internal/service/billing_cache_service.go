@@ -773,7 +773,16 @@ func (s *BillingCacheService) CheckBillingEligibility(ctx context.Context, user 
 	if s.subscriptionService != nil && groupID > 0 {
 		freshSub, freshGroup, err := s.subscriptionService.GetSubscriptionForAdmission(ctx, user.ID, groupID)
 		if err != nil {
+			if infraerrors.Code(err) >= 500 {
+				s.circuitBreaker.OnFailure(err)
+			} else {
+				s.circuitBreaker.OnSuccess()
+			}
 			return err
+		}
+		// Balance requests complete their probe after the balance lookup below.
+		if freshSub != nil || subscription != nil {
+			s.circuitBreaker.OnSuccess()
 		}
 		// A billing-mode change while queued requires a new request so the
 		// downstream settlement cannot retain the previous mode or subscription.

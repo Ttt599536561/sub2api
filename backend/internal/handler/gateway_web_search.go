@@ -175,6 +175,14 @@ func (h *GatewayHandler) WebSearch(c *gin.Context) {
 		}
 		account = selected.Account
 		accountReleaseFunc = release
+		if err := revalidateGatewaySubscription(c, h.billingCacheService); err != nil {
+			status, code, message, retryAfter := billingErrorDetails(err)
+			if retryAfter > 0 {
+				c.Header("Retry-After", strconv.Itoa(retryAfter))
+			}
+			c.JSON(status, gin.H{"error": gin.H{"type": code, "message": message}})
+			return
+		}
 
 		if isXSearch {
 			nativeResp, providerName, err = h.doGrokNativeXSearch(c.Request.Context(), c, account, req, searchModel, maxResults)
@@ -272,18 +280,7 @@ func (h *GatewayHandler) WebSearch(c *gin.Context) {
 func (h *GatewayHandler) acquireWebSearchAccountSlot(
 	c *gin.Context,
 	selected *service.AccountSelectionResult,
-) (release func(), ok bool, acquireErr error) {
-	defer func() {
-		if !ok {
-			return
-		}
-		if err := revalidateGatewaySubscription(c, h.billingCacheService); err != nil {
-			if release != nil {
-				release()
-			}
-			release, ok, acquireErr = nil, false, err
-		}
-	}()
+) (func(), bool, error) {
 	if selected == nil || selected.Account == nil {
 		return nil, false, nil
 	}

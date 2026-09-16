@@ -871,7 +871,7 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 			// 注入回调到 ParsedRequest：使用外层 wrapper 以便提前清理 AfterFunc
 			attemptParsedReq.OnUpstreamAccepted = queueRelease
 			// ===== 用户消息串行队列 END =====
-			if err := revalidateGatewaySubscription(c, h.billingCacheService); err != nil {
+			if err := h.billingCacheService.RevalidateSubscription(c.Request.Context(), currentSubscription); err != nil {
 				if queueRelease != nil {
 					queueRelease()
 				}

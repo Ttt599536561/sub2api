@@ -97,6 +97,23 @@ func TestExtendSubscriptionExpiredResetsAutomaticPreference(t *testing.T) {
 	}
 }
 
+func TestExtendSubscriptionExpiredKeepsSuspension(t *testing.T) {
+	now := time.Date(2026, 9, 6, 12, 0, 0, 0, time.UTC)
+	repo := &lockingRenewalRepo{current: UserSubscription{
+		ID: 7, UserID: 11, GroupID: 13, StartsAt: now.Add(-30 * 24 * time.Hour),
+		ExpiresAt: now.Add(-time.Hour), Status: SubscriptionStatusSuspended,
+		AutoDailyResetEnabled: true,
+	}}
+	svc := NewSubscriptionService(nil, repo, nil, nil, nil)
+	t.Cleanup(svc.Stop)
+	svc.now = func() time.Time { return now }
+	sub, err := svc.ExtendSubscription(context.Background(), 7, 30)
+	require.NoError(t, err)
+	require.Equal(t, now.AddDate(0, 0, 30), sub.ExpiresAt)
+	require.Equal(t, SubscriptionStatusSuspended, sub.Status)
+	require.False(t, sub.AutoDailyResetEnabled)
+}
+
 func TestNegativeSubscriptionRedemptionUsesLockedExpiry(t *testing.T) {
 	now := time.Now()
 	current := UserSubscription{ID: 7, UserID: 11, GroupID: 13, Status: SubscriptionStatusActive, ExpiresAt: now.Add(20 * 24 * time.Hour)}

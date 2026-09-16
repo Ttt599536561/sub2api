@@ -12,12 +12,39 @@ import (
 	dbent "github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/timezone"
 	"github.com/Wei-Shaw/sub2api/internal/service"
+	"github.com/lib/pq"
 )
 
 type subscriptionDailyResetRepository struct{ db *sql.DB }
 
 func NewSubscriptionDailyResetRepository(_ *dbent.Client, db *sql.DB) service.SubscriptionDailyResetRepository {
 	return &subscriptionDailyResetRepository{db: db}
+}
+
+func (r *subscriptionDailyResetRepository) beginLocked(ctx context.Context, userID, id int64) (*sql.Tx, *service.UserSubscription, error) {
+	for attempt := 0; ; attempt++ {
+		tx, err := r.db.BeginTx(ctx, nil)
+		if err != nil {
+			return nil, nil, err
+		}
+		sub, err := r.lock(ctx, tx, userID, id)
+		if err == nil {
+			return tx, sub, nil
+		}
+		_ = tx.Rollback()
+		var pgErr *pq.Error
+		if attempt >= 99 || !errors.As(err, &pgErr) || pgErr.Code != "55P03" {
+			return nil, nil, err
+		}
+		// Release earlier locks before retrying so billing and user deletion can finish.
+		timer := time.NewTimer(10 * time.Millisecond)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return nil, nil, ctx.Err()
+		case <-timer.C:
+		}
+	}
 }
 
 // Every entry locks the user, group, then subscription so status and configuration
@@ -30,7 +57,7 @@ func (r *subscriptionDailyResetRepository) lock(ctx context.Context, tx *sql.Tx,
 	var groupJSON []byte
 	err := tx.QueryRowContext(ctx, `SELECT row_to_json(g)
 		FROM groups g WHERE g.id = (SELECT group_id FROM user_subscriptions WHERE id = $1 AND user_id = $2)
-		FOR SHARE OF g`, id, userID).Scan(&groupJSON)
+		FOR SHARE OF g NOWAIT`, id, userID).Scan(&groupJSON)
 	if err != nil {
 		return nil, resetNotFound(err)
 	}
@@ -44,7 +71,7 @@ func (r *subscriptionDailyResetRepository) lock(ctx context.Context, tx *sql.Tx,
 	}
 	var subscriptionJSON []byte
 	err = tx.QueryRowContext(ctx, `SELECT row_to_json(s)
-		FROM user_subscriptions s WHERE id = $1 AND user_id = $2 AND group_id = $3 FOR UPDATE`, id, userID, g.ID).
+		FROM user_subscriptions s WHERE id = $1 AND user_id = $2 AND group_id = $3 FOR UPDATE NOWAIT`, id, userID, g.ID).
 		Scan(&subscriptionJSON)
 	if err != nil {
 		return nil, resetNotFound(err)
@@ -96,15 +123,11 @@ func saveResetSubscription(ctx context.Context, tx *sql.Tx, s *service.UserSubsc
 }
 
 func (r *subscriptionDailyResetRepository) GetState(ctx context.Context, userID, id int64) (*service.SubscriptionDailyResetState, error) {
-	tx, err := r.db.BeginTx(ctx, nil)
+	tx, s, err := r.beginLocked(ctx, userID, id)
 	if err != nil {
 		return nil, err
 	}
 	defer tx.Rollback()
-	s, err := r.lock(ctx, tx, userID, id)
-	if err != nil {
-		return nil, err
-	}
 	state, err := r.state(ctx, tx, s, true)
 	if err != nil {
 		return nil, err
@@ -119,15 +142,11 @@ func (r *subscriptionDailyResetRepository) Apply(ctx context.Context, cmd *servi
 	if cmd == nil || cmd.OperationID == "" || cmd.RequestFingerprint == "" || len(cmd.OperationID) > 128 || len(cmd.RequestFingerprint) > 128 || (cmd.Source != "manual" && cmd.Source != "automatic") {
 		return nil, service.ErrResetInvalidData
 	}
-	tx, err := r.db.BeginTx(ctx, nil)
+	tx, s, err := r.beginLocked(ctx, cmd.UserID, cmd.SubscriptionID)
 	if err != nil {
 		return nil, err
 	}
 	defer tx.Rollback()
-	s, err := r.lock(ctx, tx, cmd.UserID, cmd.SubscriptionID)
-	if err != nil {
-		return nil, err
-	}
 	event, err := queryResetEvent(ctx, tx, cmd.UserID, cmd.SubscriptionID, cmd.OperationID)
 	if err != nil && !errors.Is(err, service.ErrResetOperationNotFound) {
 		return nil, err
@@ -203,15 +222,11 @@ func (r *subscriptionDailyResetRepository) Apply(ctx context.Context, cmd *servi
 }
 
 func (r *subscriptionDailyResetRepository) SetAutomatic(ctx context.Context, userID, id, expectedVersion int64, enabled bool) (*service.SubscriptionDailyResetState, error) {
-	tx, err := r.db.BeginTx(ctx, nil)
+	tx, s, err := r.beginLocked(ctx, userID, id)
 	if err != nil {
 		return nil, err
 	}
 	defer tx.Rollback()
-	s, err := r.lock(ctx, tx, userID, id)
-	if err != nil {
-		return nil, err
-	}
 	state, err := r.state(ctx, tx, s, true)
 	if err != nil {
 		return nil, err

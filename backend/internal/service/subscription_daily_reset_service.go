@@ -29,8 +29,12 @@ func resetStateSubscription(state *SubscriptionDailyResetState) *UserSubscriptio
 	if state == nil || state.Subscription == nil {
 		return nil
 	}
-	state.Subscription.DailyResetState = state.View()
-	return state.Subscription
+	sub := *state.Subscription
+	sub.DailyResetState = state.View()
+	if sub.Status == SubscriptionStatusActive && !sub.ExpiresAt.After(state.ServerTime) {
+		sub.Status = SubscriptionStatusExpired
+	}
+	return &sub
 }
 
 func (s *SubscriptionService) GetDailyResetState(ctx context.Context, userID, subscriptionID int64) (*UserSubscription, error) {

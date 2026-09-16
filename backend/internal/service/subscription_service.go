@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"math/rand/v2"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -697,7 +698,11 @@ func (s *SubscriptionService) ExtendSubscription(ctx context.Context, subscripti
 			return ErrAdjustWouldExpire
 		}
 		if isExpired {
-			return s.userSubRepo.Update(txCtx, renewedSubscriptionTerm(sub, "", now, newExpiresAt))
+			renewed := renewedSubscriptionTerm(sub, "", now, newExpiresAt)
+			if sub.Status == SubscriptionStatusSuspended {
+				renewed.Status = SubscriptionStatusSuspended
+			}
+			return s.userSubRepo.Update(txCtx, renewed)
 		}
 		if err := s.userSubRepo.ExtendExpiry(txCtx, subscriptionID, newExpiresAt); err != nil {
 			return err
@@ -793,6 +798,9 @@ func (s *SubscriptionService) ListActiveUserSubscriptions(ctx context.Context, u
 	if err := s.attachDailyResetStates(ctx, userID, subs); err != nil {
 		return nil, err
 	}
+	subs = slices.DeleteFunc(subs, func(sub UserSubscription) bool {
+		return sub.Status != SubscriptionStatusActive || sub.DeletedAt != nil
+	})
 	normalizeExpiredWindows(subs)
 	return subs, nil
 }

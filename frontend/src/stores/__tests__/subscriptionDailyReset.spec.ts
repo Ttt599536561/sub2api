@@ -46,6 +46,28 @@ describe('subscription daily reset state', () => {
     api.getDailyResetState.mockResolvedValue(subscription())
   })
 
+  it.each(['manual', 'auto'] as const)('submits and retries %s operations when randomUUID is unavailable', async (kind) => {
+    vi.stubGlobal('crypto', {})
+    try {
+      const store = useSubscriptionStore()
+      const request = kind === 'manual' ? api.resetDailyQuota : api.setAutoDailyReset
+      request.mockRejectedValueOnce({ code: 'NETWORK_ERROR' }).mockResolvedValueOnce(completed())
+      api.getDailyResetOperation.mockRejectedValueOnce({ status: 404 })
+
+      await (kind === 'manual'
+        ? store.resetDailyQuota(subscription())
+        : store.setAutoDailyReset(subscription(), true))
+
+      expect(request).toHaveBeenCalledTimes(2)
+      expect(request.mock.calls[0][2]).toEqual(expect.any(String))
+      expect(request.mock.calls[0][2].length).toBeGreaterThanOrEqual(8)
+      expect(request.mock.calls[1]).toEqual(request.mock.calls[0])
+      expect(store.pendingDailyResets[1]).toBeUndefined()
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+
   it('deduplicates one card while another card can submit independently', async () => {
     const store = useSubscriptionStore()
     let resolveFirst!: (value: ReturnType<typeof completed>) => void
@@ -123,6 +145,47 @@ describe('subscription daily reset state', () => {
     expect(api.setAutoDailyReset).toHaveBeenCalledWith(1, {
       expected_version: 10, expected_date: '2026-09-06', enabled: false
     }, expect.any(String))
+  })
+
+  it('can disable automatic reset when session storage cannot be written', async () => {
+    const store = useSubscriptionStore()
+    const enabled = subscription()
+    enabled.daily_reset!.auto_daily_reset_enabled = true
+    const disabled = subscription(1, 11)
+    api.setAutoDailyReset.mockResolvedValue({
+      subscription: disabled, preference_saved: true, reset_performed: false
+    })
+    const storage = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new DOMException('Storage quota exceeded', 'QuotaExceededError')
+    })
+    try {
+      await store.setAutoDailyReset(enabled, false)
+      expect(api.setAutoDailyReset).toHaveBeenCalledWith(1, {
+        expected_version: 10, expected_date: '2026-09-06', enabled: false
+      }, expect.any(String))
+      expect(store.subscriptions[0].daily_reset!.auto_daily_reset_enabled).toBe(false)
+      expect(store.pendingDailyResets[1]).toBeUndefined()
+    } finally {
+      storage.mockRestore()
+    }
+  })
+
+  it.each(['manual', 'enable'] as const)('does not submit a %s operation without durable recovery state', async (kind) => {
+    const store = useSubscriptionStore()
+    const storageError = new DOMException('Storage quota exceeded', 'QuotaExceededError')
+    const storage = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw storageError
+    })
+    try {
+      const operation = kind === 'manual'
+        ? store.resetDailyQuota(subscription())
+        : store.setAutoDailyReset(subscription(), true)
+      await expect(operation).rejects.toBe(storageError)
+      expect(api.resetDailyQuota).not.toHaveBeenCalled()
+      expect(api.setAutoDailyReset).not.toHaveBeenCalled()
+    } finally {
+      storage.mockRestore()
+    }
   })
 
   it('does not let old list or active polling responses overwrite a mutation', async () => {

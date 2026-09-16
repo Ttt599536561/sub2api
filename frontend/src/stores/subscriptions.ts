@@ -251,12 +251,18 @@ export const useSubscriptionStore = defineStore('subscriptions', () => {
       (enabled === undefined && (!state.eligible || !state.can_reset))) return null
     const pending: PendingDailyReset = {
       subscription_id: subscription.id, user_id: subscription.user_id,
-      operation_id: crypto.randomUUID(), status: 'pending',
+      operation_id: globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      status: 'pending',
       kind: enabled === undefined ? 'manual' : 'auto', enabled,
       expected_version: state.daily_reset_version, expected_date: state.server_date
     }
     // Persist before submitting: a remount must never create a new ID for an uncertain operation.
-    sessionStorage.setItem(pendingKey(subscription.user_id, subscription.id), JSON.stringify(pending))
+    try {
+      sessionStorage.setItem(pendingKey(subscription.user_id, subscription.id), JSON.stringify(pending))
+    } catch (error) {
+      // Disabling cannot charge and must remain available when storage is full.
+      if (enabled !== false) throw error
+    }
     pendingDailyResets.value[subscription.id] = pending
     const generation = sessionGeneration
     try {

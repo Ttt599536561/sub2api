@@ -12,6 +12,7 @@ import (
 
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/Wei-Shaw/sub2api/internal/service"
+	"github.com/lib/pq"
 	"github.com/stretchr/testify/require"
 )
 
@@ -72,5 +73,25 @@ func TestSubscriptionDailyResetRepository_EventFailureRollsBackDeduction(t *test
 		UserID: 1, SubscriptionID: 3, ExpectedVersion: 10, OperationID: "rollback", ObservedDate: "2026-09-06", Source: "manual", RequestFingerprint: "fingerprint",
 	})
 	require.ErrorIs(t, err, injected)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestSubscriptionDailyResetRepository_RetriesContendedLocksInNewTransaction(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+	now := time.Date(2026, 9, 6, 12, 0, 0, 0, time.UTC)
+	mock.ExpectBegin()
+	mock.ExpectQuery("SELECT status, deleted_at FROM users.*FOR SHARE").WithArgs(int64(1)).WillReturnRows(
+		sqlmock.NewRows([]string{"status", "deleted_at"}).AddRow("active", nil))
+	mock.ExpectQuery("(?s)SELECT.*FROM groups.*FOR SHARE").WithArgs(int64(3), int64(1)).
+		WillReturnError(&pq.Error{Code: "55P03"})
+	mock.ExpectRollback()
+	expectResetLocks(mock, now, 10)
+	expectResetClockAndUser(mock, now)
+	mock.ExpectCommit()
+	state, err := NewSubscriptionDailyResetRepository(nil, db).GetState(context.Background(), 1, 3)
+	require.NoError(t, err)
+	require.EqualValues(t, 10, state.Subscription.DailyResetVersion)
 	require.NoError(t, mock.ExpectationsWereMet())
 }
