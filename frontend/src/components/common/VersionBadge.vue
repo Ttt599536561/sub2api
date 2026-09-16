@@ -10,9 +10,9 @@
             ? 'bg-amber-100 text-amber-700 hover:bg-amber-200 dark:bg-amber-900/30 dark:text-amber-400 dark:hover:bg-amber-900/50'
             : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-dark-800 dark:text-dark-400 dark:hover:bg-dark-700'
         ]"
-        :title="hasUpdate ? t('version.updateAvailable') : t('version.upToDate')"
+        :title="badgeTitle"
       >
-        <span v-if="currentVersion" class="font-medium">v{{ currentVersion }}</span>
+        <span v-if="currentVersion" class="font-medium">v{{ compactCurrentVersion }}</span>
         <span
           v-else
           class="h-3 w-12 animate-pulse rounded bg-gray-200 font-medium dark:bg-dark-600"
@@ -80,10 +80,10 @@
             <template v-else>
               <!-- Version display - centered and prominent -->
               <div class="mb-4 text-center">
-                <div class="inline-flex items-center gap-2">
+                <div class="inline-flex max-w-full items-center gap-2">
                   <span
                     v-if="currentVersion"
-                    class="text-2xl font-bold text-gray-900 dark:text-white"
+                    class="min-w-0 break-all text-2xl font-bold text-gray-900 dark:text-white"
                     >v{{ currentVersion }}</span
                   >
                   <span v-else class="text-2xl font-bold text-gray-400 dark:text-dark-500">--</span>
@@ -631,8 +631,8 @@
     </template>
 
     <!-- Non-admin: Simple static version text -->
-    <span v-else-if="version" class="text-xs text-gray-500 dark:text-dark-400">
-      v{{ version }}
+    <span v-else-if="version" :title="`v${version}`" class="text-xs text-gray-500 dark:text-dark-400">
+      v{{ compactPublicVersion }}
     </span>
   </div>
 </template>
@@ -672,8 +672,17 @@ const dropdownRef = ref<HTMLElement | null>(null)
 // Use store's cached version state
 const loading = computed(() => appStore.versionLoading)
 const currentVersion = computed(() => appStore.currentVersion || props.version || '')
+// Shorten only this fork's build suffix in the sidebar; keep full versions for diagnostics and updates.
+const compactVersion = (version: string) =>
+  version.replace(/^(\d+\.\d+\.\d+)-daily-reset\.r\d+\.\d{8}$/, '$1')
+const compactCurrentVersion = computed(() => compactVersion(currentVersion.value))
+const compactPublicVersion = computed(() => compactVersion(props.version || ''))
 const latestVersion = computed(() => appStore.latestVersion)
 const hasUpdate = computed(() => appStore.hasUpdate)
+const badgeTitle = computed(() => {
+  const status = hasUpdate.value ? t('version.updateAvailable') : t('version.upToDate')
+  return currentVersion.value ? `v${currentVersion.value} · ${status}` : status
+})
 const releaseInfo = computed(() => appStore.releaseInfo)
 const buildType = computed(() => appStore.buildType)
 
