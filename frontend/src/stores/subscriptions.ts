@@ -31,13 +31,23 @@ function isDefinitiveFailure(error: unknown): boolean {
   return !!status && status >= 400 && status < 500 && status !== 408
 }
 
+function serverTimeAfter(current: string, incoming: string): boolean {
+  const currentMs = Date.parse(current)
+  const incomingMs = Date.parse(incoming)
+  if (currentMs !== incomingMs) return currentMs > incomingMs
+  // PostgreSQL timestamps retain microseconds, while Date.parse truncates to
+  // milliseconds. Preserve the remaining RFC3339 precision for tied instants.
+  const fraction = (value: string) => (value.match(/\.(\d+)(?:Z|[+-]\d{2}:\d{2})$/)?.[1] ?? '').padEnd(9, '0')
+  return fraction(current) > fraction(incoming)
+}
+
 function newestSubscription(current: UserSubscription | undefined, incoming: UserSubscription) {
   if (!current?.daily_reset || !incoming.daily_reset) return incoming
   const oldState = current.daily_reset
   const newState = incoming.daily_reset
   if (oldState.daily_reset_version > newState.daily_reset_version) return current
   if (oldState.daily_reset_version === newState.daily_reset_version &&
-      Date.parse(oldState.server_time) > Date.parse(newState.server_time)) return current
+      serverTimeAfter(oldState.server_time, newState.server_time)) return current
   return incoming
 }
 

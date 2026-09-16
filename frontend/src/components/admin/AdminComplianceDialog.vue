@@ -97,7 +97,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
 import { useI18n } from 'vue-i18n'
@@ -115,6 +115,18 @@ const authStore = useAuthStore()
 const appStore = useAppStore()
 const typedPhrase = ref('')
 const attemptedSubmit = ref(false)
+let identityGeneration = 0
+
+watch(
+  [() => authStore.isAuthenticated, () => authStore.user?.id],
+  () => {
+    identityGeneration++
+    typedPhrase.value = ''
+    attemptedSubmit.value = false
+  },
+  { flush: 'sync' }
+)
+onBeforeUnmount(() => { identityGeneration++ })
 
 marked.setOptions({
   breaks: true,
@@ -164,14 +176,17 @@ async function submit(): Promise<void> {
     return
   }
 
+  const generation = identityGeneration
   try {
     const status = await complianceStore.accept(typedPhrase.value.trim())
+    if (generation !== identityGeneration) return
     if (!status.required) {
       appStore.showSuccess(t('adminCompliance.accepted'))
       typedPhrase.value = ''
       attemptedSubmit.value = false
     }
   } catch (error) {
+    if (generation !== identityGeneration) return
     const message = (error as { message?: string })?.message || t('adminCompliance.acceptFailed')
     appStore.showError(message)
   }

@@ -12,6 +12,7 @@ export const useAdminComplianceStore = defineStore('adminCompliance', () => {
   const submitting = ref(false)
   const initialized = ref(false)
   const forceVisible = ref(false)
+  let sessionGeneration = 0
 
   const required = computed(() => status.value?.required === true)
   const shouldShow = computed(() => required.value || forceVisible.value)
@@ -24,30 +25,36 @@ export const useAdminComplianceStore = defineStore('adminCompliance', () => {
   })
 
   async function fetchStatus(): Promise<AdminComplianceStatus> {
+    const generation = sessionGeneration
     loading.value = true
     try {
       const nextStatus = await adminComplianceAPI.getStatus()
-      status.value = nextStatus
-      initialized.value = true
-      forceVisible.value = nextStatus.required
+      if (generation === sessionGeneration) {
+        status.value = nextStatus
+        initialized.value = true
+        forceVisible.value = nextStatus.required
+      }
       return nextStatus
     } finally {
-      loading.value = false
+      if (generation === sessionGeneration) loading.value = false
     }
   }
 
   async function accept(phrase: string): Promise<AdminComplianceStatus> {
+    const generation = sessionGeneration
     submitting.value = true
     try {
       const nextStatus = await adminComplianceAPI.accept({
         phrase,
         language: currentLocale.value
       })
-      status.value = nextStatus
-      forceVisible.value = nextStatus.required
+      if (generation === sessionGeneration) {
+        status.value = nextStatus
+        forceVisible.value = nextStatus.required
+      }
       return nextStatus
     } finally {
-      submitting.value = false
+      if (generation === sessionGeneration) submitting.value = false
     }
   }
 
@@ -68,6 +75,8 @@ export const useAdminComplianceStore = defineStore('adminCompliance', () => {
   }
 
   function reset(): void {
+    // Pending work may finish after another administrator signs in.
+    sessionGeneration++
     status.value = null
     loading.value = false
     submitting.value = false

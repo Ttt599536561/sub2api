@@ -90,9 +90,17 @@ watch(subscriptionFeatureEnabled, (enabled) => {
 })
 
 watch(
-  () => authStore.isAuthenticated,
-  (isAuthenticated, oldValue) => {
+  [() => authStore.isAuthenticated, () => authStore.user?.id],
+  ([isAuthenticated, userID], [oldValue, previousUserID]) => {
     if (isAuthenticated) {
+      // An OAuth/account switch can replace the user without passing through
+      // a logged-out render. Invalidate pending responses before loading the
+      // new user's subscriptions; recovery records remain scoped by user ID.
+      if (oldValue && userID !== previousUserID) {
+        subscriptionStore.clear()
+        announcementStore.reset()
+        adminComplianceStore.reset()
+      }
       if (authStore.isAdmin) {
         adminComplianceStore.fetchStatus().catch((error) => {
           console.error('Failed to fetch admin compliance status:', error)

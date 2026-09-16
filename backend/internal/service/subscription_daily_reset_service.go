@@ -210,7 +210,6 @@ func (s *SubscriptionService) scanAutoDailyResets(ctx context.Context, afterID *
 		*afterID = 0
 		return
 	}
-	*afterID = candidates[len(candidates)-1].ID
 	jobs := make(chan int64)
 	var wg sync.WaitGroup
 	for i := 0; i < 4; i++ {
@@ -235,7 +234,14 @@ func (s *SubscriptionService) scanAutoDailyResets(ctx context.Context, afterID *
 	}
 	close(jobs)
 	wg.Wait()
+	// A timed-out page may still contain unprocessed candidates. Keep its
+	// original cursor so the next scan can retry them before advancing.
+	if ctx.Err() != nil {
+		return
+	}
 	if len(candidates) < 100 {
 		*afterID = 0
+	} else {
+		*afterID = candidates[len(candidates)-1].ID
 	}
 }

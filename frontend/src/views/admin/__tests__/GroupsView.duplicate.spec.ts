@@ -366,6 +366,67 @@ describe('GroupsView duplicate action', () => {
     wrapper.unmount()
   })
 
+  it('creates an enabled monthly reset group and clears that permission from the next draft', async () => {
+    createGroup.mockResolvedValue({ ...sourceGroup, id: 43 })
+    const wrapper = mountView()
+    try {
+      await flushPromises()
+      await wrapper.get('[data-tour="groups-create-btn"]').trigger('click')
+      await wrapper.get('[data-tour="group-form-name"]').setValue('Monthly reset')
+      const selectSubscription = async () => {
+        const billingType = wrapper.findAllComponents({ name: 'Select' }).find(select =>
+          (select.props('options') as Array<{ value: string }> | undefined)?.some(option => option.value === 'subscription'))
+        expect(billingType).toBeDefined()
+        billingType!.vm.$emit('update:modelValue', 'subscription')
+        await wrapper.vm.$nextTick()
+      }
+      await selectSubscription()
+      const permission = wrapper.get<HTMLInputElement>('[data-testid="create-allow-subscription-day-reset"]')
+      expect(permission.element.checked).toBe(false)
+      expect(permission.attributes('disabled')).toBeDefined()
+      await wrapper.findAll('input[placeholder="admin.groups.subscription.noLimit"]')[0].setValue('100')
+      await permission.setValue(true)
+      await wrapper.get('#create-group-form').trigger('submit')
+      await flushPromises()
+
+      expect(createGroup).toHaveBeenCalledWith(expect.objectContaining({
+        name: 'Monthly reset', subscription_type: 'subscription', daily_limit_usd: 100,
+        allow_subscription_day_reset: true
+      }))
+      await wrapper.get('[data-tour="groups-create-btn"]').trigger('click')
+      await selectSubscription()
+      const nextPermission = wrapper.get<HTMLInputElement>('[data-testid="create-allow-subscription-day-reset"]')
+      expect(nextPermission.element.checked).toBe(false)
+      expect(nextPermission.attributes('disabled')).toBeDefined()
+    } finally { wrapper.unmount() }
+  })
+
+  it('preserves the server-copied monthly reset permission when editing a duplicated group', async () => {
+    const monthly = { ...sourceGroup, subscription_type: 'subscription' as const,
+      daily_limit_usd: 100, allow_subscription_day_reset: true }
+    const duplicated = { ...monthly, id: 43, name: 'Monthly copy', status: 'inactive' as const }
+    listGroups.mockResolvedValueOnce({ items: [monthly], total: 1, page: 1, page_size: 20, pages: 1 })
+      .mockResolvedValue({ items: [duplicated], total: 1, page: 1, page_size: 20, pages: 1 })
+    duplicateGroup.mockResolvedValue(duplicated)
+    updateGroup.mockResolvedValue(duplicated)
+    const wrapper = mountView()
+    try {
+      await flushPromises()
+      await wrapper.get('[data-testid="group-duplicate"]').trigger('click')
+      await flushPromises()
+      await wrapper.findAll('button').find(button => button.text() === 'common.edit')!.trigger('click')
+      await flushPromises()
+
+      expect(wrapper.get<HTMLInputElement>('[data-testid="edit-allow-subscription-day-reset"]').element.checked).toBe(true)
+      await wrapper.get('#edit-group-form').trigger('submit')
+      await flushPromises()
+      expect(duplicateGroup).toHaveBeenCalledWith(42)
+      expect(updateGroup).toHaveBeenCalledWith(43, expect.objectContaining({
+        subscription_type: 'subscription', daily_limit_usd: 100, allow_subscription_day_reset: true
+      }))
+    } finally { wrapper.unmount() }
+  })
+
   it('updates manifest controls immediately and submits the displayed selection', async () => {
     vi.useFakeTimers()
     vi.mocked(adminAPI.accounts.list).mockResolvedValue({

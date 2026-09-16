@@ -318,6 +318,7 @@ import { storeToRefs } from 'pinia'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
 import { useAppStore } from '@/stores/app'
+import { useAuthStore } from '@/stores/auth'
 import { useAnnouncementStore } from '@/stores/announcements'
 import { formatRelativeTime, formatRelativeWithDateTime } from '@/utils/format'
 import type { UserAnnouncement } from '@/types'
@@ -326,6 +327,7 @@ import '@/styles/announcement-markdown.css'
 
 const { t } = useI18n()
 const appStore = useAppStore()
+const authStore = useAuthStore()
 const announcementStore = useAnnouncementStore()
 
 // Configure marked
@@ -342,6 +344,17 @@ const unreadCount = computed(() => announcementStore.unreadCount)
 const isModalOpen = ref(false)
 const detailModalOpen = ref(false)
 const selectedAnnouncement = ref<UserAnnouncement | null>(null)
+let identityGeneration = 0
+
+watch(
+  [() => authStore.isAuthenticated, () => authStore.user?.id],
+  () => {
+    identityGeneration++
+    closeModal()
+    closeDetail()
+  },
+  { flush: 'sync' }
+)
 
 // Methods
 function renderMarkdown(content: string): string {
@@ -372,24 +385,31 @@ function closeDetail() {
 }
 
 async function markAsRead(id: number) {
+  const generation = identityGeneration
   try {
     await announcementStore.markAsRead(id)
   } catch (err: any) {
+    if (generation !== identityGeneration) return
     appStore.showError(err?.message || t('common.unknownError'))
   }
 }
 
 async function markAsReadAndClose(id: number) {
+  const generation = identityGeneration
   await markAsRead(id)
+  if (generation !== identityGeneration) return
   appStore.showSuccess(t('announcements.markedAsRead'))
   closeDetail()
 }
 
 async function markAllAsRead() {
+  const generation = identityGeneration
   try {
     await announcementStore.markAllAsRead()
+    if (generation !== identityGeneration) return
     appStore.showSuccess(t('announcements.allMarkedAsRead'))
   } catch (err: any) {
+    if (generation !== identityGeneration) return
     appStore.showError(err?.message || t('common.unknownError'))
   }
 }
@@ -409,6 +429,7 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  identityGeneration++
   document.removeEventListener('keydown', handleEscape)
   document.body.style.overflow = ''
 })

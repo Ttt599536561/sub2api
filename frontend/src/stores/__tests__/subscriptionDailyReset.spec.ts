@@ -234,4 +234,72 @@ describe('subscription daily reset state', () => {
     const current = source === 'list' ? store.subscriptions : store.activeSubscriptions
     expect(current[0].daily_usage_usd).toBe(70)
   })
+
+  it.each(['list', 'active'] as const)('keeps the latest %s usage when server timestamps differ within a millisecond', async (source) => {
+    const store = useSubscriptionStore()
+    const newer = subscription()
+    newer.daily_usage_usd = 70
+    newer.daily_reset!.server_time = '2026-09-06T01:00:00.100002Z'
+    const older = subscription()
+    older.daily_reset!.server_time = '2026-09-06T09:00:00.100001+08:00'
+    const read = source === 'list' ? api.getMySubscriptions : api.getActiveSubscriptions
+    const fetch = () => source === 'list' ? store.fetchSubscriptions() : store.fetchActiveSubscriptions(true)
+    read.mockResolvedValueOnce([newer]).mockResolvedValueOnce([older])
+
+    await fetch()
+    await fetch()
+
+    const current = source === 'list' ? store.subscriptions : store.activeSubscriptions
+    expect(current[0].daily_usage_usd).toBe(70)
+  })
+
+  it('does not switch automatic preference while a manual reset for the same card is unresolved', async () => {
+    const store = useSubscriptionStore()
+    let finish!: (value: ReturnType<typeof completed>) => void
+    api.resetDailyQuota.mockImplementation(() => new Promise(resolve => { finish = resolve }))
+    const manual = store.resetDailyQuota(subscription())
+
+    await store.setAutoDailyReset(subscription(), true)
+    expect(api.setAutoDailyReset).not.toHaveBeenCalled()
+    finish(completed())
+    await manual
+
+    api.setAutoDailyReset.mockResolvedValue({ ...completed(), preference_saved: true, reset_performed: false })
+    await store.setAutoDailyReset(store.subscriptions[0], true)
+    expect(api.setAutoDailyReset).toHaveBeenCalledWith(1,
+      expect.objectContaining({ expected_version: 11, enabled: true }), expect.any(String))
+  })
+
+  it.each(['RESET_WEEKLY_LIMIT', 'RESET_MONTHLY_LIMIT'])(
+    'refreshes authoritative state after %s rejects a stale manual reset', async (reason) => {
+      const store = useSubscriptionStore()
+      const limited = subscription(1, 12)
+      limited.daily_reset!.can_reset = false
+      limited.daily_reset!.auto_daily_reset_enabled = true
+      limited.daily_reset!.reason = reason
+      api.resetDailyQuota.mockRejectedValue({ status: 400, reason })
+      api.getDailyResetState.mockResolvedValue(limited)
+
+      await expect(store.resetDailyQuota(subscription())).rejects.toMatchObject({ reason })
+
+      expect(api.resetDailyQuota).toHaveBeenCalledTimes(1)
+      expect(store.subscriptions[0].daily_reset).toEqual(limited.daily_reset)
+      expect(store.pendingDailyResets).toEqual({})
+      expect(sessionStorage.length).toBe(0)
+    }
+  )
+
+  it('does not restore another user\'s uncertain operation from session storage', async () => {
+    sessionStorage.setItem('subscription-daily-reset:7:1', JSON.stringify({
+      user_id: 8, subscription_id: 1, operation_id: 'another-user-operation',
+      expected_version: 10, expected_date: '2026-09-06', kind: 'manual', status: 'checking'
+    }))
+    const store = useSubscriptionStore()
+    await store.fetchSubscriptions()
+    await store.recoverDailyReset(1)
+
+    expect(store.pendingDailyResets).toEqual({})
+    expect(api.getDailyResetOperation).not.toHaveBeenCalled()
+    expect(api.resetDailyQuota).not.toHaveBeenCalled()
+  })
 })

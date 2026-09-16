@@ -15,6 +15,7 @@ export const useAnnouncementStore = defineStore('announcements', () => {
 
   // Session-scoped dedup set — not reactive, used as plain lookup only
   let shownPopupIds = new Set<number>()
+  let sessionGeneration = 0
 
   // Getters
   const unreadCount = computed(() =>
@@ -23,6 +24,7 @@ export const useAnnouncementStore = defineStore('announcements', () => {
 
   // Actions
   async function fetchAnnouncements(force = false) {
+    const generation = sessionGeneration
     const now = Date.now()
     if (!force && lastFetchTime.value > 0 && now - lastFetchTime.value < THROTTLE_MS) {
       return
@@ -34,14 +36,16 @@ export const useAnnouncementStore = defineStore('announcements', () => {
     try {
       loading.value = true
       const all = await announcementsAPI.list(false)
+      if (generation !== sessionGeneration) return
       announcements.value = all.slice(0, 20)
       enqueueNewPopups()
     } catch (err: any) {
+      if (generation !== sessionGeneration) return
       // Revert throttle timestamp on failure so retry is allowed
       lastFetchTime.value = 0
       console.error('Failed to fetch announcements:', err)
     } finally {
-      loading.value = false
+      if (generation === sessionGeneration) loading.value = false
     }
   }
 
@@ -73,6 +77,7 @@ export const useAnnouncementStore = defineStore('announcements', () => {
 
   async function dismissPopup() {
     if (!currentPopup.value) return
+    const generation = sessionGeneration
     const id = currentPopup.value.id
     currentPopup.value = null
 
@@ -81,13 +86,17 @@ export const useAnnouncementStore = defineStore('announcements', () => {
 
     // Show next popup after a short delay
     if (popupQueue.value.length > 0) {
-      setTimeout(() => showNextPopup(), 300)
+      setTimeout(() => {
+        if (generation === sessionGeneration) showNextPopup()
+      }, 300)
     }
   }
 
   async function markAsRead(id: number) {
+    const generation = sessionGeneration
     try {
       await announcementsAPI.markRead(id)
+      if (generation !== sessionGeneration) return
       const ann = announcements.value.find((a) => a.id === id)
       if (ann) {
         ann.read_at = new Date().toISOString()
@@ -98,14 +107,17 @@ export const useAnnouncementStore = defineStore('announcements', () => {
   }
 
   async function markAllAsRead() {
+    const generation = sessionGeneration
     const unread = announcements.value.filter((a) => !a.read_at)
     if (unread.length === 0) return
+    const submittedIDs = new Set(unread.map((a) => a.id))
 
     try {
       loading.value = true
       await Promise.all(unread.map((a) => announcementsAPI.markRead(a.id)))
+      if (generation !== sessionGeneration) return
       announcements.value.forEach((a) => {
-        if (!a.read_at) {
+        if (submittedIDs.has(a.id) && !a.read_at) {
           a.read_at = new Date().toISOString()
         }
       })
@@ -113,11 +125,13 @@ export const useAnnouncementStore = defineStore('announcements', () => {
       console.error('Failed to mark all as read:', err)
       throw err
     } finally {
-      loading.value = false
+      if (generation === sessionGeneration) loading.value = false
     }
   }
 
   function reset() {
+    // Invalidate late responses and queued popup callbacks from the old identity.
+    sessionGeneration++
     announcements.value = []
     lastFetchTime.value = 0
     shownPopupIds = new Set()
