@@ -13,8 +13,14 @@ import (
 )
 
 var (
-	ErrUsageLogNotFound = infraerrors.NotFound("USAGE_LOG_NOT_FOUND", "usage log not found")
+	ErrUsageLogNotFound           = infraerrors.NotFound("USAGE_LOG_NOT_FOUND", "usage log not found")
+	ErrAtomicUsageBillingRequired = errors.New("actual API charges require the atomic usage billing repository")
 )
+
+func requiresAtomicUsageBilling(repo UserRepository) bool {
+	guard, ok := repo.(interface{ RequiresAtomicUsageBilling() bool })
+	return ok && guard.RequiresAtomicUsageBilling()
+}
 
 // CreateUsageLogRequest 创建使用日志请求
 type CreateUsageLogRequest struct {
@@ -74,6 +80,9 @@ func NewUsageService(usageRepo UsageLogRepository, userRepo UserRepository, entC
 
 // Create 创建使用日志
 func (s *UsageService) Create(ctx context.Context, req CreateUsageLogRequest) (*UsageLog, error) {
+	if req.ActualCost > 0 && requiresAtomicUsageBilling(s.userRepo) {
+		return nil, ErrAtomicUsageBillingRequired
+	}
 	// 使用数据库事务保证「使用日志插入」与「扣费」的原子性，避免重复扣费或漏扣风险。
 	tx, err := s.entClient.Tx(ctx)
 	if err != nil && !errors.Is(err, dbent.ErrTxStarted) {

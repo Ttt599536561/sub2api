@@ -78,17 +78,19 @@ const (
 	cacheWriteTimeout         = 2 * time.Second // 单个写入操作超时
 	cacheWriteDropLogInterval = 5 * time.Second // 丢弃日志节流间隔
 	balanceLoadTimeout        = 3 * time.Second
+	balanceLoadMaxAttempts    = 3
 )
 
 // cacheWriteTask 缓存写入任务
 type cacheWriteTask struct {
-	kind             cacheWriteKind
-	userID           int64
-	groupID          int64
-	apiKeyID         int64
-	balance          float64
-	amount           float64
-	subscriptionData *subscriptionCacheData
+	kind              cacheWriteKind
+	userID            int64
+	groupID           int64
+	apiKeyID          int64
+	balance           float64
+	balanceGeneration *int64
+	amount            float64
+	subscriptionData  *subscriptionCacheData
 }
 
 // apiKeyRateLimitLoader defines the interface for loading rate limit data from DB.
@@ -240,7 +242,13 @@ func (s *BillingCacheService) cacheWriteWorker(ch <-chan cacheWriteTask) {
 		ctx, cancel := context.WithTimeout(context.Background(), cacheWriteTimeout)
 		switch task.kind {
 		case cacheWriteSetBalance:
-			s.setBalanceCache(ctx, task.userID, task.balance)
+			if fenced, ok := s.cache.(BalanceGenerationCache); ok && task.balanceGeneration != nil {
+				if _, err := fenced.SetUserBalanceIfGeneration(ctx, task.userID, task.balance, *task.balanceGeneration); err != nil {
+					logger.LegacyPrintf("service.billing_cache", "Warning: fenced balance refill failed for user %d: %v", task.userID, err)
+				}
+			} else if !ok {
+				s.setBalanceCache(ctx, task.userID, task.balance)
+			}
 		case cacheWriteSetSubscription:
 			s.setSubscriptionCache(ctx, task.userID, task.groupID, task.subscriptionData)
 		case cacheWriteUpdateSubscriptionUsage:
@@ -337,36 +345,85 @@ func (s *BillingCacheService) GetUserBalance(ctx context.Context, userID int64) 
 
 	// 尝试从缓存读取
 	balance, err := s.cache.GetUserBalance(ctx, userID)
-	if err == nil {
+	// A delayed cache deduction can subtract an already-settled charge from a
+	// post-credit refill. Before rejecting admission, read the database anew.
+	// Legacy adapters without a user repository retain their cache-only behavior.
+	forceRefresh := err == nil && s.userRepo != nil && s.balanceBelowEligibilityThreshold(balance)
+	if err == nil && !forceRefresh {
 		return balance, nil
 	}
 
-	// 缓存未命中：singleflight 合并同一 userID 的并发回源请求。
-	value, err, _ := s.balanceLoadSF.Do(strconv.FormatInt(userID, 10), func() (any, error) {
-		loadCtx, cancel := context.WithTimeout(context.Background(), balanceLoadTimeout)
-		defer cancel()
-
-		balance, err := s.getUserBalanceFromDB(loadCtx, userID)
-		if err != nil {
-			return nil, err
+	fenced, hasGeneration := s.cache.(BalanceGenerationCache)
+	for attempt := 0; attempt < balanceLoadMaxAttempts; attempt++ {
+		if err := ctx.Err(); err != nil {
+			return 0, err
+		}
+		// Read the shared generation before joining singleflight. A request made
+		// after another instance credits the user must not join a pre-credit read.
+		flightKey := strconv.FormatInt(userID, 10)
+		var generation *int64
+		if hasGeneration {
+			value, generationErr := fenced.UserBalanceGeneration(ctx, userID)
+			if generationErr != nil {
+				return s.loadUserBalanceWithoutCache(ctx, userID)
+			}
+			generation = &value
+			flightKey += ":" + strconv.FormatInt(value, 10)
 		}
 
-		// 异步建立缓存
-		_ = s.enqueueCacheWrite(cacheWriteTask{
-			kind:    cacheWriteSetBalance,
-			userID:  userID,
-			balance: balance,
-		})
+		load := func() (any, error) {
+			loadCtx, cancel := context.WithTimeout(context.Background(), balanceLoadTimeout)
+			defer cancel()
+			balance, err := s.getUserBalanceFromDB(loadCtx, userID)
+			if err != nil {
+				return nil, err
+			}
+
+			// Queued refills retain the generation from before the database read;
+			// their CAS remains necessary if invalidation races the async worker.
+			_ = s.enqueueCacheWrite(cacheWriteTask{
+				kind:              cacheWriteSetBalance,
+				userID:            userID,
+				balance:           balance,
+				balanceGeneration: generation,
+			})
+			return balance, nil
+		}
+		var value any
+		if forceRefresh {
+			// A cached rejection needs a snapshot started by this request, even
+			// when an older flight has the same generation (e.g. pending outbox).
+			value, err = load()
+		} else {
+			value, err, _ = s.balanceLoadSF.Do(flightKey, load)
+		}
+		if err != nil {
+			return 0, err
+		}
+		balance, ok := value.(float64)
+		if !ok {
+			return 0, fmt.Errorf("unexpected balance type: %T", value)
+		}
+		if hasGeneration {
+			current, generationErr := fenced.UserBalanceGeneration(ctx, userID)
+			if generationErr != nil {
+				// A shared result cannot be validated during a Redis failure. Read
+				// a new snapshot directly without sharing or repopulating the cache.
+				return s.loadUserBalanceWithoutCache(ctx, userID)
+			}
+			if current != *generation {
+				continue
+			}
+		}
 		return balance, nil
-	})
-	if err != nil {
-		return 0, err
 	}
-	balance, ok := value.(float64)
-	if !ok {
-		return 0, fmt.Errorf("unexpected balance type: %T", value)
-	}
-	return balance, nil
+	return 0, fmt.Errorf("balance snapshot invalidated during all %d load attempts", balanceLoadMaxAttempts)
+}
+
+func (s *BillingCacheService) loadUserBalanceWithoutCache(ctx context.Context, userID int64) (float64, error) {
+	loadCtx, cancel := context.WithTimeout(ctx, balanceLoadTimeout)
+	defer cancel()
+	return s.getUserBalanceFromDB(loadCtx, userID)
 }
 
 // getUserBalanceFromDB 从数据库获取用户余额

@@ -209,6 +209,8 @@ export interface LoginAgreementDocument {
 }
 
 export interface PublicSettings {
+	/** A launched welfare program remains accessible while rewards are paused. */
+	welfare_enabled?: boolean
   registration_enabled: boolean
   email_verify_enabled: boolean
   force_email_on_third_party_signup: boolean

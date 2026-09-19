@@ -186,14 +186,24 @@ func APIKeyAuthWithSubscriptionGoogle(apiKeyService *service.APIKeyService, subs
 			}
 			if subscription != nil {
 				c.Set(string(ContextKeySubscription), subscription)
-			} else if apiKeyBalanceBelowAuthThreshold(apiKey.User.Balance, cfg) {
-				abortWithGoogleError(c, 403, "Insufficient account balance")
-				return
+			} else {
+				if err := refreshLowAuthBalance(c.Request.Context(), apiKeyService, apiKey, cfg); err != nil {
+					abortWithGoogleError(c, 503, "Balance admission is temporarily unavailable")
+					return
+				}
+				if apiKeyBalanceBelowAuthThreshold(apiKey.User.Balance, cfg) {
+					abortWithGoogleError(c, 403, "Insufficient account balance")
+					return
+				}
 			}
 		} else if isSubscriptionType {
 			abortWithGoogleError(c, 503, "Subscription admission is temporarily unavailable")
 			return
 		} else {
+			if err := refreshLowAuthBalance(c.Request.Context(), apiKeyService, apiKey, cfg); err != nil {
+				abortWithGoogleError(c, 503, "Balance admission is temporarily unavailable")
+				return
+			}
 			if apiKeyBalanceBelowAuthThreshold(apiKey.User.Balance, cfg) {
 				abortWithGoogleError(c, 403, "Insufficient account balance")
 				return

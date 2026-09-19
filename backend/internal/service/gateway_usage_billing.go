@@ -337,9 +337,15 @@ func applyUsageBilling(ctx context.Context, requestID string, usageLog *UsageLog
 	if p == nil || deps == nil {
 		return false, nil
 	}
+	if repo == nil && requiresAtomicUsageBilling(deps.userRepo) {
+		return false, ErrAtomicUsageBillingRequired
+	}
 
 	cmd := buildUsageBillingCommand(requestID, usageLog, p)
 	if cmd == nil || cmd.RequestID == "" || repo == nil {
+		if requiresAtomicUsageBilling(deps.userRepo) {
+			return false, ErrAtomicUsageBillingRequired
+		}
 		postUsageBilling(ctx, p, deps)
 		return true, nil
 	}

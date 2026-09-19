@@ -9,7 +9,7 @@ import (
 	"entgo.io/ent/schema/index"
 )
 
-type SubscriptionDailyResetEvent struct { ent.Schema }
+type SubscriptionDailyResetEvent struct{ ent.Schema }
 
 func (SubscriptionDailyResetEvent) Annotations() []schema.Annotation {
 	return []schema.Annotation{entsql.Annotation{Table: "subscription_daily_reset_events"}}

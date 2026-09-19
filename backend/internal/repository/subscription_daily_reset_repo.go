@@ -127,7 +127,7 @@ func (r *subscriptionDailyResetRepository) GetState(ctx context.Context, userID,
 	if err != nil {
 		return nil, err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	state, err := r.state(ctx, tx, s, true)
 	if err != nil {
 		return nil, err
@@ -146,7 +146,7 @@ func (r *subscriptionDailyResetRepository) Apply(ctx context.Context, cmd *servi
 	if err != nil {
 		return nil, err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	event, err := queryResetEvent(ctx, tx, cmd.UserID, cmd.SubscriptionID, cmd.OperationID)
 	if err != nil && !errors.Is(err, service.ErrResetOperationNotFound) {
 		return nil, err
@@ -226,7 +226,7 @@ func (r *subscriptionDailyResetRepository) SetAutomatic(ctx context.Context, use
 	if err != nil {
 		return nil, err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	state, err := r.state(ctx, tx, s, true)
 	if err != nil {
 		return nil, err
@@ -303,7 +303,7 @@ func (r *subscriptionDailyResetRepository) ListAutomaticCandidates(ctx context.C
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	result := make([]service.SubscriptionDailyResetCandidate, 0)
 	for rows.Next() {
 		var candidate service.SubscriptionDailyResetCandidate

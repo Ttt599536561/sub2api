@@ -251,6 +251,10 @@ func apiKeyAuthWithSubscription(apiKeyService *service.APIKeyService, subscripti
 			}
 			if subscription == nil {
 				// Standard groups use the user's balance after current group resolution.
+				if err := refreshLowAuthBalance(c.Request.Context(), apiKeyService, apiKey, cfg); err != nil {
+					AbortWithError(c, http.StatusServiceUnavailable, "BILLING_SERVICE_UNAVAILABLE", "Balance admission is temporarily unavailable")
+					return
+				}
 				if apiKeyBalanceBelowAuthThreshold(apiKey.User.Balance, cfg) {
 					AbortWithError(c, 403, "INSUFFICIENT_BALANCE", "Insufficient account balance")
 					return
@@ -276,6 +280,18 @@ func apiKeyAuthWithSubscription(apiKeyService *service.APIKeyService, subscripti
 
 		c.Next()
 	}
+}
+
+func refreshLowAuthBalance(ctx context.Context, svc *service.APIKeyService, key *service.APIKey, cfg *config.Config) error {
+	if key == nil || key.User == nil || !apiKeyBalanceBelowAuthThreshold(key.User.Balance, cfg) {
+		return nil
+	}
+	balance, err := svc.RefreshUserBalanceForAuth(ctx, key.User)
+	if err != nil {
+		return err
+	}
+	key.User.Balance = balance
+	return nil
 }
 
 func subscriptionAdmissionErrorDetails(err error) (int, string) {

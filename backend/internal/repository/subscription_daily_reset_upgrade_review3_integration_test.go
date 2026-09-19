@@ -40,12 +40,13 @@ func TestSubscriptionDailyResetUpgradeReview3_ExistingUpstreamDataAndMigrationHi
 	t.Cleanup(func() { _ = db.Close() })
 
 	const customMigration = "235_subscription_daily_reset.sql"
+	const welfareMigration = "239_welfare_center.sql"
 	upstream := fstest.MapFS{}
 	baseline := sha256.New()
 	files, err := fs.Glob(migrations.FS, "*.sql")
 	require.NoError(t, err)
 	for _, name := range files {
-		if name == customMigration {
+		if name == customMigration || name == welfareMigration {
 			continue
 		}
 		contents, readErr := migrations.FS.ReadFile(name)
@@ -88,7 +89,7 @@ func TestSubscriptionDailyResetUpgradeReview3_ExistingUpstreamDataAndMigrationHi
 		"groups":            "SELECT jsonb_agg(to_jsonb(t)-'allow_subscription_day_reset' ORDER BY id)::text FROM groups t",
 		"subscriptions":     "SELECT jsonb_agg(to_jsonb(t)-ARRAY['auto_daily_reset_enabled','daily_reset_version','preserve_calendar_daily_reset'] ORDER BY id)::text FROM user_subscriptions t",
 		"keys":              "SELECT jsonb_agg(to_jsonb(t) ORDER BY id)::text FROM api_keys t",
-		"migration_history": "SELECT jsonb_agg(to_jsonb(t) ORDER BY filename)::text FROM schema_migrations t WHERE filename <> '235_subscription_daily_reset.sql'",
+		"migration_history": "SELECT jsonb_agg(to_jsonb(t) ORDER BY filename)::text FROM schema_migrations t WHERE filename NOT IN ('235_subscription_daily_reset.sql', '239_welfare_center.sql')",
 	}
 	before := map[string]string{}
 	for name, query := range queries {
@@ -110,9 +111,14 @@ func TestSubscriptionDailyResetUpgradeReview3_ExistingUpstreamDataAndMigrationHi
 	require.False(t, calendar)
 	require.Zero(t, version)
 	require.Equal(t, "0", snapshot("SELECT count(*)::text FROM subscription_daily_reset_events"))
+	var rewardsEnabled, hasLaunch bool
+	require.NoError(t, db.QueryRowContext(ctx, `SELECT enabled,launch_at IS NOT NULL FROM welfare_programs WHERE id=1`).Scan(&rewardsEnabled, &hasLaunch))
+	require.False(t, rewardsEnabled, "upgrading must not enable welfare awards")
+	require.False(t, hasLaunch, "upgrading must not set the welfare spend boundary")
+	require.Equal(t, "0", snapshot("SELECT count(*)::text FROM welfare_wallets"), "existing users must not receive synthetic welfare balances")
 
 	// The numerical prefix is shared; both complete filenames must be recorded.
-	for _, name := range []string{"235_group_model_allowlist.sql", customMigration} {
+	for _, name := range []string{"235_group_model_allowlist.sql", customMigration, welfareMigration} {
 		contents, readErr := migrations.FS.ReadFile(name)
 		require.NoError(t, readErr)
 		var checksum string

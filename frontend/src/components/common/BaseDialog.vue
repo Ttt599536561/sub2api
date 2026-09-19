@@ -3,6 +3,7 @@
     <Transition name="modal">
       <div
         v-if="show"
+        ref="overlayRef"
         class="modal-overlay"
         :style="zIndexStyle"
         :aria-labelledby="dialogId"
@@ -11,7 +12,7 @@
         @click.self="handleClose"
       >
         <!-- Modal panel -->
-        <div ref="dialogRef" :class="['modal-content', widthClasses]" @click.stop>
+        <div ref="dialogRef" :class="['modal-content', widthClasses]" :tabindex="trapFocus ? -1 : undefined" @click.stop>
           <!-- Header -->
           <div class="modal-header">
             <h3 :id="dialogId" class="modal-title">
@@ -42,18 +43,68 @@
   </Teleport>
 </template>
 
+<script lang="ts">
+// Shared across instances so a lower dialog never competes with a nested one.
+interface OpenDialog {
+  overlay: HTMLElement
+  panel: HTMLElement
+  trapFocus: boolean
+  zIndex: number
+}
+const openDialogs: OpenDialog[] = []
+const inertBackground = new Map<HTMLElement, string | null>()
+let dialogIdCounter = 0
+
+function topDialog(): OpenDialog | undefined {
+  return openDialogs.reduce<OpenDialog | undefined>((top, entry) =>
+    !top || entry.zIndex >= top.zIndex ? entry : top, undefined)
+}
+
+function syncBackgroundInert() {
+  for (const [element, value] of inertBackground) {
+    if (value === null) element.removeAttribute('inert')
+    else element.setAttribute('inert', value)
+  }
+  inertBackground.clear()
+  const top = topDialog()
+  if (!top || !openDialogs.some(entry => entry.trapFocus)) return
+  for (const element of Array.from(document.body.children)) {
+    if (!(element instanceof HTMLElement) || element === top.overlay || element.contains(top.overlay)) continue
+    inertBackground.set(element, element.getAttribute('inert'))
+    element.setAttribute('inert', '')
+  }
+}
+
+function focusableControls(panel: HTMLElement): HTMLElement[] {
+  return Array.from(panel.querySelectorAll<HTMLElement>(
+    'button, [href], input, select, textarea, [tabindex], [contenteditable="true"]'
+  )).filter(element => {
+    if (element.tabIndex < 0 || element.matches(':disabled, input[type="hidden"]') || element.closest('[hidden], [inert]')) return false
+    for (let parent: HTMLElement | null = element; parent; parent = parent.parentElement) {
+      const style = getComputedStyle(parent)
+      if (style.display === 'none' || style.visibility === 'hidden' || style.visibility === 'collapse') return false
+      if (parent === panel) break
+    }
+    return true
+  }).sort((a, b) => (a.tabIndex || Infinity) - (b.tabIndex || Infinity))
+}
+</script>
+
 <script setup lang="ts">
 import { computed, watch, onMounted, onUnmounted, ref, nextTick } from 'vue'
 import Icon from '@/components/icons/Icon.vue'
 
 // 生成唯一ID以避免多个对话框时ID冲突
-let dialogIdCounter = 0
 const dialogId = `modal-title-${++dialogIdCounter}`
 
 // 焦点管理
 const dialogRef = ref<HTMLElement | null>(null)
+const overlayRef = ref<HTMLElement | null>(null)
 const modalBodyRef = ref<HTMLElement | null>(null)
 let previousActiveElement: HTMLElement | null = null
+let openEntry: OpenDialog | undefined
+let disposed = false
+let openGeneration = 0
 
 type DialogWidth = 'narrow' | 'normal' | 'wide' | 'extra-wide' | 'full'
 
@@ -64,6 +115,7 @@ interface Props {
   closeOnEscape?: boolean
   closeOnClickOutside?: boolean
   showCloseButton?: boolean
+  trapFocus?: boolean
   zIndex?: number
 }
 
@@ -76,6 +128,7 @@ const props = withDefaults(defineProps<Props>(), {
   closeOnEscape: true,
   closeOnClickOutside: false,
   showCloseButton: true,
+  trapFocus: false,
   zIndex: 50
 })
 
@@ -107,15 +160,63 @@ const handleClose = () => {
 }
 
 const handleEscape = (event: KeyboardEvent) => {
+  if (openDialogs.some(entry => entry.trapFocus) && topDialog() !== openEntry) return
   if (props.show && props.closeOnEscape && event.key === 'Escape') {
     emit('close')
   }
+}
+
+function activeTrap() {
+  return props.show && props.trapFocus && openEntry !== undefined && topDialog() === openEntry
+}
+
+function focusInside() {
+  if (dialogRef.value) (focusableControls(dialogRef.value)[0] || dialogRef.value).focus()
+}
+
+function handleTab(event: KeyboardEvent) {
+  if (!activeTrap() || event.key !== 'Tab' || event.defaultPrevented || !dialogRef.value) return
+  const controls = focusableControls(dialogRef.value)
+  const first = controls[0]
+  const last = controls[controls.length - 1]
+  const focused = document.activeElement
+  if (!first || !dialogRef.value.contains(focused) || focused === dialogRef.value) {
+    event.preventDefault()
+    ;(event.shiftKey ? last : first)?.focus()
+    if (!first) dialogRef.value.focus()
+  } else if (event.shiftKey && focused === first) {
+    event.preventDefault()
+    last.focus()
+  } else if (!event.shiftKey && focused === last) {
+    event.preventDefault()
+    first.focus()
+  }
+}
+
+function handleFocus(event: FocusEvent) {
+  if (activeTrap() && event.target instanceof Node && !dialogRef.value?.contains(event.target)) focusInside()
+}
+
+function releaseDialog() {
+  const wasTop = openEntry !== undefined && topDialog() === openEntry
+  if (openEntry) {
+    openDialogs.splice(openDialogs.indexOf(openEntry), 1)
+    openEntry = undefined
+    syncBackgroundInert()
+  }
+  if (!openDialogs.length) document.body.classList.remove('modal-open')
+  const top = topDialog()
+  if (wasTop && previousActiveElement?.isConnected && (!top || top.panel.contains(previousActiveElement))) {
+    previousActiveElement.focus()
+  }
+  previousActiveElement = null
 }
 
 // Prevent body scroll when modal is open and manage focus
 watch(
   () => props.show,
   async (isOpen) => {
+    const generation = ++openGeneration
     if (isOpen) {
       // 保存当前焦点元素
       previousActiveElement = document.activeElement as HTMLElement
@@ -124,34 +225,48 @@ watch(
 
       // 等待DOM更新后设置焦点到对话框
       await nextTick()
+      if (disposed || !props.show || generation !== openGeneration || !overlayRef.value || !dialogRef.value) return
+      openEntry = { overlay: overlayRef.value, panel: dialogRef.value, trapFocus: props.trapFocus, zIndex: props.zIndex }
+      openDialogs.push(openEntry)
+      syncBackgroundInert()
       if (modalBodyRef.value) {
         modalBodyRef.value.scrollTop = 0
       }
-      if (dialogRef.value) {
+      if (topDialog() === openEntry && props.trapFocus) {
+        focusInside()
+      } else if (topDialog() === openEntry) {
         const firstFocusable = dialogRef.value.querySelector<HTMLElement>(
           'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
         )
         firstFocusable?.focus()
       }
     } else {
-      document.body.classList.remove('modal-open')
-      // 恢复之前的焦点
-      if (previousActiveElement && typeof previousActiveElement.focus === 'function') {
-        previousActiveElement.focus()
-      }
-      previousActiveElement = null
+      releaseDialog()
     }
   },
   { immediate: true }
 )
 
+watch(() => [props.trapFocus, props.zIndex], () => {
+  if (!openEntry) return
+  openEntry.trapFocus = props.trapFocus
+  openEntry.zIndex = props.zIndex
+  syncBackgroundInert()
+  if (activeTrap() && !dialogRef.value?.contains(document.activeElement)) focusInside()
+})
+
 onMounted(() => {
   document.addEventListener('keydown', handleEscape)
+  document.addEventListener('keydown', handleTab)
+  document.addEventListener('focusin', handleFocus)
 })
 
 onUnmounted(() => {
+  disposed = true
   document.removeEventListener('keydown', handleEscape)
+  document.removeEventListener('keydown', handleTab)
+  document.removeEventListener('focusin', handleFocus)
   // 确保组件卸载时移除滚动锁定
-  document.body.classList.remove('modal-open')
+  releaseDialog()
 })
 </script>

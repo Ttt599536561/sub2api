@@ -945,6 +945,8 @@ var ProviderSet = wire.NewSet(
 	NewModelPlazaService,
 	NewContentModerationService,
 	NewAffiliateService,
+	ProvideWelfareService,
+	ProvideWelfareBalanceOutboxWorker,
 	ProvidePaymentConfigService,
 	ProvidePaymentService,
 	ProvidePaymentOrderExpiryService,
@@ -1047,4 +1049,25 @@ func ProvideChannelMonitorV2Aggregator(repo ChannelMonitorV2Repository, db *sql.
 	}
 	aggregator.Start()
 	return aggregator
+}
+
+func ProvideWelfareService(repo WelfareRepository, settings *SettingService, cfg *config.Config) *WelfareService {
+	svc := NewWelfareService(repo)
+	settings.SetWelfareAvailabilityProvider(func(ctx context.Context) (bool, error) {
+		if cfg != nil && cfg.RunMode == config.RunModeSimple {
+			return false, nil
+		}
+		program, err := svc.GetSettings(ctx)
+		if err != nil {
+			return false, err
+		}
+		return program.LaunchAt != nil, nil
+	})
+	return svc
+}
+
+func ProvideWelfareBalanceOutboxWorker(repo WelfareBalanceOutboxRepository, balance *BillingCacheService, keys *APIKeyService) *WelfareBalanceOutboxWorker {
+	worker := NewWelfareBalanceOutboxWorker(repo, balance, keys)
+	worker.Start()
+	return worker
 }

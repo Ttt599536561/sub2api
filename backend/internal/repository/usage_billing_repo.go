@@ -133,6 +133,10 @@ func (r *usageBillingRepository) applyBatchImageBalanceHold(
 		return nil, errors.New("usage billing repository db is nil")
 	}
 	cmd.Normalize()
+	// Preserve the original fingerprint, then use one canonical amount for both
+	// balance/frozen settlement and the eligible-spend fact.
+	cmd.HoldAmount = service.QuantizeUsageBillingAmount(cmd.HoldAmount)
+	cmd.ActualAmount = service.QuantizeUsageBillingAmount(cmd.ActualAmount)
 	if cmd.RequestID == "" {
 		return nil, service.ErrUsageBillingRequestIDRequired
 	}
@@ -185,6 +189,9 @@ func (r *usageBillingRepository) applyUsageBillingEffects(ctx context.Context, t
 		}
 		result.NewBalance = &newBalance
 		result.BalanceOverdrafted = !sufficient
+		if err := accrueWelfareSpend(ctx, tx, cmd.UserID, "usage", welfareUsageSourceID(cmd.RequestID, cmd.APIKeyID), cmd.BalanceCost); err != nil {
+			return err
+		}
 	}
 
 	if cmd.APIKeyQuotaCost > 0 {
@@ -318,6 +325,9 @@ func captureUsageBillingBatchImageBalance(ctx context.Context, tx *sql.Tx, cmd *
 		RETURNING balance, frozen_balance
 	`, cmd.HoldAmount, cmd.ActualAmount, cmd.UserID).Scan(&balance, &frozen)
 	if err == nil {
+		if err := accrueWelfareSpend(ctx, tx, cmd.UserID, "batch_image", welfareUsageSourceID(cmd.RequestID, cmd.APIKeyID), cmd.ActualAmount); err != nil {
+			return nil, err
+		}
 		return &service.BatchImageBalanceHoldResult{NewBalance: &balance, FrozenBalance: &frozen}, nil
 	}
 	if !errors.Is(err, sql.ErrNoRows) {

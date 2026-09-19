@@ -9,6 +9,14 @@ const componentSource = readFileSync(componentPath, 'utf8')
 const stylePath = resolve(dirname(fileURLToPath(import.meta.url)), '../../../style.css')
 const styleSource = readFileSync(stylePath, 'utf8')
 
+describe('welfare navigation', () => {
+  it('places welfare between purchase and orders in the shared personal navigation', () => {
+    const shared = componentSource.slice(componentSource.indexOf('function buildSelfNavItems'), componentSource.indexOf('function finalizeNav'))
+    expect(shared).toMatch(/path: '\/purchase'[\s\S]*path: '\/welfare'[^\n]*hideInSimpleMode: true[^\n]*featureFlag: flagWelfare[\s\S]*path: '\/orders'/)
+    expect(componentSource).toContain('makeSidebarFlag(FeatureFlags.welfare)')
+  })
+})
+
 describe('AppSidebar custom SVG styles', () => {
   it('does not override uploaded SVG fill or stroke colors', () => {
     expect(componentSource).toContain('.sidebar-svg-icon {')

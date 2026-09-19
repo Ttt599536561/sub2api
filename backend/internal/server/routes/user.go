@@ -28,6 +28,19 @@ func RegisterUserRoutes(
 		// 用户接口
 		user := authenticated.Group("/user")
 		{
+			if h.Welfare != nil {
+				welfare := user.Group("/welfare")
+				welfare.GET("/overview", h.Welfare.Overview)
+				welfare.GET("/calendar", h.Welfare.Calendar)
+				welfare.GET("/rules", h.Welfare.Rules)
+				welfare.GET("/records", panelRateLimiter.Heavy(), h.Welfare.Records)
+				welfare.GET("/operations/by-key", h.Welfare.OperationByKey)
+				welfare.GET("/operations/:id", h.Welfare.Operation)
+				welfare.POST("/check-in", h.Welfare.CheckIn)
+				welfare.POST("/draw", h.Welfare.Draw)
+				welfare.POST("/redemption-quote", h.Welfare.Quote)
+				welfare.POST("/redeem", h.Welfare.Redeem)
+			}
 			user.GET("/profile", h.User.GetProfile)
 			user.PUT("/password", h.User.ChangePassword)
 			user.PUT("", h.User.UpdateProfile)

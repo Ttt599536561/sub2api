@@ -26,6 +26,7 @@ const appStore = vi.hoisted(() => ({
     payment_enabled?: boolean
     risk_control_enabled?: boolean
     subscription_enabled?: boolean
+    welfare_enabled?: boolean
     custom_menu_items?: []
   },
   fetchPublicSettings: vi.fn(),
@@ -176,6 +177,35 @@ describe('feature route guard', () => {
     expect(appStore.fetchPublicSettings).not.toHaveBeenCalled()
     expect(next).toHaveBeenCalledOnce()
     expect(next).toHaveBeenCalledWith(target)
+  })
+})
+
+describe('welfare route access', () => {
+  beforeEach(() => {
+    authStore.isAuthenticated = true
+    authStore.isAdmin = false
+    authStore.isSimpleMode = false
+    appStore.backendModeEnabled = false
+    appStore.publicSettingsLoaded = true
+  })
+  it.each([false, undefined])('requires the welfare opt-in flag (%s)', async (enabled) => {
+    appStore.cachedPublicSettings = { welfare_enabled: enabled }
+    const { navigation, next } = runGuard({ requiresWelfare: true }, '/welfare')
+    await navigation
+    expect(next).toHaveBeenCalledWith('/dashboard')
+  })
+  it('allows welfare independently of payments', async () => {
+    appStore.cachedPublicSettings = { welfare_enabled: true, payment_enabled: false }
+    const { navigation, next } = runGuard({ requiresWelfare: true }, '/welfare')
+    await navigation
+    expect(next).toHaveBeenCalledWith()
+  })
+  it('blocks welfare in simple mode', async () => {
+    authStore.isSimpleMode = true
+    appStore.cachedPublicSettings = { welfare_enabled: true }
+    const { navigation, next } = runGuard({ requiresWelfare: true }, '/welfare')
+    await navigation
+    expect(next).toHaveBeenCalledWith('/dashboard')
   })
 })
 

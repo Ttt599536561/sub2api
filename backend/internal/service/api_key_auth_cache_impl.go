@@ -252,6 +252,10 @@ func (s *APIKeyService) setAuthCacheEntry(ctx context.Context, cacheKey string, 
 }
 
 func (s *APIKeyService) deleteAuthCache(ctx context.Context, cacheKey string) {
+	_ = s.deleteAuthCacheReliable(ctx, cacheKey)
+}
+
+func (s *APIKeyService) deleteAuthCacheReliable(ctx context.Context, cacheKey string) error {
 	if s.authCacheL1 != nil {
 		s.authCacheL1.Del(cacheKey)
 	}
@@ -259,11 +263,51 @@ func (s *APIKeyService) deleteAuthCache(ctx context.Context, cacheKey string) {
 		s.authNegativeCacheL1.Del(cacheKey)
 	}
 	if s.cache == nil {
-		return
+		return nil
 	}
-	_ = s.cache.DeleteAuthCache(ctx, cacheKey)
+	deleteErr := s.cache.DeleteAuthCache(ctx, cacheKey)
 	// Publish invalidation message to other instances
-	_ = s.cache.PublishAuthCacheInvalidation(ctx, cacheKey)
+	publishErr := s.cache.PublishAuthCacheInvalidation(ctx, cacheKey)
+	return errors.Join(deleteErr, publishErr)
+}
+
+// InvalidateAuthCacheByUserIDReliable is used by durable credit delivery. Unlike
+// the legacy best-effort API, every database, Redis and publish error is returned.
+func (s *APIKeyService) InvalidateAuthCacheByUserIDReliable(ctx context.Context, userID int64) error {
+	if s == nil || s.apiKeyRepo == nil {
+		return errors.New("auth cache repository unavailable")
+	}
+	keys, err := s.apiKeyRepo.ListKeysByUserID(ctx, userID)
+	if err != nil {
+		return err
+	}
+	var failures []error
+	for _, key := range keys {
+		if key != "" {
+			failures = append(failures, s.deleteAuthCacheReliable(ctx, s.authCacheKey(key)))
+		}
+	}
+	return errors.Join(failures...)
+}
+
+// RefreshUserBalanceForAuth prevents a stale low-balance auth snapshot from
+// rejecting a credit. Only low-balance admission invokes this authoritative read.
+func (s *APIKeyService) RefreshUserBalanceForAuth(ctx context.Context, user *User) (float64, error) {
+	if user == nil {
+		return 0, ErrUserNotFound
+	}
+	// Legacy test adapters may omit the repository. Production always supplies it.
+	if s == nil || s.userRepo == nil {
+		return user.Balance, nil
+	}
+	fresh, err := s.userRepo.GetByID(ctx, user.ID)
+	if err != nil {
+		return 0, err
+	}
+	if fresh == nil {
+		return 0, ErrUserNotFound
+	}
+	return fresh.Balance, nil
 }
 
 func (s *APIKeyService) loadAuthCacheEntry(ctx context.Context, key, cacheKey string) (*APIKeyAuthCacheEntry, error) {

@@ -1,10 +1,13 @@
 package handler
 
 import (
+	"context"
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/handler/admin"
 	"github.com/Wei-Shaw/sub2api/internal/securityaudit"
 	"github.com/Wei-Shaw/sub2api/internal/service"
+	"log/slog"
+	"time"
 
 	"github.com/google/wire"
 )
@@ -173,6 +176,7 @@ func ProvideAdminSettingHandler(settingService *service.SettingService, emailSer
 
 // ProvideHandlers creates the Handlers struct
 func ProvideHandlers(
+	welfareHandler *WelfareHandler,
 	authHandler *AuthHandler,
 	userHandler *UserHandler,
 	apiKeyHandler *APIKeyHandler,
@@ -199,6 +203,7 @@ func ProvideHandlers(
 	_ *service.OpenAIQuotaAutoResetService,
 ) *Handlers {
 	return &Handlers{
+		Welfare:          welfareHandler,
 		Auth:             authHandler,
 		User:             userHandler,
 		APIKey:           apiKeyHandler,
@@ -225,6 +230,7 @@ func ProvideHandlers(
 
 // ProviderSet is the Wire provider set for all handlers
 var ProviderSet = wire.NewSet(
+	ProvideWelfareHandler,
 	// Top-level handlers
 	NewAuthHandler,
 	NewUserHandler,
@@ -288,3 +294,21 @@ var ProviderSet = wire.NewSet(
 	ProvideAdminHandlers,
 	ProvideHandlers,
 )
+
+func ProvideWelfareHandler(svc *service.WelfareService, settings *service.SettingService, cfg *config.Config, balance *service.BillingCacheService, keys *service.APIKeyService, outbox *service.WelfareBalanceOutboxWorker) *WelfareHandler {
+	h := NewWelfareHandler(svc, settings, cfg)
+	h.afterCredit = func(_ context.Context, userID int64) {
+		// The transaction has committed. Cache failures never turn a successful
+		// transfer into a retryable financial failure; the durable outbox retries.
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		defer cancel()
+		if err := balance.InvalidateUserBalance(ctx, userID); err != nil {
+			slog.Warn("welfare credit balance invalidation deferred", "user_id", userID, "error", err)
+		}
+		if err := keys.InvalidateAuthCacheByUserIDReliable(ctx, userID); err != nil {
+			slog.Warn("welfare credit auth invalidation deferred", "user_id", userID, "error", err)
+		}
+		outbox.Wake()
+	}
+	return h
+}

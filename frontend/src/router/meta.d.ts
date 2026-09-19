@@ -48,6 +48,7 @@ declare module 'vue-router' {
      * @default false
      */
     requiresPayment?: boolean
+    requiresWelfare?: boolean
 
     /**
      * 是否要求风控中心功能开关已启用

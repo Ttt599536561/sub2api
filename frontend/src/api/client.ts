@@ -54,6 +54,10 @@ const getUserTimezone = (): string => {
 
 apiClient.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
+    const expected = (config as InternalAxiosRequestConfig & { welfareIdentity?: { sessionID: string | null; userID: number | null } }).welfareIdentity
+    if (expected && (expected.sessionID !== getAuthSessionID() || expected.userID !== getStoredUserID())) {
+      throw new axios.CanceledError('Authentication session changed before welfare request dispatch')
+    }
     requestIdentities.set(config, { userID: getStoredUserID(), sessionID: getAuthSessionID() })
     // Attach token from localStorage
     const token = localStorage.getItem('auth_token')
@@ -294,6 +298,7 @@ apiClient.interceptors.response.use(
       // Return structured error
       return Promise.reject({
         status,
+        retryAfter: error.response.headers['retry-after'],
         code: apiData.code,
         reason: apiData.reason,
         error: apiData.error,

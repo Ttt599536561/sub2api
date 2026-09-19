@@ -5,6 +5,7 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"regexp"
 	"testing"
 
 	"github.com/DATA-DOG/go-sqlmock"
@@ -21,6 +22,19 @@ const (
 	releaseBatchImageHoldSQL    = `(?s)UPDATE users\s+SET balance = balance \+ \$1,\s+frozen_balance = COALESCE\(frozen_balance, 0\) - \$1,\s+updated_at = NOW\(\)\s+WHERE id = \$2 AND deleted_at IS NULL AND COALESCE\(frozen_balance, 0\) >= \$1\s+RETURNING balance, frozen_balance`
 	userExistsForBillingSQL     = `(?s)SELECT 1\s+FROM users\s+WHERE id = \$1 AND deleted_at IS NULL`
 )
+
+const welfareAccrueBillingSpendSQL = `WITH fact AS (
+ INSERT INTO welfare_spend_events(user_id,source_type,source_id,action,amount,ticket_delta)
+ SELECT $1,$2,$3,'debit',$4::numeric(20,8),
+ floor((COALESCE((SELECT eligible_spend FROM welfare_wallets WHERE user_id=$1),0)+$4::numeric(20,8))/50)::bigint
+ -floor(COALESCE((SELECT eligible_spend FROM welfare_wallets WHERE user_id=$1),0)/50)::bigint
+ FROM welfare_programs WHERE id=1 AND enabled AND launch_at IS NOT NULL
+ AND launch_at<=statement_timestamp() AND $4::numeric(20,8)>0
+ ON CONFLICT(source_type,source_id,action) DO NOTHING RETURNING user_id,amount
+ ) INSERT INTO welfare_wallets(user_id,eligible_spend,wallet_version)
+ SELECT user_id,amount,1 FROM fact
+ ON CONFLICT(user_id) DO UPDATE SET eligible_spend=welfare_wallets.eligible_spend+EXCLUDED.eligible_spend,
+ wallet_version=welfare_wallets.wallet_version+1,updated_at=NOW()`
 
 func TestDeductUsageBillingBalance_UsesSufficientBalanceGuard(t *testing.T) {
 	ctx := context.Background()
@@ -84,10 +98,15 @@ func TestApplyUsageBillingEffects_FlagsBalanceOverdraft(t *testing.T) {
 	mock.ExpectQuery(overdraftBalanceDeductSQL).
 		WithArgs(10.0, int64(42)).
 		WillReturnRows(sqlmock.NewRows([]string{"balance"}).AddRow(-5.0))
+	mock.ExpectExec("^"+regexp.QuoteMeta(welfareAccrueBillingSpendSQL)+"$").
+		WithArgs(int64(42), "usage", "usage-overdraft:7", 10.0).
+		WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectCommit()
 
 	result := &service.UsageBillingApplyResult{Applied: true}
 	err = (&usageBillingRepository{}).applyUsageBillingEffects(ctx, tx, &service.UsageBillingCommand{
+		RequestID:   "usage-overdraft",
+		APIKeyID:    7,
 		UserID:      42,
 		BalanceCost: 10,
 	}, result)
@@ -181,9 +200,15 @@ func TestCaptureUsageBillingBatchImageBalance_ReleasesRemainder(t *testing.T) {
 	mock.ExpectQuery(captureBatchImageHoldSQL).
 		WithArgs(1.0, 0.25, int64(42)).
 		WillReturnRows(sqlmock.NewRows([]string{"balance", "frozen_balance"}).AddRow(9.75, 0.0))
+	// Only the settled cost accrues; the original hold and released remainder do not.
+	mock.ExpectExec("^"+regexp.QuoteMeta(welfareAccrueBillingSpendSQL)+"$").
+		WithArgs(int64(42), "batch_image", "batch-image-capture:7", 0.25).
+		WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectCommit()
 
-	result, err := captureUsageBillingBatchImageBalance(ctx, tx, &service.BatchImageBalanceHoldCommand{UserID: 42, HoldAmount: 1, ActualAmount: 0.25})
+	result, err := captureUsageBillingBatchImageBalance(ctx, tx, &service.BatchImageBalanceHoldCommand{
+		RequestID: "batch-image-capture", APIKeyID: 7, UserID: 42, HoldAmount: 1, ActualAmount: 0.25,
+	})
 	require.NoError(t, err)
 	require.InDelta(t, 9.75, *result.NewBalance, 0.000001)
 	require.InDelta(t, 0.0, *result.FrozenBalance, 0.000001)

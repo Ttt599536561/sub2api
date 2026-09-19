@@ -323,6 +323,7 @@ type DefaultSubscriptionSetting struct {
 }
 
 type PublicSettings struct {
+	WelfareEnabled                      bool `json:"welfare_enabled"`
 	RegistrationEnabled                 bool
 	EmailVerifyEnabled                  bool
 	ForceEmailOnThirdPartySignup        bool

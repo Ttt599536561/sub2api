@@ -75,6 +75,10 @@ func RegisterAdminRoutes(
 
 		// 系统设置
 		registerSettingsRoutes(admin, h)
+		if h.Welfare != nil {
+			admin.GET("/welfare/settings", h.Welfare.GetSettings)
+			admin.PUT("/welfare/settings", h.Welfare.UpdateSettings)
+		}
 
 		// 数据管理
 		registerDataManagementRoutes(admin, h, stepUpAuth)
