@@ -58,8 +58,13 @@ jobs:
       - name: Keep an existing final release immutable
         shell: bash
         run: |
-          if docker buildx imagetools inspect "$IMAGE:$VERSION" >/dev/null 2>&1; then
+          set -euo pipefail
+          if result="$(docker buildx imagetools inspect "$IMAGE:$VERSION" 2>&1)"; then
             echo 'This release already exists. Use a new version for another publication.' >&2
+            exit 1
+          fi
+          if ! grep -Eqi 'not found|manifest unknown|name unknown' <<< "$result"; then
+            printf '%s\n' "$result" >&2
             exit 1
           fi
 
@@ -145,8 +150,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if docker buildx imagetools inspect "$IMAGE:$VERSION" >/dev/null 2>&1; then
+          if result="$(docker buildx imagetools inspect "$IMAGE:$VERSION" 2>&1)"; then
             echo 'Refusing to overwrite the existing final release.' >&2
+            exit 1
+          fi
+          if ! grep -Eqi 'not found|manifest unknown|name unknown' <<< "$result"; then
+            printf '%s\n' "$result" >&2
             exit 1
           fi
           amd64="$(cat /tmp/image-digests/amd64)"
