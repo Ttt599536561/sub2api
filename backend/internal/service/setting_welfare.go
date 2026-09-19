@@ -11,16 +11,16 @@ func (s *SettingService) SetWelfareAvailabilityProvider(provider func(context.Co
 	s.welfareAvailabilityProvider = provider
 }
 
-func (s *SettingService) welfareAvailable(ctx context.Context) bool {
+func (s *SettingService) welfareAvailable(ctx context.Context) (bool, error) {
 	if s.welfareAvailabilityProvider == nil {
-		return false
+		return false, nil
 	}
 	available, err := s.welfareAvailabilityProvider(ctx)
 	if err != nil {
 		slog.Warn("welfare public availability unavailable", "error", err)
-		return false
+		return false, err
 	}
-	return available
+	return available, nil
 }
 
 // NotifyWelfareSettingsChanged invalidates cached HTML/public configuration.

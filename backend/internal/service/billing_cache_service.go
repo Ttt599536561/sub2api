@@ -417,7 +417,10 @@ func (s *BillingCacheService) GetUserBalance(ctx context.Context, userID int64) 
 		}
 		return balance, nil
 	}
-	return 0, fmt.Errorf("balance snapshot invalidated during all %d load attempts", balanceLoadMaxAttempts)
+	// Continuous balance updates are contention, not a database failure. Start
+	// one fresh, unshared read without refilling the cache so admission remains
+	// available while all queued refills still honor their generation fences.
+	return s.loadUserBalanceWithoutCache(ctx, userID)
 }
 
 func (s *BillingCacheService) loadUserBalanceWithoutCache(ctx context.Context, userID int64) (float64, error) {

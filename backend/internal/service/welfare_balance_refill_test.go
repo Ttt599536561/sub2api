@@ -153,10 +153,10 @@ func TestWelfareBalanceServiceBoundsRetriesDuringContinuousChanges(t *testing.T)
 	repo := &welfareChangingBalanceRepo{cache: cache}
 	svc := NewBillingCacheService(cache, repo, nil, nil, nil, nil, &config.Config{}, nil)
 	t.Cleanup(svc.Stop)
-	_, err := svc.GetUserBalance(context.Background(), 7)
-	require.Error(t, err, "an invalidated snapshot cannot be returned as an authoritative zero balance")
-	require.Greater(t, repo.calls.Load(), int64(1), "transient changes should be retried")
-	require.LessOrEqual(t, repo.calls.Load(), int64(4), "continuous debits must not create an unbounded read loop")
+	balance, err := svc.GetUserBalance(context.Background(), 7)
+	require.NoError(t, err, "continuous changes should fall back to a fresh database read")
+	require.Zero(t, balance)
+	require.EqualValues(t, 4, repo.calls.Load(), "continuous debits must stop after three retries and one direct database read")
 }
 
 type welfareGenerationFailureRepo struct {

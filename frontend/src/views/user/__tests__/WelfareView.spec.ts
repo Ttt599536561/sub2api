@@ -62,6 +62,43 @@ describe('welfare user interactions', () => {
     expect(vi.mocked(welfareAPI.calendar).mock.calls.length).toBeGreaterThan(calendarCalls)
     expect(auth.refreshUser).not.toHaveBeenCalled()
   })
+  it('keeps redemption input and an in-flight quote when refreshing the same user', async () => {
+    await start()
+    await wrapper.get('[data-testid="open-redemption"]').trigger('click')
+    await wrapper.get('#welfare-redemption-amount').setValue('1.00')
+    let resolve!: (value: Awaited<ReturnType<typeof welfareAPI.quote>>) => void
+    vi.mocked(welfareAPI.quote).mockReturnValueOnce(new Promise(r => { resolve = r }))
+    await wrapper.get('[data-testid="quote-partial"]').trigger('click')
+    const signal = vi.mocked(welfareAPI.quote).mock.calls[0][1]
+
+    auth.user = { ...auth.user }
+    await flushPromises()
+
+    expect(wrapper.find('[role="dialog"]').exists()).toBe(true)
+    expect(wrapper.get<HTMLInputElement>('#welfare-redemption-amount').element.value).toBe('1.00')
+    expect(signal?.aborted).toBe(false)
+    resolve({ amount: '1.00', welfare_balance: '2.80', account_balance: '18.35', account_balance_after: '19.35', welfare_balance_version: 1 })
+    await flushPromises()
+    expect(wrapper.find('[data-testid="confirm-redeem"]').exists()).toBe(true)
+    expect(wrapper.get('[role="dialog"]').text()).toContain('$19.35')
+  })
+  it.each([
+    { change: 'account ID', sessionID: 'first', userID: 2 },
+    { change: 'session', sessionID: 'second', userID: 1 }
+  ])('clears redemption input when the $change changes', async ({ sessionID, userID }) => {
+    await start()
+    await wrapper.get('[data-testid="open-redemption"]').trigger('click')
+    await wrapper.get('#welfare-redemption-amount').setValue('1.00')
+
+    localStorage.setItem('auth_session_id', sessionID)
+    localStorage.setItem('auth_user', JSON.stringify({ id: userID }))
+    auth.sessionRevision = sessionID; auth.user = { id: userID }
+    await flushPromises()
+
+    expect(wrapper.find('[role="dialog"]').exists()).toBe(false)
+    await wrapper.get('[data-testid="open-redemption"]').trigger('click')
+    expect(wrapper.get<HTMLInputElement>('#welfare-redemption-amount').element.value).toBe('')
+  })
   it('shows the returned draw prize and current remaining tickets', async () => {
     vi.mocked(welfareAPI.overview).mockResolvedValue({ ...initial, available_draws: 1 })
     await start()
@@ -84,6 +121,75 @@ describe('welfare user interactions', () => {
     await wrapper.get('[data-testid="confirm-redeem"]').trigger('click'); await flushPromises()
     expect(auth.refreshUser).toHaveBeenCalledOnce()
     expect(wrapper.text()).toContain('$2.80 已转入账户余额')
+  })
+  it('keeps the transfer success notice after refreshing the same account data', async () => {
+    await start()
+    await wrapper.get('[data-testid="open-redemption"]').trigger('click')
+    vi.mocked(welfareAPI.quote).mockResolvedValue({ amount: '2.80', welfare_balance: '2.80', account_balance: '18.35', account_balance_after: '21.15', welfare_balance_version: 1 })
+    await wrapper.get('[data-testid="redeem-all"]').trigger('click'); await flushPromises()
+    auth.refreshUser.mockImplementationOnce(async () => { auth.user = { ...auth.user }; return {} })
+    const after = { ...initial, welfare_balance: '0.00', account_balance: '21.15', wallet_version: 2, welfare_balance_version: 2 }
+    vi.mocked(welfareAPI.redeem).mockResolvedValue({ operation_id: 'transfer', status: 'completed', overview: after })
+    vi.mocked(welfareAPI.overview).mockResolvedValue(after)
+
+    await wrapper.get('[data-testid="confirm-redeem"]').trigger('click'); await flushPromises()
+
+    expect(auth.refreshUser).toHaveBeenCalledOnce()
+    expect(wrapper.text()).toContain('$2.80 已转入账户余额')
+    expect(wrapper.find('[role="dialog"]').exists()).toBe(false)
+  })
+  it.each([
+    { completion: 'background recovery with the dialog open', closeDialog: false, retry: false },
+    { completion: 'background recovery with the dialog closed', closeDialog: true, retry: false },
+    { completion: 'the pending-transfer retry button', closeDialog: true, retry: true }
+  ])('allows a new redemption after $completion', async ({ closeDialog, retry }) => {
+    await start()
+    await wrapper.get('[data-testid="open-redemption"]').trigger('click')
+    await wrapper.get('#welfare-redemption-amount').setValue('1.00')
+    vi.mocked(welfareAPI.quote).mockResolvedValue({ amount: '1.00', welfare_balance: '2.80', account_balance: '18.35', account_balance_after: '19.35', welfare_balance_version: 1 })
+    await wrapper.get('[data-testid="quote-partial"]').trigger('click'); await flushPromises()
+    vi.mocked(welfareAPI.redeem).mockRejectedValueOnce(new Error('response lost'))
+    await wrapper.get('[data-testid="confirm-redeem"]').trigger('click'); await flushPromises()
+    const firstRequest = vi.mocked(welfareAPI.redeem).mock.calls[0]
+    expect(wrapper.get('#welfare-redemption-amount').attributes('disabled')).toBeDefined()
+    if (closeDialog) {
+      await wrapper.get('[role="dialog"]').findAll('button').find(button => button.text() === '取消')!.trigger('click')
+    }
+
+    const after = { ...initial, welfare_balance: '1.80', account_balance: '19.35', wallet_version: 2, welfare_balance_version: 2 }
+    const completed = { operation_id: 'transfer', status: 'completed' as const, amount: '1.00', overview: after }
+    vi.mocked(welfareAPI.overview).mockResolvedValue(after)
+    if (retry) {
+      vi.mocked(welfareAPI.redeem).mockResolvedValueOnce(completed)
+      await wrapper.get('[data-testid="retry-pending-redemption"]').trigger('click'); await flushPromises()
+      expect(vi.mocked(welfareAPI.redeem).mock.calls[1].slice(0, 2)).toEqual(firstRequest.slice(0, 2))
+    } else {
+      vi.mocked(welfareAPI.operationByKey).mockResolvedValueOnce(completed)
+      window.dispatchEvent(new Event('focus')); await flushPromises()
+      expect(welfareAPI.operationByKey).toHaveBeenCalledWith('redeem', firstRequest[1], expect.any(AbortSignal))
+      expect(welfareAPI.redeem).toHaveBeenCalledOnce()
+    }
+    expect(wrapper.text()).toContain('$1.00 已转入账户余额')
+    expect(wrapper.find('[data-testid="retry-pending-redemption"]').exists()).toBe(false)
+    expect(wrapper.find('[role="dialog"]').exists()).toBe(false)
+
+    await wrapper.get('[data-testid="open-redemption"]').trigger('click'); await flushPromises()
+    expect(wrapper.get<HTMLInputElement>('#welfare-redemption-amount').element.value).toBe('')
+    expect(wrapper.get('#welfare-redemption-amount').attributes('disabled')).toBeUndefined()
+    expect(wrapper.get('[data-testid="redeem-all"]').attributes('disabled')).toBeUndefined()
+    expect(wrapper.find('[data-testid="confirm-redeem"]').exists()).toBe(false)
+    await wrapper.get('#welfare-redemption-amount').setValue('0.50')
+    vi.mocked(welfareAPI.quote).mockResolvedValueOnce({ amount: '0.50', welfare_balance: '1.80', account_balance: '19.35', account_balance_after: '19.85', welfare_balance_version: 2 })
+    await wrapper.get('[data-testid="quote-partial"]').trigger('click'); await flushPromises()
+    const next = { ...after, welfare_balance: '1.30', account_balance: '19.85', wallet_version: 3, welfare_balance_version: 3 }
+    vi.mocked(welfareAPI.overview).mockResolvedValue(next)
+    vi.mocked(welfareAPI.redeem).mockResolvedValueOnce({ operation_id: 'next-transfer', status: 'completed', amount: '0.50', overview: next })
+    await wrapper.get('[data-testid="confirm-redeem"]').trigger('click'); await flushPromises()
+    const lastRequest = vi.mocked(welfareAPI.redeem).mock.calls.at(-1)!
+    expect(lastRequest[0]).toEqual({ amount: '0.50', welfare_balance_version: 2 })
+    expect(lastRequest[1]).not.toBe(firstRequest[1])
+    expect(wrapper.text()).toContain('$0.50 已转入账户余额')
+    expect(wrapper.find('[role="dialog"]').exists()).toBe(false)
   })
   it('sends record filters and rejects reversed date ranges', async () => {
     await start()

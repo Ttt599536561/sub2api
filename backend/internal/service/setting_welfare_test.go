@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -28,12 +29,31 @@ func TestWelfarePublicAvailabilityMirrorsInjection(t *testing.T) {
 	require.True(t, injected.(*PublicSettingsInjectionPayload).WelfareEnabled)
 }
 
-func TestWelfareAvailabilityFailureDoesNotBreakPublicSettings(t *testing.T) {
+func TestWelfareAvailabilityFailurePropagatesToPublicSettings(t *testing.T) {
 	svc := NewSettingService(&settingPublicRepoStub{}, &config.Config{})
-	svc.SetWelfareAvailabilityProvider(func(context.Context) (bool, error) { return false, errors.New("unavailable") })
+	unavailable := errors.New("unavailable")
+	svc.SetWelfareAvailabilityProvider(func(context.Context) (bool, error) { return false, unavailable })
 	settings, err := svc.GetPublicSettings(context.Background())
+	require.ErrorIs(t, err, unavailable)
+	require.Nil(t, settings)
+}
+
+func TestWelfarePublicSettingsInjectionRecoversAfterAvailabilityFailure(t *testing.T) {
+	svc := NewSettingService(&settingPublicRepoStub{}, &config.Config{})
+	unavailable := errors.New("welfare database unavailable")
+	providerErr := unavailable
+	svc.SetWelfareAvailabilityProvider(func(context.Context) (bool, error) {
+		return providerErr == nil, providerErr
+	})
+
+	injected, err := svc.GetPublicSettingsForInjection(context.Background())
+	assert.ErrorIs(t, err, unavailable)
+	assert.Nil(t, injected, "unknown availability must not become a cacheable disabled configuration")
+
+	providerErr = nil
+	injected, err = svc.GetPublicSettingsForInjection(context.Background())
 	require.NoError(t, err)
-	require.False(t, settings.WelfareEnabled)
+	require.True(t, injected.(*PublicSettingsInjectionPayload).WelfareEnabled)
 }
 
 func TestWelfarePublicSettingsAndSSRExposeOnlyAvailability(t *testing.T) {

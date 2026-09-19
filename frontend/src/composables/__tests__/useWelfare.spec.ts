@@ -24,6 +24,56 @@ beforeEach(() => {
 })
 afterEach(() => { wrapper?.unmount(); vi.useRealTimers(); vi.unstubAllGlobals() })
 describe('welfare state', () => {
+  it('keeps an in-flight redemption when refreshing the same user', async () => {
+    await start()
+    let resolve!: (value: Awaited<ReturnType<typeof welfareAPI.redeem>>) => void
+    vi.mocked(welfareAPI.redeem).mockReturnValueOnce(new Promise(r => { resolve = r }))
+    const redemption = state.redeem({ amount: '1.00', welfare_balance_version: 1 })
+    const signal = vi.mocked(welfareAPI.redeem).mock.calls[0][2]
+    const pending = state.pendingRedemption.value
+    const overview = state.overview.value
+
+    auth.user = { ...auth.user }
+    await flushPromises()
+
+    expect(signal?.aborted).toBe(false)
+    expect(state.busy.value).toBe(true)
+    expect(state.pendingRedemption.value).toEqual(pending)
+    expect(state.overview.value).toBe(overview)
+    expect(welfareAPI.overview).toHaveBeenCalledOnce()
+    resolve({ operation_id: 'transfer', status: 'completed', overview: snapshot(2, '1.80') })
+    expect((await redemption)?.operation_id).toBe('transfer')
+    expect(state.pendingRedemption.value).toBeNull()
+    expect(state.busy.value).toBe(false)
+  })
+  it.each([
+    { change: 'account ID', sessionID: 'first', userID: 2 },
+    { change: 'session', sessionID: 'second', userID: 1 }
+  ])('aborts redemption and clears private state when the $change changes', async ({ sessionID, userID }) => {
+    await start()
+    let resolve!: (value: Awaited<ReturnType<typeof welfareAPI.redeem>>) => void
+    vi.mocked(welfareAPI.redeem).mockReturnValueOnce(new Promise(r => { resolve = r }))
+    const redemption = state.redeem({ amount: '1.00', welfare_balance_version: 1 })
+    const signal = vi.mocked(welfareAPI.redeem).mock.calls[0][2]
+    vi.mocked(welfareAPI.overview).mockReturnValueOnce(new Promise(() => {}))
+    vi.mocked(welfareAPI.rules).mockReturnValueOnce(new Promise(() => {}))
+
+    localStorage.setItem('auth_session_id', sessionID)
+    localStorage.setItem('auth_user', JSON.stringify({ id: userID }))
+    auth.sessionRevision = sessionID; auth.user = { id: userID }
+    await flushPromises()
+
+    expect(signal?.aborted).toBe(true)
+    expect(state.busy.value).toBe(false)
+    expect(state.pendingRedemption.value).toBeNull()
+    expect(state.overview.value).toBeNull()
+    expect(state.calendar.value).toBeNull()
+    expect(state.records.value).toBeNull()
+    expect(state.rules.value).toBeNull()
+    resolve({ operation_id: 'old-transfer', status: 'completed', overview: snapshot(2, '1.80') })
+    expect(await redemption).toBeNull()
+    expect(state.overview.value).toBeNull()
+  })
   it.each([{}, undefined])('keeps draw and redemption retries stable when crypto lacks randomUUID (%j)', async crypto => {
     vi.stubGlobal('crypto', crypto)
     await start()

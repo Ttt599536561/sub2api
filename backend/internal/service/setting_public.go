@@ -248,6 +248,11 @@ func (s *SettingService) GetPublicSettings(ctx context.Context) (*PublicSettings
 	if err != nil {
 		return nil, fmt.Errorf("get public settings: %w", err)
 	}
+	welfareEnabled, err := s.welfareAvailable(ctx)
+	if err != nil {
+		// Unknown availability must not be injected and cached as a disabled feature.
+		return nil, fmt.Errorf("get welfare availability: %w", err)
+	}
 
 	linuxDoEnabled := false
 	if raw, ok := settings[SettingKeyLinuxDoConnectEnabled]; ok {
@@ -300,7 +305,7 @@ func (s *SettingService) GetPublicSettings(ctx context.Context) (*PublicSettings
 	}
 
 	return &PublicSettings{
-		WelfareEnabled:                      s.welfareAvailable(ctx),
+		WelfareEnabled:                      welfareEnabled,
 		RegistrationEnabled:                 settings[SettingKeyRegistrationEnabled] == "true",
 		EmailVerifyEnabled:                  emailVerifyEnabled,
 		ForceEmailOnThirdPartySignup:        settings[SettingKeyForceEmailOnThirdPartySignup] == "true",

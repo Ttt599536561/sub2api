@@ -53,7 +53,7 @@ const dialog = ref<'rules' | 'probabilities' | 'result' | ''>('')
 const showRedemption = ref(false)
 const notice = ref('')
 const result = ref<WelfareOperation | null>(null)
-const sessionKey = ref(0)
+const redemptionKey = ref(0)
 watch(sessionInvalidated, invalid => { if (invalid) window.location.reload() }, { flush: 'post' })
 watch(() => recovered.value.length, (count, previous) => {
   for (const recovery of recovered.value.slice(previous, count)) {
@@ -61,7 +61,7 @@ watch(() => recovered.value.length, (count, previous) => {
     else redemptionComplete(recovery.amount || recovery.result.amount || '0.00')
   }
 })
-watch(() => [auth.sessionRevision, auth.user?.id], () => { dialog.value = ''; showRedemption.value = false; notice.value = ''; result.value = null; sessionKey.value++ })
+watch([() => auth.sessionRevision, () => auth.user?.id], () => { dialog.value = ''; showRedemption.value = false; notice.value = ''; result.value = null; redemptionKey.value++ })
 async function handleCheckIn() {
   const response = await checkIn()
   if (response?.status !== 'completed') return
@@ -69,6 +69,9 @@ async function handleCheckIn() {
 }
 async function handleDraw() { const response = await draw(); if (response?.status === 'completed') { result.value = response; dialog.value = 'result' } }
 function redemptionComplete(amount: string) {
+  // Recovery and page-level retries can complete outside the dialog itself.
+  showRedemption.value = false
+  redemptionKey.value++
   notice.value = t('welfare.redemptionSuccess', { amount: welfareMoney(amount) })
   void auth.refreshUser().catch(() => { /* The transfer already committed; the next account refresh can recover. */ })
 }
@@ -100,7 +103,7 @@ async function retryRedemption() {
         <div class="wf-grid"><WelfareCalendar :overview="overview" :calendar="calendar" :month="month" :loading="calendarLoading" :error="calendarError" :busy="busy || recovering" @month="month = $event" @check-in="handleCheckIn" @retry="loadCalendar" /><WelfareLottery :overview="overview" :rules="rules" :busy="busy || recovering" :redemption-pending="!!pendingRedemption" @draw="handleDraw" @redeem="showRedemption = true" @probabilities="dialog = 'probabilities'" /></div>
         <WelfareRecords :records="records" :filters="filters" :loading="recordsLoading" :error="recordsError" :draws-used="overview.draws_used" @filter="changeRecordFilters" @retry="loadRecords" />
         <p class="wf-footer">{{ t('welfare.footer') }}</p>
-        <WelfareRedemption :key="sessionKey" :show="showRedemption" :balance="overview.welfare_balance" :busy="busy" :mutation-error="mutationError" :quote-request="quote" :redeem-request="redeem" @close="showRedemption = false" @completed="redemptionComplete" />
+        <WelfareRedemption :key="redemptionKey" :show="showRedemption" :balance="overview.welfare_balance" :busy="busy" :mutation-error="mutationError" :quote-request="quote" :redeem-request="redeem" @close="showRedemption = false" @completed="redemptionComplete" />
       </template>
       <BaseDialog :show="!!dialog" trap-focus :title="t(dialog === 'result' ? 'welfare.drawResult' : dialog === 'probabilities' ? 'welfare.probabilities' : 'welfare.rules')" @close="dialog = ''">
         <div v-if="dialog === 'rules'" class="space-y-5 text-sm leading-7 text-gray-600 dark:text-dark-300"><div><h3 class="font-semibold text-gray-900 dark:text-white">{{ t('welfare.checkIn') }}</h3><p>{{ t('welfare.ruleCheck') }}</p></div><p>{{ t('welfare.ruleStreak') }}</p><p>{{ t('welfare.ruleSpend', { amount: welfareMoney(rules?.draw_threshold) }) }}</p><p>{{ t('welfare.ruleRedeem') }}</p></div>

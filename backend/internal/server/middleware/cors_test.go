@@ -3,6 +3,7 @@ package middleware
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
@@ -113,6 +114,95 @@ func TestCORS_AllowedOrigin_HasAllowHeaders(t *testing.T) {
 			assert.Equal(t, "https://allowed.example.com", w.Header().Get("Access-Control-Allow-Origin"),
 				"允许的 origin 应收到 Allow-Origin")
 		})
+	}
+}
+
+func TestCORS_RateLimitResponseExposesRetryAfter(t *testing.T) {
+	for _, tt := range []struct {
+		name           string
+		allowedOrigins []string
+		origin         string
+		wantOrigin     string
+	}{
+		{
+			name:           "allowed_origin",
+			allowedOrigins: []string{"https://panel.example.com"},
+			origin:         "https://panel.example.com",
+			wantOrigin:     "https://panel.example.com",
+		},
+		{
+			name:           "wildcard_origin",
+			allowedOrigins: []string{"*"},
+			origin:         "https://panel.example.com",
+			wantOrigin:     "*",
+		},
+		{
+			name:           "disallowed_origin",
+			allowedOrigins: []string{"https://panel.example.com"},
+			origin:         "https://untrusted.example.com",
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			router := gin.New()
+			router.Use(CORS(config.CORSConfig{AllowedOrigins: tt.allowedOrigins}))
+			router.GET("/api/v1/user/welfare/overview", func(c *gin.Context) {
+				c.Header("Retry-After", "45")
+				c.AbortWithStatus(http.StatusTooManyRequests)
+			})
+			req := httptest.NewRequest(http.MethodGet, "/api/v1/user/welfare/overview", nil)
+			req.Header.Set("Origin", tt.origin)
+			w := httptest.NewRecorder()
+			router.ServeHTTP(w, req)
+
+			assert.Equal(t, http.StatusTooManyRequests, w.Code)
+			assert.Equal(t, "45", w.Header().Get("Retry-After"))
+			assert.Equal(t, tt.wantOrigin, w.Header().Get("Access-Control-Allow-Origin"))
+			if tt.wantOrigin == "" {
+				assert.Empty(t, w.Header().Get("Access-Control-Expose-Headers"))
+				return
+			}
+			headers := strings.Split(strings.ToLower(w.Header().Get("Access-Control-Expose-Headers")), ",")
+			for i := range headers {
+				headers[i] = strings.TrimSpace(headers[i])
+			}
+			assert.Contains(t, headers, "retry-after", "browser clients must be able to read the server's rate-limit retry delay")
+		})
+	}
+}
+
+func TestCORS_WelfareIdempotentPreflight(t *testing.T) {
+	for _, endpoint := range []string{"draw", "redeem"} {
+		for _, allowed := range []bool{true, false} {
+			origin := "https://panel.example.com"
+			if !allowed {
+				origin = "https://untrusted.example.com"
+			}
+			t.Run(endpoint+"/"+origin, func(t *testing.T) {
+				w := httptest.NewRecorder()
+				c, _ := gin.CreateTestContext(w)
+				c.Request = httptest.NewRequest(http.MethodOptions, "/api/v1/user/welfare/"+endpoint, nil)
+				c.Request.Header.Set("Origin", origin)
+				c.Request.Header.Set("Access-Control-Request-Method", http.MethodPost)
+				c.Request.Header.Set("Access-Control-Request-Headers", "authorization,content-type,idempotency-key")
+				CORS(config.CORSConfig{AllowedOrigins: []string{"https://panel.example.com"}})(c)
+
+				if !allowed {
+					assert.Equal(t, http.StatusForbidden, w.Code)
+					assert.Empty(t, w.Header().Get("Access-Control-Allow-Origin"))
+					assert.Empty(t, w.Header().Get("Access-Control-Allow-Headers"))
+					return
+				}
+				assert.Equal(t, http.StatusNoContent, w.Code)
+				assert.Equal(t, origin, w.Header().Get("Access-Control-Allow-Origin"))
+				headers := strings.Split(strings.ToLower(w.Header().Get("Access-Control-Allow-Headers")), ",")
+				for i := range headers {
+					headers[i] = strings.TrimSpace(headers[i])
+				}
+				for _, header := range []string{"authorization", "content-type", "idempotency-key"} {
+					assert.Contains(t, headers, header, "welfare POST must pass the browser preflight")
+				}
+			})
+		}
 	}
 }
 

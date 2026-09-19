@@ -204,7 +204,7 @@ export function useWelfare(initialFilters: Partial<WelfareRecordQuery> = {}) {
   function storageChanged(event: StorageEvent) { if (!event.key || ['auth_session_id', 'auth_user', 'auth_token'].includes(event.key)) ensureIdentity() }
   watch(month, () => { void loadCalendar() })
   watch(filters, () => { void loadRecords() })
-  watch(() => [auth.sessionRevision, auth.user?.id], () => {
+  watch([() => auth.sessionRevision, () => auth.user?.id], () => {
     if (sessionInvalidated.value) return
     epoch++; controller.abort(); controller = new AbortController(); reading = null
     overview.value = null; calendar.value = null; records.value = null; rules.value = null
