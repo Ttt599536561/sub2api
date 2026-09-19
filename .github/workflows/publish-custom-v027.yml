@@ -1,0 +1,161 @@
+name: Publish custom 0.2.7-r5 Docker image
+
+on:
+  push:
+    branches: [codex/publish-v0.2.7-r5]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: publish-custom-0.2.7-r5
+  cancel-in-progress: false
+
+env:
+  IMAGE: ghcr.io/ttt599536561/sub2api-custom
+  VERSION: 0.2.7-r5
+  SOURCE_COMMIT: 1f428c0242d3ff9ab6f958f23135c00bbc6ad05c
+
+jobs:
+  build:
+    if: github.repository == 'Ttt599536561/sub2api'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    steps:
+      - name: Check out the verified application source
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ env.SOURCE_COMMIT }}
+          persist-credentials: false
+
+      - name: Verify the source commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$SOURCE_COMMIT"
+          test "$(tr -d '\r\n' < backend/cmd/server/VERSION)" = '0.2.7'
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Keep an existing final release immutable
+        shell: bash
+        run: |
+          if docker buildx imagetools inspect "$IMAGE:$VERSION" >/dev/null 2>&1; then
+            echo 'This release already exists. Use a new version for another publication.' >&2
+            exit 1
+          fi
+
+      - name: Build and publish the architecture image
+        id: image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          platforms: linux/${{ matrix.arch }}
+          push: true
+          tags: ${{ env.IMAGE }}:${{ env.VERSION }}-${{ matrix.arch }}
+          build-args: |
+            VERSION=${{ env.VERSION }}
+            COMMIT=${{ env.SOURCE_COMMIT }}
+            GOPROXY=https://proxy.golang.org,direct
+            GOSUMDB=sum.golang.org
+          labels: |
+            org.opencontainers.image.source=https://github.com/Ttt599536561/sub2api
+            org.opencontainers.image.revision=${{ env.SOURCE_COMMIT }}
+            org.opencontainers.image.version=${{ env.VERSION }}
+          cache-from: type=gha,scope=sub2api-custom-${{ matrix.arch }}
+          cache-to: type=gha,scope=sub2api-custom-${{ matrix.arch }},mode=max
+
+      - name: Verify the published binary and runtime resources
+        shell: bash
+        env:
+          DIGEST: ${{ steps.image.outputs.digest }}
+          ARCH: ${{ matrix.arch }}
+        run: |
+          set -euo pipefail
+          ref="$IMAGE@$DIGEST"
+          docker pull "$ref"
+          test "$(docker image inspect "$ref" --format '{{.Os}}/{{.Architecture}}')" = "linux/$ARCH"
+          test "$(docker image inspect "$ref" --format '{{index .Config.Labels "org.opencontainers.image.revision"}}')" = "$SOURCE_COMMIT"
+          docker run --rm "$ref" -version 2>&1 | tee version.txt
+          grep -F "Sub2API $VERSION (commit: $SOURCE_COMMIT," version.txt
+          docker run --rm "$ref" sh -ec 'pg_dump --version; psql --version; test -d /app/resources'
+          docker run --detach --name image-smoke "$ref"
+          trap 'docker logs image-smoke; docker rm --force image-smoke >/dev/null' EXIT
+          for attempt in $(seq 1 30); do
+            if docker exec image-smoke wget -q -O - http://127.0.0.1:8080/setup/status > setup.json; then
+              break
+            fi
+            sleep 1
+          done
+          jq -e '.data.needs_setup == true' setup.json
+          docker exec image-smoke wget -q -O - http://127.0.0.1:8080/ > index.html
+          grep -q '/assets/' index.html
+          mkdir -p /tmp/image-digests
+          printf '%s\n' "$DIGEST" > "/tmp/image-digests/$ARCH"
+
+      - name: Save the verified image digest
+        uses: actions/upload-artifact@v7
+        with:
+          name: image-digest-${{ matrix.arch }}
+          path: /tmp/image-digests/${{ matrix.arch }}
+          retention-days: 30
+
+  publish:
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Download verified image digests
+        uses: actions/download-artifact@v8
+        with:
+          pattern: image-digest-*
+          merge-multiple: true
+          path: /tmp/image-digests
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish the multi-platform release
+        shell: bash
+        run: |
+          set -euo pipefail
+          if docker buildx imagetools inspect "$IMAGE:$VERSION" >/dev/null 2>&1; then
+            echo 'Refusing to overwrite the existing final release.' >&2
+            exit 1
+          fi
+          amd64="$(cat /tmp/image-digests/amd64)"
+          arm64="$(cat /tmp/image-digests/arm64)"
+          [[ "$amd64" =~ ^sha256:[a-f0-9]{64}$ ]]
+          [[ "$arm64" =~ ^sha256:[a-f0-9]{64}$ ]]
+          docker buildx imagetools create --tag "$IMAGE:$VERSION" "$IMAGE@$amd64" "$IMAGE@$arm64"
+          docker buildx imagetools inspect "$IMAGE:$VERSION" | tee manifest.txt
+          grep -F 'linux/amd64' manifest.txt
+          grep -F 'linux/arm64' manifest.txt
+          printf 'Published `%s:%s` from `%s` for linux/amd64 and linux/arm64.\n' \
+            "$IMAGE" "$VERSION" "$SOURCE_COMMIT" >> "$GITHUB_STEP_SUMMARY"
