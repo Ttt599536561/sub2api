@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
+	"github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/Wei-Shaw/sub2api/internal/web"
 	"github.com/gin-gonic/gin"
@@ -19,10 +20,47 @@ import (
 
 type welfarePublicSettingsRepo struct {
 	service.SettingRepository
+	values map[string]string
 }
 
-func (welfarePublicSettingsRepo) GetMultiple(context.Context, []string) (map[string]string, error) {
-	return map[string]string{}, nil
+func (r welfarePublicSettingsRepo) GetMultiple(context.Context, []string) (map[string]string, error) {
+	return r.values, nil
+}
+
+func TestFrontendWelfareRecoveryPreservesConfiguredFrameOrigins(t *testing.T) {
+	settings := service.NewSettingService(welfarePublicSettingsRepo{values: map[string]string{
+		service.SettingKeyHomeContent:     "https://home.example.test/welcome",
+		service.SettingKeyCustomMenuItems: `[{"url":"https://menu.example.test/page"}]`,
+	}}, &config.Config{})
+	providerErr := errors.New("welfare query temporarily unavailable at startup")
+	settings.SetWelfareAvailabilityProvider(func(context.Context) (bool, error) {
+		return providerErr == nil, providerErr
+	})
+	// The router reads these origins once at startup and only refreshes them
+	// after settings updates. Unrelated welfare recovery must not be required.
+	origins, err := settings.GetFrameSrcOrigins(context.Background())
+	require.NoError(t, err)
+	server, err := web.NewFrontendServer(settings)
+	require.NoError(t, err)
+	router := gin.New()
+	router.Use(middleware.SecurityHeaders(config.CSPConfig{Enabled: true}, func() []string { return origins }))
+	router.Use(server.Middleware())
+
+	failed := httptest.NewRecorder()
+	router.ServeHTTP(failed, httptest.NewRequest(http.MethodGet, "/", nil))
+	require.Equal(t, http.StatusOK, failed.Code)
+	require.NotContains(t, failed.Body.String(), "window.__APP_CONFIG__=")
+	require.Empty(t, failed.Header().Get("ETag"))
+
+	providerErr = nil
+	recovered := httptest.NewRecorder()
+	router.ServeHTTP(recovered, httptest.NewRequest(http.MethodGet, "/", nil))
+	require.Equal(t, http.StatusOK, recovered.Code)
+	require.Contains(t, recovered.Body.String(), `"welfare_enabled":true`)
+	for _, response := range []*httptest.ResponseRecorder{failed, recovered} {
+		require.Contains(t, response.Header().Get("Content-Security-Policy"), "https://home.example.test")
+		require.Contains(t, response.Header().Get("Content-Security-Policy"), "https://menu.example.test")
+	}
 }
 
 func TestFrontendWelfareAvailabilityRecoversWithoutCacheInvalidation(t *testing.T) {

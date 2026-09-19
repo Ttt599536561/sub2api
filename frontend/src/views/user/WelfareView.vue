@@ -78,8 +78,11 @@ function redemptionComplete(amount: string) {
 async function retryRedemption() {
   const pending = pendingRedemption.value
   if (!pending) return
+  const owner = redemptionKey.value
   const response = await redeem(pending.body)
+  if (owner !== redemptionKey.value) return
   if (response?.status === 'completed') redemptionComplete(pending.body.amount)
+  else if (!pendingRedemption.value) { showRedemption.value = false; redemptionKey.value++ }
 }
 </script>
 <template>
@@ -103,7 +106,7 @@ async function retryRedemption() {
         <div class="wf-grid"><WelfareCalendar :overview="overview" :calendar="calendar" :month="month" :loading="calendarLoading" :error="calendarError" :busy="busy || recovering" @month="month = $event" @check-in="handleCheckIn" @retry="loadCalendar" /><WelfareLottery :overview="overview" :rules="rules" :busy="busy || recovering" :redemption-pending="!!pendingRedemption" @draw="handleDraw" @redeem="showRedemption = true" @probabilities="dialog = 'probabilities'" /></div>
         <WelfareRecords :records="records" :filters="filters" :loading="recordsLoading" :error="recordsError" :draws-used="overview.draws_used" @filter="changeRecordFilters" @retry="loadRecords" />
         <p class="wf-footer">{{ t('welfare.footer') }}</p>
-        <WelfareRedemption :key="redemptionKey" :show="showRedemption" :balance="overview.welfare_balance" :busy="busy" :mutation-error="mutationError" :quote-request="quote" :redeem-request="redeem" @close="showRedemption = false" @completed="redemptionComplete" />
+        <WelfareRedemption :key="redemptionKey" :show="showRedemption" :balance="overview.welfare_balance" :busy="busy" :pending="!!pendingRedemption" :mutation-error="mutationError" :quote-request="quote" :redeem-request="redeem" @close="showRedemption = false" @completed="redemptionComplete" />
       </template>
       <BaseDialog :show="!!dialog" trap-focus :title="t(dialog === 'result' ? 'welfare.drawResult' : dialog === 'probabilities' ? 'welfare.probabilities' : 'welfare.rules')" @close="dialog = ''">
         <div v-if="dialog === 'rules'" class="space-y-5 text-sm leading-7 text-gray-600 dark:text-dark-300"><div><h3 class="font-semibold text-gray-900 dark:text-white">{{ t('welfare.checkIn') }}</h3><p>{{ t('welfare.ruleCheck') }}</p></div><p>{{ t('welfare.ruleStreak') }}</p><p>{{ t('welfare.ruleSpend', { amount: welfareMoney(rules?.draw_threshold) }) }}</p><p>{{ t('welfare.ruleRedeem') }}</p></div>

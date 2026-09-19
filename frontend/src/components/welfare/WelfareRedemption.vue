@@ -5,7 +5,7 @@ import BaseDialog from '@/components/common/BaseDialog.vue'
 import { welfareErrorCode } from '@/utils/welfareError'
 import { moneyCents, welfareMoney } from '@/utils/welfareMoney'
 import type { WelfareOperation, WelfareQuote, WelfareQuoteRequest, WelfareRedemption } from '@/types/welfare'
-const props = defineProps<{ show: boolean; balance: string; busy: boolean; mutationError?: string; quoteRequest: (request: WelfareQuoteRequest) => Promise<WelfareQuote | null>; redeemRequest: (request: WelfareRedemption) => Promise<WelfareOperation | null> }>()
+const props = defineProps<{ show: boolean; balance: string; busy: boolean; pending: boolean; mutationError?: string; quoteRequest: (request: WelfareQuoteRequest) => Promise<WelfareQuote | null>; redeemRequest: (request: WelfareRedemption) => Promise<WelfareOperation | null> }>()
 const emit = defineEmits<{ close: []; completed: [amount: string] }>()
 const { t } = useI18n()
 const amount = ref('')
@@ -46,7 +46,7 @@ async function confirm() {
   const result = await props.redeemRequest({ amount: selected.amount, welfare_balance_version: selected.welfare_balance_version })
   if (result?.status === 'completed') { uncertain.value = false; emit('completed', selected.amount); emit('close') }
   else {
-    uncertain.value = !props.mutationError || props.mutationError === 'network'
+    uncertain.value = props.pending
     error.value = uncertain.value ? t('welfare.uncertainTransfer') : t(`welfare.errors.${props.mutationError}`)
     if (!uncertain.value) quote.value = null
   }

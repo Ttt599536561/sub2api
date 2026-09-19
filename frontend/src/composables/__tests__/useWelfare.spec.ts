@@ -219,6 +219,92 @@ describe('welfare state', () => {
     await state.draw(); await state.draw()
     expect(vi.mocked(welfareAPI.draw).mock.calls[0][0]).toBe(vi.mocked(welfareAPI.draw).mock.calls[1][0])
   })
+  it('consumes only one ticket when a committed draw response is lost and its retry is rate limited', async () => {
+    await start()
+    const committed = new Map<string, Awaited<ReturnType<typeof welfareAPI.draw>>>()
+    let requests = 0
+    vi.mocked(welfareAPI.draw).mockImplementation(async key => {
+      requests++
+      // Middleware rejects the retry before the handler can replay the committed draw.
+      if (requests === 2) throw { status: 429, code: 'RATE_LIMITED' }
+      if (!committed.has(key)) committed.set(key, { operation_id: `draw-${committed.size + 1}`, status: 'completed', overview: snapshot(committed.size + 2) })
+      if (requests === 1) throw new Error('committed response lost')
+      return committed.get(key)!
+    })
+    await state.draw()
+    const originalKey = state.pendingDraw.value
+    await state.draw()
+    expect(state.pendingDraw.value).toBe(originalKey)
+    const result = await state.draw()
+    expect(vi.mocked(welfareAPI.draw).mock.calls.map(call => call[0])).toEqual([originalKey, originalKey, originalKey])
+    expect(committed.size).toBe(1)
+    expect(result?.operation_id).toBe('draw-1')
+    expect(state.pendingDraw.value).toBeNull()
+    expect(sessionStorage.getItem('welfare.pending:1:first')).toBeNull()
+  })
+  it.each([401, 403, 429, 400, 409])('preserves an unresolved redemption after an unrecognized HTTP %i retry rejection', async status => {
+    await start()
+    const body = { amount: '1.00', welfare_balance_version: 1 }
+    vi.mocked(welfareAPI.redeem).mockRejectedValueOnce(new Error('response lost'))
+      .mockRejectedValueOnce({ response: { status, data: { reason: 'FRONT_DOOR_REJECTION' } } })
+      .mockResolvedValueOnce({ operation_id: 'original', status: 'completed', overview: snapshot(2) })
+    await state.redeem(body)
+    const pending = state.pendingRedemption.value
+    await state.redeem(body)
+    expect(state.pendingRedemption.value).toEqual(pending)
+    expect(JSON.parse(sessionStorage.getItem('welfare.pending:1:first')!).redemption).toEqual(pending)
+    await state.redeem({ amount: '2.00', welfare_balance_version: 2 })
+    expect(welfareAPI.redeem).toHaveBeenCalledTimes(2)
+    expect(state.mutationError.value).toBe('WELFARE_OPERATION_UNRESOLVED')
+    await state.redeem(body)
+    expect(vi.mocked(welfareAPI.redeem).mock.calls[2].slice(0, 2)).toEqual([body, pending!.key])
+    expect(state.pendingRedemption.value).toBeNull()
+  })
+  it.each([401, 403, 429])('does not retain a new operation rejected with HTTP %i', async status => {
+    await start()
+    vi.mocked(welfareAPI.draw).mockRejectedValueOnce({ status })
+    vi.mocked(welfareAPI.redeem).mockRejectedValueOnce({ status })
+    await state.draw()
+    await state.redeem({ amount: '1.00', welfare_balance_version: 1 })
+    expect(state.pendingDraw.value).toBeNull()
+    expect(state.pendingRedemption.value).toBeNull()
+    expect(sessionStorage.getItem('welfare.pending:1:first')).toBeNull()
+  })
+  it('releases an unresolved redemption after a definitive stale-quote response', async () => {
+    await start()
+    vi.mocked(welfareAPI.redeem).mockRejectedValueOnce(new Error('request lost'))
+      .mockRejectedValueOnce({ response: { status: 409, data: { reason: 'WELFARE_QUOTE_STALE' } } })
+    const body = { amount: '1.00', welfare_balance_version: 1 }
+    await state.redeem(body)
+    await state.redeem(body)
+    expect(state.pendingRedemption.value).toBeNull()
+    expect(state.mutationError.value).toBe('WELFARE_QUOTE_STALE')
+    expect(sessionStorage.getItem('welfare.pending:1:first')).toBeNull()
+  })
+  it('keeps an unresolved operation on a server error even with a recognized welfare reason', async () => {
+    await start()
+    vi.mocked(welfareAPI.draw).mockRejectedValueOnce(new Error('response lost'))
+      .mockRejectedValueOnce({ status: 503, reason: 'WELFARE_PAUSED' })
+    await state.draw()
+    const key = state.pendingDraw.value
+    await state.draw()
+    expect(state.pendingDraw.value).toBe(key)
+  })
+  it('recovers the original committed draw after a rate-limited retry and remount', async () => {
+    await start()
+    vi.mocked(welfareAPI.draw).mockRejectedValueOnce(new Error('response lost'))
+      .mockRejectedValueOnce({ status: 429 })
+    await state.draw()
+    const key = state.pendingDraw.value
+    await state.draw()
+    wrapper.unmount()
+    vi.mocked(welfareAPI.operationByKey).mockResolvedValueOnce({ operation_id: 'committed', status: 'completed', overview: snapshot(2) })
+    await start()
+    expect(welfareAPI.operationByKey).toHaveBeenCalledWith('draw', key, expect.any(AbortSignal))
+    expect(state.recovered.value[0].result.operation_id).toBe('committed')
+    expect(state.pendingDraw.value).toBeNull()
+    expect(welfareAPI.draw).toHaveBeenCalledTimes(2)
+  })
   it('does not replace newer balances with an idempotent replay snapshot', async () => {
     await start()
     vi.mocked(welfareAPI.overview).mockResolvedValue(snapshot(9, '9.00'))

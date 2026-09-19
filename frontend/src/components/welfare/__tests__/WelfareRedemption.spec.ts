@@ -4,7 +4,7 @@ import WelfareRedemption from '../WelfareRedemption.vue'
 vi.mock('vue-i18n', () => ({ useI18n: () => ({ t: (key: string) => key }) }))
 const makeQuote = vi.fn()
 const redeem = vi.fn()
-function create() { return mount(WelfareRedemption, { props: { show: true, balance: '2.80', busy: false, quoteRequest: makeQuote, redeemRequest: redeem }, global: { stubs: { BaseDialog: { template: '<div><slot/><slot name="footer"/></div>' } } } }) }
+function create() { return mount(WelfareRedemption, { props: { show: true, balance: '2.80', busy: false, pending: false, quoteRequest: makeQuote, redeemRequest: redeem }, global: { stubs: { BaseDialog: { template: '<div><slot/><slot name="footer"/></div>' } } } }) }
 beforeEach(() => {
   vi.clearAllMocks()
   makeQuote.mockResolvedValue({ amount: '2.80', welfare_balance: '2.80', account_balance: '18.35', account_balance_after: '21.15', welfare_balance_version: 7 })
@@ -15,6 +15,7 @@ describe('welfare redemption', () => {
     const wrapper = create()
     await wrapper.get('[data-testid="redeem-all"]').trigger('click'); await flushPromises()
     redeem.mockResolvedValueOnce(null)
+    await wrapper.setProps({ pending: true })
     await wrapper.get('[data-testid="confirm-redeem"]').trigger('click'); await flushPromises()
     expect(wrapper.get('input').attributes('disabled')).toBeDefined()
     expect(wrapper.get('[data-testid="redeem-all"]').attributes('disabled')).toBeDefined()

@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strconv"
 	"sync"
@@ -818,8 +819,14 @@ func (s *BillingCacheService) CheckBillingEligibility(ctx context.Context, user 
 	if s.cfg.RunMode == config.RunModeSimple {
 		return nil
 	}
-	if s.circuitBreaker != nil && !s.circuitBreaker.Allow() {
-		return ErrBillingServiceUnavailable
+	if s.circuitBreaker != nil {
+		allowed, probeGeneration := s.circuitBreaker.allowProbe()
+		if !allowed {
+			return ErrBillingServiceUnavailable
+		}
+		// Cancellation is neither a failed nor a successful health check. Return
+		// its half-open capacity even when admission exits before a lookup.
+		defer s.circuitBreaker.releaseProbe(probeGeneration)
 	}
 	if group != nil && group.IsSubscriptionType() && s.subscriptionService == nil {
 		return ErrBillingServiceUnavailable
@@ -833,6 +840,9 @@ func (s *BillingCacheService) CheckBillingEligibility(ctx context.Context, user 
 	if s.subscriptionService != nil && groupID > 0 {
 		freshSub, freshGroup, err := s.subscriptionService.GetSubscriptionForAdmission(ctx, user.ID, groupID)
 		if err != nil {
+			if isBillingCallerCancellation(ctx, err) {
+				return err
+			}
 			if infraerrors.Code(err) >= 500 {
 				s.circuitBreaker.OnFailure(err)
 			} else {
@@ -1009,6 +1019,9 @@ func (s *BillingCacheService) balanceBelowEligibilityThreshold(balance float64) 
 func (s *BillingCacheService) checkBalanceEligibility(ctx context.Context, userID int64) error {
 	balance, err := s.GetUserBalance(ctx, userID)
 	if err != nil {
+		if isBillingCallerCancellation(ctx, err) {
+			return ErrBillingServiceUnavailable.WithCause(err)
+		}
 		if s.circuitBreaker != nil {
 			s.circuitBreaker.OnFailure(err)
 		}
@@ -1026,6 +1039,12 @@ func (s *BillingCacheService) checkBalanceEligibility(ctx context.Context, userI
 	return nil
 }
 
+func isBillingCallerCancellation(ctx context.Context, err error) bool {
+	// A dependency's own timeout/cancellation still counts while the caller is
+	// active, and a separate database error must not be hidden by a disconnect.
+	return ctx.Err() != nil && errors.Is(err, ctx.Err())
+}
+
 type billingCircuitBreakerState int
 
 const (
@@ -1035,14 +1054,15 @@ const (
 )
 
 type billingCircuitBreaker struct {
-	mu                sync.Mutex
-	state             billingCircuitBreakerState
-	failures          int
-	openedAt          time.Time
-	failureThreshold  int
-	resetTimeout      time.Duration
-	halfOpenRequests  int
-	halfOpenRemaining int
+	mu                 sync.Mutex
+	state              billingCircuitBreakerState
+	failures           int
+	openedAt           time.Time
+	failureThreshold   int
+	resetTimeout       time.Duration
+	halfOpenRequests   int
+	halfOpenRemaining  int
+	halfOpenGeneration uint64
 }
 
 func newBillingCircuitBreaker(cfg config.CircuitBreakerConfig) *billingCircuitBreaker {
@@ -1070,28 +1090,47 @@ func newBillingCircuitBreaker(cfg config.CircuitBreakerConfig) *billingCircuitBr
 }
 
 func (b *billingCircuitBreaker) Allow() bool {
+	allowed, _ := b.allowProbe()
+	return allowed
+}
+
+func (b *billingCircuitBreaker) allowProbe() (bool, uint64) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
 	switch b.state {
 	case billingCircuitClosed:
-		return true
+		return true, 0
 	case billingCircuitOpen:
 		if time.Since(b.openedAt) < b.resetTimeout {
-			return false
+			return false, 0
 		}
 		b.state = billingCircuitHalfOpen
 		b.halfOpenRemaining = b.halfOpenRequests
+		b.halfOpenGeneration++
 		logger.LegacyPrintf("service.billing_cache", "ALERT: billing circuit breaker entering half-open state")
 		fallthrough
 	case billingCircuitHalfOpen:
 		if b.halfOpenRemaining <= 0 {
-			return false
+			return false, 0
 		}
 		b.halfOpenRemaining--
-		return true
+		return true, b.halfOpenGeneration
 	default:
-		return false
+		return false, 0
+	}
+}
+
+func (b *billingCircuitBreaker) releaseProbe(generation uint64) {
+	if generation == 0 {
+		return
+	}
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	// Only return capacity acquired in this recovery cycle. A late completion
+	// from the closed state or an earlier cycle cannot create an extra probe.
+	if b.state == billingCircuitHalfOpen && b.halfOpenGeneration == generation && b.halfOpenRemaining < b.halfOpenRequests {
+		b.halfOpenRemaining++
 	}
 }
 

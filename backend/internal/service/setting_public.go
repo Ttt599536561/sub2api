@@ -789,9 +789,16 @@ func safeRawJSONArray(raw string) json.RawMessage {
 // GetFrameSrcOrigins returns deduplicated http(s) origins from home_content URL,
 // purchase_subscription_url, and all custom_menu_items URLs. Used by the router layer for CSP frame-src injection.
 func (s *SettingService) GetFrameSrcOrigins(ctx context.Context) ([]string, error) {
-	settings, err := s.GetPublicSettings(ctx)
+	// CSP is cached separately from injected HTML. Its origins must remain
+	// available when an unrelated public feature (such as welfare) fails.
+	settings, err := s.settingRepo.GetMultiple(ctx, []string{
+		SettingKeyHomeContent,
+		SettingKeyPurchaseSubscriptionEnabled,
+		SettingKeyPurchaseSubscriptionURL,
+		SettingKeyCustomMenuItems,
+	})
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("get frame source settings: %w", err)
 	}
 
 	seen := make(map[string]struct{})
@@ -807,15 +814,15 @@ func (s *SettingService) GetFrameSrcOrigins(ctx context.Context) ([]string, erro
 	}
 
 	// home content URL (when home_content is set to a URL for iframe embedding)
-	addOrigin(settings.HomeContent)
+	addOrigin(settings[SettingKeyHomeContent])
 
 	// purchase subscription URL
-	if settings.PurchaseSubscriptionEnabled {
-		addOrigin(settings.PurchaseSubscriptionURL)
+	if settings[SettingKeyPurchaseSubscriptionEnabled] == "true" {
+		addOrigin(settings[SettingKeyPurchaseSubscriptionURL])
 	}
 
 	// all custom menu items (including admin-only, since CSP must allow all iframes)
-	for _, item := range parseCustomMenuItemURLs(settings.CustomMenuItems) {
+	for _, item := range parseCustomMenuItemURLs(settings[SettingKeyCustomMenuItems]) {
 		addOrigin(item)
 	}
 

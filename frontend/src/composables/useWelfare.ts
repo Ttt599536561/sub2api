@@ -133,7 +133,7 @@ export function useWelfare(initialFilters: Partial<WelfareRecordQuery> = {}) {
     return task
   }
   async function refreshDetails() { await Promise.allSettled([loadCalendar(), loadRecords()]) }
-  async function mutate(run: (signal: AbortSignal) => Promise<WelfareOperation>, done?: () => void) {
+  async function mutate(run: (signal: AbortSignal) => Promise<WelfareOperation>, done?: () => void, retrying = false) {
     if (busy.value || !ensureIdentity()) return null
     const owner = epoch
     busy.value = true; mutationError.value = ''
@@ -146,16 +146,22 @@ export function useWelfare(initialFilters: Partial<WelfareRecordQuery> = {}) {
       void refresh().then(refreshDetails)
       return result
     } catch (e) {
-      if (current(owner)) { mutationError.value = welfareErrorCode(e); if (!isUncertain(e)) done?.() }
+      if (current(owner)) {
+        mutationError.value = welfareErrorCode(e)
+        // A front-door rejection of this retry says nothing about the earlier POST.
+        // Only a welfare business outcome can resolve an already uncertain operation.
+        if (!isUncertain(e) && (!retrying || mutationError.value !== 'network')) done?.()
+      }
       return null
     } finally { if (current(owner)) busy.value = false }
   }
   const checkIn = () => mutate(signal => welfareAPI.checkIn(signal))
   function draw() {
     if (!ensureIdentity() || busy.value || recovering.value) return Promise.resolve(null)
+    const retrying = pendingDraw.value !== null
     pendingDraw.value ??= operationKey()
     if (!persistPending()) return Promise.resolve(null)
-    return mutate(signal => welfareAPI.draw(pendingDraw.value!, signal), () => { pendingDraw.value = null; persistPending() })
+    return mutate(signal => welfareAPI.draw(pendingDraw.value!, signal), () => { pendingDraw.value = null; persistPending() }, retrying)
   }
   function redeem(body: WelfareRedemption) {
     if (!ensureIdentity() || busy.value || recovering.value) return Promise.resolve(null)
@@ -164,9 +170,10 @@ export function useWelfare(initialFilters: Partial<WelfareRecordQuery> = {}) {
       mutationError.value = 'WELFARE_OPERATION_UNRESOLVED'
       return Promise.resolve(null)
     }
+    const retrying = pendingRedemption.value !== null
     pendingRedemption.value ??= { key: operationKey(), body: { ...body } }
     if (!persistPending()) return Promise.resolve(null)
-    return mutate(signal => welfareAPI.redeem(pendingRedemption.value!.body, pendingRedemption.value!.key, signal), () => { pendingRedemption.value = null; persistPending() })
+    return mutate(signal => welfareAPI.redeem(pendingRedemption.value!.body, pendingRedemption.value!.key, signal), () => { pendingRedemption.value = null; persistPending() }, retrying)
   }
   async function quote(body: WelfareQuoteRequest) {
     if (!ensureIdentity()) return null
