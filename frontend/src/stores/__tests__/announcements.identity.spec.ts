@@ -148,6 +148,42 @@ describe('announcement identity isolation', () => {
     expect(store.currentPopup?.id).toBe(4)
   })
 
+  it.each(['success', 'mixed failure'] as const)('isolates an old batch %s from a new batch with the same IDs', async (outcome) => {
+    const oldFirst = deferred<{ message: string }>()
+    const oldSecond = deferred<{ message: string }>()
+    const freshFirst = deferred<{ message: string }>()
+    const freshSecond = deferred<{ message: string }>()
+    api.markRead
+      .mockReturnValueOnce(oldFirst.promise)
+      .mockReturnValueOnce(oldSecond.promise)
+      .mockReturnValueOnce(freshFirst.promise)
+      .mockReturnValueOnce(freshSecond.promise)
+    const store = useAnnouncementStore()
+    store.announcements = [announcement(1), announcement(2)]
+    const oldMutation = store.markAllAsRead().catch(err => err)
+    store.reset()
+    store.announcements = [announcement(1), announcement(2)]
+    let freshFinished = false
+    const freshMutation = store.markAllAsRead().then(() => { freshFinished = true })
+    const oldError = new Error('old identity partial failure')
+
+    oldFirst.resolve({ message: 'ok' })
+    if (outcome === 'success') oldSecond.resolve({ message: 'ok' })
+    else oldSecond.reject(oldError)
+    expect(await oldMutation).toBe(outcome === 'success' ? undefined : oldError)
+
+    expect(store.unreadCount).toBe(2)
+    expect(store.loading).toBe(true)
+    expect(freshFinished).toBe(false)
+    expect(api.markRead.mock.calls).toEqual([[1], [2], [1], [2]])
+    freshFirst.resolve({ message: 'ok' })
+    freshSecond.resolve({ message: 'ok' })
+    await freshMutation
+    expect(store.unreadCount).toBe(0)
+    expect(store.loading).toBe(false)
+    expect(api.markRead.mock.calls).toEqual([[1], [2], [1], [2]])
+  })
+
   it('only marks the submitted IDs read when a refresh adds announcements during mark-all', async () => {
     const pending = deferred<{ message: string }>()
     api.list.mockResolvedValueOnce([announcement(1)]).mockResolvedValueOnce([announcement(1), announcement(2)])

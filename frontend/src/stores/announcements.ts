@@ -115,13 +115,17 @@ export const useAnnouncementStore = defineStore('announcements', () => {
 
     try {
       loading.value = true
-      await Promise.all(unread.map((a) => announcementsAPI.markRead(a.id)))
-      if (generation !== sessionGeneration) return
-      announcements.value.forEach((a) => {
-        if (submittedIDs.has(a.id) && !a.read_at) {
-          a.read_at = new Date().toISOString()
+      const results = await Promise.allSettled([...submittedIDs].map(async (id) => {
+        await announcementsAPI.markRead(id)
+        if (generation !== sessionGeneration) return
+        // A refresh may have replaced the records while this request was pending.
+        const ann = announcements.value.find((a) => a.id === id)
+        if (ann && !ann.read_at) {
+          ann.read_at = new Date().toISOString()
         }
-      })
+      }))
+      const failure = results.find((result) => result.status === 'rejected')
+      if (failure) throw failure.reason
     } catch (err: any) {
       console.error('Failed to mark all as read:', err)
       throw err
