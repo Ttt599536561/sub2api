@@ -159,7 +159,7 @@ func TestWelfareExactAmountsAndTicketDebt(t *testing.T) {
 		{"49.99999999", 0, 0, 0, "0.00000001"}, {"50.00000000", 0, 1, 0, "50.00000000"},
 		{"149.99999999", 3, 0, 1, "50.00000001"}, {"150.00000000", 3, 0, 0, "50.00000000"},
 	} {
-		available, debt, remaining, err := welfareTickets(tc.spend, tc.used)
+		available, debt, remaining, err := welfareTickets(tc.spend, tc.used, 0)
 		require.NoError(t, err)
 		require.Equal(t, tc.available, available)
 		require.Equal(t, tc.debt, debt)

@@ -401,6 +401,19 @@ func newPaymentConfigServiceTestClient(t *testing.T) *dbent.Client {
 
 	drv := entsql.OpenDB(dialect.SQLite, db)
 	client := enttest.NewClient(t, enttest.WithOptions(dbent.Driver(drv)))
+	// PostgreSQL stores only wall-clock timestamps. SQLite's driver otherwise
+	// writes Go's monotonic suffix into TEXT but drops it when reading, which
+	// makes an exact timestamp CAS fail even without a competing writer.
+	client.PaymentOrder.Use(func(next dbent.Mutator) dbent.Mutator {
+		return dbent.MutateFunc(func(ctx context.Context, mutation dbent.Mutation) (dbent.Value, error) {
+			if order, ok := mutation.(*dbent.PaymentOrderMutation); ok {
+				if updatedAt, exists := order.UpdatedAt(); exists {
+					order.SetUpdatedAt(updatedAt.UTC())
+				}
+			}
+			return next.Mutate(ctx, mutation)
+		})
+	})
 	t.Cleanup(func() { _ = client.Close() })
 	return client
 }

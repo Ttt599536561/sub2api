@@ -402,21 +402,35 @@ func (s *PaymentService) markCompleted(ctx context.Context, o *dbent.PaymentOrde
 	if lease == nil {
 		return errors.New("missing payment fulfillment lease")
 	}
+	tx, err := s.entClient.Tx(ctx)
+	if err != nil {
+		return fmt.Errorf("begin payment completion: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	txCtx := dbent.NewTxContext(ctx, tx)
 	now := time.Now()
-	updated, err := s.entClient.PaymentOrder.Update().Where(
+	updated, err := tx.PaymentOrder.Update().Where(
 		paymentorder.IDEQ(o.ID),
 		paymentorder.StatusEQ(OrderStatusRecharging),
 		paymentorder.UpdatedAtEQ(lease.version),
-	).SetStatus(OrderStatusCompleted).SetCompletedAt(now).Save(ctx)
+	).SetStatus(OrderStatusCompleted).SetCompletedAt(now).Save(txCtx)
 	if err != nil {
 		return fmt.Errorf("mark completed: %w", err)
 	}
 	if updated == 0 {
-		current, getErr := s.entClient.PaymentOrder.Get(ctx, o.ID)
+		current, getErr := tx.PaymentOrder.Get(txCtx, o.ID)
 		if getErr == nil && current.Status == OrderStatusCompleted {
 			return nil
 		}
 		return infraerrors.Conflict("CONFLICT", "fulfillment lease was lost before completion")
+	}
+	if o.OrderType == payment.OrderTypeSubscription && s.welfarePaymentRepo != nil {
+		if err := s.welfarePaymentRepo.AccrueSubscriptionPurchase(txCtx, o.ID); err != nil {
+			return fmt.Errorf("grant subscription welfare draws: %w", err)
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit payment completion: %w", err)
 	}
 	if !s.hasAuditLog(ctx, o.ID, auditAction) {
 		s.writeAuditLog(ctx, o.ID, auditAction, "system", map[string]any{

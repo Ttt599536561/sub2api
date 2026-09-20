@@ -197,6 +197,7 @@ type PaymentService struct {
 	groupRepo                GroupRepository
 	resumeService            *PaymentResumeService
 	affiliateService         *AffiliateService
+	welfarePaymentRepo       WelfarePaymentRepository
 	notificationEmailService *NotificationEmailService
 }
 

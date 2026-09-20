@@ -3,6 +3,7 @@ export interface WelfareOverview {
   account_balance: string
   available_draws: number
   draws_used: number
+  subscription_draws?: number
   total_checkin_days: number
   cycle_day: number
   today_checked_in: boolean
@@ -18,7 +19,7 @@ export interface WelfareOverview {
   milestones: Array<{ day: number; status: 'locked' | 'available' | 'claimed' }>
 }
 export interface WelfarePrize { id: string; name: string; amount: string; probability: string }
-export interface WelfareRules { prizes: WelfarePrize[]; draw_threshold: string; timezone: string }
+export interface WelfareRules { prizes: WelfarePrize[]; draw_threshold: string; subscription_draw_threshold?: string; subscription_draw_currency?: string; timezone: string }
 export interface WelfareCalendar { month: string; days: Array<{ date: string; checked_in: boolean; reward_amount?: string }> }
 export type WelfareRecordType = 'daily' | 'streak' | 'draw' | 'redeem'
 export interface WelfareRecord { id: string; type: WelfareRecordType; created_at: string; amount: string; description: string }

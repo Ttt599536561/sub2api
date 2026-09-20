@@ -34,23 +34,29 @@ func parseWelfareAmount(s string) (int64, error) {
 
 // A spent ticket is never undone by refunds. Remaining spend pays down ticket
 // debt before it can produce a new available ticket.
-func welfareTickets(spend string, used int64) (available, debt int64, remaining string, err error) {
+func welfareTickets(spend string, used, subscriptionDraws int64) (available, debt int64, remaining string, err error) {
 	d, err := decimal.NewFromString(spend)
-	if err != nil || d.IsNegative() || used < 0 {
+	if err != nil || d.IsNegative() || used < 0 || subscriptionDraws < 0 {
 		return 0, 0, "", fmt.Errorf("invalid welfare ticket state")
 	}
 	threshold := decimal.NewFromInt(50)
-	earned := d.Div(threshold).Floor().IntPart()
+	apiEarned := d.Div(threshold).Floor()
+	if apiEarned.GreaterThan(decimal.NewFromInt(math.MaxInt64 - subscriptionDraws)) {
+		return 0, 0, "", fmt.Errorf("welfare draw entitlement overflow")
+	}
+	earned := apiEarned.IntPart() + subscriptionDraws
 	if earned >= used {
 		available = earned - used
 	} else {
 		debt = used - earned
 	}
-	target := earned + 1
+	// Only API spend contributes a fractional progress bar. Subscription order
+	// remainders never enter this dollar amount; their integer draws pay debt.
+	target := apiEarned.Add(decimal.NewFromInt(1))
 	if used > earned {
-		target = used + 1
+		target = decimal.NewFromInt(used - subscriptionDraws).Add(decimal.NewFromInt(1))
 	}
-	remaining = threshold.Mul(decimal.NewFromInt(target)).Sub(d).StringFixed(8)
+	remaining = threshold.Mul(target).Sub(d).StringFixed(8)
 	return available, debt, remaining, nil
 }
 

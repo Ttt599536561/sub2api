@@ -34,6 +34,7 @@ type WelfareWallet struct {
 	LastCheckinDate       string
 	DailyLowCount         int
 	EligibleSpend         string
+	SubscriptionDraws     int64
 	DrawsUsed             int64
 	WalletVersion         int64
 	WelfareBalanceVersion int64
@@ -67,6 +68,7 @@ type WelfareOverview struct {
 	BusinessDate          string             `json:"business_date"`
 	NextResetAt           time.Time          `json:"next_reset_at"`
 	EligibleSpend         string             `json:"eligible_spend"`
+	SubscriptionDraws     int64              `json:"subscription_draws"`
 	NextDrawRemaining     string             `json:"next_draw_remaining"`
 	TicketDebt            int64              `json:"ticket_debt"`
 	WalletVersion         int64              `json:"wallet_version"`
@@ -84,11 +86,13 @@ type WelfarePrize struct {
 }
 
 type WelfareRules struct {
-	RulesVersion   int            `json:"rules_version"`
-	Timezone       string         `json:"timezone"`
-	DrawThreshold  string         `json:"draw_threshold"`
-	RedemptionRate string         `json:"redemption_rate"`
-	Prizes         []WelfarePrize `json:"prizes"`
+	RulesVersion              int            `json:"rules_version"`
+	Timezone                  string         `json:"timezone"`
+	DrawThreshold             string         `json:"draw_threshold"`
+	SubscriptionDrawThreshold string         `json:"subscription_draw_threshold"`
+	SubscriptionDrawCurrency  string         `json:"subscription_draw_currency"`
+	RedemptionRate            string         `json:"redemption_rate"`
+	Prizes                    []WelfarePrize `json:"prizes"`
 }
 
 type WelfareOperation struct {

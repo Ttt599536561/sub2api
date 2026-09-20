@@ -115,7 +115,7 @@ func requireWelfarePublicOverview(t *testing.T, object map[string]any, statuses 
 	t.Helper()
 	requireWelfarePublicKeys(t, object,
 		"welfare_balance", "account_balance", "available_draws", "draws_used", "total_checkin_days", "cycle_day",
-		"today_checked_in", "business_date", "next_reset_at", "eligible_spend", "next_draw_remaining", "ticket_debt",
+		"today_checked_in", "business_date", "next_reset_at", "eligible_spend", "subscription_draws", "next_draw_remaining", "ticket_debt",
 		"wallet_version", "welfare_balance_version", "rewards_enabled", "rules_version", "milestones")
 	milestones, ok := object["milestones"].([]any)
 	require.True(t, ok)
@@ -132,10 +132,12 @@ func requireWelfarePublicOverview(t *testing.T, object map[string]any, statuses 
 func requireWelfarePublicRules(t *testing.T, rules *WelfareRules) {
 	t.Helper()
 	object := welfarePublicContractObject(t, rules)
-	requireWelfarePublicKeys(t, object, "rules_version", "timezone", "draw_threshold", "redemption_rate", "prizes")
+	requireWelfarePublicKeys(t, object, "rules_version", "timezone", "draw_threshold", "subscription_draw_threshold", "subscription_draw_currency", "redemption_rate", "prizes")
 	require.Equal(t, float64(2), object["rules_version"])
 	require.Equal(t, "Asia/Shanghai", object["timezone"])
 	require.Equal(t, "50.00", object["draw_threshold"])
+	require.Equal(t, "50.00", object["subscription_draw_threshold"])
+	require.Equal(t, "CNY", object["subscription_draw_currency"])
 	require.Equal(t, "1:1", object["redemption_rate"])
 	prizes, ok := object["prizes"].([]any)
 	require.True(t, ok)

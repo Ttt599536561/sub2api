@@ -57,7 +57,7 @@ func (s *WelfareService) Overview(ctx context.Context, userID int64) (*WelfareOv
 
 func welfareOverview(state *WelfareState, now time.Time) (*WelfareOverview, error) {
 	w := &state.Wallet
-	available, debt, remaining, err := welfareTickets(w.EligibleSpend, w.DrawsUsed)
+	available, debt, remaining, err := welfareTickets(w.EligibleSpend, w.DrawsUsed, w.SubscriptionDraws)
 	if err != nil {
 		return nil, err
 	}
@@ -81,7 +81,8 @@ func welfareOverview(state *WelfareState, now time.Time) (*WelfareOverview, erro
 	return &WelfareOverview{WelfareBalance: welfareMoney(w.BalanceCents), AccountBalance: state.AccountBalance,
 		AvailableDraws: available, DrawsUsed: w.DrawsUsed, TotalCheckinDays: w.TotalCheckinDays, CycleDay: cycle, TodayCheckedIn: checked,
 		BusinessDate: date, NextResetAt: today.AddDate(0, 0, 1), EligibleSpend: w.EligibleSpend, NextDrawRemaining: remaining, TicketDebt: debt,
-		WalletVersion: w.WalletVersion, WelfareBalanceVersion: w.WelfareBalanceVersion,
+		SubscriptionDraws: w.SubscriptionDraws,
+		WalletVersion:     w.WalletVersion, WelfareBalanceVersion: w.WelfareBalanceVersion,
 		RewardsEnabled: state.Program.Enabled, RulesVersion: 2, Milestones: milestones}, nil
 }
 
@@ -93,7 +94,7 @@ func (s *WelfareService) Rules(ctx context.Context) (*WelfareRules, error) {
 	for _, amount := range welfareLotteryAmounts {
 		prizes = append(prizes, welfarePrizeFor(amount))
 	}
-	return &WelfareRules{RulesVersion: 2, Timezone: "Asia/Shanghai", DrawThreshold: "50.00", RedemptionRate: "1:1", Prizes: prizes}, nil
+	return &WelfareRules{RulesVersion: 2, Timezone: "Asia/Shanghai", DrawThreshold: "50.00", SubscriptionDrawThreshold: "50.00", SubscriptionDrawCurrency: "CNY", RedemptionRate: "1:1", Prizes: prizes}, nil
 }
 
 func (s *WelfareService) Calendar(ctx context.Context, userID int64, month string) (*WelfareCalendar, error) {
@@ -175,7 +176,7 @@ func (s *WelfareService) Draw(ctx context.Context, userID int64, key string) (*W
 			return nil, err
 		}
 		w := &state.Wallet
-		available, _, _, err := welfareTickets(w.EligibleSpend, w.DrawsUsed)
+		available, _, _, err := welfareTickets(w.EligibleSpend, w.DrawsUsed, w.SubscriptionDraws)
 		if err != nil {
 			return nil, err
 		}

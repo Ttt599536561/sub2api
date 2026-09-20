@@ -21,12 +21,12 @@ func NewWelfareRepository(db *sql.DB) service.WelfareRepository { return &welfar
 
 type welfareRowScanner interface{ Scan(...any) error }
 
-const welfareWalletColumns = `user_id,balance_cents,total_earned_cents,total_redeemed_cents,total_checkin_days,cycle_id,cycle_day,last_checkin_date,daily_low_count,eligible_spend::text,draws_used,wallet_version,welfare_balance_version`
+const welfareWalletColumns = `user_id,balance_cents,total_earned_cents,total_redeemed_cents,total_checkin_days,cycle_id,cycle_day,last_checkin_date,daily_low_count,eligible_spend::text,draws_used,wallet_version,welfare_balance_version,subscription_draws`
 
 func scanWelfareWallet(row welfareRowScanner) (service.WelfareWallet, error) {
 	var w service.WelfareWallet
 	var last sql.NullTime
-	err := row.Scan(&w.UserID, &w.BalanceCents, &w.TotalEarnedCents, &w.TotalRedeemedCents, &w.TotalCheckinDays, &w.CycleID, &w.CycleDay, &last, &w.DailyLowCount, &w.EligibleSpend, &w.DrawsUsed, &w.WalletVersion, &w.WelfareBalanceVersion)
+	err := row.Scan(&w.UserID, &w.BalanceCents, &w.TotalEarnedCents, &w.TotalRedeemedCents, &w.TotalCheckinDays, &w.CycleID, &w.CycleDay, &last, &w.DailyLowCount, &w.EligibleSpend, &w.DrawsUsed, &w.WalletVersion, &w.WelfareBalanceVersion, &w.SubscriptionDraws)
 	if last.Valid {
 		w.LastCheckinDate = last.Time.Format("2006-01-02")
 	}
@@ -90,12 +90,12 @@ func (r *welfareRepository) State(ctx context.Context, userID int64) (*service.W
 		COALESCE(w.balance_cents,0),COALESCE(w.total_earned_cents,0),COALESCE(w.total_redeemed_cents,0),
 		COALESCE(w.total_checkin_days,0),COALESCE(w.cycle_id,0),COALESCE(w.cycle_day,0),w.last_checkin_date,
 		COALESCE(w.daily_low_count,0),COALESCE(w.eligible_spend,0)::numeric(20,8)::text,
-		COALESCE(w.draws_used,0),COALESCE(w.wallet_version,0),COALESCE(w.welfare_balance_version,0),p.enabled,p.launch_at
+		COALESCE(w.draws_used,0),COALESCE(w.wallet_version,0),COALESCE(w.welfare_balance_version,0),COALESCE(w.subscription_draws,0),p.enabled,p.launch_at
 		FROM users u LEFT JOIN welfare_wallets w ON w.user_id=u.id CROSS JOIN welfare_programs p
 		WHERE u.id=$1 AND u.deleted_at IS NULL AND p.id=1`, userID).Scan(
 		&w.UserID, &state.AccountBalance, &w.BalanceCents, &w.TotalEarnedCents, &w.TotalRedeemedCents,
 		&w.TotalCheckinDays, &w.CycleID, &w.CycleDay, &last, &w.DailyLowCount, &w.EligibleSpend, &w.DrawsUsed,
-		&w.WalletVersion, &w.WelfareBalanceVersion, &state.Program.Enabled, &launch)
+		&w.WalletVersion, &w.WelfareBalanceVersion, &w.SubscriptionDraws, &state.Program.Enabled, &launch)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, service.ErrUserNotFound
 	}

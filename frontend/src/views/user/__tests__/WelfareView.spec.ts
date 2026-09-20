@@ -5,10 +5,12 @@ import { createMemoryHistory, createRouter, type Router } from 'vue-router'
 import WelfareView from '../WelfareView.vue'
 vi.mock('@/components/layout/AppLayout.vue', () => ({ default: { template: '<main><slot /></main>' } }))
 import { welfareAPI } from '@/api/welfare'
+const { welfareLocale } = vi.hoisted(() => ({ welfareLocale: { value: 'zh' as 'zh' | 'en' } }))
 vi.mock('vue-i18n', async () => {
-  const { default: messages } = await import('@/i18n/locales/zh/welfare')
-  return { useI18n: () => ({ locale: { value: 'zh' }, t: (key: string, params: Record<string, unknown> = {}) => {
-    const text = key.split('.').reduce((value: any, part) => value?.[part], messages) || key
+  const { default: zh } = await import('@/i18n/locales/zh/welfare')
+  const { default: en } = await import('@/i18n/locales/en/welfare')
+  return { useI18n: () => ({ locale: welfareLocale, t: (key: string, params: Record<string, unknown> = {}) => {
+    const text = key.split('.').reduce((value: any, part) => value?.[part], welfareLocale.value === 'zh' ? zh : en) || key
     return text.replace(/\{(\w+)\}/g, (_match: string, name: string) => String(params[name] ?? ''))
   } }) }
 })
@@ -27,6 +29,7 @@ async function start(location = '/welfare') {
 }
 beforeEach(() => {
   vi.clearAllMocks()
+  welfareLocale.value = 'zh'
   localStorage.clear(); sessionStorage.clear()
   localStorage.setItem('auth_session_id', 'first'); localStorage.setItem('auth_user', JSON.stringify({ id: 1 })); localStorage.setItem('auth_token', 'token-1')
   auth.sessionRevision = 'first'; auth.user = { id: 1 }
@@ -37,6 +40,46 @@ beforeEach(() => {
 })
 afterEach(() => wrapper?.unmount())
 describe('welfare user interactions', () => {
+  it.each([
+    { locale: 'zh' as const, progress: 'API 余额消费进度', apiThreshold: 'API 余额每消费 $40.00 获得 1 次', subscriptionThreshold: '套餐单笔实付每满 ¥75.00 送 1 次', perOrder: '每笔独立计算，余数不累计', rulesLabel: '活动规则', refund: '退款确认后，按该订单剩余实付金额重新计算赠送次数', rewardsKept: '已获得的福利余额不收回' },
+    { locale: 'en' as const, progress: 'API balance spending progress', apiThreshold: 'One draw per $40.00 in API balance spending', subscriptionThreshold: 'One draw per ¥75.00 paid on each subscription order', perOrder: 'Each order is calculated separately; remainders do not carry over', rulesLabel: 'Program rules', refund: 'After a refund is confirmed, draws are recalculated from the amount still paid on that order', rewardsKept: 'Welfare funds already earned are kept' },
+  ])('separates API dollar progress from per-order yuan subscription rewards in $locale', async ({ locale, progress, apiThreshold, subscriptionThreshold, perOrder, rulesLabel, refund, rewardsKept }) => {
+    welfareLocale.value = locale
+    vi.mocked(welfareAPI.rules).mockResolvedValue({ prizes: [], draw_threshold: '40.00', timezone: 'Asia/Shanghai', subscription_draw_threshold: '75.00', subscription_draw_currency: 'CNY' })
+    vi.mocked(welfareAPI.overview).mockResolvedValue({ ...initial, available_draws: 2, subscription_draws: 7, next_draw_remaining: '10.00' })
+    await start()
+
+    const drawsCard = wrapper.findAll('.wf-stat')[1]
+    expect(drawsCard.get('strong').text()).toMatch(/^2\s/)
+    expect(drawsCard.text()).toContain(apiThreshold)
+    expect(drawsCard.text()).toContain(subscriptionThreshold)
+    const lottery = wrapper.get('.wf-lottery')
+    expect(lottery.text()).toContain(subscriptionThreshold)
+    expect(lottery.text()).toContain(perOrder)
+    expect(lottery.get('[role="progressbar"]').attributes('aria-label')).toBe(progress)
+    expect(lottery.get('[role="progressbar"]').attributes('aria-valuenow')).toBe('75')
+    expect(lottery.text()).not.toContain('$75.00')
+
+    await wrapper.get('.wf-heading').findAll('button').find(button => button.text() === rulesLabel)!.trigger('click')
+    const rulesDialog = wrapper.get('[role="dialog"]')
+    expect(rulesDialog.text()).toContain('$40.00')
+    expect(rulesDialog.text()).toContain('¥75.00')
+    expect(rulesDialog.text()).toContain(refund)
+    expect(rulesDialog.text()).toContain(rewardsKept)
+  })
+
+  it.each([
+    { name: 'omits the new rules', extra: {} },
+    { name: 'returns a currency other than CNY', extra: { subscription_draw_currency: 'USD', subscription_draw_threshold: '50.00' } },
+  ])('does not announce yuan subscription rewards when the server $name', async ({ extra }) => {
+    vi.mocked(welfareAPI.rules).mockResolvedValue({ prizes: [], draw_threshold: '50.00', timezone: 'Asia/Shanghai', ...extra })
+    await start()
+    expect(wrapper.text()).toContain('API 余额每消费 $50.00 获得 1 次')
+    expect(wrapper.text()).not.toContain('套餐单笔实付')
+    await wrapper.get('.wf-heading').findAll('button').find(button => button.text() === '活动规则')!.trigger('click')
+    expect(wrapper.get('[role="dialog"]').text()).not.toContain('人民币订阅订单')
+  })
+
   it('shows a real month and mystery milestones, with redemption usable at zero draws', async () => {
     await start()
     expect(wrapper.findAll('.wf-day')).toHaveLength(30)

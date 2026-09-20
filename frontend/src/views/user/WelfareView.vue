@@ -99,7 +99,16 @@ async function retryRedemption() {
         <button class="wf-link" :disabled="busy || recovering" @click="recoverPending">{{ t('welfare.checkResult') }}</button>
       </div>
       <template v-if="overview">
-        <div class="wf-stats"><section class="wf-stat"><div class="wf-stat-label"><Icon name="creditCard" />{{ t('welfare.balance') }}</div><strong>{{ welfareMoney(overview.welfare_balance) }}</strong><p>{{ t('welfare.balanceHint') }}</p></section><section class="wf-stat"><div class="wf-stat-label"><Icon name="gift" />{{ t('welfare.draws') }}</div><strong>{{ overview.available_draws }} <small>{{ t('welfare.drawsUnit') }}</small></strong><p>{{ rules ? t('welfare.threshold', { amount: welfareMoney(rules.draw_threshold) }) : '—' }}</p></section><section class="wf-stat"><div class="wf-stat-label"><Icon name="calendar" />{{ t('welfare.totalDays') }}</div><strong>{{ overview.total_checkin_days }} <small>{{ t('welfare.daysUnit') }}</small></strong><p>{{ t('welfare.cycle', { days: overview.cycle_day }) }}</p></section></div>
+        <div class="wf-stats">
+          <section class="wf-stat"><div class="wf-stat-label"><Icon name="creditCard" />{{ t('welfare.balance') }}</div><strong>{{ welfareMoney(overview.welfare_balance) }}</strong><p>{{ t('welfare.balanceHint') }}</p></section>
+          <section class="wf-stat">
+            <div class="wf-stat-label"><Icon name="gift" />{{ t('welfare.draws') }}</div>
+            <strong>{{ overview.available_draws }} <small>{{ t('welfare.drawsUnit') }}</small></strong>
+            <p>{{ rules ? t('welfare.threshold', { amount: welfareMoney(rules.draw_threshold) }) : '—' }}</p>
+            <p v-if="rules?.subscription_draw_currency === 'CNY' && rules.subscription_draw_threshold">{{ t('welfare.subscriptionThreshold', { amount: rules.subscription_draw_threshold }) }}</p>
+          </section>
+          <section class="wf-stat"><div class="wf-stat-label"><Icon name="calendar" />{{ t('welfare.totalDays') }}</div><strong>{{ overview.total_checkin_days }} <small>{{ t('welfare.daysUnit') }}</small></strong><p>{{ t('welfare.cycle', { days: overview.cycle_day }) }}</p></section>
+        </div>
         <p v-if="!overview.rewards_enabled" class="wf-notice" role="status">{{ t('welfare.paused') }}</p>
         <p v-if="notice" class="wf-notice" role="status" aria-live="polite">{{ notice }}</p>
         <p v-if="mutationError" class="wf-error" role="alert">{{ t(`welfare.errors.${mutationError}`) }}</p>
@@ -109,7 +118,17 @@ async function retryRedemption() {
         <WelfareRedemption :key="redemptionKey" :show="showRedemption" :balance="overview.welfare_balance" :busy="busy" :pending="!!pendingRedemption" :mutation-error="mutationError" :quote-request="quote" :redeem-request="redeem" @close="showRedemption = false" @completed="redemptionComplete" />
       </template>
       <BaseDialog :show="!!dialog" trap-focus :title="t(dialog === 'result' ? 'welfare.drawResult' : dialog === 'probabilities' ? 'welfare.probabilities' : 'welfare.rules')" @close="dialog = ''">
-        <div v-if="dialog === 'rules'" class="space-y-5 text-sm leading-7 text-gray-600 dark:text-dark-300"><div><h3 class="font-semibold text-gray-900 dark:text-white">{{ t('welfare.checkIn') }}</h3><p>{{ t('welfare.ruleCheck') }}</p></div><p>{{ t('welfare.ruleStreak') }}</p><p>{{ t('welfare.ruleSpend', { amount: welfareMoney(rules?.draw_threshold) }) }}</p><p>{{ t('welfare.ruleRedeem') }}</p></div>
+        <div v-if="dialog === 'rules'" class="space-y-5 text-sm leading-7 text-gray-600 dark:text-dark-300">
+          <div><h3 class="font-semibold text-gray-900 dark:text-white">{{ t('welfare.checkIn') }}</h3><p>{{ t('welfare.ruleCheck') }}</p></div>
+          <p>{{ t('welfare.ruleStreak') }}</p>
+          <p>{{ t('welfare.ruleSpend', { amount: welfareMoney(rules?.draw_threshold) }) }}</p>
+          <template v-if="rules?.subscription_draw_currency === 'CNY' && rules.subscription_draw_threshold">
+            <p>{{ t('welfare.ruleSubscription', { amount: rules.subscription_draw_threshold }) }}</p>
+            <p>{{ t('welfare.ruleSubscriptionEligibility') }}</p>
+            <p>{{ t('welfare.ruleSubscriptionRefund') }}</p>
+          </template>
+          <p>{{ t('welfare.ruleRedeem') }}</p>
+        </div>
         <div v-else-if="dialog === 'probabilities'"><p class="mb-4 text-sm text-gray-500 dark:text-dark-300">{{ t('welfare.probabilityHint') }}</p><div v-for="prize in rules?.prizes || []" :key="prize.id" class="flex justify-between border-b border-gray-100 py-3 dark:border-dark-700"><strong>{{ welfareMoney(prize.amount) }}</strong><span>{{ prize.probability }}</span></div></div>
         <div v-else-if="result" class="py-5 text-center"><p class="text-sm text-gray-500 dark:text-dark-300">{{ t('welfare.received') }}</p><strong class="my-4 block text-4xl text-primary-600 dark:text-primary-400">+{{ welfareMoney(result.reward_amount || result.prize?.amount) }}</strong><p class="text-sm text-gray-500 dark:text-dark-300">{{ t('welfare.drawSuccess', { count: overview?.available_draws || 0 }) }}</p></div>
         <template #footer><button class="btn btn-secondary" @click="dialog = ''">{{ t(dialog === 'result' ? 'welfare.accept' : 'welfare.close') }}</button><button v-if="dialog === 'result'" class="btn btn-primary" @click="dialog = ''; showRedemption = true">{{ t('welfare.redeem') }}</button></template>
