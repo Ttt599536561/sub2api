@@ -1,8 +1,8 @@
-name: Publish custom 0.2.7-r6 Docker image
+name: Publish custom 0.2.7-r7 Docker image
 
 on:
   push:
-    branches: [codex/publish-v0.2.7-r6]
+    branches: [codex/publish-v0.2.7-r7]
   workflow_dispatch:
 
 permissions:
@@ -10,13 +10,13 @@ permissions:
   packages: write
 
 concurrency:
-  group: publish-custom-0.2.7-r6
+  group: publish-custom-0.2.7-r7
   cancel-in-progress: false
 
 env:
   IMAGE: ghcr.io/ttt599536561/sub2api-custom
-  VERSION: 0.2.7-r6
-  SOURCE_COMMIT: 6bd6654ee616a942410850be8902dc35111ec7bb
+  VERSION: 0.2.7-r7
+  SOURCE_COMMIT: 301939d880289939b8943ed489887d2e67004f98
 
 jobs:
   build:
