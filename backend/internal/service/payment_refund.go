@@ -20,6 +20,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/payment/provider"
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/servertiming"
+	"github.com/shopspring/decimal"
 )
 
 // --- Refund Flow ---
@@ -247,6 +248,12 @@ func (s *PaymentService) PrepareRefund(ctx context.Context, oid int64, amt float
 	}
 	if amt <= 0 {
 		amt = o.Amount
+	}
+	// RefundAmount is stored as numeric(20,2), independently of the gateway
+	// currency. Reject precision loss before sending an irreversible refund.
+	refundAmount := decimal.NewFromFloat(amt)
+	if !refundAmount.Equal(refundAmount.Round(2)) {
+		return nil, nil, infraerrors.BadRequest("INVALID_AMOUNT", "refund amount must not have more than 2 decimal places")
 	}
 	orderCurrency := PaymentOrderCurrency(o)
 	if amt-o.Amount > paymentAmountToleranceForCurrency(orderCurrency) {

@@ -534,7 +534,9 @@ func TestWelfareRefundPrepareConfirmedRecoverySkipsProviderAndDeductionChecks(t 
 					return nil
 				},
 			}}
-			plan, earlyResult, err := svc.PrepareRefund(ctx, order.ID, 100, "new retry amount", false, true)
+			// A confirmed refund retries its saved amount, even if the new
+			// request contains a value rejected for a fresh gateway refund.
+			plan, earlyResult, err := svc.PrepareRefund(ctx, order.ID, 5.001, "new retry amount", false, true)
 			require.NoError(t, err)
 			require.Nil(t, earlyResult)
 			require.NotNil(t, plan)
