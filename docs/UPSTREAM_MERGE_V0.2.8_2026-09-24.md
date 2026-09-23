@@ -67,10 +67,41 @@
 | 最终内嵌前端的后端构建 | 退出 0，版本输出 `0.2.8-r1`；本地验证标记为 `premerge-review-final`，镜像将使用真实提交 SHA。 |
 | 源码完整性 | 441 个仅上游改变的路径与官方完全一致；官方及历史二开 SQL 均保留原始 Git blob；无未解决索引冲突。 |
 
-此提交准备先推送 `codex/merge-upstream-v0.2.8` 做 GitHub 验证；在同一完整 SHA 的 CI 和 Security Scan 全部成功之前，不推进远端开发分支或发布镜像。原工作区未提交内容保持原样，更新后的源码位于隔离工作树。
+实际源码合并提交为 `d3eb9815b8de58a83fdecbfe5f4b245cd97cd497`，先推送 `codex/merge-upstream-v0.2.8` 完成 GitHub 验证；同一 SHA 的 CI 和 Security Scan 全部成功后，才快进远端 `feature/monthly-subscription-daily-reset`，并将完全相同的 SHA 推送到发布分支。
+
+- [固定源码 CI：全部成功](https://github.com/Ttt599536561/sub2api/actions/runs/35895273408)：完整 unit、完整 integration、前端、golangci-lint、部署脚本及发布工具。实际 repository 集成测试执行 41.098 秒；lint 输出 `0 issues.`。
+- [固定源码 Security Scan：全部成功](https://github.com/Ttt599536561/sub2api/actions/runs/35895273371)：后端漏洞检查与前端依赖审计。
+- [双架构镜像构建与发布：全部成功](https://github.com/Ttt599536561/sub2api/actions/runs/35896862145)：两种架构分别校验版本、源码标签、PostgreSQL 工具、运行资源、容器启动、`/setup/status` 和内嵌前端，再合成最终标签。
 
 本地 Docker 引擎无响应且已有数据库进程运行，因此没有重启 Docker。数据库集成测试和依赖 Linux 文件权限的官方 release-helper 测试以 GitHub CI 的实际执行结果作为发布门槛，CI 不允许静默跳过不可用的 Docker。
 
 专用发布工作流为 `.github/workflows/publish-custom-v028.yml`：仅推送 `codex/publish-v0.2.8-r1` 才自动发布；源码固定为本次事件的不可变完整 SHA，原生构建和验证 `linux/amd64`、`linux/arm64` 后合成最终标签，拒绝覆盖已有最终版本。不会触发普通 `v*` 标签发布。
 
-本地原始日志目录：`%TEMP%/sub2api-merge-v028-20260924/`。交付时应记录固定源码 SHA、GitHub CI/构建链接、GHCR 标签及 manifest digest；本任务不部署生产服务器。
+## 已发布镜像
+
+```text
+ghcr.io/ttt599536561/sub2api-custom:0.2.8-r1
+```
+
+固定内容地址：
+
+```text
+ghcr.io/ttt599536561/sub2api-custom@sha256:af9532eff7efc5f526d4245b062b3cfa58c55a794c56c4ec87501b6065347946
+```
+
+支持 `linux/amd64` 和 `linux/arm64`，已通过匿名 GHCR 请求验证公开可拉取。独立校验实际 manifest/config 字节的 SHA-256、镜像版本和源提交，并将最终平台条目逐一对应到 GitHub 上传的已验证架构 digest 产物。
+
+| 架构 | CI 验证的架构索引 digest | 最终索引中的运行镜像 digest |
+| --- | --- | --- |
+| linux/amd64 | `sha256:4373cf900fe134af0da5f49257d53573d56dd2c5eaa34f734944c674f919104f` | `sha256:fce88b83fbd480c4c3ff9b94a65237928564780779d0070b8fea50ee17a76554` |
+| linux/arm64 | `sha256:81cdd82a529e878200d175cd0899f8f966c604bd9cd642c8f6d243a1a1f21aa1` | `sha256:84cc8ccc2455afa5aad2573d0f2226100fa47d3e077b5b7a8aa6e71833b3623b` |
+
+架构索引还包含构建证明，故其 digest 与运行镜像 manifest digest 不同；最终两个运行镜像均已核对源码为 `d3eb9815b8de58a83fdecbfe5f4b245cd97cd497`、版本为 `0.2.8-r1`。
+
+服务器可拉取上述标签，或使用固定内容地址锁定本次版本。升级包含三个官方数据库迁移，其中定价迁移会转换旧的推理倍率字段；升级前保留数据库备份。生产服务器部署由用户执行，本任务未连接生产数据库或调用真实付费模型。
+
+## 原工作区及审计留档
+
+原工作区继续保留提交 `713d2852e` 和全部未提交修改，远端开发分支已推进；最新源码在 `C:/Users/Administrator/.codex/worktrees/sub2api-upstream-v028/Sub2api`。原工作区的已跟踪修改补丁 SHA-256 前后均为 `FECBD24AA81B9DB7D19E8A4A97EBD435EC7E45FC7C2572D97119F5D611061CF8`，未跟踪文件清单也未变化。没有 stash、覆盖或提交这些排除在发布之外的改动。
+
+合并前基线另保留在本地 `codex/pre-upstream-v0.2.8`。本地原始日志、GitHub 日志、三轮审查报告及 `image-verification.json` 位于 `%TEMP%/sub2api-merge-v028-20260924/`。后续记录发布结果的提交只更新交付文档，镜像固定来源仍为上述源码合并提交。
