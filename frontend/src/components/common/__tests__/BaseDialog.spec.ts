@@ -160,4 +160,28 @@ describe('BaseDialog optional focus trap', () => {
     expect(key('Tab').defaultPrevented).toBe(false)
     expect(document.activeElement).toBe(button)
   })
+
+  it('keeps the scroll lock while a replacement dialog registers its focus entry', async () => {
+    const background = document.createElement('main')
+    document.body.append(background)
+    const first = create({ show: true, trapFocus: true })
+    await nextTick()
+    expect(background.hasAttribute('inert')).toBe(true)
+
+    const replacement = create({ show: true, trapFocus: true }, {
+      default: '<button id="replacement-confirm">Confirm replacement</button>'
+    })
+    // The replacement has registered its scroll lock, but is still waiting for nextTick.
+    first.unmount()
+    wrappers.splice(wrappers.indexOf(first), 1)
+    expect(document.body.classList.contains('modal-open')).toBe(true)
+
+    await nextTick()
+    expect(background.hasAttribute('inert')).toBe(true)
+    document.querySelector<HTMLElement>('#replacement-confirm')!.focus()
+    expect(key('Tab').defaultPrevented).toBe(true)
+    await replacement.setProps({ show: false })
+    expect(document.body.classList.contains('modal-open')).toBe(false)
+    expect(background.hasAttribute('inert')).toBe(false)
+  })
 })

@@ -114,22 +114,10 @@ func APIKeyAuthWithSubscriptionGoogle(apiKeyService *service.APIKeyService, subs
 			abortWithGoogleError(c, 401, "User account is not active")
 			return
 		}
-		if code, message, ok := validateAPIKeyGroupAvailable(apiKey); !ok && (cfg.RunMode == config.RunModeSimple || subscriptionService == nil) {
-			service.MarkOpsClientBusinessLimited(c, service.OpsClientBusinessLimitedReasonAPIKeyGroupUnavailable)
-			if code == "GROUP_DELETED" {
-				MarkIngressRejected(c, IngressRejectGroupDeleted)
-			} else {
-				MarkIngressRejected(c, IngressRejectGroupDisabled)
+		if cfg.RunMode == config.RunModeSimple || subscriptionService == nil {
+			if abortIfAPIKeyGroupUnavailableGoogle(c, apiKey) || abortIfAPIKeyGroupNotAllowedGoogle(c, apiKey) {
+				return
 			}
-			abortWithGoogleError(c, 403, message)
-			return
-		}
-		// 专属分组授权校验：用户对该专属分组的授权被撤销后应拒绝（与主中间件一致，防止越权）。
-		if !validateAPIKeyGroupAllowed(apiKey) && (cfg.RunMode == config.RunModeSimple || subscriptionService == nil) {
-			service.MarkOpsClientBusinessLimited(c, service.OpsClientBusinessLimitedReasonAPIKeyGroupUnavailable)
-			MarkIngressRejected(c, IngressRejectGroupNotAllowed)
-			abortWithGoogleError(c, 403, "API Key 所属专属分组不再允许当前用户使用")
-			return
 		}
 
 		// 简易模式：跳过余额和订阅检查
@@ -173,15 +161,17 @@ func APIKeyAuthWithSubscriptionGoogle(apiKeyService *service.APIKeyService, subs
 				apiKey.User.ID,
 				*apiKey.GroupID,
 			)
+			// Preserve the official group guards using only authoritative state.
+			// Nil plus ErrSubscriptionInvalid confirms absence, unlike a DB outage.
+			if group != nil || (errors.Is(err, service.ErrSubscriptionInvalid) && !errors.Is(err, service.ErrBillingServiceUnavailable)) {
+				apiKey.Group = group
+				if abortIfAPIKeyGroupUnavailableGoogle(c, apiKey) || abortIfAPIKeyGroupNotAllowedGoogle(c, apiKey) {
+					return
+				}
+			}
 			if err != nil {
 				status, _ := subscriptionAdmissionErrorDetails(err)
 				abortWithGoogleError(c, status, infraerrors.Message(err))
-				return
-			}
-			apiKey.Group = group
-			if !validateAPIKeyGroupAllowed(apiKey) {
-				MarkIngressRejected(c, IngressRejectGroupNotAllowed)
-				abortWithGoogleError(c, 403, "API Key group is no longer available to this user")
 				return
 			}
 			if subscription != nil {
@@ -220,6 +210,32 @@ func APIKeyAuthWithSubscriptionGoogle(apiKeyService *service.APIKeyService, subs
 		_ = apiKeyService.TouchLastUsed(c.Request.Context(), apiKey.ID)
 		c.Next()
 	}
+}
+
+func abortIfAPIKeyGroupUnavailableGoogle(c *gin.Context, apiKey *service.APIKey) bool {
+	code, message, ok := validateAPIKeyGroupAvailable(apiKey)
+	if ok {
+		return false
+	}
+	service.MarkOpsClientBusinessLimited(c, service.OpsClientBusinessLimitedReasonAPIKeyGroupUnavailable)
+	if code == "GROUP_DELETED" {
+		MarkIngressRejected(c, IngressRejectGroupDeleted)
+	} else {
+		MarkIngressRejected(c, IngressRejectGroupDisabled)
+	}
+	abortWithGoogleError(c, 403, message)
+	return true
+}
+
+// 专属分组授权校验：用户对该专属分组的授权被撤销后应拒绝（与主中间件一致，防止越权）。
+func abortIfAPIKeyGroupNotAllowedGoogle(c *gin.Context, apiKey *service.APIKey) bool {
+	if validateAPIKeyGroupAllowed(apiKey) {
+		return false
+	}
+	service.MarkOpsClientBusinessLimited(c, service.OpsClientBusinessLimitedReasonAPIKeyGroupUnavailable)
+	MarkIngressRejected(c, IngressRejectGroupNotAllowed)
+	abortWithGoogleError(c, 403, "API Key 所属专属分组不再允许当前用户使用")
+	return true
 }
 
 // extractAPIKeyForGoogle extracts API key for Google/Gemini endpoints.

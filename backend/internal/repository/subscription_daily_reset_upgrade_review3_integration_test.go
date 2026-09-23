@@ -20,7 +20,7 @@ import (
 
 // Start from the upstream migration set, with existing customer data, rather
 // than merely checking that the customized schema installs into an empty DB.
-// All upstream SQL files are unchanged relative to upstream 881f32026 (0.2.5).
+// All upstream SQL files are unchanged relative to upstream a3eb7ef302 (0.2.8).
 func TestSubscriptionDailyResetUpgradeReview3_ExistingUpstreamDataAndMigrationHistory(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
@@ -58,9 +58,9 @@ func TestSubscriptionDailyResetUpgradeReview3_ExistingUpstreamDataAndMigrationHi
 	}
 	// Pin the fixture to the audited upstream commit. Future upstream merges must
 	// explicitly refresh this baseline instead of silently changing what we test.
-	require.Len(t, upstream, 286)
-	require.Equal(t, "0e603b72c87bfd1b7ad9a02625c56c5e212e37752fe298c942f5a43cec4b2f5f",
-		fmt.Sprintf("%x", baseline.Sum(nil)), "upstream 881f32026 migration fixture changed; re-audit the upgrade baseline")
+	require.Len(t, upstream, 289)
+	require.Equal(t, "6075250885f45555d7671005dc80db75c8848e9066a0cc3d291cd36a80c30947",
+		fmt.Sprintf("%x", baseline.Sum(nil)), "upstream a3eb7ef302 migration fixture changed; re-audit the upgrade baseline")
 	require.NoError(t, applyMigrationsFS(ctx, db, upstream))
 
 	// These are old-schema writes: none mentions a customized field.
@@ -120,7 +120,11 @@ func TestSubscriptionDailyResetUpgradeReview3_ExistingUpstreamDataAndMigrationHi
 	require.Equal(t, "0", snapshot("SELECT count(*)::text FROM welfare_subscription_rewards"), "upgrading must not grant draws for historical purchases")
 
 	// The numerical prefix is shared; both complete filenames must be recorded.
-	for _, name := range []string{"235_group_model_allowlist.sql", customMigration, welfareMigration, subscriptionRewardsMigration} {
+	for _, name := range []string{
+		"235_group_model_allowlist.sql", customMigration,
+		"239_channel_reasoning_effort_multipliers.sql", welfareMigration,
+		"240_affiliate_ledger_operation_id.sql", subscriptionRewardsMigration,
+	} {
 		contents, readErr := migrations.FS.ReadFile(name)
 		require.NoError(t, readErr)
 		var checksum string

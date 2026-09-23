@@ -105,6 +105,45 @@ describe('announcement identity isolation', () => {
     expect(store.announcements[0].read_at).toBeDefined()
   })
 
+  it.each(['success', 'failure'] as const)('keeps a forced refresh loading after a superseded same-session %s', async (outcome) => {
+    const old = deferred<UserAnnouncement[]>()
+    const fresh = deferred<UserAnnouncement[]>()
+    api.list.mockReturnValueOnce(old.promise).mockReturnValueOnce(fresh.promise)
+    const store = useAnnouncementStore()
+    const oldRequest = store.fetchAnnouncements()
+    const newRequest = store.fetchAnnouncements(true)
+    if (outcome === 'success') old.resolve([announcement(7)])
+    else old.reject(new Error('superseded request failed'))
+    await oldRequest
+
+    expect(store.loading).toBe(true)
+    expect(store.announcements).toEqual([])
+    expect(store.currentPopup).toBeNull()
+    await store.fetchAnnouncements()
+    expect(api.list).toHaveBeenCalledTimes(2)
+    fresh.resolve([announcement(8)])
+    await newRequest
+    expect(store.loading).toBe(false)
+    expect(store.announcements.map(item => item.id)).toEqual([8])
+    expect(store.currentPopup?.id).toBe(8)
+  })
+
+  it('keeps a pending mark-read valid after a forced refresh in the same session', async () => {
+    const pending = deferred<{ message: string }>()
+    api.list.mockResolvedValueOnce([announcement(1)]).mockResolvedValueOnce([announcement(1), announcement(2)])
+    api.markRead.mockReturnValueOnce(pending.promise)
+    const store = useAnnouncementStore()
+    await store.fetchAnnouncements()
+    const mutation = store.markAsRead(1)
+    await store.fetchAnnouncements(true)
+    pending.resolve({ message: 'ok' })
+    await mutation
+
+    expect(store.announcements[0].read_at).toBeDefined()
+    expect(store.announcements[1].read_at).toBeUndefined()
+    expect(store.unreadCount).toBe(1)
+  })
+
   it.each(['success', 'failure'] as const)('isolates an old mark-all %s from new reads and loading', async (outcome) => {
     const old = deferred<{ message: string }>()
     const fresh = deferred<UserAnnouncement[]>()

@@ -51,12 +51,13 @@ interface OpenDialog {
   trapFocus: boolean
   zIndex: number
 }
-const openDialogs: OpenDialog[] = []
+const dialogStack: OpenDialog[] = []
 const inertBackground = new Map<HTMLElement, string | null>()
 let dialogIdCounter = 0
+const openDialogs = new Set<string>()
 
 function topDialog(): OpenDialog | undefined {
-  return openDialogs.reduce<OpenDialog | undefined>((top, entry) =>
+  return dialogStack.reduce<OpenDialog | undefined>((top, entry) =>
     !top || entry.zIndex >= top.zIndex ? entry : top, undefined)
 }
 
@@ -67,7 +68,7 @@ function syncBackgroundInert() {
   }
   inertBackground.clear()
   const top = topDialog()
-  if (!top || !openDialogs.some(entry => entry.trapFocus)) return
+  if (!top || !dialogStack.some(entry => entry.trapFocus)) return
   for (const element of Array.from(document.body.children)) {
     if (!(element instanceof HTMLElement) || element === top.overlay || element.contains(top.overlay)) continue
     inertBackground.set(element, element.getAttribute('inert'))
@@ -160,10 +161,16 @@ const handleClose = () => {
 }
 
 const handleEscape = (event: KeyboardEvent) => {
-  if (openDialogs.some(entry => entry.trapFocus) && topDialog() !== openEntry) return
+  if (dialogStack.some(entry => entry.trapFocus) && topDialog() !== openEntry) return
   if (props.show && props.closeOnEscape && event.key === 'Escape') {
     emit('close')
   }
+}
+
+const updateScrollLock = (isOpen: boolean) => {
+  if (isOpen) openDialogs.add(dialogId)
+  else openDialogs.delete(dialogId)
+  document.body.classList.toggle('modal-open', openDialogs.size > 0)
 }
 
 function activeTrap() {
@@ -200,11 +207,11 @@ function handleFocus(event: FocusEvent) {
 function releaseDialog() {
   const wasTop = openEntry !== undefined && topDialog() === openEntry
   if (openEntry) {
-    openDialogs.splice(openDialogs.indexOf(openEntry), 1)
+    dialogStack.splice(dialogStack.indexOf(openEntry), 1)
     openEntry = undefined
     syncBackgroundInert()
   }
-  if (!openDialogs.length) document.body.classList.remove('modal-open')
+  updateScrollLock(false)
   const top = topDialog()
   if (wasTop && previousActiveElement?.isConnected && (!top || top.panel.contains(previousActiveElement))) {
     previousActiveElement.focus()
@@ -221,13 +228,13 @@ watch(
       // 保存当前焦点元素
       previousActiveElement = document.activeElement as HTMLElement
       // 使用CSS类而不是直接操作style,更易于管理多个对话框
-      document.body.classList.add('modal-open')
+      updateScrollLock(true)
 
       // 等待DOM更新后设置焦点到对话框
       await nextTick()
       if (disposed || !props.show || generation !== openGeneration || !overlayRef.value || !dialogRef.value) return
       openEntry = { overlay: overlayRef.value, panel: dialogRef.value, trapFocus: props.trapFocus, zIndex: props.zIndex }
-      openDialogs.push(openEntry)
+      dialogStack.push(openEntry)
       syncBackgroundInert()
       if (modalBodyRef.value) {
         modalBodyRef.value.scrollTop = 0

@@ -1,8 +1,8 @@
-name: Publish custom 0.2.7-r8 Docker image
+name: Publish custom 0.2.8-r1 Docker image
 
 on:
   push:
-    branches: [codex/publish-v0.2.7-r8]
+    branches: [codex/publish-v0.2.8-r1]
   workflow_dispatch:
 
 permissions:
@@ -10,13 +10,14 @@ permissions:
   packages: write
 
 concurrency:
-  group: publish-custom-0.2.7-r8
+  group: publish-custom-0.2.8-r1
   cancel-in-progress: false
 
 env:
   IMAGE: ghcr.io/ttt599536561/sub2api-custom
-  VERSION: 0.2.7-r8
-  SOURCE_COMMIT: a718ad29b44812411bfdba764579006479ea1724
+  VERSION: 0.2.8-r1
+  # The event SHA is immutable for this run and is checked after checkout.
+  SOURCE_COMMIT: ${{ github.sha }}
 
 jobs:
   build:
@@ -43,7 +44,7 @@ jobs:
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$SOURCE_COMMIT"
-          test "$(tr -d '\r\n' < backend/cmd/server/VERSION)" = '0.2.7'
+          test "$(tr -d '\r\n' < backend/cmd/server/VERSION)" = '0.2.8'
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3

@@ -236,15 +236,20 @@ func apiKeyAuthWithSubscription(apiKeyService *service.APIKeyService, subscripti
 
 			if apiKey.GroupID != nil && subscriptionService != nil {
 				freshSub, freshGroup, admissionErr := subscriptionService.GetSubscriptionForAdmission(c.Request.Context(), apiKey.User.ID, *apiKey.GroupID)
+				// A nil group with ErrSubscriptionInvalid means the group is gone;
+				// a failed database read does not establish group availability.
+				if freshGroup != nil || (errors.Is(admissionErr, service.ErrSubscriptionInvalid) && !errors.Is(admissionErr, service.ErrBillingServiceUnavailable)) {
+					apiKey.Group = freshGroup
+					if abortIfAPIKeyGroupUnavailable(c, apiKey) || abortIfAPIKeyGroupNotAllowed(c, apiKey) {
+						return
+					}
+				}
 				if admissionErr != nil {
 					status, code := subscriptionAdmissionErrorDetails(admissionErr)
 					AbortWithError(c, status, code, infraerrors.Message(admissionErr))
 					return
 				}
-				subscription, apiKey.Group = freshSub, freshGroup
-				if abortIfAPIKeyGroupUnavailable(c, apiKey) || abortIfAPIKeyGroupNotAllowed(c, apiKey) {
-					return
-				}
+				subscription = freshSub
 			} else if isSubscriptionType {
 				AbortWithError(c, http.StatusServiceUnavailable, "BILLING_SERVICE_UNAVAILABLE", "Subscription admission is temporarily unavailable")
 				return

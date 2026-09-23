@@ -16,6 +16,7 @@ export const useAnnouncementStore = defineStore('announcements', () => {
   // Session-scoped dedup set — not reactive, used as plain lookup only
   let shownPopupIds = new Set<number>()
   let sessionGeneration = 0
+  let fetchGeneration = 0
 
   // Getters
   const unreadCount = computed(() =>
@@ -24,7 +25,6 @@ export const useAnnouncementStore = defineStore('announcements', () => {
 
   // Actions
   async function fetchAnnouncements(force = false) {
-    const generation = sessionGeneration
     const now = Date.now()
     if (!force && lastFetchTime.value > 0 && now - lastFetchTime.value < THROTTLE_MS) {
       return
@@ -32,20 +32,21 @@ export const useAnnouncementStore = defineStore('announcements', () => {
 
     // Set immediately to prevent concurrent duplicate requests
     lastFetchTime.value = now
+    const generation = ++fetchGeneration
 
     try {
       loading.value = true
       const all = await announcementsAPI.list(false)
-      if (generation !== sessionGeneration) return
+      if (generation !== fetchGeneration) return
       announcements.value = all.slice(0, 20)
       enqueueNewPopups()
     } catch (err: any) {
-      if (generation !== sessionGeneration) return
+      if (generation !== fetchGeneration) return
       // Revert throttle timestamp on failure so retry is allowed
       lastFetchTime.value = 0
       console.error('Failed to fetch announcements:', err)
     } finally {
-      if (generation === sessionGeneration) loading.value = false
+      if (generation === fetchGeneration) loading.value = false
     }
   }
 
@@ -137,6 +138,7 @@ export const useAnnouncementStore = defineStore('announcements', () => {
   function reset() {
     // Invalidate late responses and queued popup callbacks from the old identity.
     sessionGeneration++
+    fetchGeneration++
     announcements.value = []
     lastFetchTime.value = 0
     shownPopupIds = new Set()
