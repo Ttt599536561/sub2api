@@ -89,4 +89,11 @@ describe('recharge bonus hints on quick amounts', () => {
     // 500 × (1 − 30%) = 350
     expect(hit.get('[data-testid="quick-amount-credited"]').text()).toContain('350.00')
   })
+
+  it('uses backend IQD precision for the quick discount quote', () => {
+    const wrapper = mount(AmountInput, {
+      props: { modelValue: null, amounts: [10], bonusTiers: [{ min_amount: 0, bonus_percent: 15 }], bonusMode: 'discount', currency: 'IQD' },
+    })
+    expect(wrapper.get('[data-testid="quick-amount-credited"]').text()).toContain('8.500')
+  })
 })

@@ -75,7 +75,7 @@ import { ref, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { RechargeBonusTier } from '@/types/payment'
 import { formatRechargeBonusNumber, quoteRechargeBonus, type RechargeBonusMode } from '@/utils/rechargeBonus'
-import { formatPaymentAmount } from './currency'
+import { formatPaymentAmount, paymentCurrencyFractionDigits } from './currency'
 
 const props = withDefaults(defineProps<{
   amounts?: number[]
@@ -116,12 +116,7 @@ const filteredAmounts = computed(() =>
 const showSecondLine = computed(() => props.bonusTiers.length > 0)
 
 function currencyDigits(): number {
-  if (!props.currency) return 2
-  try {
-    return new Intl.NumberFormat(undefined, { style: 'currency', currency: props.currency }).resolvedOptions().maximumFractionDigits ?? 2
-  } catch {
-    return 2
-  }
+  return paymentCurrencyFractionDigits(props.currency)
 }
 
 function quoteFor(amt: number) {

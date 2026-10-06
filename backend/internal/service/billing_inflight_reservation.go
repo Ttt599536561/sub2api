@@ -272,6 +272,23 @@ func (s *BillingCacheService) reserveInflight(ctx context.Context, user *User, g
 		logger.LegacyPrintf("service.billing_cache", "Warning: inflight reservation failed for user %d (fail-open): %v", user.ID, err)
 		return nil, nil
 	}
+	if !allowed && s.userRepo != nil {
+		// A credit followed by a delayed cache debit can leave a positive but
+		// understated balance. Recheck a rejection against a fresh DB snapshot;
+		// retry atomically so concurrent reservations are still included. Do not
+		// refill Redis here or replace the existing rejection if the read fails.
+		freshBalance, refreshErr := s.loadUserBalanceWithoutCache(ctx, user.ID)
+		if refreshErr == nil && freshBalance > balance && !math.IsInf(freshBalance, 0) {
+			balance = freshBalance
+			retryCtx, retryCancel := context.WithTimeout(context.WithoutCancel(ctx), inflightReservationReserveTimeout)
+			allowed, inflight, err = rc.ReserveInflightBalance(retryCtx, user.ID, requestID, estimate, balance, ttl)
+			retryCancel()
+			if err != nil {
+				logger.LegacyPrintf("service.billing_cache", "Warning: inflight reservation retry failed for user %d (fail-open): %v", user.ID, err)
+				return nil, nil
+			}
+		}
+	}
 	if !allowed {
 		logger.LegacyPrintf("service.billing_cache", "inflight reservation rejected: user=%d balance=%.6f inflight=%.6f estimate=%.6f", user.ID, balance, inflight, estimate)
 		return nil, ErrInsufficientBalance

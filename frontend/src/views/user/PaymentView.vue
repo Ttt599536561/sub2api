@@ -315,7 +315,7 @@ import { platformAccentBarClass, platformBadgeLightClass, platformBadgeClass, pl
 import SubscriptionPlanCard from '@/components/payment/SubscriptionPlanCard.vue'
 import PaymentStatusPanel from '@/components/payment/PaymentStatusPanel.vue'
 import Icon from '@/components/icons/Icon.vue'
-import { DEFAULT_PAYMENT_CURRENCY, formatPaymentAmount, normalizePaymentCurrency } from '@/components/payment/currency'
+import { DEFAULT_PAYMENT_CURRENCY, calculatePaymentFee, formatPaymentAmount, normalizePaymentCurrency, paymentCurrencyFractionDigits as currencyFractionDigits } from '@/components/payment/currency'
 import { planValiditySuffix as validitySuffixOf } from '@/components/payment/validity'
 import type { PaymentMethodOption } from '@/components/payment/PaymentMethodSelector.vue'
 import { buildPaymentErrorToastMessage, describePaymentScenarioError } from './paymentUx'
@@ -623,27 +623,10 @@ const localeCode = computed(() => {
   return undefined
 })
 
-function currencyFractionDigits(currency: string): number {
-  try {
-    return new Intl.NumberFormat(undefined, {
-      style: 'currency',
-      currency,
-    }).resolvedOptions().maximumFractionDigits ?? 2
-  } catch {
-    return 2
-  }
-}
-
 function roundPaymentAmount(value: number, currency: string): number {
   if (!Number.isFinite(value)) return 0
   const factor = 10 ** currencyFractionDigits(currency)
   return Math.round(value * factor) / factor
-}
-
-function ceilPaymentAmount(value: number, currency: string): number {
-  if (!Number.isFinite(value)) return 0
-  const factor = 10 ** currencyFractionDigits(currency)
-  return Math.ceil(value * factor) / factor
 }
 
 function subscriptionPaymentAmountForCurrency(value: number, currency: string): number {
@@ -661,12 +644,23 @@ function formatSelectedSubscriptionPaymentAmount(value: number): string {
 }
 
 // 充值优惠：阈值按输入金额命中；赠金模式按到账基数（输入 × 倍率）加赠送，折扣模式按百分比减实付。
-// 与后端 quoteRechargeBonus 一致；渠道限额、手续费、实付都按折后基数（payBaseAmount）计算，提交仍发送输入金额。
-const bonusQuote = computed(() => quoteRechargeBonus(rechargeBonusTiers.value, validAmount.value, {
-  multiplier: balanceRechargeMultiplier.value,
-  mode: rechargeBonusMode.value,
-  currencyDigits: currencyFractionDigits(selectedCurrency.value),
-}))
+// 与后端一致：各渠道按自己的币种报价，限额使用包含手续费的实付金额，提交仍发送输入金额。
+const feeRate = computed(() => checkout.value?.recharge_fee_rate ?? 0)
+function rechargeQuoteForCurrency(currency: string) {
+  return quoteRechargeBonus(rechargeBonusTiers.value, validAmount.value, {
+    multiplier: balanceRechargeMultiplier.value,
+    mode: rechargeBonusMode.value,
+    currencyDigits: currencyFractionDigits(currency),
+  })
+}
+function rechargeTotalAmountForMethod(type: string): number {
+  const currency = normalizePaymentCurrency(visibleMethods.value[type]?.currency)
+  const payBase = rechargeQuoteForCurrency(currency).payBase
+  if (feeRate.value <= 0 || payBase <= 0) return payBase
+  const fee = calculatePaymentFee(payBase, feeRate.value, currency)
+  return roundPaymentAmount(payBase + fee, currency)
+}
+const bonusQuote = computed(() => rechargeQuoteForCurrency(selectedCurrency.value))
 const payBaseAmount = computed(() => bonusQuote.value.payBase)
 const discountAmount = computed(() => roundPaymentAmount(validAmount.value - payBaseAmount.value, selectedCurrency.value))
 const creditedAmount = computed(() => bonusQuote.value.credited)
@@ -680,20 +674,19 @@ const methodOptions = computed<PaymentMethodOption[]>(() =>
       type,
       display_name: ml?.display_name,
       fee_rate: ml?.fee_rate ?? 0,
-      available: ml?.available !== false && amountFitsMethod(payBaseAmount.value, type),
+      available: ml?.available !== false && amountFitsMethod(rechargeTotalAmountForMethod(type), type),
     }
   })
 )
 
-const feeRate = computed(() => checkout.value?.recharge_fee_rate ?? 0)
 const feeAmount = computed(() =>
   feeRate.value > 0 && payBaseAmount.value > 0
-    ? Math.ceil(((payBaseAmount.value * feeRate.value) / 100) * 100) / 100
+    ? calculatePaymentFee(payBaseAmount.value, feeRate.value, selectedCurrency.value)
     : 0
 )
 const totalAmount = computed(() =>
   feeRate.value > 0 && payBaseAmount.value > 0
-    ? Math.round((payBaseAmount.value + feeAmount.value) * 100) / 100
+    ? roundPaymentAmount(payBaseAmount.value + feeAmount.value, selectedCurrency.value)
     : payBaseAmount.value
 )
 const showActualPay = computed(() => feeRate.value > 0 || discountAmount.value > 0)
@@ -701,21 +694,21 @@ const showActualPay = computed(() => feeRate.value > 0 || discountAmount.value >
 const amountError = computed(() => {
   if (validAmount.value <= 0) return ''
   // No method can handle this amount
-  if (!enabledMethods.value.some((m) => amountFitsMethod(payBaseAmount.value, m))) {
+  if (!methodOptions.value.some((method) => method.available)) {
     return t('payment.amountNoMethod')
   }
   // Selected method can't handle this amount (but others can)
   const ml = selectedLimit.value
   if (ml) {
-    if (ml.single_min > 0 && payBaseAmount.value < ml.single_min) return t('payment.amountTooLow', { min: formatSelectedPaymentAmount(ml.single_min) })
-    if (ml.single_max > 0 && payBaseAmount.value > ml.single_max) return t('payment.amountTooHigh', { max: formatSelectedPaymentAmount(ml.single_max) })
+    if (ml.single_min > 0 && totalAmount.value < ml.single_min) return t('payment.amountTooLow', { min: formatSelectedPaymentAmount(ml.single_min) })
+    if (ml.single_max > 0 && totalAmount.value > ml.single_max) return t('payment.amountTooHigh', { max: formatSelectedPaymentAmount(ml.single_max) })
   }
   return ''
 })
 
 const canSubmit = computed(() =>
   validAmount.value > 0
-    && amountFitsMethod(payBaseAmount.value, selectedMethod.value)
+    && amountFitsMethod(totalAmount.value, selectedMethod.value)
     && selectedLimit.value?.available !== false
 )
 
@@ -726,7 +719,7 @@ const subPaymentAmount = computed(() => {
 
 const subFeeAmount = computed(() => {
   if (feeRate.value <= 0 || subPaymentAmount.value <= 0) return 0
-  return ceilPaymentAmount((subPaymentAmount.value * feeRate.value) / 100, selectedCurrency.value)
+  return calculatePaymentFee(subPaymentAmount.value, feeRate.value, selectedCurrency.value)
 })
 
 const subTotalAmount = computed(() => {
@@ -737,7 +730,7 @@ const subTotalAmount = computed(() => {
 function subscriptionTotalAmountForCurrency(value: number, currency: string): number {
   const paymentAmount = subscriptionPaymentAmountForCurrency(value, currency)
   if (feeRate.value <= 0 || paymentAmount <= 0) return paymentAmount
-  const fee = ceilPaymentAmount((paymentAmount * feeRate.value) / 100, currency)
+  const fee = calculatePaymentFee(paymentAmount, feeRate.value, currency)
   return roundPaymentAmount(paymentAmount + fee, currency)
 }
 
@@ -763,10 +756,10 @@ const canSubmitSubscription = computed(() =>
 )
 
 // Auto-switch to first available method when current selection can't handle the amount
-watch(() => [payBaseAmount.value, selectedMethod.value] as const, ([amt, method]) => {
+watch(() => [totalAmount.value, selectedMethod.value] as const, ([amt, method]) => {
   if (amt <= 0 || amountFitsMethod(amt, method)) return
-  const available = enabledMethods.value.find((m) => amountFitsMethod(amt, m))
-  if (available) selectedMethod.value = available
+  const available = methodOptions.value.find((option) => option.available)
+  if (available) selectedMethod.value = available.type
 })
 
 // Payment button class: follows selected payment method color

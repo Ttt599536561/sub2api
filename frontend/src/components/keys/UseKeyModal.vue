@@ -859,7 +859,7 @@ Invoke-RestMethod -Method Post -Uri "${endpoint}" -Headers $headers -ContentType
       content: `curl -X POST "${endpoint}" ^
   -H "Authorization: Bearer ${apiKey}" ^
   -H "Content-Type: application/json" ^
-  --data "{\"model\":\"jev-latest\",\"state\":\"Text to evaluate\",\"questions\":{\"safety\":{\"type\":\"noul\",\"instructions\":\"Evaluate whether the text is unsafe\"}}}"`
+  --data "{\\"model\\":\\"jev-latest\\",\\"state\\":\\"Text to evaluate\\",\\"questions\\":{\\"safety\\":{\\"type\\":\\"noul\\",\\"instructions\\":\\"Evaluate whether the text is unsafe\\"}}}"`
     }
   }
   return {

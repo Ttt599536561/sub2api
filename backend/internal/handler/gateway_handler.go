@@ -1059,6 +1059,22 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 						// 兜底重试按"直接请求兜底分组"处理：清除强制平台，允许按分组平台调度
 						ctx := context.WithValue(c.Request.Context(), ctxkey.ForcePlatform, "")
 						c.Request = c.Request.WithContext(ctx)
+						// The failed attempt will not be billed. Replace its handler hold
+						// before reserving at the fallback group's price; otherwise a
+						// subscription bypasses the balance guard, or a balance request
+						// counts its own old reservation against the new one. HandlerDone
+						// preserves any references already handed to billing tasks.
+						inflightRelease()
+						fallbackInflightDone, err := reserveInflightBalance(c, h.billingCacheService, h.gatewayService, fallbackAPIKey, nil, tokenInflightEstimate(reqModel, body))
+						if err != nil {
+							status, code, message, retryAfter := billingErrorDetails(err)
+							if retryAfter > 0 {
+								c.Header("Retry-After", strconv.Itoa(retryAfter))
+							}
+							h.handleStreamingAwareError(c, status, code, message, streamStarted)
+							return
+						}
+						defer fallbackInflightDone()
 						currentAPIKey = fallbackAPIKey
 						currentSubscription = nil
 						fallbackUsed = true
