@@ -82,6 +82,37 @@ describe('rechargeBonus helpers', () => {
     expect(calculateRechargeBonus(100, 0)).toBe(0)
   })
 
+  it('rounds half-cent bonuses from the decimal inputs used by the backend', () => {
+    expect(calculateRechargeBonus(20.15, 50)).toBe(10.08)
+    expect(quoteRechargeBonus([{ min_amount: 0, bonus_percent: 50 }], 20.15)).toMatchObject({
+      base: 20.15, bonus: 10.08, credited: 30.23,
+    })
+  })
+
+  it('rounds the credited base before calculating the bonus', () => {
+    expect(quoteRechargeBonus([{ min_amount: 0, bonus_percent: 50 }], 20.15, { multiplier: 0.5 })).toMatchObject({
+      base: 10.08, bonus: 5.04, credited: 15.12,
+    })
+  })
+
+  it.each([
+    { amount: 20.15, percent: 50, digits: 2, payBase: 10.08 },
+    { amount: 20.15, percent: 50, digits: 3, payBase: 10.075 },
+    { amount: 10, percent: 89.95, digits: 2, payBase: 1.01 },
+    { amount: 100, percent: 89.93, digits: 2, payBase: 10.07 },
+    { amount: 101, percent: 50, digits: 0, payBase: 51 },
+  ])('matches decimal discount rounding for $amount at $percent% with $digits digits', ({ amount, percent, digits, payBase }) => {
+    expect(quoteRechargeBonus([{ min_amount: 0, bonus_percent: percent }], amount, {
+      mode: 'discount', currencyDigits: digits,
+    }).payBase).toBe(payBase)
+  })
+
+  it('uses rounded paid credit when computing the free portion of a discount', () => {
+    expect(quoteRechargeBonus([{ min_amount: 0, bonus_percent: 50 }], 20.15, {
+      mode: 'discount', multiplier: 0.5,
+    })).toMatchObject({ payBase: 10.08, base: 10.08, bonus: 5.04, credited: 10.08 })
+  })
+
   it('quotes threshold by payment amount and bonus by credited base', () => {
     expect(quoteRechargeBonus(tiers, 100)).toMatchObject({ percent: 20, base: 100, bonus: 20, credited: 120 })
     // 1000 CNY × 0.14 = 140 USD base; threshold matched by the entered 1000 → 35%

@@ -4,6 +4,7 @@ import PaymentView from '../PaymentView.vue'
 import { PAYMENT_RECOVERY_STORAGE_KEY } from '@/components/payment/paymentFlow'
 import { formatPaymentAmount } from '@/components/payment/currency'
 import AmountInput from '@/components/payment/AmountInput.vue'
+import PaymentMethodSelector from '@/components/payment/PaymentMethodSelector.vue'
 import SubscriptionPlanCard from '@/components/payment/SubscriptionPlanCard.vue'
 import en from '@/i18n/locales/en'
 import zh from '@/i18n/locales/zh'
@@ -412,6 +413,27 @@ describe('PaymentView recharge rate preview', () => {
 })
 
 describe('PaymentView subscription confirmation amounts', () => {
+  it.each([
+    { fee: 0, min: 10.08, max: 10.08, total: 10.08, available: true },
+    { fee: 0, min: 0, max: 10.07, total: 10.08, available: false },
+    { fee: 7, min: 10.79, max: 10.79, total: 10.79, available: true },
+  ])('checks a decimal-converted subscription against limits $min–$max with $fee% fee', async ({ fee, min, max, total, available }) => {
+    const wrapper = await mountSubscriptionConfirm({
+      checkout: { subscription_usd_to_cny_rate: 0.5, recharge_fee_rate: fee },
+      method: { currency: 'CNY', single_min: min, single_max: max },
+      plan: { price: 20.15 },
+    })
+    try {
+      const method = wrapper.getComponent(PaymentMethodSelector).props('methods').find(item => item.type === 'wxpay')
+      expect(method).toMatchObject({ available })
+      const button = wrapper.findAll('button').find(item => item.text().includes('payment.createOrder'))!
+      expect(button.text()).toContain(formatPaymentAmount(total, 'CNY'))
+      expect((button.element as HTMLButtonElement).disabled).toBe(!available)
+    } finally {
+      wrapper.unmount()
+    }
+  })
+
   it('shows converted CNY pay amount using the subscription rate, not the balance multiplier', async () => {
     const wrapper = await mountSubscriptionConfirm({
       checkout: {

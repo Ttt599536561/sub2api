@@ -16,6 +16,8 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/paymentauditlog"
 	"github.com/Wei-Shaw/sub2api/ent/paymentorder"
 	"github.com/Wei-Shaw/sub2api/ent/paymentproviderinstance"
+	"github.com/Wei-Shaw/sub2api/ent/schema/mixins"
+	"github.com/Wei-Shaw/sub2api/ent/usersubscription"
 	"github.com/Wei-Shaw/sub2api/internal/payment"
 	"github.com/Wei-Shaw/sub2api/internal/payment/provider"
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
@@ -362,7 +364,7 @@ func (s *PaymentService) ExecuteRefund(ctx context.Context, p *RefundPlan) (*Ref
 				if errors.Is(err, ErrAdjustWouldExpire) {
 					// Deduction would expire the subscription — revoke it entirely
 					slog.Info("subscription deduction would expire, revoking", "orderID", p.OrderID, "subID", p.SubscriptionID, "days", p.SubDaysToDeduct)
-					if revokeErr := s.subscriptionSvc.RevokeSubscription(ctx, p.SubscriptionID); revokeErr != nil {
+					if revokeErr := s.revokeRefundSubscription(ctx, p); revokeErr != nil {
 						s.restoreStatus(ctx, p)
 						return nil, fmt.Errorf("revoke subscription: %w", revokeErr)
 					}
@@ -692,6 +694,10 @@ func (s *PaymentService) getRefundProvider(ctx context.Context, o *dbent.Payment
 }
 
 func (s *PaymentService) handleGwFail(ctx context.Context, p *RefundPlan, gErr error) (*RefundResult, error) {
+	// A disconnected admin request can cancel the gateway call after the
+	// entitlement deduction. Keep rollback, order recovery, and audit writable.
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+	defer cancel()
 	if s.RollbackRefund(ctx, p, gErr) {
 		s.restoreStatus(ctx, p)
 		s.writeAuditLog(ctx, p.OrderID, "REFUND_GATEWAY_FAILED", "admin", map[string]any{"detail": psErrMsg(gErr)})
@@ -920,6 +926,99 @@ func refundResponseID(resp *payment.RefundResponse) string {
 	return strings.TrimSpace(resp.RefundID)
 }
 
+// Keep the revocation and its persisted version in one transaction. A later
+// rollback may restore this exact revocation, never a concurrent admin action.
+func (s *PaymentService) revokeRefundSubscription(ctx context.Context, p *RefundPlan) error {
+	tx, err := s.entClient.Tx(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	txCtx := dbent.NewTxContext(ctx, tx)
+	sub, err := tx.UserSubscription.Get(txCtx, p.SubscriptionID)
+	if err != nil {
+		return err
+	}
+	now := time.Now()
+	// A renewal may have committed after ExtendSubscription rejected the
+	// shortening. Do not revoke that newer entitlement; let the admin retry.
+	if sub.ExpiresAt.AddDate(0, 0, -p.SubDaysToDeduct).After(now) {
+		return infraerrors.Conflict("CONFLICT", "subscription changed before refund revocation")
+	}
+	claimed, err := tx.UserSubscription.Update().Where(
+		usersubscription.IDEQ(sub.ID), usersubscription.DeletedAtIsNil(),
+		usersubscription.UpdatedAtEQ(sub.UpdatedAt),
+		usersubscription.DailyResetVersionEQ(sub.DailyResetVersion),
+	).SetUpdatedAt(now).Save(txCtx)
+	if err != nil {
+		return err
+	}
+	if claimed == 0 {
+		return infraerrors.Conflict("CONFLICT", "subscription changed before refund revocation")
+	}
+	if err := s.subscriptionSvc.RevokeSubscription(txCtx, sub.ID); err != nil {
+		return err
+	}
+	revoked, err := tx.UserSubscription.Get(mixins.SkipSoftDelete(txCtx), sub.ID)
+	if err != nil {
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	p.revokedSubscription = revoked
+	s.invalidateRefundSubscriptionCaches(revoked)
+	return nil
+}
+
+func (s *PaymentService) restoreRefundSubscription(ctx context.Context, p *RefundPlan) error {
+	revoked := p.revokedSubscription
+	if revoked == nil {
+		_, err := s.subscriptionSvc.ExtendSubscription(ctx, p.SubscriptionID, p.SubDaysToDeduct)
+		return err
+	}
+	if revoked.DeletedAt == nil {
+		return errors.New("refund revocation snapshot has no deletion timestamp")
+	}
+	tx, err := s.entClient.Tx(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	txCtx := dbent.NewTxContext(ctx, tx)
+	claimed, err := tx.UserSubscription.Update().Where(
+		usersubscription.IDEQ(revoked.ID), usersubscription.DeletedAtEQ(*revoked.DeletedAt),
+		usersubscription.UpdatedAtEQ(revoked.UpdatedAt),
+		usersubscription.DailyResetVersionEQ(revoked.DailyResetVersion),
+	).SetUpdatedAt(time.Now()).Save(mixins.SkipSoftDelete(txCtx))
+	if err != nil {
+		return err
+	}
+	if claimed == 0 {
+		return infraerrors.Conflict("CONFLICT", "subscription changed after refund revocation")
+	}
+	// Restore only the deletion flag/status. The revocation did not change the
+	// expiry, usage windows, or paid daily-reset preferences, so adding days
+	// here would grant extra entitlement and could reset those preferences.
+	if _, err := s.subscriptionSvc.RestoreSubscription(txCtx, revoked.ID); err != nil {
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	p.revokedSubscription = nil
+	s.invalidateRefundSubscriptionCaches(revoked)
+	return nil
+}
+
+func (s *PaymentService) invalidateRefundSubscriptionCaches(sub *dbent.UserSubscription) {
+	// SubscriptionService also invalidates inside our transaction. Invalidate
+	// again after commit so a concurrent reader cannot leave its old snapshot.
+	if err := s.subscriptionSvc.invalidateSubscriptionCaches(sub.UserID, sub.GroupID); err != nil {
+		slog.Warn("invalidate committed refund subscription cache", "subID", sub.ID, "error", err)
+	}
+}
+
 func (s *PaymentService) RollbackRefund(ctx context.Context, p *RefundPlan, gErr error) bool {
 	if p.DeductionType == payment.DeductionTypeBalance && p.BalanceToDeduct > 0 {
 		if err := s.userRepo.UpdateBalance(ctx, p.Order.UserID, p.BalanceToDeduct); err != nil {
@@ -929,11 +1028,12 @@ func (s *PaymentService) RollbackRefund(ctx context.Context, p *RefundPlan, gErr
 		}
 	}
 	if p.DeductionType == payment.DeductionTypeSubscription && p.SubDaysToDeduct > 0 && p.SubscriptionID > 0 {
-		if _, err := s.subscriptionSvc.ExtendSubscription(ctx, p.SubscriptionID, p.SubDaysToDeduct); err != nil {
+		if err := s.restoreRefundSubscription(ctx, p); err != nil {
 			slog.Error("[CRITICAL] subscription rollback failed", "orderID", p.OrderID, "subID", p.SubscriptionID, "days", p.SubDaysToDeduct, "error", err)
 			s.writeAuditLog(ctx, p.OrderID, "REFUND_ROLLBACK_FAILED", "admin", map[string]any{"gatewayError": psErrMsg(gErr), "rollbackError": psErrMsg(err), "subDaysDeducted": p.SubDaysToDeduct})
 			return false
 		}
+		p.SubDaysToDeduct = 0
 	}
 	return true
 }

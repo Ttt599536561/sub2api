@@ -37,10 +37,56 @@ export interface RechargeBonusQuote {
   tier: RechargeBonusTier | null
 }
 
+interface DecimalAmount { coefficient: bigint; scale: number }
+
+// Parse the original inputs before arithmetic, as decimal.NewFromFloat does on
+// the backend. Adding an epsilon after multiplication loses real half-cent ties.
+function decimalAmount(value: number): DecimalAmount {
+  const [mantissa, exponent = '0'] = String(value).split('e')
+  const [whole, fraction = ''] = mantissa.split('.')
+  return { coefficient: BigInt(whole + fraction), scale: fraction.length - Number(exponent) }
+}
+
+function multiplyAmounts(left: DecimalAmount, right: DecimalAmount): DecimalAmount {
+  return { coefficient: left.coefficient * right.coefficient, scale: left.scale + right.scale }
+}
+
+function addAmounts(left: DecimalAmount, right: DecimalAmount, subtract = false): DecimalAmount {
+  const scale = Math.max(left.scale, right.scale)
+  return {
+    coefficient: left.coefficient * 10n ** BigInt(scale - left.scale)
+      + (subtract ? -1n : 1n) * right.coefficient * 10n ** BigInt(scale - right.scale),
+    scale,
+  }
+}
+
+function roundAmount(value: DecimalAmount, digits: number): DecimalAmount {
+  const power = digits - value.scale
+  if (power >= 0) return { coefficient: value.coefficient * 10n ** BigInt(power), scale: digits }
+  const divisor = 10n ** BigInt(-power)
+  const sign = value.coefficient < 0n ? -1n : 1n
+  return { coefficient: sign * ((sign * value.coefficient + divisor / 2n) / divisor), scale: digits }
+}
+
+function roundedNumber(value: DecimalAmount, digits = 2): number {
+  const rounded = roundAmount(value, digits)
+  return Number(`${rounded.coefficient}e${-rounded.scale}`)
+}
+
+function percentageAmount(amount: DecimalAmount, percent: DecimalAmount, digits = 2): number {
+  const product = multiplyAmounts(amount, percent)
+  // shopspring/decimal.Div(100) rounds to 16 places before Round(currencyDigits).
+  return roundedNumber(roundAmount({ ...product, scale: product.scale + 2 }, 16), digits)
+}
+
 export function roundRechargeAmount(value: number, digits = 2): number {
   if (!Number.isFinite(value)) return 0
-  const factor = 10 ** digits
-  return Math.round((value + Number.EPSILON) * factor) / factor
+  return roundedNumber(decimalAmount(value), digits)
+}
+
+export function multiplyAndRoundPaymentAmount(amount: number, multiplier: number, digits = 2): number {
+  if (!Number.isFinite(amount) || !Number.isFinite(multiplier)) return 0
+  return roundedNumber(multiplyAmounts(decimalAmount(amount), decimalAmount(multiplier)), digits)
 }
 
 function hasAtMostTwoDecimals(value: number): boolean {
@@ -141,7 +187,7 @@ export function matchRechargeBonusTier(tiers: RechargeBonusTier[], paymentAmount
 // 赠送额度 = 到账基数 × 百分比，保留两位小数；与后端 calculateRechargeBonus 一致。
 export function calculateRechargeBonus(baseCredited: number, percent: number): number {
   if (!Number.isFinite(baseCredited) || !Number.isFinite(percent) || baseCredited <= 0 || percent <= 0) return 0
-  return roundRechargeAmount((baseCredited * percent) / 100)
+  return percentageAmount(decimalAmount(baseCredited), decimalAmount(percent))
 }
 
 export interface RechargeBonusQuoteOptions {
@@ -163,25 +209,25 @@ export function quoteRechargeBonus(
   const amount = Number.isFinite(paymentAmount) && paymentAmount > 0 ? paymentAmount : 0
   const rate = typeof opts.multiplier === 'number' && Number.isFinite(opts.multiplier) && opts.multiplier > 0 ? opts.multiplier : 1
   const digits = typeof opts.currencyDigits === 'number' && Number.isInteger(opts.currencyDigits) && opts.currencyDigits >= 0 ? opts.currencyDigits : 2
-  const base = roundRechargeAmount(amount * rate)
+  const base = multiplyAndRoundPaymentAmount(amount, rate)
   const quote: RechargeBonusQuote = { mode, percent: 0, payBase: amount, base, bonus: 0, credited: base, tier: null }
   const tier = matchRechargeBonusTier(tiers, amount)
   if (!tier || tier.bonus_percent <= 0) return quote
   quote.tier = tier
   if (mode === 'discount') {
     if (tier.bonus_percent >= 100) return quote
-    const payBase = roundRechargeAmount((amount * (100 - tier.bonus_percent)) / 100, digits)
+    const payBase = percentageAmount(decimalAmount(amount), addAmounts(decimalAmount(100), decimalAmount(tier.bonus_percent), true), digits)
     if (payBase <= 0 || payBase >= amount) return quote
-    const paidCredit = roundRechargeAmount(payBase * rate)
+    const paidCredit = multiplyAndRoundPaymentAmount(payBase, rate)
     quote.payBase = payBase
-    quote.bonus = Math.max(0, roundRechargeAmount(base - paidCredit))
+    quote.bonus = Math.max(0, roundedNumber(addAmounts(decimalAmount(base), decimalAmount(paidCredit), true)))
     quote.percent = tier.bonus_percent
     return quote
   }
   const bonus = calculateRechargeBonus(base, tier.bonus_percent)
   if (bonus <= 0) return quote
   quote.bonus = bonus
-  quote.credited = roundRechargeAmount(base + bonus)
+  quote.credited = roundedNumber(addAmounts(decimalAmount(base), decimalAmount(bonus)))
   quote.percent = tier.bonus_percent
   return quote
 }

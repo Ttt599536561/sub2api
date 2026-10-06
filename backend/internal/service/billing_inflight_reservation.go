@@ -429,14 +429,30 @@ func inflightBillingModelCandidates(ctx context.Context, deps inflightEstimateDe
 	if apiKey == nil || apiKey.GroupID == nil {
 		return primary, nil, upstreamInput
 	}
+	// Composite WebSocket ingress retains the public alias in the frame, while
+	// forwarding and billing use the already-resolved route before channel and
+	// account mappings. HTTP ingress may already have rewritten model to that
+	// route target. Do not resolve a new route here or use a stale decision for
+	// another model (for example after a group fallback).
+	if apiKey.Group != nil && apiKey.Group.Platform == PlatformComposite {
+		if routed, ok := ResolvedUpstreamModelFromContext(ctx); ok {
+			public, _ := RequestedPublicModelFromContext(ctx)
+			if model == public || model == routed {
+				upstreamInput = routed
+				if routed != model {
+					primary = append(primary, routed)
+				}
+			}
+		}
+	}
 	if deps.resolveMapping != nil {
-		m := deps.resolveMapping(ctx, *apiKey.GroupID, model)
-		if mapped := m.MappedModel; mapped != "" && mapped != model {
+		m := deps.resolveMapping(ctx, *apiKey.GroupID, upstreamInput)
+		if mapped := m.MappedModel; mapped != "" && mapped != upstreamInput {
 			upstreamInput = mapped
 			if m.BillingModelSource == BillingModelSourceRequested {
 				fallbacks = append(fallbacks, mapped)
 			} else {
-				primary = []string{mapped, model}
+				primary = append([]string{mapped}, primary...)
 			}
 		}
 	}
@@ -522,7 +538,16 @@ func (d inflightEstimateDeps) estimateOne(ctx context.Context, apiKey *APIKey, m
 		if pricing == nil {
 			return 0
 		}
-		return (float64(inputTokens)*pricing.InputPricePerToken + float64(outputTokens)*pricing.OutputPricePerToken) * textRate
+		pricingAt, hasPricingAt := gatewayTokenRequestPricingAtFromContext(ctx)
+		if !hasPricingAt && ctx != nil {
+			pricingAt, hasPricingAt = openAIPricingAtFromContext(ctx)
+		}
+		if !hasPricingAt {
+			pricingAt = timezone.Now()
+		}
+		// Time pricing is supported only for channel token prices. Reuse the
+		// settlement multiplier without applying it to per-request/media prices.
+		return (float64(inputTokens)*pricing.InputPricePerToken + float64(outputTokens)*pricing.OutputPricePerToken) * textRate * resolvedChannelTimeMultiplier(resolved, pricingAt)
 	}
 
 	var cost float64
@@ -712,7 +737,9 @@ func (s *OpenAIGatewayService) inflightEstimateDeps() inflightEstimateDeps {
 			},
 			func(ctx context.Context, apiKey *APIKey, model string) (string, bool, bool) {
 				platform := PlatformOpenAI
-				if apiKey.Group != nil && apiKey.Group.Platform != "" && apiKey.Group.Platform != PlatformComposite {
+				if resolved, ok := ResolvedTargetPlatformFromContext(ctx); ok {
+					platform = resolved
+				} else if apiKey.Group != nil && apiKey.Group.Platform != "" && apiKey.Group.Platform != PlatformComposite {
 					platform = apiKey.Group.Platform
 				}
 				return NormalizeOpenAICompatiblePlatform(platform), false, true

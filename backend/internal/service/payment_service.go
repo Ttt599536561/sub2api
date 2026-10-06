@@ -134,6 +134,8 @@ type RefundPlan struct {
 	BalanceToDeduct float64
 	SubDaysToDeduct int
 	SubscriptionID  int64
+	// Set only when this attempt revoked the subscription instead of shortening it.
+	revokedSubscription *dbent.UserSubscription
 }
 
 type RefundResult struct {

@@ -22,7 +22,7 @@ vi.mock('@/stores/subscriptions', () => ({ useSubscriptionStore: () => ({ active
 vi.mock('@/stores', () => ({ useAppStore: () => ({ showError: vi.fn(), showInfo: vi.fn(), showWarning: vi.fn() }) }))
 vi.mock('@/api/payment', () => ({ paymentAPI: { getCheckoutInfo } }))
 
-async function mountPayment(options: { alipay?: Partial<MethodLimit>; stripe?: Partial<MethodLimit>; fee?: number; discount?: boolean } = {}) {
+async function mountPayment(options: { alipay?: Partial<MethodLimit>; stripe?: Partial<MethodLimit>; fee?: number; discount?: boolean; percent?: number } = {}) {
   const method: MethodLimit = { daily_limit: 0, daily_used: 0, daily_remaining: 0, single_min: 0, single_max: 0, fee_rate: 0, available: true }
   const checkout: CheckoutInfoResponse = {
     methods: {
@@ -32,7 +32,7 @@ async function mountPayment(options: { alipay?: Partial<MethodLimit>; stripe?: P
     global_min: 0, global_max: 0, plans: [], balance_disabled: false,
     balance_recharge_multiplier: 1, subscription_usd_to_cny_rate: 0,
     recharge_fee_rate: options.fee ?? 0, recharge_bonus_mode: 'discount',
-    recharge_bonus_tiers: options.discount === false ? [] : [{ min_amount: 0, bonus_percent: 15 }],
+    recharge_bonus_tiers: options.discount === false ? [] : [{ min_amount: 0, bonus_percent: options.percent ?? 15 }],
     help_text: '', help_image_url: '', stripe_publishable_key: ''
   }
   getCheckoutInfo.mockResolvedValue({ data: checkout })
@@ -45,6 +45,25 @@ async function mountPayment(options: { alipay?: Partial<MethodLimit>; stripe?: P
 
 describe('discounted recharge method currency limits', () => {
   afterEach(() => localStorage.clear())
+
+  it.each([
+    { min: 10.08, max: 10.08, available: true },
+    { min: 0, max: 10.07, available: false },
+  ])('checks the decimal-rounded discount against limits $min–$max', async ({ min, max, available }) => {
+    const wrapper = await mountPayment({
+      alipay: { single_min: min, single_max: max },
+      stripe: { available: false }, percent: 50,
+    })
+    try {
+      wrapper.getComponent(AmountInput).vm.$emit('update:modelValue', 20.15)
+      await flushPromises()
+      expect(wrapper.getComponent(PaymentMethodSelector).props('methods').find(item => item.type === 'alipay'))
+        .toMatchObject({ available })
+      expect(wrapper.text()).toContain(formatPaymentAmount(10.08, 'CNY', 'en'))
+    } finally {
+      wrapper.unmount()
+    }
+  })
 
   it.each([
     { title: 'keeps the current CNY method and enables the alternative JPY method', max: 0, selected: 'alipay' },
