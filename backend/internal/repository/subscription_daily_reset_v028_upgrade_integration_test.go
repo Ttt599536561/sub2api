@@ -10,7 +10,6 @@ import (
 	"io/fs"
 	"strings"
 	"testing"
-	"testing/fstest"
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/migrations"
@@ -19,8 +18,14 @@ import (
 )
 
 // Reproduce the deployed custom v0.2.7 migration history, including custom 239
-// and 240 filenames, before adding the official v0.2.8 files with those prefixes.
+// and 240 filenames, before applying the current official and custom migrations.
 func TestSubscriptionDailyResetUpgradeV028_PreservesDeployedCustomStateAndHistory(t *testing.T) {
+	testDeployedCustomUpgrade(t, customV027MigrationBaseline)
+}
+
+func testDeployedCustomUpgrade(t *testing.T, baseline migrationUpgradeBaseline) {
+	t.Helper()
+	previous := migrationUpgradeFixture(t, baseline)
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
 	container, err := tcpostgres.Run(ctx, selectDockerImage(ctx, postgresImageTag),
@@ -38,29 +43,15 @@ func TestSubscriptionDailyResetUpgradeV028_PreservesDeployedCustomStateAndHistor
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = db.Close() })
 
-	const moderationMigration = "238b_content_moderation_engine_meta.sql"
 	const pricingMigration = "239_channel_reasoning_effort_multipliers.sql"
-	const affiliateMigration = "240_affiliate_ledger_operation_id.sql"
-	previous := fstest.MapFS{}
-	baseline := sha256.New()
 	files, err := fs.Glob(migrations.FS, "*.sql")
 	require.NoError(t, err)
-	for _, name := range files {
-		if name == moderationMigration || name == pricingMigration || name == affiliateMigration {
-			continue
-		}
-		contents, readErr := migrations.FS.ReadFile(name)
-		require.NoError(t, readErr)
-		previous[name] = &fstest.MapFile{Data: contents}
-		_, err = fmt.Fprintf(baseline, "%s\x00%s\x00", name, strings.TrimSpace(string(contents)))
-		require.NoError(t, err)
-	}
-	// Pin the actual deployed custom baseline, so an edited historical SQL file
-	// cannot silently replace the fixture or its expected recorded checksum.
-	require.Len(t, previous, 289)
-	require.Equal(t, "47bd915b3a9b9baf8b145c432617b26082f138dcc34170ccfeabdd4079484648",
-		fmt.Sprintf("%x", baseline.Sum(nil)), "custom 713d2852e migration fixture changed; re-audit the deployed baseline")
 	require.NoError(t, applyMigrationsFS(ctx, db, previous))
+	_, hasV028Migrations := previous[pricingMigration]
+	pricing := `[{"model":"gpt-5.5","max_reasoning_effort_multiplier":1.75}]`
+	if hasV028Migrations {
+		pricing = `[{"model":"gpt-5.5","reasoning_effort_multipliers":{"high":1.5,"max":1.75}}]`
+	}
 
 	var userID, groupID, subscriptionID, orderID int64
 	require.NoError(t, db.QueryRowContext(ctx, `INSERT INTO users
@@ -68,8 +59,7 @@ func TestSubscriptionDailyResetUpgradeV028_PreservesDeployedCustomStateAndHistor
 		RETURNING id`).Scan(&userID))
 	require.NoError(t, db.QueryRowContext(ctx, `INSERT INTO groups
 		(name,status,subscription_type,daily_limit_usd,weekly_limit_usd,monthly_limit_usd,allow_subscription_day_reset,model_pricing)
-		VALUES ('custom-upgrade-v028','active','subscription',100,1000,5000,true,
-		'[{"model":"gpt-5.5","max_reasoning_effort_multiplier":1.75}]') RETURNING id`).Scan(&groupID))
+		VALUES ('custom-upgrade-v028','active','subscription',100,1000,5000,true,$1) RETURNING id`, pricing).Scan(&groupID))
 	require.NoError(t, db.QueryRowContext(ctx, `INSERT INTO user_subscriptions
 		(user_id,group_id,starts_at,expires_at,status,daily_window_start,weekly_window_start,monthly_window_start,
 		daily_usage_usd,weekly_usage_usd,monthly_usage_usd,auto_daily_reset_enabled,daily_reset_version,preserve_calendar_daily_reset)
@@ -117,6 +107,22 @@ func TestSubscriptionDailyResetUpgradeV028_PreservesDeployedCustomStateAndHistor
 		(order_id,user_id,order_amount,paid_amount_cny,paid_at,granted_draws)
 		SELECT id,user_id,amount,pay_amount,paid_at,2 FROM payment_orders WHERE id=$1`, orderID)
 	require.NoError(t, err)
+	_, err = db.ExecContext(ctx, `UPDATE welfare_subscription_rewards SET reversed_draws=1,
+		refunded_amount_cny=25,refund_amount=1.75,refund_status='PARTIALLY_REFUNDED',
+		refund_reason='existing partial refund',refund_processed_at=now() WHERE order_id=$1`, orderID)
+	require.NoError(t, err)
+	_, err = db.ExecContext(ctx, `UPDATE payment_orders SET status='PARTIALLY_REFUNDED',
+		refund_amount=1.75,refund_reason='existing partial refund',refund_at=now() WHERE id=$1`, orderID)
+	require.NoError(t, err)
+	_, err = db.ExecContext(ctx, `UPDATE welfare_wallets SET subscription_draws=1 WHERE user_id=$1`, userID)
+	require.NoError(t, err)
+	_, err = db.ExecContext(ctx, `INSERT INTO payment_audit_logs (order_id,action,detail)
+		VALUES($1,'REFUND_SUCCESS','{"refund_amount":1.75}')`, fmt.Sprint(orderID))
+	require.NoError(t, err)
+	_, err = db.ExecContext(ctx, `INSERT INTO payment_orders
+		(user_id,amount,pay_amount,order_type,status,paid_at,completed_at,expires_at,out_trade_no)
+		VALUES($1,50,50,'balance','COMPLETED',now(),now(),now()+interval '1 hour','existing-balance-order')`, userID)
+	require.NoError(t, err)
 	_, err = db.ExecContext(ctx, `INSERT INTO welfare_balance_outbox (user_id,version,attempts,last_error)
 		VALUES($1,4,1,'previous delivery retry')`, userID)
 	require.NoError(t, err)
@@ -126,6 +132,26 @@ func TestSubscriptionDailyResetUpgradeV028_PreservesDeployedCustomStateAndHistor
 	_, err = db.ExecContext(ctx, `INSERT INTO user_affiliate_ledger (user_id,action,amount,source_order_id)
 		VALUES($1,'accrue',5,$2)`, userID, orderID)
 	require.NoError(t, err)
+	if hasV028Migrations {
+		_, err = db.ExecContext(ctx, `UPDATE content_moderation_logs SET engine_meta='{"engine":"existing-custom-engine"}' WHERE request_id='existing-moderation-request'`)
+		require.NoError(t, err)
+		_, err = db.ExecContext(ctx, `UPDATE user_affiliate_ledger SET operation_id='existing-affiliate-operation' WHERE user_id=$1`, userID)
+		require.NoError(t, err)
+	}
+	// Preserve every already supported platform while the new migration widens
+	// both CHECK constraints. A fresh installation alone cannot exercise this.
+	for _, platform := range []string{"anthropic", "openai", "gemini", "antigravity", "grok", "kimi", "zhipu", "deepseek", "minimax", "opencode_go"} {
+		_, err = db.ExecContext(ctx, `INSERT INTO user_platform_quotas (user_id,platform,daily_limit_usd,daily_usage_usd)
+			VALUES($1,$2,100,12.5)`, userID, platform)
+		require.NoError(t, err)
+		_, err = db.ExecContext(ctx, `INSERT INTO composite_model_routes (group_id,public_model,target_platform,upstream_model)
+			VALUES($1,$2,$2,'existing-upstream-model')`, groupID, platform)
+		require.NoError(t, err)
+	}
+	_, err = db.ExecContext(ctx, `INSERT INTO user_platform_quotas (user_id,platform) VALUES($1,'typesafe')`, userID)
+	require.ErrorContains(t, err, "user_platform_quotas_platform_check", "the source fixture must predate TypeSafe support")
+	_, err = db.ExecContext(ctx, `INSERT INTO composite_model_routes (group_id,public_model,target_platform) VALUES($1,'typesafe','typesafe')`, groupID)
+	require.ErrorContains(t, err, "composite_model_routes_target_platform_check", "the source fixture must predate TypeSafe support")
 
 	snapshot := func(query string) string {
 		t.Helper()
@@ -139,7 +165,8 @@ func TestSubscriptionDailyResetUpgradeV028_PreservesDeployedCustomStateAndHistor
 		"subscriptions":        "SELECT jsonb_agg(to_jsonb(t) ORDER BY id)::text FROM user_subscriptions t",
 		"reset_events":         "SELECT jsonb_agg(to_jsonb(t) ORDER BY id)::text FROM subscription_daily_reset_events t",
 		"keys":                 "SELECT jsonb_agg(to_jsonb(t) ORDER BY id)::text FROM api_keys t",
-		"orders":               "SELECT jsonb_agg(to_jsonb(t) ORDER BY id)::text FROM payment_orders t",
+		"orders":               "SELECT jsonb_agg(to_jsonb(t)-'bonus_amount' ORDER BY id)::text FROM payment_orders t",
+		"payment_audit":        "SELECT jsonb_agg(to_jsonb(t) ORDER BY id)::text FROM payment_audit_logs t",
 		"programs":             "SELECT jsonb_agg(to_jsonb(t) ORDER BY id)::text FROM welfare_programs t",
 		"wallets":              "SELECT jsonb_agg(to_jsonb(t) ORDER BY user_id)::text FROM welfare_wallets t",
 		"operations":           "SELECT jsonb_agg(to_jsonb(t) ORDER BY id)::text FROM welfare_operations t",
@@ -150,7 +177,14 @@ func TestSubscriptionDailyResetUpgradeV028_PreservesDeployedCustomStateAndHistor
 		"outbox":               "SELECT jsonb_agg(to_jsonb(t) ORDER BY id)::text FROM welfare_balance_outbox t",
 		"moderation":           "SELECT jsonb_agg(to_jsonb(t)-'engine_meta' ORDER BY id)::text FROM content_moderation_logs t",
 		"affiliate_ledger":     "SELECT jsonb_agg(to_jsonb(t)-'operation_id' ORDER BY id)::text FROM user_affiliate_ledger t",
-		"migration_history":    "SELECT jsonb_agg(to_jsonb(t) ORDER BY filename)::text FROM schema_migrations t WHERE filename NOT IN ('238b_content_moderation_engine_meta.sql','239_channel_reasoning_effort_multipliers.sql','240_affiliate_ledger_operation_id.sql')",
+		"platform_quotas":      "SELECT jsonb_agg(to_jsonb(t) ORDER BY id)::text FROM user_platform_quotas t",
+		"composite_routes":     "SELECT jsonb_agg(to_jsonb(t) ORDER BY id)::text FROM composite_model_routes t",
+		"migration_history":    migrationUpgradeHistoryQuery(t, previous),
+	}
+	if hasV028Migrations {
+		queries["groups"] = "SELECT jsonb_agg(to_jsonb(t) ORDER BY id)::text FROM groups t"
+		queries["moderation"] = "SELECT jsonb_agg(to_jsonb(t) ORDER BY id)::text FROM content_moderation_logs t"
+		queries["affiliate_ledger"] = "SELECT jsonb_agg(to_jsonb(t) ORDER BY id)::text FROM user_affiliate_ledger t"
 	}
 	before := map[string]string{}
 	for name, query := range queries {
@@ -161,12 +195,16 @@ func TestSubscriptionDailyResetUpgradeV028_PreservesDeployedCustomStateAndHistor
 	for name, query := range queries {
 		require.JSONEq(t, before[name], snapshot(query), "%s must survive the deployed custom upgrade unchanged", name)
 	}
-	// The official pricing migration still consumes the old custom multiplier.
-	require.JSONEq(t, `[{"model":"gpt-5.5","reasoning_effort_multipliers":{"max":1.75}}]`,
-		snapshot("SELECT model_pricing::text FROM groups WHERE name='custom-upgrade-v028'"))
-	require.Equal(t, "1", snapshot("SELECT count(*)::text FROM content_moderation_logs WHERE engine_meta IS NULL"))
-	require.Equal(t, "1", snapshot("SELECT count(*)::text FROM user_affiliate_ledger WHERE operation_id IS NULL"))
-	require.Equal(t, "292", snapshot("SELECT count(*)::text FROM schema_migrations"))
+	if !hasV028Migrations {
+		// The official v0.2.8 pricing migration still consumes the old multiplier.
+		require.JSONEq(t, `[{"model":"gpt-5.5","reasoning_effort_multipliers":{"max":1.75}}]`,
+			snapshot("SELECT model_pricing::text FROM groups WHERE name='custom-upgrade-v028'"))
+		require.Equal(t, "1", snapshot("SELECT count(*)::text FROM content_moderation_logs WHERE engine_meta IS NULL"))
+		require.Equal(t, "1", snapshot("SELECT count(*)::text FROM user_affiliate_ledger WHERE operation_id IS NULL"))
+	}
+	require.Equal(t, fmt.Sprint(len(files)), snapshot("SELECT count(*)::text FROM schema_migrations"))
+	require.Equal(t, "2", snapshot("SELECT count(*)::text FROM payment_orders WHERE bonus_amount=0"),
+		"the upgrade must not grant synthetic bonuses to historical subscription or balance orders")
 	for _, name := range files {
 		contents, readErr := migrations.FS.ReadFile(name)
 		require.NoError(t, readErr)
@@ -174,11 +212,27 @@ func TestSubscriptionDailyResetUpgradeV028_PreservesDeployedCustomStateAndHistor
 		require.NoError(t, db.QueryRowContext(ctx, "SELECT checksum FROM schema_migrations WHERE filename=$1", name).Scan(&checksum))
 		require.Equal(t, fmt.Sprintf("%x", sha256.Sum256([]byte(strings.TrimSpace(string(contents))))), checksum, "%s", name)
 	}
+	// The two new migrations share 241: both must have applied. New platform
+	// rows work, unsupported platforms remain rejected, and a later startup
+	// must preserve an explicitly set bonus rather than reset it to the default.
+	_, err = db.ExecContext(ctx, `INSERT INTO user_platform_quotas (user_id,platform) VALUES($1,'typesafe')`, userID)
+	require.NoError(t, err)
+	_, err = db.ExecContext(ctx, `INSERT INTO composite_model_routes (group_id,public_model,target_platform) VALUES($1,'typesafe','typesafe')`, groupID)
+	require.NoError(t, err)
+	_, err = db.ExecContext(ctx, `INSERT INTO user_platform_quotas (user_id,platform) VALUES($1,'invalid_platform')`, userID)
+	require.ErrorContains(t, err, "user_platform_quotas_platform_check")
+	_, err = db.ExecContext(ctx, `INSERT INTO composite_model_routes (group_id,public_model,target_platform) VALUES($1,'invalid','invalid_platform')`, groupID)
+	require.ErrorContains(t, err, "composite_model_routes_target_platform_check")
+	_, err = db.ExecContext(ctx, `INSERT INTO payment_orders
+		(user_id,amount,pay_amount,bonus_amount,order_type,status,paid_at,completed_at,expires_at,out_trade_no)
+		VALUES($1,110,100,10,'balance','COMPLETED',now(),now(),now()+interval '1 hour','post-upgrade-bonus-order')`, userID)
+	require.NoError(t, err)
 
 	// A later startup preserves both the old history and all newly recorded rows.
 	queries["groups"] = "SELECT jsonb_agg(to_jsonb(t) ORDER BY id)::text FROM groups t"
 	queries["moderation"] = "SELECT jsonb_agg(to_jsonb(t) ORDER BY id)::text FROM content_moderation_logs t"
 	queries["affiliate_ledger"] = "SELECT jsonb_agg(to_jsonb(t) ORDER BY id)::text FROM user_affiliate_ledger t"
+	queries["orders"] = "SELECT jsonb_agg(to_jsonb(t) ORDER BY id)::text FROM payment_orders t"
 	queries["migration_history"] = "SELECT jsonb_agg(to_jsonb(t) ORDER BY filename)::text FROM schema_migrations t"
 	for name, query := range queries {
 		before[name] = snapshot(query)

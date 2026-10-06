@@ -9,13 +9,14 @@ import {
   type DefaultPlatformQuotasMap,
 } from "@/api/admin/settings";
 
-/** 全 null 的 5 平台 map，用于断言归一化默认值 */
+/** 全 null 的 6 平台 map，用于断言归一化默认值 */
 const allNullQuotas: DefaultPlatformQuotasMap = {
   anthropic: { daily: null, weekly: null, monthly: null },
   openai:    { daily: null, weekly: null, monthly: null },
   gemini:    { daily: null, weekly: null, monthly: null },
   antigravity: { daily: null, weekly: null, monthly: null },
   grok: { daily: null, weekly: null, monthly: null },
+  typesafe: { daily: null, weekly: null, monthly: null },
 }
 
 describe("admin settings auth source defaults helpers", () => {
@@ -95,6 +96,21 @@ describe("admin settings auth source defaults helpers", () => {
     // 未出现的平台（gemini/antigravity）归一化为 null
     expect(state.email.platform_quotas.gemini).toEqual({ daily: null, weekly: null, monthly: null });
     expect(state.email.platform_quotas.antigravity).toEqual({ daily: null, weekly: null, monthly: null });
+    expect(state.email.platform_quotas.typesafe).toEqual({ daily: null, weekly: null, monthly: null });
+  });
+
+  it("preserves TypeSafe quota defaults through loading and saving settings", () => {
+    const typesafeQuotas = { daily: 12.5, weekly: 0, monthly: null };
+    const state = buildAuthSourceDefaultsState({
+      auth_source_default_email_platform_quotas: { typesafe: typesafeQuotas },
+    });
+
+    expect(state.email.platform_quotas).toEqual({ ...allNullQuotas, typesafe: typesafeQuotas });
+
+    const payload: UpdateSettingsRequest = {};
+    appendAuthSourceDefaultsToUpdateRequest(payload, state);
+    expect(payload.auth_source_default_email_platform_quotas).toEqual({ ...allNullQuotas, typesafe: typesafeQuotas });
+    expect(payload.auth_source_default_linuxdo_platform_quotas).toEqual(allNullQuotas);
   });
 
   it("appends auth source defaults back onto update payload", () => {
@@ -238,14 +254,12 @@ describe("normalizePlatformQuotasMap", () => {
     expect(result.gemini).toEqual({ daily: null, weekly: null, monthly: null });
     expect(result.antigravity).toEqual({ daily: null, weekly: null, monthly: null });
     expect(result.grok).toEqual({ daily: null, weekly: null, monthly: null });
+    expect(result.typesafe).toEqual({ daily: null, weekly: null, monthly: null });
   });
 
-  it("无参数时返回全 5 平台全 null", () => {
+  it("无参数时返回全 6 平台全 null", () => {
     const result = normalizePlatformQuotasMap();
-    expect(Object.keys(result)).toHaveLength(5);
-    for (const v of Object.values(result)) {
-      expect(v).toEqual({ daily: null, weekly: null, monthly: null });
-    }
+    expect(result).toEqual(allNullQuotas);
   });
 
   it("非 number 类型的值归一化为 null", () => {
@@ -288,11 +302,15 @@ describe("sanitizePlatformQuotasMap", () => {
     expect(result.gemini?.weekly).toBe(null);
   });
 
+  it("清洗 TypeSafe 的无效额度且保留平台", () => {
+    const result = sanitizePlatformQuotasMap({
+      typesafe: { daily: -1, weekly: NaN, monthly: Infinity },
+    });
+    expect(result.typesafe).toEqual({ daily: null, weekly: null, monthly: null });
+  });
+
   it("缺失平台填充为全 null", () => {
     const result = sanitizePlatformQuotasMap({});
-    expect(Object.keys(result)).toHaveLength(5);
-    for (const v of Object.values(result)) {
-      expect(v).toEqual({ daily: null, weekly: null, monthly: null });
-    }
+    expect(result).toEqual(allNullQuotas);
   });
 });

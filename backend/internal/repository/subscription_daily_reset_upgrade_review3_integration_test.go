@@ -10,7 +10,6 @@ import (
 	"io/fs"
 	"strings"
 	"testing"
-	"testing/fstest"
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/migrations"
@@ -18,10 +17,24 @@ import (
 	tcpostgres "github.com/testcontainers/testcontainers-go/modules/postgres"
 )
 
+func migrationUpgradeHistoryQuery(t *testing.T, fixture fs.FS) string {
+	t.Helper()
+	names, err := fs.Glob(fixture, "*.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i, name := range names {
+		names[i] = "'" + strings.ReplaceAll(name, "'", "''") + "'"
+	}
+	return "SELECT jsonb_agg(to_jsonb(t) ORDER BY filename)::text FROM schema_migrations t WHERE filename IN (" + strings.Join(names, ",") + ")"
+}
+
 // Start from the upstream migration set, with existing customer data, rather
 // than merely checking that the customized schema installs into an empty DB.
-// All upstream SQL files are unchanged relative to upstream a3eb7ef302 (0.2.8).
+// The source fixture stays pinned to upstream a3eb7ef302 (0.2.8), even as
+// ApplyMigrations gains new official files in later releases.
 func TestSubscriptionDailyResetUpgradeReview3_ExistingUpstreamDataAndMigrationHistory(t *testing.T) {
+	upstream := migrationUpgradeFixture(t, upstreamV028MigrationBaseline)
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
 	container, err := tcpostgres.Run(ctx, selectDockerImage(ctx, postgresImageTag),
@@ -42,25 +55,6 @@ func TestSubscriptionDailyResetUpgradeReview3_ExistingUpstreamDataAndMigrationHi
 	const customMigration = "235_subscription_daily_reset.sql"
 	const welfareMigration = "239_welfare_center.sql"
 	const subscriptionRewardsMigration = "240_welfare_subscription_rewards.sql"
-	upstream := fstest.MapFS{}
-	baseline := sha256.New()
-	files, err := fs.Glob(migrations.FS, "*.sql")
-	require.NoError(t, err)
-	for _, name := range files {
-		if name == customMigration || name == welfareMigration || name == subscriptionRewardsMigration {
-			continue
-		}
-		contents, readErr := migrations.FS.ReadFile(name)
-		require.NoError(t, readErr)
-		upstream[name] = &fstest.MapFile{Data: contents}
-		_, err = fmt.Fprintf(baseline, "%s\x00%s\x00", name, strings.TrimSpace(string(contents)))
-		require.NoError(t, err)
-	}
-	// Pin the fixture to the audited upstream commit. Future upstream merges must
-	// explicitly refresh this baseline instead of silently changing what we test.
-	require.Len(t, upstream, 289)
-	require.Equal(t, "6075250885f45555d7671005dc80db75c8848e9066a0cc3d291cd36a80c30947",
-		fmt.Sprintf("%x", baseline.Sum(nil)), "upstream a3eb7ef302 migration fixture changed; re-audit the upgrade baseline")
 	require.NoError(t, applyMigrationsFS(ctx, db, upstream))
 
 	// These are old-schema writes: none mentions a customized field.
@@ -90,7 +84,7 @@ func TestSubscriptionDailyResetUpgradeReview3_ExistingUpstreamDataAndMigrationHi
 		"groups":            "SELECT jsonb_agg(to_jsonb(t)-'allow_subscription_day_reset' ORDER BY id)::text FROM groups t",
 		"subscriptions":     "SELECT jsonb_agg(to_jsonb(t)-ARRAY['auto_daily_reset_enabled','daily_reset_version','preserve_calendar_daily_reset'] ORDER BY id)::text FROM user_subscriptions t",
 		"keys":              "SELECT jsonb_agg(to_jsonb(t) ORDER BY id)::text FROM api_keys t",
-		"migration_history": "SELECT jsonb_agg(to_jsonb(t) ORDER BY filename)::text FROM schema_migrations t WHERE filename NOT IN ('235_subscription_daily_reset.sql', '239_welfare_center.sql', '240_welfare_subscription_rewards.sql')",
+		"migration_history": migrationUpgradeHistoryQuery(t, upstream),
 	}
 	before := map[string]string{}
 	for name, query := range queries {
