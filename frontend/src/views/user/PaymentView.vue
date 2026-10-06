@@ -279,7 +279,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
@@ -305,9 +305,12 @@ import {
   buildCreateOrderPayload,
   clearPaymentRecoverySnapshot,
   decidePaymentLaunch,
+  getPaymentRecoveryIdentity,
+  isPaymentRecoveryIdentityCurrent,
   getVisibleMethods,
   normalizeVisibleMethod,
   readPaymentRecoverySnapshot,
+  type PaymentRecoveryIdentity,
   type PaymentRecoverySnapshot,
   writePaymentRecoverySnapshot,
 } from '@/components/payment/paymentFlow'
@@ -422,8 +425,9 @@ function waitForWeixinJSBridge(timeoutMs = 4000): Promise<WeixinJSBridgeLike | n
   })
 }
 
-async function invokeWechatJsapiPayment(payload: Record<string, unknown>): Promise<Record<string, unknown>> {
+async function invokeWechatJsapiPayment(payload: Record<string, unknown>, owner: PaymentRecoveryIdentity): Promise<Record<string, unknown>> {
   const bridge = await waitForWeixinJSBridge()
+  if (!isPaymentRecoveryIdentityCurrent(owner)) throw new Error('AUTH_SESSION_CHANGED')
   if (!bridge) {
     throw new Error('WECHAT_JSAPI_UNAVAILABLE')
   }
@@ -433,6 +437,25 @@ async function invokeWechatJsapiPayment(payload: Record<string, unknown>): Promi
 }
 
 const paymentState = ref<PaymentRecoverySnapshot>(emptyPaymentState())
+let paymentOwner = getPaymentRecoveryIdentity()
+
+function invalidateChangedPaymentIdentity() {
+  if (isPaymentRecoveryIdentityCurrent(paymentOwner)) return
+  paymentOwner = getPaymentRecoveryIdentity()
+  // Do not erase shared storage: the other tab may already own a newer order.
+  paymentPhase.value = 'select'
+  paymentState.value = emptyPaymentState()
+  selectedPlan.value = null
+  submitting.value = false
+}
+
+function onPaymentStorageChange(event: StorageEvent) {
+  if (!event.key || ['auth_user', 'auth_session_id'].includes(event.key)) invalidateChangedPaymentIdentity()
+}
+
+watch([() => authStore.user?.id, () => authStore.sessionRevision], invalidateChangedPaymentIdentity, { flush: 'sync' })
+onMounted(() => window.addEventListener('storage', onPaymentStorageChange))
+onBeforeUnmount(() => window.removeEventListener('storage', onPaymentStorageChange))
 
 function persistRecoverySnapshot(snapshot: PaymentRecoverySnapshot) {
   if (typeof window === 'undefined' || !snapshot.orderId) return
@@ -753,10 +776,14 @@ const canSubmitSubscription = computed(() =>
     && selectedLimit.value?.available !== false
 )
 
-// Auto-switch to first available method when current selection can't handle the amount
-watch(() => [totalAmount.value, selectedMethod.value] as const, ([amt, method]) => {
-  if (amt <= 0 || amountFitsMethod(amt, method)) return
-  const available = methodOptions.value.find((option) => option.available)
+// Only the active checkout's quote may change its payment method.
+watch([
+  () => activeTab.value === 'subscription' ? subMethodOptions.value : methodOptions.value,
+  selectedMethod,
+], ([options, method]) => {
+  if (activeTab.value === 'subscription' && !selectedPlan.value) return
+  if (options.find((option) => option.type === method)?.available) return
+  const available = options.find((option) => option.available)
   if (available) selectedMethod.value = available.type
 })
 
@@ -824,6 +851,8 @@ async function confirmSubscribe() {
 }
 
 async function createOrder(orderAmount: number, orderType: OrderType, planId?: number, options: CreateOrderOptions = {}) {
+  const owner = getPaymentRecoveryIdentity()
+  paymentOwner = owner
   submitting.value = true
   errorMessage.value = ''
   errorHintMessage.value = ''
@@ -848,6 +877,7 @@ async function createOrder(orderAmount: number, orderType: OrderType, planId?: n
     }
 
     const result = await paymentStore.createOrder(payload) as CreateOrderResult & { resume_token?: string }
+    if (!isPaymentRecoveryIdentityCurrent(owner)) return
     const openWindow = (url: string) => {
       const win = window.open(url, 'paymentPopup', getPaymentPopupFeatures())
       if (!win || win.closed) {
@@ -926,7 +956,8 @@ async function createOrder(orderAmount: number, orderType: OrderType, planId?: n
     }
     if (decision.kind === 'wechat_jsapi' && decision.jsapi) {
       try {
-        const jsapiResult = await invokeWechatJsapiPayment(decision.jsapi as Record<string, unknown>)
+        const jsapiResult = await invokeWechatJsapiPayment(decision.jsapi as Record<string, unknown>, owner)
+        if (!isPaymentRecoveryIdentityCurrent(owner)) return
         const errMsg = String(jsapiResult.err_msg || '').toLowerCase()
         if (errMsg.includes('cancel')) {
           appStore.showInfo(t('payment.qr.cancelled'))
@@ -952,6 +983,7 @@ async function createOrder(orderAmount: number, orderType: OrderType, planId?: n
           await redirectToPaymentResult(resultState)
         }
       } catch (err: unknown) {
+        if (!isPaymentRecoveryIdentityCurrent(owner)) return
         resetPayment()
         const fallbackApplied = await attemptMobileQrFallback(err, {
           orderAmount,
@@ -974,6 +1006,7 @@ async function createOrder(orderAmount: number, orderType: OrderType, planId?: n
       openWindow(decision.paymentState.payUrl)
     }
   } catch (err: unknown) {
+    if (!isPaymentRecoveryIdentityCurrent(owner)) return
     const apiErr = err as Record<string, unknown>
     if (apiErr.reason === 'TOO_MANY_PENDING') {
       const metadata = apiErr.metadata as Record<string, unknown> | undefined
@@ -1005,7 +1038,7 @@ async function createOrder(orderAmount: number, orderType: OrderType, planId?: n
     }
     appStore.showError(buildPaymentErrorToastMessage(errorMessage.value, errorHintMessage.value))
   } finally {
-    submitting.value = false
+    if (isPaymentRecoveryIdentityCurrent(owner)) submitting.value = false
   }
 }
 
@@ -1051,6 +1084,7 @@ function shouldFallbackToDesktopQr(err: unknown, paymentMethod: string, attempte
 }
 
 async function attemptMobileQrFallback(err: unknown, context: MobileQrFallbackContext): Promise<boolean> {
+  const owner = getPaymentRecoveryIdentity()
   if (!shouldFallbackToDesktopQr(err, context.paymentType, context.attempted)) {
     return false
   }
@@ -1067,6 +1101,7 @@ async function attemptMobileQrFallback(err: unknown, context: MobileQrFallbackCo
       isWechatBrowser: false,
     })
     const result = await paymentStore.createOrder(payload) as CreateOrderResult & { resume_token?: string }
+    if (!isPaymentRecoveryIdentityCurrent(owner)) return true
     const stripeMethod = visibleMethod === 'wxpay' ? 'wechat_pay' : 'alipay'
     const stripeRouteUrl = result.client_secret
       ? router.resolve({
@@ -1100,7 +1135,9 @@ async function attemptMobileQrFallback(err: unknown, context: MobileQrFallbackCo
     appStore.showWarning(t('payment.errors.mobilePaymentFallbackToQr'))
     return true
   } catch {
-    return false
+    // Treat a superseded attempt as handled so its caller cannot show the old
+    // buyer's error or initiate further recovery in the replacement session.
+    return !isPaymentRecoveryIdentityCurrent(owner)
   }
 }
 
@@ -1122,6 +1159,7 @@ function applyScenarioError(err: unknown, paymentMethod: string): boolean {
 }
 
 async function resumeWechatPaymentFromQuery() {
+  const owner = getPaymentRecoveryIdentity()
   const resume = parseWechatResumeRoute(route.query, checkout.value.plans, validAmount.value)
   if (!resume) {
     return
@@ -1136,6 +1174,7 @@ async function resumeWechatPaymentFromQuery() {
   }
 
   await router.replace({ path: route.path, query: stripWechatResumeQuery(route.query) })
+  if (!isPaymentRecoveryIdentityCurrent(owner)) return
 
   if (resume.wechatResumeToken) {
     await createOrder(0, resume.orderType, resume.planId, {
@@ -1156,8 +1195,10 @@ async function resumeWechatPaymentFromQuery() {
 }
 
 onMounted(async () => {
+  const owner = getPaymentRecoveryIdentity()
   try {
     const res = await paymentAPI.getCheckoutInfo()
+    if (!isPaymentRecoveryIdentityCurrent(owner)) return
     checkout.value = res.data
     if (enabledMethods.value.length) {
       const order: readonly string[] = METHOD_ORDER

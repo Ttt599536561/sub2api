@@ -495,7 +495,7 @@ func (s *PaymentService) QueryAndFinalizeRefund(ctx context.Context, oid int64) 
 		TradeNo:  o.PaymentTradeNo,
 		OrderID:  o.OutTradeNo,
 		RefundID: pendingDetail.RefundID,
-		Amount:   formatGatewayRefundAmount(o.RefundAmount, o),
+		Amount:   formatGatewayRefundAmount(calculateGatewayRefundAmount(o.Amount, o.PayAmount, o.RefundAmount, PaymentOrderCurrency(o)), o),
 	})
 	finishProviderCall()
 	if err != nil {
@@ -573,6 +573,13 @@ func (s *PaymentService) finalizePendingRefundSuccess(ctx context.Context, p *Re
 	}
 	if err = tx.Commit(); err != nil {
 		return nil, fmt.Errorf("commit refund finalization: %w", err)
+	}
+	if p.DeductionType == payment.DeductionTypeSubscription && p.SubscriptionID > 0 && p.Order.SubscriptionGroupID != nil {
+		// Deduction invalidates inside this transaction. Readers can refill the
+		// old committed entitlement before commit, so evict it again afterward.
+		if cacheErr := s.subscriptionSvc.invalidateSubscriptionCaches(p.Order.UserID, *p.Order.SubscriptionGroupID); cacheErr != nil {
+			slog.Warn("invalidate committed pending refund subscription cache", "subID", p.SubscriptionID, "error", cacheErr)
+		}
 	}
 	return result, nil
 }

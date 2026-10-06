@@ -6,8 +6,30 @@ import type {
   WechatJSAPIPayload,
   WechatOAuthInfo,
 } from '@/types/payment'
+import { getAuthSessionID } from '@/api/authSession'
 
 export const PAYMENT_RECOVERY_STORAGE_KEY = 'payment.recovery.current'
+
+export interface PaymentRecoveryIdentity {
+  userId: number | null
+  sessionId: string | null
+}
+
+export function getPaymentRecoveryIdentity(): PaymentRecoveryIdentity {
+  let userId: number | null = null
+  try {
+    const storedId = JSON.parse(localStorage.getItem('auth_user') || 'null')?.id
+    if (Number.isSafeInteger(storedId) && storedId > 0) userId = storedId
+  } catch {
+    // Unavailable or malformed auth storage cannot own an automatic recovery.
+  }
+  return { userId, sessionId: getAuthSessionID() }
+}
+
+export function isPaymentRecoveryIdentityCurrent(owner: PaymentRecoveryIdentity): boolean {
+  const current = getPaymentRecoveryIdentity()
+  return owner.userId === current.userId && owner.sessionId === current.sessionId
+}
 
 const VISIBLE_METHOD_ALIASES = {
   alipay: 'alipay',
@@ -32,6 +54,7 @@ export type PaymentLaunchKind =
   | 'unhandled'
 
 export interface PaymentRecoverySnapshot {
+  owner?: PaymentRecoveryIdentity
   orderId: number
   amount: number
   qrCode: string
@@ -261,7 +284,7 @@ export function writePaymentRecoverySnapshot(
   snapshot: PaymentRecoverySnapshot,
   key = PAYMENT_RECOVERY_STORAGE_KEY,
 ): void {
-  storage.setItem(key, JSON.stringify(snapshot))
+  storage.setItem(key, JSON.stringify({ ...snapshot, owner: getPaymentRecoveryIdentity() }))
 }
 
 export function clearPaymentRecoverySnapshot(
@@ -309,8 +332,15 @@ export function readPaymentRecoverySnapshot(
     if (options.resumeToken && parsed.resumeToken !== options.resumeToken) {
       return null
     }
+    // A signed token explicitly supplied by the return URL is a public recovery
+    // capability. Implicit recovery from shared browser storage requires the
+    // same login session; legacy records without an owner cannot establish it.
+    if (!options.resumeToken && (!parsed.owner?.userId || !isPaymentRecoveryIdentityCurrent(parsed.owner))) {
+      return null
+    }
 
     return {
+      owner: parsed.owner,
       orderId: parsed.orderId,
       amount: parsed.amount,
       qrCode: parsed.qrCode,

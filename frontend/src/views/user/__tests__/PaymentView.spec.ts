@@ -413,6 +413,43 @@ describe('PaymentView recharge rate preview', () => {
 })
 
 describe('PaymentView subscription confirmation amounts', () => {
+  it('keeps a subscription method selected when only the previous recharge amount exceeds its limit', async () => {
+    const method: MethodLimit = {
+      daily_limit: 0, daily_used: 0, daily_remaining: 0,
+      single_min: 0, single_max: 2000, fee_rate: 0, available: true, currency: 'CNY',
+    }
+    const wrapper = await mountSubscriptionConfirm({
+      checkout: { methods: { wxpay: { ...method, single_max: 100 }, stripe: method } },
+      plan: { price: 10 },
+    })
+    try {
+      await wrapper.findAll('button').find(button => button.text() === 'common.cancel')!.trigger('click')
+      await wrapper.findAll('button').find(button => button.text() === 'payment.tabTopUp')!.trigger('click')
+      wrapper.getComponent(AmountInput).vm.$emit('update:modelValue', 1000)
+      await flushPromises()
+      expect(wrapper.getComponent(PaymentMethodSelector).props('selected')).toBe('stripe')
+
+      await wrapper.findAll('button').find(button => button.text() === 'payment.tabSubscribe')!.trigger('click')
+      const plan = wrapper.getComponent(SubscriptionPlanCard)
+      plan.vm.$emit('select', plan.props('plan'))
+      await flushPromises()
+      wrapper.getComponent(PaymentMethodSelector).vm.$emit('select', 'wxpay')
+      await flushPromises()
+
+      const selector = wrapper.getComponent(PaymentMethodSelector)
+      expect(selector.props('methods').find(item => item.type === 'wxpay')).toMatchObject({ available: true })
+      expect(selector.props('selected')).toBe('wxpay')
+      expect(wrapper.findAll('button').find(button => button.text().includes('payment.createOrder'))!.attributes('disabled')).toBeUndefined()
+
+      await wrapper.findAll('button').find(button => button.text() === 'common.cancel')!.trigger('click')
+      await wrapper.findAll('button').find(button => button.text() === 'payment.tabTopUp')!.trigger('click')
+      await flushPromises()
+      expect(wrapper.getComponent(PaymentMethodSelector).props('selected')).toBe('stripe')
+    } finally {
+      wrapper.unmount()
+    }
+  })
+
   it.each([
     { fee: 0, min: 10.08, max: 10.08, total: 10.08, available: true },
     { fee: 0, min: 0, max: 10.07, total: 10.08, available: false },
@@ -543,6 +580,8 @@ describe('PaymentView payment recovery', () => {
   })
 
   it('restores a custom EasyPay method as the selected payment method', async () => {
+    window.localStorage.setItem('auth_user', JSON.stringify({ id: 7 }))
+    window.localStorage.setItem('auth_session_id', 'custom-payment-session')
     getCheckoutInfo.mockResolvedValue(checkoutInfoFixture({
       methods: {
         wxpay: checkoutInfoFixture().data.methods.wxpay,
@@ -560,6 +599,7 @@ describe('PaymentView payment recovery', () => {
     }))
     window.localStorage.setItem(PAYMENT_RECOVERY_STORAGE_KEY, JSON.stringify({
       orderId: 888,
+      owner: { userId: 7, sessionId: 'custom-payment-session' },
       amount: 66,
       qrCode: 'ldc-qr',
       expiresAt: '2099-01-01T00:10:00.000Z',

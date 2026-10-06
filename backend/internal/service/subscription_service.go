@@ -704,15 +704,23 @@ func (s *SubscriptionService) ExtendSubscription(ctx context.Context, subscripti
 			if sub.Status == SubscriptionStatusSuspended {
 				renewed.Status = SubscriptionStatusSuspended
 			}
-			return s.userSubRepo.Update(txCtx, renewed)
+			if err := s.userSubRepo.Update(txCtx, renewed); err != nil {
+				return err
+			}
+		} else {
+			if err := s.userSubRepo.ExtendExpiry(txCtx, subscriptionID, newExpiresAt); err != nil {
+				return err
+			}
+			if sub.Status == SubscriptionStatusExpired {
+				if err := s.userSubRepo.UpdateStatus(txCtx, subscriptionID, SubscriptionStatusActive); err != nil {
+					return err
+				}
+			}
 		}
-		if err := s.userSubRepo.ExtendExpiry(txCtx, subscriptionID, newExpiresAt); err != nil {
-			return err
-		}
-		if sub.Status == SubscriptionStatusExpired {
-			return s.userSubRepo.UpdateStatus(txCtx, subscriptionID, SubscriptionStatusActive)
-		}
-		return nil
+		// Refresh before commit so a read failure cannot report a failed
+		// adjustment after its duration change has already been persisted.
+		sub, err = s.userSubRepo.GetByID(txCtx, subscriptionID)
+		return err
 	})
 	if err != nil {
 		return nil, err
@@ -729,9 +737,7 @@ func (s *SubscriptionService) ExtendSubscription(ctx context.Context, subscripti
 		}()
 	}
 
-	// Repository writes do not mutate the locked snapshot. Return the updated
-	// expiry and renewal preferences, also when called inside a bulk transaction.
-	return s.userSubRepo.GetByID(ctx, subscriptionID)
+	return sub, nil
 }
 
 // GetByID 根据ID获取订阅

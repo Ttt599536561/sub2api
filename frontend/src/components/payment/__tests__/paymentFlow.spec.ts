@@ -1,10 +1,12 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import type { CreateOrderResult, MethodLimit } from '@/types/payment'
 import {
   buildCreateOrderPayload,
   decidePaymentLaunch,
   getVisibleMethods,
   readPaymentRecoverySnapshot,
+  writePaymentRecoverySnapshot,
+  PAYMENT_RECOVERY_STORAGE_KEY,
   type PaymentRecoverySnapshot,
 } from '@/components/payment/paymentFlow'
 
@@ -376,6 +378,51 @@ describe('buildCreateOrderPayload', () => {
 })
 
 describe('readPaymentRecoverySnapshot', () => {
+  afterEach(() => localStorage.clear())
+
+  function savedBuyerSnapshot() {
+    localStorage.setItem('auth_user', JSON.stringify({ id: 7 }))
+    localStorage.setItem('auth_session_id', 'buyer-session')
+    const snapshot = decidePaymentLaunch(createOrderResult({
+      qr_code: 'weixin://order-101', resume_token: 'resume-101',
+    }), { visibleMethod: 'wxpay', orderType: 'balance', isMobile: false }).recovery
+    writePaymentRecoverySnapshot(localStorage, snapshot)
+    return localStorage.getItem(PAYMENT_RECOVERY_STORAGE_KEY)!
+  }
+
+  it('binds saved recovery to the login session, without depending on the rotating access token', () => {
+    const raw = savedBuyerSnapshot()
+    expect(readPaymentRecoverySnapshot(raw)?.orderId).toBe(101)
+    localStorage.setItem('auth_token', 'rotated-token')
+    expect(readPaymentRecoverySnapshot(raw)?.orderId).toBe(101)
+    localStorage.setItem('auth_session_id', 'another-login')
+    expect(readPaymentRecoverySnapshot(raw)).toBeNull()
+  })
+
+  it('does not automatically restore another user or an anonymous browser', () => {
+    const raw = savedBuyerSnapshot()
+    localStorage.setItem('auth_user', JSON.stringify({ id: 8 }))
+    expect(readPaymentRecoverySnapshot(raw)).toBeNull()
+    localStorage.removeItem('auth_user')
+    expect(readPaymentRecoverySnapshot(raw)).toBeNull()
+  })
+
+  it('rejects ownerless legacy recovery unless the callback explicitly supplies its matching resume token', () => {
+    const parsed = JSON.parse(savedBuyerSnapshot())
+    delete parsed.owner
+    const raw = JSON.stringify(parsed)
+    expect(readPaymentRecoverySnapshot(raw)).toBeNull()
+    localStorage.clear()
+    expect(readPaymentRecoverySnapshot(raw, { resumeToken: 'resume-101' })?.orderId).toBe(101)
+    expect(readPaymentRecoverySnapshot(raw, { resumeToken: 'different-order' })).toBeNull()
+  })
+
+  it('preserves anonymous public callbacks carrying the exact signed resume token', () => {
+    const raw = savedBuyerSnapshot()
+    localStorage.clear()
+    expect(readPaymentRecoverySnapshot(raw, { resumeToken: 'resume-101' })?.orderId).toBe(101)
+  })
+
   it('restores an unexpired snapshot when the resume token matches', () => {
     const snapshot: PaymentRecoverySnapshot = {
       orderId: 33,

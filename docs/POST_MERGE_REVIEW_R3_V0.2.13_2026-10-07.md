@@ -1,5 +1,7 @@
 # v0.2.13 合并后的第三轮独立审查
 
+从 `d5a2febf5` 开始的后续审查与修复见 [第四轮独立审查报告](POST_MERGE_REVIEW_R4_V0.2.13_2026-10-07.md)。本文保留第三轮的历史验证结果。
+
 ## 范围
 
 起点为用户指定的 `84e9dc95e93248fbe4801a1b8de73cbbc1ca055c`，工作分支为 `codex/merge-upstream-v0.2.13`，工作区为 `C:/Users/Administrator/.codex/worktrees/7d1b/sub2二次开发项目`。线上二开功能基准继续使用 `ebaa8c022`，官方合并来源为 `b8dece900`。当前聊天原目录的旧 `b0ba68f93` 不作为修复基线。

@@ -260,8 +260,10 @@ func TestRecordCyberPolicyEvent_RuntimeSnapshotRefreshFailureKeepsStaleScope(t *
 		SettingKeyRiskControlEnabled:      "true",
 		SettingKeyContentModerationConfig: `{"all_groups":true,"model_filter":{"type":"include","models":["gpt-5"]}}`,
 	}}
-	svc := NewContentModerationService(settingRepo, repo, nil, nil, nil, nil, nil, nil)
-	svc.runtimeCacheTTL = time.Minute
+	// This request owns the refresh under test. Constructor workers also load
+	// snapshots and can win the refresh lock, deferring it to their next tick.
+	svc := runtimeCacheTestService(settingRepo, time.Minute)
+	svc.repo = repo
 
 	_, err := svc.loadRuntimeSnapshot(context.Background())
 	require.NoError(t, err)
@@ -278,10 +280,15 @@ func TestRecordCyberPolicyEvent_RuntimeSnapshotRefreshFailureKeepsStaleScope(t *
 	})
 
 	require.Len(t, repo.snapshotLogs(), 1)
-	require.Eventually(t, func() bool {
-		_, calls := settingRepo.calls()
-		return calls == 2
-	}, time.Second, time.Millisecond)
+	// triggerRuntimeSnapshotRefresh acquires this lock before spawning the
+	// refresh, so locking here joins that attempt without a scheduler deadline.
+	svc.runtimeRefreshMu.Lock()
+	retained := svc.runtimeSnapshot.Load()
+	svc.runtimeRefreshMu.Unlock()
+	require.Same(t, &expired, retained, "failed refresh must retain the stale scope")
+	require.True(t, svc.runtimeRefreshDeferred(), "a failed refresh must enter backoff")
+	svc.RecordCyberPolicyEvent(context.Background(), CyberPolicyRecordInput{UserID: 1, Model: "gpt-6"})
+	require.Len(t, repo.snapshotLogs(), 1, "the retained model scope must still exclude other models")
 	getValue, getMultiple := settingRepo.calls()
 	require.Zero(t, getValue)
 	require.Equal(t, 2, getMultiple)
