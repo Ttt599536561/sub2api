@@ -39,6 +39,26 @@ jobs:
       - name: Unit tests
         working-directory: backend
         run: make test-unit
+      - name: Prepare integration test images
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker info --format 'Docker server {{.ServerVersion}} ({{.DockerRootDir}})'
+          for image in postgres:18.1-alpine3.23 redis:8.4-alpine testcontainers/ryuk:0.13.0; do
+            if docker image inspect "$image" >/dev/null 2>&1; then
+              continue
+            fi
+            for attempt in 1 2 3; do
+              if docker pull "$image"; then
+                break
+              fi
+              if [ "$attempt" = 3 ]; then
+                exit 1
+              fi
+              sleep "$((attempt * 5))"
+            done
+            docker image inspect "$image" --format '{{.Id}}'
+          done
       - name: Integration tests
         working-directory: backend
         run: make test-integration
