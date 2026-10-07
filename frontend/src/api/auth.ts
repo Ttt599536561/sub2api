@@ -620,6 +620,15 @@ export async function completeWeChatOAuthRegistration(
   return createPendingWeChatOAuthAccount(invitationCode, decision, affiliateCode)
 }
 
+// OAuth completion may wait for provider work while another tab replaces the
+// login. Bind both dispatch and returned credentials to the original session.
+export async function postOAuthCompletion<T>(url: string, body?: unknown) {
+  const owner = ownedAuthRequestConfig()
+  const response = await apiClient.post<T>(url, body, owner)
+  assertAuthSessionCurrent(owner.authIdentity.sessionID)
+  return response
+}
+
 async function createPendingOAuthAccount(
   provider: 'linuxdo' | 'oidc' | 'wechat' | 'dingtalk',
   invitationCode: string,
@@ -627,7 +636,7 @@ async function createPendingOAuthAccount(
   affiliateCode?: string
 ): Promise<PendingOAuthCreateAccountResponse> {
   const normalizedAffiliateCode = affiliateCode?.trim()
-  const { data } = await apiClient.post<PendingOAuthCreateAccountResponse>(
+  const { data } = await postOAuthCompletion<PendingOAuthCreateAccountResponse>(
     `/auth/oauth/${provider}/complete-registration`,
     {
       invitation_code: invitationCode,
@@ -673,7 +682,7 @@ export async function createPendingDingTalkOAuthAccount(
 export async function completePendingOAuthBindLogin(
   decision?: OAuthAdoptionDecision
 ): Promise<PendingOAuthBindLoginResponse> {
-  const { data } = await apiClient.post<PendingOAuthBindLoginResponse>(
+  const { data } = await postOAuthCompletion<PendingOAuthBindLoginResponse>(
     '/auth/oauth/pending/exchange',
     serializeOAuthAdoptionDecision(decision)
   )

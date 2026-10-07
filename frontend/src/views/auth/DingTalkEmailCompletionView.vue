@@ -30,10 +30,10 @@ import { AuthLayout } from '@/components/layout'
 import PendingOAuthCreateAccountForm, {
   type PendingOAuthCreateAccountPayload
 } from '@/components/auth/PendingOAuthCreateAccountForm.vue'
-import { apiClient } from '@/api/client'
 import { useAuthStore, useAppStore } from '@/stores'
 import {
   persistOAuthTokenContext,
+  postOAuthCompletion,
   type PendingOAuthExchangeResponse
 } from '@/api/auth'
 import { clearAllAffiliateReferralCodes } from '@/utils/oauthAffiliate'
@@ -70,7 +70,7 @@ async function handleCreateAccount(payload: PendingOAuthCreateAccountPayload) {
 
   isSubmitting.value = true
   try {
-    const { data } = await apiClient.post<
+    const { data } = await postOAuthCompletion<
       PendingOAuthExchangeResponse & {
         step?: string
         redirect?: string

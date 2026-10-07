@@ -401,6 +401,7 @@ export const useAuthStore = defineStore('auth', () => {
 
     try {
       const userData = await refreshUser()
+      assertAuthSessionCurrent(nextSession)
       startAutoRefresh()
 
       // Start proactive token refresh if we have refresh token and expiry info
@@ -412,6 +413,7 @@ export const useAuthStore = defineStore('auth', () => {
       clearPendingAuthSession()
       return userData
     } catch (error) {
+      if ((error as { code?: string })?.code !== 'AUTH_SESSION_CHANGED') assertAuthSessionCurrent(nextSession)
       clearAuthAfterError(error)
       throw error
     }

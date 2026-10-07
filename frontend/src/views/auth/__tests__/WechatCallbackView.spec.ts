@@ -139,6 +139,7 @@ vi.mock('@/api/auth', async () => {
   const actual = await vi.importActual<typeof import('@/api/auth')>('@/api/auth')
   return {
     ...actual,
+    postOAuthCompletion: (...args: any[]) => apiClientPostMock(...args),
     exchangePendingOAuthCompletion: (...args: any[]) => exchangePendingOAuthCompletionMock(...args),
     completeWeChatOAuthRegistration: (...args: any[]) => completeWeChatOAuthRegistrationMock(...args),
     login2FA: (...args: any[]) => login2FAMock(...args),

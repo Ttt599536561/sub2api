@@ -250,7 +250,6 @@ import { AuthLayout } from '@/components/layout'
 import PendingOAuthCreateAccountForm, {
   type PendingOAuthCreateAccountPayload
 } from '@/components/auth/PendingOAuthCreateAccountForm.vue'
-import { apiClient } from '@/api/client'
 import { useAuthStore, useAppStore } from '@/stores'
 import {
   completeOIDCOAuthRegistration,
@@ -260,6 +259,7 @@ import {
   isOAuthLoginCompletion,
   login2FA,
   persistOAuthTokenContext,
+  postOAuthCompletion,
   type OAuthAdoptionDecision,
   type OAuthTokenResponse,
   type PendingOAuthExchangeResponse
@@ -662,7 +662,7 @@ async function handleSubmitInvitation() {
     const decision = currentAdoptionDecision()
     const completion: PendingOidcCompletion = legacyPendingOAuthToken.value
       ? (
-          await apiClient.post<PendingOidcCompletion>('/auth/oauth/oidc/complete-registration', {
+          await postOAuthCompletion<PendingOidcCompletion>('/auth/oauth/oidc/complete-registration', {
             pending_oauth_token: legacyPendingOAuthToken.value,
             invitation_code: invitationCode.value.trim(),
             ...oauthAffiliatePayload(affCode),
@@ -701,7 +701,7 @@ async function handleCreateAccount(payload: PendingOAuthCreateAccountPayload) {
 
   isSubmitting.value = true
   try {
-    const { data } = await apiClient.post<PendingOidcCompletion>('/auth/oauth/pending/create-account', {
+    const { data } = await postOAuthCompletion<PendingOidcCompletion>('/auth/oauth/pending/create-account', {
       email: payload.email,
       password: payload.password,
       verify_code: payload.verifyCode || undefined,
@@ -736,7 +736,7 @@ async function handleBindLogin() {
 
   isSubmitting.value = true
   try {
-    const { data } = await apiClient.post<PendingOidcCompletion>('/auth/oauth/pending/bind-login', {
+    const { data } = await postOAuthCompletion<PendingOidcCompletion>('/auth/oauth/pending/bind-login', {
       email,
       password,
       ...serializeAdoptionDecision(currentAdoptionDecision())

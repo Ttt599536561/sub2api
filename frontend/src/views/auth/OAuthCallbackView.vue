@@ -151,11 +151,11 @@ import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { useClipboard } from '@/composables/useClipboard'
 import { useAppStore, useAuthStore } from '@/stores'
-import { apiClient } from '@/api/client'
 import { buildApiUrl } from '@/api/url'
 import {
   exchangePendingOAuthCompletion,
   persistOAuthTokenContext,
+  postOAuthCompletion,
   type OAuthTokenResponse
 } from '@/api/auth'
 import {
@@ -349,7 +349,7 @@ async function handleSubmitRegistration() {
     if (invitationRequired.value) {
       payload.invitation_code = code
     }
-    const { data } = await apiClient.post<OAuthTokenResponse>(
+    const { data } = await postOAuthCompletion<OAuthTokenResponse>(
       `/auth/oauth/${pendingProvider.value}/complete-registration`,
       payload
     )

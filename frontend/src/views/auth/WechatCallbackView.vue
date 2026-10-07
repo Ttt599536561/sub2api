@@ -323,7 +323,6 @@ import { AuthLayout } from '@/components/layout'
 import PendingOAuthCreateAccountForm, {
   type PendingOAuthCreateAccountPayload
 } from '@/components/auth/PendingOAuthCreateAccountForm.vue'
-import { apiClient } from '@/api/client'
 import { useAuthStore, useAppStore } from '@/stores'
 import {
   completeWeChatOAuthRegistration,
@@ -335,6 +334,7 @@ import {
   login2FA,
   prepareOAuthBindAccessTokenCookie,
   persistOAuthTokenContext,
+  postOAuthCompletion,
   resolveWeChatOAuthStartStrict,
   type OAuthAdoptionDecision,
   type OAuthTokenResponse,
@@ -872,7 +872,7 @@ async function handleSubmitInvitation() {
     const decision = currentAdoptionDecision()
     const completion: PendingWeChatCompletion = legacyPendingOAuthToken.value
       ? (
-          await apiClient.post<PendingWeChatCompletion>('/auth/oauth/wechat/complete-registration', {
+          await postOAuthCompletion<PendingWeChatCompletion>('/auth/oauth/wechat/complete-registration', {
             pending_oauth_token: legacyPendingOAuthToken.value,
             invitation_code: invitationCode.value.trim(),
             ...oauthAffiliatePayload(affCode),
@@ -911,7 +911,7 @@ async function handleCreateAccount(payload: PendingOAuthCreateAccountPayload) {
 
   isSubmitting.value = true
   try {
-    const { data } = await apiClient.post<PendingWeChatCompletion>('/auth/oauth/pending/create-account', {
+    const { data } = await postOAuthCompletion<PendingWeChatCompletion>('/auth/oauth/pending/create-account', {
       email: payload.email,
       password: payload.password,
       verify_code: payload.verifyCode || undefined,
@@ -946,7 +946,7 @@ async function handleBindLogin() {
 
   isSubmitting.value = true
   try {
-    const { data } = await apiClient.post<PendingWeChatCompletion>('/auth/oauth/pending/bind-login', {
+    const { data } = await postOAuthCompletion<PendingWeChatCompletion>('/auth/oauth/pending/bind-login', {
       email,
       password,
       ...serializeAdoptionDecision(currentAdoptionDecision())

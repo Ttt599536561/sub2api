@@ -242,7 +242,6 @@ import { AuthLayout } from '@/components/layout'
 import PendingOAuthCreateAccountForm, {
   type PendingOAuthCreateAccountPayload
 } from '@/components/auth/PendingOAuthCreateAccountForm.vue'
-import { apiClient } from '@/api/client'
 import { useAuthStore, useAppStore } from '@/stores'
 import {
   exchangePendingOAuthCompletion,
@@ -250,6 +249,7 @@ import {
   isOAuthLoginCompletion,
   login2FA,
   persistOAuthTokenContext,
+  postOAuthCompletion,
   type OAuthAdoptionDecision,
   type OAuthTokenResponse,
   type PendingOAuthExchangeResponse
@@ -641,7 +641,7 @@ async function handleSubmitInvitation() {
   try {
     const affCode = loadOAuthAffiliateCode()
     const decision = currentAdoptionDecision()
-    const { data: completion } = await apiClient.post<DingTalkPendingActionResponse>(
+    const { data: completion } = await postOAuthCompletion<DingTalkPendingActionResponse>(
       '/auth/oauth/dingtalk/complete-registration',
       {
         pending_oauth_token: legacyPendingOAuthToken.value || undefined,
@@ -679,7 +679,7 @@ async function handleCreateAccount(payload: PendingOAuthCreateAccountPayload) {
 
   isSubmitting.value = true
   try {
-    const { data } = await apiClient.post<DingTalkPendingActionResponse>('/auth/oauth/pending/create-account', {
+    const { data } = await postOAuthCompletion<DingTalkPendingActionResponse>('/auth/oauth/pending/create-account', {
       email: payload.email,
       password: payload.password,
       verify_code: payload.verifyCode || undefined,
@@ -714,7 +714,7 @@ async function handleBindLogin() {
 
   isSubmitting.value = true
   try {
-    const { data } = await apiClient.post<DingTalkPendingActionResponse>('/auth/oauth/pending/bind-login', {
+    const { data } = await postOAuthCompletion<DingTalkPendingActionResponse>('/auth/oauth/pending/bind-login', {
       email,
       password,
       ...serializeAdoptionDecision(currentAdoptionDecision())

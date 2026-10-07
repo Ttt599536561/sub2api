@@ -13,6 +13,7 @@ export const useAdminComplianceStore = defineStore('adminCompliance', () => {
   const initialized = ref(false)
   const forceVisible = ref(false)
   let sessionGeneration = 0
+  let statusRevision = 0
 
   const required = computed(() => status.value?.required === true)
   const shouldShow = computed(() => required.value || forceVisible.value)
@@ -26,10 +27,11 @@ export const useAdminComplianceStore = defineStore('adminCompliance', () => {
 
   async function fetchStatus(): Promise<AdminComplianceStatus> {
     const generation = sessionGeneration
+    const revision = statusRevision
     loading.value = true
     try {
       const nextStatus = await adminComplianceAPI.getStatus()
-      if (generation === sessionGeneration) {
+      if (generation === sessionGeneration && revision === statusRevision) {
         status.value = nextStatus
         initialized.value = true
         forceVisible.value = nextStatus.required
@@ -49,6 +51,8 @@ export const useAdminComplianceStore = defineStore('adminCompliance', () => {
         language: currentLocale.value
       })
       if (generation === sessionGeneration) {
+        // A committed acknowledgement supersedes any earlier status read.
+        statusRevision++
         status.value = nextStatus
         forceVisible.value = nextStatus.required
       }
@@ -59,6 +63,14 @@ export const useAdminComplianceStore = defineStore('adminCompliance', () => {
   }
 
   function requireAcknowledgement(partialStatus?: Partial<AdminComplianceStatus>): void {
+    if (status.value?.required === false && partialStatus?.version === status.value.version) {
+      // An API request rejected before acceptance may finish afterward. Confirm
+      // a real server-side revocation before reopening an acknowledged document.
+      void fetchStatus().catch(() => { /* A later request can retry the authoritative check. */ })
+      return
+    }
+    // A newly required version also supersedes reads of the previous document.
+    statusRevision++
     status.value = {
       required: true,
       version: partialStatus?.version || status.value?.version || 'v2026.06.10',

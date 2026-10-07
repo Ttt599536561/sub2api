@@ -815,6 +815,21 @@ func (s *BillingCacheService) IncrementUserPlatformQuotaUsage(userID int64, plat
 // 订阅模式：检查缓存用量未超过限额（Group限额从参数传入）
 // platform 为请求的目标平台（如 "anthropic"），传空串 "" 时跳过 user × platform quota 检查。
 func (s *BillingCacheService) CheckBillingEligibility(ctx context.Context, user *User, apiKey *APIKey, group *Group, subscription *UserSubscription, platform string) error {
+	return s.checkBillingEligibility(ctx, user, apiKey, group, subscription, platform, true)
+}
+
+// RevalidateBillingEligibility rechecks spending after a slot wait or before a
+// new WebSocket turn without counting another RPM admission. The previous turn
+// may still own its subscription snapshot in an asynchronous billing task.
+func (s *BillingCacheService) RevalidateBillingEligibility(ctx context.Context, user *User, apiKey *APIKey, group *Group, subscription *UserSubscription, platform string) error {
+	if subscription != nil {
+		snapshot := *subscription
+		subscription = &snapshot
+	}
+	return s.checkBillingEligibility(ctx, user, apiKey, group, subscription, platform, false)
+}
+
+func (s *BillingCacheService) checkBillingEligibility(ctx context.Context, user *User, apiKey *APIKey, group *Group, subscription *UserSubscription, platform string, countRPM bool) error {
 	// 简易模式默认跳过所有计费检查. An explicit key-window opt-in keeps
 	// balance/subscription/platform checks bypassed while enforcing the three
 	// API-key monetary windows from the database source of truth.
@@ -895,8 +910,10 @@ func (s *BillingCacheService) CheckBillingEligibility(ctx context.Context, user 
 	}
 
 	// RPM 限流：级联回落（Override → Group → User），放在最后以避免为注定失败的请求增加计数。
-	if err := s.checkRPM(ctx, user, group); err != nil {
-		return err
+	if countRPM {
+		if err := s.checkRPM(ctx, user, group); err != nil {
+			return err
+		}
 	}
 
 	return nil

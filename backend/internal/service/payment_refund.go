@@ -1079,9 +1079,22 @@ func (s *PaymentService) RollbackRefund(ctx context.Context, p *RefundPlan, gErr
 }
 
 func (s *PaymentService) restoreStatus(ctx context.Context, p *RefundPlan) {
+	// A request can be canceled after the refund claim but before any gateway
+	// call. Releasing that claim must survive cancellation and stay bounded.
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+	defer cancel()
 	rs := OrderStatusCompleted
 	if p.Order.Status == OrderStatusRefundRequested {
 		rs = OrderStatusRefundRequested
 	}
-	_, _ = s.entClient.PaymentOrder.UpdateOneID(p.OrderID).SetStatus(rs).Save(ctx)
+	updated, err := s.entClient.PaymentOrder.Update().Where(
+		paymentorder.IDEQ(p.OrderID), paymentorder.StatusEQ(OrderStatusRefunding),
+	).SetStatus(rs).Save(ctx)
+	if err != nil {
+		slog.Error("restore refund order status failed", "orderID", p.OrderID, "status", rs, "error", err)
+		return
+	}
+	if updated == 0 {
+		slog.Warn("refund order status restore skipped after state changed", "orderID", p.OrderID, "status", rs)
+	}
 }

@@ -187,13 +187,13 @@ import TurnstileWidget from '@/components/CaptchaChallenge.vue'
 import { useAuthStore, useAppStore } from '@/stores'
 import {
   persistOAuthTokenContext,
+  postOAuthCompletion,
   getPublicSettings,
   isOAuthLoginCompletion,
   type PendingOAuthSendVerifyCodeResponse,
   sendPendingOAuthVerifyCode,
   sendVerifyCode,
 } from '@/api/auth'
-import { apiClient } from '@/api/client'
 import { buildAuthErrorMessage } from '@/utils/authError'
 import { extractApiErrorCode } from '@/utils/apiError'
 import {
@@ -700,7 +700,7 @@ async function handleVerify(): Promise<void> {
         payload.adopt_avatar = pendingAdoptionDecision.value.adoptAvatar
       }
 
-      const { data } = await apiClient.post<PendingOAuthCreateAccountResponse>(
+      const { data } = await postOAuthCompletion<PendingOAuthCreateAccountResponse>(
         '/auth/oauth/pending/create-account',
         payload
       )

@@ -242,7 +242,6 @@ import { AuthLayout } from '@/components/layout'
 import PendingOAuthCreateAccountForm, {
   type PendingOAuthCreateAccountPayload
 } from '@/components/auth/PendingOAuthCreateAccountForm.vue'
-import { apiClient } from '@/api/client'
 import { useAuthStore, useAppStore } from '@/stores'
 import {
   completeLinuxDoOAuthRegistration,
@@ -251,6 +250,7 @@ import {
   isOAuthLoginCompletion,
   login2FA,
   persistOAuthTokenContext,
+  postOAuthCompletion,
   type OAuthAdoptionDecision,
   type OAuthTokenResponse,
   type PendingOAuthExchangeResponse
@@ -638,7 +638,7 @@ async function handleSubmitInvitation() {
     const decision = currentAdoptionDecision()
     const completion: LinuxDoPendingActionResponse = legacyPendingOAuthToken.value
       ? (
-          await apiClient.post<LinuxDoPendingActionResponse>('/auth/oauth/linuxdo/complete-registration', {
+          await postOAuthCompletion<LinuxDoPendingActionResponse>('/auth/oauth/linuxdo/complete-registration', {
             pending_oauth_token: legacyPendingOAuthToken.value,
             invitation_code: invitationCode.value.trim(),
             ...oauthAffiliatePayload(affCode),
@@ -677,7 +677,7 @@ async function handleCreateAccount(payload: PendingOAuthCreateAccountPayload) {
 
   isSubmitting.value = true
   try {
-    const { data } = await apiClient.post<LinuxDoPendingActionResponse>('/auth/oauth/pending/create-account', {
+    const { data } = await postOAuthCompletion<LinuxDoPendingActionResponse>('/auth/oauth/pending/create-account', {
       email: payload.email,
       password: payload.password,
       verify_code: payload.verifyCode || undefined,
@@ -712,7 +712,7 @@ async function handleBindLogin() {
 
   isSubmitting.value = true
   try {
-    const { data } = await apiClient.post<LinuxDoPendingActionResponse>('/auth/oauth/pending/bind-login', {
+    const { data } = await postOAuthCompletion<LinuxDoPendingActionResponse>('/auth/oauth/pending/bind-login', {
       email,
       password,
       ...serializeAdoptionDecision(currentAdoptionDecision())
