@@ -1,5 +1,7 @@
 # 二开 v0.2.8-r1 升级至官方 Sub2API v0.2.14
 
+> 2026-10-07 补充：Docker 数据盘迁到 E 盘后，完整真实数据库集成测试 13,885 项通过，三条历史升级路径全部通过。首轮 Docker 环境缺口已补齐，详见 [迁移后验证记录](POST_MIGRATION_VALIDATION_V0.2.14_2026-10-07.md)。
+
 ## 结论与工作位置
 
 不能从线上二开基线无检查地直接合并：从 v0.2.11 起存在 Wire 文本冲突，余额预占、新请求入口、支付与退款还有语义兼容要求。本次复用已经提交的 v0.2.13 合并及三轮修复，继续合入官方 v0.2.14；新增兼容调整只涉及配置生成测试，生产安全逻辑与依赖沿用官方。
@@ -74,7 +76,8 @@ v0.2.8 标签到 v0.2.14 标签累计 173 个提交。统一共同祖先口径�
 | --- | --- | --- |
 | 继承分支关键后端基线 | 退出 0 | baseline-backend.log |
 | 完整后端 unit | 58 个测试包，22,327 项通过，0 失败，18 项既有条件跳过 | backend-unit.jsonl / backend-unit-result.json |
-| integration 标签（禁用 Docker） | 12,259 项通过、0 失败、15 项条件跳过；repository 数据库整包额外跳过，不能称为完整集成通过 | backend-integration-no-docker.jsonl |
+| 首轮 integration 标签（禁用 Docker） | 12,259 项通过、0 失败、15 项条件跳过；repository 数据库整包额外跳过，不能称为完整集成通过 | backend-integration-no-docker.jsonl |
+| 迁移后完整 integration（CI=true） | 52 个测试包，13,885 项通过，0 失败，16 项条件跳过；三条历史升级路径全部通过 | post-migration/backend-integration.jsonl / integration-summary.json |
 | 安全/支付独立专项 | 208 项通过、0 失败/跳过 | reviewer-security-payment.jsonl / reviewer-payment-reconcile.jsonl |
 | 完整后端 lint | golangci-lint 2.13.0，退出 0，0 issues | backend-lint.log |
 | 前端完整 Vitest | 358 文件，2,868 项通过，0 失败/跳过 | frontend-vitest.json |
@@ -88,7 +91,7 @@ v0.2.8 标签到 v0.2.14 标签累计 173 个提交。统一共同祖先口径�
 验证二进制用 integration-uncommitted 标识本轮暂存合并源码，不冒充正式发布镜像或最终提交构建；Linux 为交叉构建，未运行 Linux 容器。
 
 初始前端完整测试的 3 条失败单独保存在 frontend-vitest-red.*，修复后重新运行完整测试。部署 simple-mode 原脚本受 Windows Store python3 别名影响退出 49；最终用已安装 Python 执行同一嵌入代码，仅把 /dev/null 改为 os.devnull，保留全部断言，docker compose 仅执行 config 不创建容器。前端构建仍有既有 Browserslist、Node 弃用、混合导入与大分块提示。
-本机 Docker VHD 位于 C:/Users/Administrator/AppData/Local/Docker/wsl/disk/docker_data.vhdx。依据项目存储约定，本次测试进程使用失效 DOCKER_HOST 禁用该引擎；没有创建测试容器。integration 标签命令虽退出 0，repository 的真实数据库 TestMain 整体跳过；不能据此宣称 PostgreSQL/Redis 全集成、数据库三条升级路径已经重新验证。迁移内容一致性已验证，真实数据库升级仍是上线前验证项。
+首轮验证时 Docker VHD 仍位于 C 盘，因此禁用 Docker，repository 的真实数据库 TestMain 整体跳过。用户随后完成迁移；本轮核实实际数据目录为 E:/CodexData/DockerBackup/DockerDesktopWSL，目录链无联接，C 盘旧数据盘已不存在，E 盘文件在测试期间产生写入。使用独立 PostgreSQL 18.1/Redis 8.4 容器、CI=true、-count=1 重新运行完整 integration，三条历史数据库升级及真实事务/缓存测试均执行通过。该运行目录虽含 DockerBackup 字样，已经承载运行数据，不能按普通备份清理。未连接生产数据库；详细条件跳过与资源回收见补充记录。
 
 ## 官方升级行为与交付边界
 
@@ -96,6 +99,6 @@ v0.2.8 标签到 v0.2.14 标签累计 173 个提交。统一共同祖先口径�
 - 0.2.12 密码重置令牌改为单次哈希消费，升级前旧重置链接需要重新申请。
 - 0.2.14 新安装需要符合规则的管理员凭据；已有管理员/用户不会被这次首次安装策略阻断。非标准 EasyPay 回调额外字段会按官方策略拒绝。
 - 不自动处理历史损坏订单，也不宣称预占估值等于所有真实最终账单；没有调用真实模型、支付网关或生产数据库。
-- 本次不创建发布工作流或 0.2.14-r1 镜像，不改动历史 0.2.8-r1 发布工作流。生产部署应使用后续明确的二开版本、备份和真实数据库验证。
+- 本次不创建发布工作流或 0.2.14-r1 镜像，不改动历史 0.2.8-r1 发布工作流。生产部署应使用后续明确的二开版本和独立数据备份；本轮仅验证本地合成历史数据，未部署生产。
 
 官方参考：[v0.2.14 发布说明](https://github.com/Wei-Shaw/sub2api/releases/tag/v0.2.14)、[本次固定主线](https://github.com/Wei-Shaw/sub2api/commit/3f1a2ea0a760730e3bc528105c00b4ee4f23e469)。
