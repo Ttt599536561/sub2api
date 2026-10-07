@@ -1,4 +1,5 @@
-import { apiClient } from './client'
+import { apiClient, ownedAuthRequestConfig } from './client'
+import { assertAuthSessionCurrent } from './authSession'
 import type { ActionCaptchaRequestProof, AuthResponse } from '@/types'
 
 export interface PasskeyCredentialSummary {
@@ -105,20 +106,22 @@ function serializeAssertionCredential(credential: PublicKeyCredential): Record<s
 }
 
 async function login(proof?: ActionCaptchaRequestProof): Promise<AuthResponse> {
+  const owner = ownedAuthRequestConfig()
   requirePasskeySupport()
-  const { data: begin } = proof
-    ? await apiClient.post<CeremonyOptionsResponse>('/auth/passkey/login/begin', proof)
-    : await apiClient.post<CeremonyOptionsResponse>('/auth/passkey/login/begin')
+  const { data: begin } = await apiClient.post<CeremonyOptionsResponse>('/auth/passkey/login/begin', proof, owner)
+  assertAuthSessionCurrent(owner.authIdentity.sessionID)
   const credential = await navigator.credentials.get({
     publicKey: requestOptionsFromJSON(begin.options.publicKey)
   })
+  assertAuthSessionCurrent(owner.authIdentity.sessionID)
   if (!(credential instanceof PublicKeyCredential)) {
     throw new Error('Passkey sign-in was cancelled')
   }
   const { data } = await apiClient.post<AuthResponse>('/auth/passkey/login/finish', {
     session_token: begin.session_token,
     credential: serializeAssertionCredential(credential)
-  })
+  }, owner)
+  assertAuthSessionCurrent(owner.authIdentity.sessionID)
   return data
 }
 

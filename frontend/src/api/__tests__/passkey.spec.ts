@@ -10,6 +10,7 @@ const { get, post, patch, remove, credentialGet, credentialCreate } = vi.hoisted
 }))
 
 vi.mock('@/api/client', () => ({
+  ownedAuthRequestConfig: () => ({ authIdentity: { sessionID: localStorage.getItem('auth_session_id'), userID: null } }),
   apiClient: {
     get,
     post,
@@ -97,7 +98,7 @@ describe('passkey api', () => {
 
     await passkeyAPI.login()
 
-    expect(post).toHaveBeenNthCalledWith(1, '/auth/passkey/login/begin')
+    expect(post).toHaveBeenNthCalledWith(1, '/auth/passkey/login/begin', undefined, expect.objectContaining({ authIdentity: expect.any(Object) }))
     const request = credentialGet.mock.calls[0][0] as CredentialRequestOptions
     expect(Array.from(new Uint8Array(request.publicKey!.challenge))).toEqual([1, 2, 3])
     expect(request.publicKey!.userVerification).toBe('required')
@@ -117,7 +118,8 @@ describe('passkey api', () => {
           userHandle: 'Cgs'
         }
       }
-    })
+    }, expect.objectContaining({ authIdentity: expect.any(Object) }))
+    expect(post.mock.calls[1][2]).toEqual(post.mock.calls[0][2])
   })
 
   it('sends Tencent captcha proof only with the passkey begin request', async () => {
@@ -145,7 +147,7 @@ describe('passkey api', () => {
     expect(post).toHaveBeenNthCalledWith(1, '/auth/passkey/login/begin', {
       tencent_captcha_ticket: 'ticket-value',
       tencent_captcha_randstr: '@rand-value'
-    })
+    }, expect.objectContaining({ authIdentity: expect.any(Object) }))
     expect(post.mock.calls[1][1]).not.toEqual(expect.objectContaining({
       tencent_captcha_ticket: expect.anything(),
       tencent_captcha_randstr: expect.anything()

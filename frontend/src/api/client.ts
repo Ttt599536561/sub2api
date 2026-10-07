@@ -3,7 +3,7 @@
  * Base client with interceptors for authentication, token refresh, and error handling
  */
 
-import axios, { AxiosInstance, AxiosError, InternalAxiosRequestConfig, AxiosResponse } from 'axios'
+import axios, { AxiosInstance, AxiosError, AxiosRequestConfig, InternalAxiosRequestConfig, AxiosResponse } from 'axios'
 import type { ApiResponse } from '@/types'
 import { getLocale } from '@/i18n'
 import {
@@ -43,6 +43,11 @@ function getStoredUserID(): number | null {
   }
 }
 
+/** Capture the caller session before Axios queues its request interceptor. */
+export function ownedAuthRequestConfig(): AxiosRequestConfig & { authIdentity: { userID: number | null; sessionID: string | null } } {
+  return { authIdentity: { userID: getStoredUserID(), sessionID: getAuthSessionID() } }
+}
+
 // Get user's timezone
 const getUserTimezone = (): string => {
   try {
@@ -54,9 +59,13 @@ const getUserTimezone = (): string => {
 
 apiClient.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
-    const expected = (config as InternalAxiosRequestConfig & { welfareIdentity?: { sessionID: string | null; userID: number | null } }).welfareIdentity
+    const ownedConfig = config as InternalAxiosRequestConfig & {
+      authIdentity?: { sessionID: string | null; userID: number | null }
+      welfareIdentity?: { sessionID: string | null; userID: number | null }
+    }
+    const expected = ownedConfig.authIdentity ?? ownedConfig.welfareIdentity
     if (expected && (expected.sessionID !== getAuthSessionID() || expected.userID !== getStoredUserID())) {
-      throw new axios.CanceledError('Authentication session changed before welfare request dispatch')
+      throw new axios.CanceledError('Authentication session changed before request dispatch')
     }
     requestIdentities.set(config, { userID: getStoredUserID(), sessionID: getAuthSessionID() })
     // Attach token from localStorage

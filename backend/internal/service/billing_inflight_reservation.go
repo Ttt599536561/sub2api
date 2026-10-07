@@ -509,6 +509,39 @@ func maxPerRequestPrice(resolved *ResolvedPricing) float64 {
 
 func validCost(v float64) bool { return v > 0 && !math.IsNaN(v) && !math.IsInf(v, 0) }
 
+// explicitlyFreeInflightMedia distinguishes configured zero prices from missing
+// token prices and unsupported audio modes. Search is only a complete price for
+// standalone requests; a free surcharge cannot price an unknown token model.
+func explicitlyFreeInflightMedia(apiKey *APIKey, model string, req InflightEstimateRequest, resolved *ResolvedPricing) bool {
+	if apiKey == nil || apiKey.Group == nil {
+		return false
+	}
+	group := apiKey.Group
+	isZero := func(price *float64) bool { return price != nil && *price == 0 }
+	configuredToken := resolved != nil && resolved.Mode == BillingModeToken &&
+		(resolved.Source == PricingSourceGroup || resolved.Source == PricingSourceChannel)
+	switch req.Kind {
+	case InflightEstimateImage:
+		// Explicit token rules supersede flat image prices at settlement. The
+		// estimate checks every size tier, so all three must explicitly be free.
+		return !configuredToken && isZero(group.ImagePrice1K) && isZero(group.ImagePrice2K) && isZero(group.ImagePrice4K)
+	case InflightEstimateVideo:
+		return !configuredToken && isZero(group.GetVideoPriceForModel(model, req.VideoResolution))
+	case InflightEstimateAudio:
+		switch strings.ToLower(req.AudioMode) {
+		case "tts":
+			return isZero(group.AudioTTSPricePerMillionChars)
+		case "stt":
+			return isZero(group.AudioSTTPricePerHour)
+		case "realtime":
+			return isZero(group.AudioRealtimePricePerMin)
+		}
+	case InflightEstimatePerRequest:
+		return req.SearchCalls > 0 && isZero(group.SearchPricePer1k)
+	}
+	return false
+}
+
 // estimateOne 估算单个候选计费模型，返回含倍率的费用及是否已定价（显式零价也算已定价）。
 func (d inflightEstimateDeps) estimateOne(ctx context.Context, apiKey *APIKey, model string, req InflightEstimateRequest, textRate, imageRate float64) (float64, bool) {
 	cfg := inflightReservationCfg(d.cfg)
@@ -527,7 +560,7 @@ func (d inflightEstimateDeps) estimateOne(ctx context.Context, apiKey *APIKey, m
 	}
 
 	inputTokens, outputTokens := tokenCounts(cfg, req.BodyBytes, req.MaxTokens)
-	priced := false
+	priced := d.billing != nil && explicitlyFreeInflightMedia(apiKey, model, req, resolved)
 	tokenCost := func() float64 {
 		if d.billing == nil {
 			return 0
@@ -577,7 +610,7 @@ func (d inflightEstimateDeps) estimateOne(ctx context.Context, apiKey *APIKey, m
 				}
 			}
 		}
-		if cost <= 0 {
+		if cost <= 0 && !priced {
 			cost = tokenCost()
 		}
 	case InflightEstimateVideo:

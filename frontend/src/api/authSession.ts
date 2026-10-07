@@ -19,3 +19,10 @@ export function advanceAuthSession(): string {
   }
   return id
 }
+
+/** Reject delayed authentication work before it can replace the current login. */
+export function assertAuthSessionCurrent(sessionID: string | null): void {
+  if (sessionID !== getAuthSessionID()) {
+    throw { status: 401, code: 'AUTH_SESSION_CHANGED', message: 'Authentication session changed before the request completed.' }
+  }
+}

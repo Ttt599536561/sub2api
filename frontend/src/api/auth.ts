@@ -3,8 +3,8 @@
  * Handles user login, registration, and logout operations
  */
 
-import { apiClient } from './client'
-import { getAuthSessionID } from './authSession'
+import { apiClient, ownedAuthRequestConfig } from './client'
+import { assertAuthSessionCurrent, getAuthSessionID } from './authSession'
 import { refreshAuthTokens, type RefreshTokenResponse } from './tokenRefresh'
 export type { RefreshTokenResponse } from './tokenRefresh'
 import type {
@@ -130,7 +130,9 @@ export function clearAuthToken(): void {
  * @returns Authentication response with token and user data, or 2FA required response
  */
 export async function login(credentials: LoginRequest): Promise<LoginResponse> {
-  const { data } = await apiClient.post<LoginResponse>('/auth/login', credentials)
+  const sessionID = getAuthSessionID()
+  const { data } = await apiClient.post<LoginResponse>('/auth/login', credentials, ownedAuthRequestConfig())
+  assertAuthSessionCurrent(sessionID)
 
   // Only store token if 2FA is not required
   if (!isTotp2FARequired(data)) {
@@ -153,7 +155,9 @@ export async function login(credentials: LoginRequest): Promise<LoginResponse> {
  * @returns Authentication response with token and user data
  */
 export async function login2FA(request: TotpLogin2FARequest): Promise<AuthResponse> {
-  const { data } = await apiClient.post<AuthResponse>('/auth/login/2fa', request)
+  const sessionID = getAuthSessionID()
+  const { data } = await apiClient.post<AuthResponse>('/auth/login/2fa', request, ownedAuthRequestConfig())
+  assertAuthSessionCurrent(sessionID)
 
   // Store token and user data
   setAuthToken(data.access_token)
@@ -174,7 +178,9 @@ export async function login2FA(request: TotpLogin2FARequest): Promise<AuthRespon
  * @returns Authentication response with token and user data
  */
 export async function register(userData: RegisterRequest): Promise<AuthResponse> {
-  const { data } = await apiClient.post<AuthResponse>('/auth/register', userData)
+  const sessionID = getAuthSessionID()
+  const { data } = await apiClient.post<AuthResponse>('/auth/register', userData, ownedAuthRequestConfig())
+  assertAuthSessionCurrent(sessionID)
 
   // Store token and user data
   setAuthToken(data.access_token)

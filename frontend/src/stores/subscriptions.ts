@@ -26,9 +26,14 @@ function pendingKey(userId: number, subscriptionId: number) {
   return `subscription-daily-reset:${userId}:${subscriptionId}`
 }
 
-function isDefinitiveFailure(error: unknown): boolean {
+function isDefinitiveFailure(error: unknown, uncertain = false): boolean {
   const status = (error as { status?: number })?.status
-  return !!status && status >= 400 && status < 500 && status !== 408
+  const definitive = !!status && status >= 400 && status < 500 && status !== 408
+  if (!definitive || !uncertain) return definitive
+  // A proxy/auth rejection of a retry cannot settle the first POST. Retain its
+  // operation ID until an authoritative reset outcome resolves the uncertainty.
+  const reason = (error as { reason?: unknown })?.reason
+  return typeof reason === 'string' && reason.startsWith('RESET_')
 }
 
 function serverTimeAfter(current: string, incoming: string): boolean {
@@ -243,7 +248,7 @@ export const useSubscriptionStore = defineStore('subscriptions', () => {
     try {
       return applyMutation(await submitPending(pending), pending, generation)
     } catch (error) {
-      if (isDefinitiveFailure(error)) return rejectOperation(error, pending, generation)
+      if (isDefinitiveFailure(error, true)) return rejectOperation(error, pending, generation)
       if (generation === sessionGeneration) pendingDailyResets.value[pending.subscription_id].status = 'checking'
       return null
     }

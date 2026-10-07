@@ -3,7 +3,7 @@
  * Handles payment operations for regular users
  */
 
-import { apiClient } from './client'
+import { apiClient, ownedAuthRequestConfig } from './client'
 import type {
   PaymentConfig,
   SubscriptionPlan,
@@ -46,7 +46,7 @@ export const paymentAPI = {
 
   /** Create a new payment order */
   createOrder(data: CreateOrderRequest) {
-    return apiClient.post<CreateOrderResult>('/payment/orders', data)
+    return apiClient.post<CreateOrderResult>('/payment/orders', data, ownedAuthRequestConfig())
   },
 
   /** Get current user's orders */

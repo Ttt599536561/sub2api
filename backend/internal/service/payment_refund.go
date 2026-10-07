@@ -352,6 +352,9 @@ func (s *PaymentService) ExecuteRefund(ctx context.Context, p *RefundPlan) (*Ref
 				return nil, fmt.Errorf("deduction: %w", err)
 			}
 			p.BalanceToDeduct = deducted
+			if deducted > 0 {
+				s.invalidateRefundBalanceCaches(ctx, p.Order.UserID)
+			}
 		} else {
 			slog.Warn("skipping balance deduction on retry (previous rollback failed)", "orderID", p.OrderID)
 			p.BalanceToDeduct = 0
@@ -573,6 +576,9 @@ func (s *PaymentService) finalizePendingRefundSuccess(ctx context.Context, p *Re
 	}
 	if err = tx.Commit(); err != nil {
 		return nil, fmt.Errorf("commit refund finalization: %w", err)
+	}
+	if p.DeductionType == payment.DeductionTypeBalance && p.BalanceToDeduct > 0 {
+		s.invalidateRefundBalanceCaches(ctx, p.Order.UserID)
 	}
 	if p.DeductionType == payment.DeductionTypeSubscription && p.SubscriptionID > 0 && p.Order.SubscriptionGroupID != nil {
 		// Deduction invalidates inside this transaction. Readers can refill the
@@ -1026,6 +1032,32 @@ func (s *PaymentService) invalidateRefundSubscriptionCaches(sub *dbent.UserSubsc
 	}
 }
 
+// invalidateRefundBalanceCaches is only called after a balance mutation has
+// committed. Cache failures must not make an irreversible refund retryable.
+// These best-effort invalidations share the existing balance-update contract;
+// Redis outages remain bounded by cache TTL, rather than a durable outbox.
+func (s *PaymentService) invalidateRefundBalanceCaches(ctx context.Context, userID int64) {
+	if dbent.TxFromContext(ctx) != nil {
+		return
+	}
+	if s.refundBalanceInvalidator != nil {
+		cacheCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 2*time.Second)
+		err := s.refundBalanceInvalidator.InvalidateUserBalance(cacheCtx, userID)
+		cancel()
+		if err != nil {
+			slog.Warn("invalidate committed refund balance cache", "userID", userID, "error", err)
+		}
+	}
+	if s.refundAuthInvalidator != nil {
+		cacheCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 2*time.Second)
+		err := s.refundAuthInvalidator.InvalidateAuthCacheByUserIDReliable(cacheCtx, userID)
+		cancel()
+		if err != nil {
+			slog.Warn("invalidate committed refund auth cache", "userID", userID, "error", err)
+		}
+	}
+}
+
 func (s *PaymentService) RollbackRefund(ctx context.Context, p *RefundPlan, gErr error) bool {
 	if p.DeductionType == payment.DeductionTypeBalance && p.BalanceToDeduct > 0 {
 		if err := s.userRepo.UpdateBalance(ctx, p.Order.UserID, p.BalanceToDeduct); err != nil {
@@ -1033,6 +1065,7 @@ func (s *PaymentService) RollbackRefund(ctx context.Context, p *RefundPlan, gErr
 			s.writeAuditLog(ctx, p.OrderID, "REFUND_ROLLBACK_FAILED", "admin", map[string]any{"gatewayError": psErrMsg(gErr), "rollbackError": psErrMsg(err), "balanceDeducted": p.BalanceToDeduct})
 			return false
 		}
+		s.invalidateRefundBalanceCaches(ctx, p.Order.UserID)
 	}
 	if p.DeductionType == payment.DeductionTypeSubscription && p.SubDaysToDeduct > 0 && p.SubscriptionID > 0 {
 		if err := s.restoreRefundSubscription(ctx, p); err != nil {

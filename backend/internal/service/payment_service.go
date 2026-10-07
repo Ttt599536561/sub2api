@@ -201,6 +201,8 @@ type PaymentService struct {
 	resumeService            *PaymentResumeService
 	affiliateService         *AffiliateService
 	welfarePaymentRepo       WelfarePaymentRepository
+	refundBalanceInvalidator WelfareBalanceInvalidator
+	refundAuthInvalidator    WelfareAuthInvalidator
 	notificationEmailService *NotificationEmailService
 }
 
@@ -208,6 +210,13 @@ func NewPaymentService(entClient *dbent.Client, registry *payment.Registry, load
 	svc := &PaymentService{entClient: entClient, registry: registry, loadBalancer: newVisibleMethodLoadBalancer(loadBalancer, configService), redeemService: redeemService, subscriptionSvc: subscriptionSvc, configService: configService, userRepo: userRepo, groupRepo: groupRepo, affiliateService: affiliateService}
 	svc.resumeService = psNewPaymentResumeService(configService)
 	return svc
+}
+
+// SetRefundCacheInvalidators connects refund balance changes to the shared
+// billing and API-key authentication caches without changing constructor callers.
+func (s *PaymentService) SetRefundCacheInvalidators(balance WelfareBalanceInvalidator, auth WelfareAuthInvalidator) {
+	s.refundBalanceInvalidator = balance
+	s.refundAuthInvalidator = auth
 }
 
 func (s *PaymentService) SetNotificationEmailService(notificationEmailService *NotificationEmailService) {

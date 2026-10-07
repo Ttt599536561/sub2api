@@ -6,7 +6,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed, readonly } from 'vue'
 import { authAPI, isTotp2FARequired, passkeyAPI, type LoginResponse } from '@/api'
-import { advanceAuthSession, getAuthSessionID } from '@/api/authSession'
+import { advanceAuthSession, assertAuthSessionCurrent, getAuthSessionID } from '@/api/authSession'
 import type {
   User,
   LoginRequest,
@@ -248,8 +248,10 @@ export const useAuthStore = defineStore('auth', () => {
    * @throws Error if login fails
    */
   async function login(credentials: LoginRequest): Promise<LoginResponse> {
+    let sessionID = getAuthSessionID()
     try {
       const response = await authAPI.login(credentials)
+      assertAuthSessionCurrent(sessionID)
 
       // If 2FA is required, return the response without setting auth state
       if (isTotp2FARequired(response)) {
@@ -257,10 +259,12 @@ export const useAuthStore = defineStore('auth', () => {
       }
 
       // Set auth state from the response
-      setAuthFromResponse(response)
+      sessionID = advanceAuthSession()
+      setAuthFromResponse(response, sessionID)
 
       return response
     } catch (error) {
+      if ((error as { code?: string })?.code !== 'AUTH_SESSION_CHANGED') assertAuthSessionCurrent(sessionID)
       // Clear any partial state on error
       clearAuthAfterError(error)
       throw error
@@ -275,22 +279,30 @@ export const useAuthStore = defineStore('auth', () => {
    * @throws Error if 2FA verification fails
    */
   async function login2FA(tempToken: string, totpCode: string): Promise<User> {
+    let sessionID = getAuthSessionID()
     try {
       const response = await authAPI.login2FA({ temp_token: tempToken, totp_code: totpCode })
-      setAuthFromResponse(response)
+      assertAuthSessionCurrent(sessionID)
+      sessionID = advanceAuthSession()
+      setAuthFromResponse(response, sessionID)
       return user.value!
     } catch (error) {
+      if ((error as { code?: string })?.code !== 'AUTH_SESSION_CHANGED') assertAuthSessionCurrent(sessionID)
       clearAuthAfterError(error)
       throw error
     }
   }
 
   async function loginWithPasskey(proof?: ActionCaptchaRequestProof): Promise<User> {
+    let sessionID = getAuthSessionID()
     try {
       const response = await passkeyAPI.login(proof)
-      setAuthFromResponse(response)
+      assertAuthSessionCurrent(sessionID)
+      sessionID = advanceAuthSession()
+      setAuthFromResponse(response, sessionID)
       return user.value!
     } catch (error) {
+      if ((error as { code?: string })?.code !== 'AUTH_SESSION_CHANGED') assertAuthSessionCurrent(sessionID)
       clearAuthAfterError(error)
       throw error
     }
@@ -300,8 +312,7 @@ export const useAuthStore = defineStore('auth', () => {
    * Set auth state from an AuthResponse
    * Internal helper function
    */
-  function setAuthFromResponse(response: AuthResponse): void {
-    const nextSession = advanceAuthSession()
+  function setAuthFromResponse(response: AuthResponse, nextSession: string): void {
     // Store token and user
     token.value = response.access_token
 
@@ -341,14 +352,18 @@ export const useAuthStore = defineStore('auth', () => {
    * @throws Error if registration fails
    */
   async function register(userData: RegisterRequest): Promise<User> {
+    let sessionID = getAuthSessionID()
     try {
       const response = await authAPI.register(userData)
+      assertAuthSessionCurrent(sessionID)
 
       // Use the common helper to set auth state
-      setAuthFromResponse(response)
+      sessionID = advanceAuthSession()
+      setAuthFromResponse(response, sessionID)
 
       return user.value!
     } catch (error) {
+      if ((error as { code?: string })?.code !== 'AUTH_SESSION_CHANGED') assertAuthSessionCurrent(sessionID)
       // Clear any partial state on error
       clearAuthAfterError(error)
       throw error
