@@ -1,25 +1,46 @@
-# 二开 0.2.14-r1 镜像发布与升级
+# 已发布：Sub2API 二开 0.2.14-r1
 
-本次发布包含官方 Sub2API v0.2.14、线上 v0.2.8-r1 的二开能力以及两轮追加审查修复。应用源码提交为 `9e6da49e32aec8c91da1e611c3b6a6f5f20477be`；发布流程提交新增版本专用工作流和本文，并将根 Dockerfile 的 pnpm 固定为本次已验证的 9.15.9；不改变应用业务源码。镜像 revision 以 GitHub 发布事件的完整提交 SHA 为准。
+2026-10-07（Asia/Shanghai）已在 GitHub 完成构建与发布。此镜像包含官方 0.2.9～0.2.14 累积更新、原 v0.2.8-r1 的二开能力，以及两轮追加审查的修复。
 
-## 发布目标
+## 镜像地址
 
-- 仓库：Ttt599536561/sub2api。
-- 整合分支：codex/merge-upstream-v0.2.14。
-- 发布分支：codex/publish-v0.2.14-r1。
-- 工作流：.github/workflows/publish-custom-v0214.yml。
-- 镜像：ghcr.io/ttt599536561/sub2api-custom:0.2.14-r1。
-- 架构：linux/amd64 和 linux/arm64，分别在原生 GitHub runner 构建与验证。
+```text
+ghcr.io/ttt599536561/sub2api-custom:0.2.14-r1
+```
 
-这份文件记录发布流程。镜像是否已经成功发布、实际 digest 和 GitHub 运行链接，以后续发布验证记录为准，不把目标地址当作已经可拉取的证明。
+固定内容地址（部署需完全锁定内容时使用）：
 
-## 验证顺序
+```text
+ghcr.io/ttt599536561/sub2api-custom@sha256:3a11e36016484c1ac6cce93ec85b5964c7439c32001305be569e94e33bc36f63
+```
 
-先推送整合分支，等待相同 SHA 的 GitHub CI 与安全扫描通过，再推送专用发布分支。工作流从事件的不可变 SHA 检出，校验基础版本文件为 0.2.14，注入二开版本 0.2.14-r1 和该 SHA。每个架构先验证镜像 revision、架构、程序版本、PostgreSQL 工具、运行资源、setup 状态及内嵌前端，再使用已验证 digest 合成最终标签。若最终标签已存在则失败，不覆盖已有版本；架构中间标签加入 run_id/run_attempt，最终清单结构化校验两种运行架构并输出 digest。手动触发也限定到专用发布分支。
+支持 linux/amd64 与 linux/arm64。两种架构均在原生 GitHub runner 构建和启动验证，并通过匿名 GHCR 索引、manifest/config 内容及 SHA-256 校验；服务器可直接拉取。
 
-## 线上更新
+## 源码与 GitHub 验证
 
-在现有 Compose 项目目录操作，先保存当前 Compose/.env 和数据库备份。将 sub2api 服务的 image 设置为发布验证记录中的固定标签或完整 digest；保留现有数据库、Redis、配置、挂载和环境变量。
+- 镜像源码/revision：`5874208c9c0d12418fedab0ee59e2650dd83808f`。
+- 应用审查修复源码：`9e6da49e32aec8c91da1e611c3b6a6f5f20477be`。之后只添加发布文档、CI/发布流程，以及把 Dockerfile 的 pnpm 固定为已验证的 9.15.9；backend/frontend 应用源码没有变化。
+- 整合分支：`codex/merge-upstream-v0.2.14`；发布分支：`codex/publish-v0.2.14-r1`（固定在镜像源码提交）。
+- [发布前同 SHA 的 CI：成功](https://github.com/Ttt599536561/sub2api/actions/runs/37609509824)
+- [发布前安全扫描：成功](https://github.com/Ttt599536561/sub2api/actions/runs/37609510423)
+- [双架构构建与发布：成功](https://github.com/Ttt599536561/sub2api/actions/runs/37610808596)
+- [发布分支 CI：成功](https://github.com/Ttt599536561/sub2api/actions/runs/37610808393)
+- [发布分支安全扫描：成功](https://github.com/Ttt599536561/sub2api/actions/runs/37610808398)
+
+每个架构先验证版本、源码标签、架构、pg_dump/psql、定价资源文件、容器启动、/setup/status 以及内嵌前端，再按已验证 digest 合成最终标签。最终清单精确包含两种 Linux 运行架构；额外构建证明条目不作为运行架构计算。架构中间标签带 run_id/run_attempt，最终版本拒绝覆盖。
+
+| 平台 | CI 验证的架构索引 digest | 最终运行镜像 digest |
+| --- | --- | --- |
+| linux/amd64 | `sha256:efbe6c08fd24053ca406bf7d2128ca2e12ae3806f8b562bdd4f7783684aeaec1` | `sha256:4fb9bcf0e8471776bd201d486b3afcddccaff0be5e3f9e12d8dcead2f29ad2e5` |
+| linux/arm64 | `sha256:5a862d53d111687380f92e15b38cbaec23abc62765871e2af89a602b53bbe4b8` | `sha256:bcb9110a9e288b7085cee160439f8bfbdc37d7815d32587951a9efa379bdb032` |
+
+最终索引 digest：`sha256:3a11e36016484c1ac6cce93ec85b5964c7439c32001305be569e94e33bc36f63`。上表运行镜像逐一匹配 GitHub 上传的已验证架构产物，镜像 config 的版本、源码 SHA、源仓库也已独立核对。
+
+首次 CI 的集成测试曾因新 runner 未准备好 postgres:18.1-alpine3.23 而失败，尚未运行数据库测试。镜像标签实际存在；增加固定 PostgreSQL/Redis/Ryuk 镜像的显式预拉取、最多三次重试和存在性检查后，完整 CI 已通过。没有修改业务实现、改数据库版本、禁用容器回收或跳过集成测试。首次失败不计作通过证据。
+
+## 更新线上部署
+
+先备份数据库，并保存当前 Compose/.env。保留数据库、Redis、配置、挂载与原环境变量，只修改现有应用服务的 image：
 
 ```yaml
 services:
@@ -27,7 +48,7 @@ services:
     image: ghcr.io/ttt599536561/sub2api-custom:0.2.14-r1
 ```
 
-确认镜像已经发布后，只更新应用服务：
+在服务器现有 Compose 项目目录执行：
 
 ```sh
 docker compose pull sub2api
@@ -35,6 +56,8 @@ docker compose up -d --no-deps sub2api
 docker compose logs --tail=100 sub2api
 ```
 
-如果实际服务名不是 sub2api，请使用现有 Compose 中的服务名。不要执行 down -v，不删除数据库卷。数据迁移后回退旧镜像是否兼容不能仅凭启动成功判断，保留升级前数据库备份。
+服务名不同则替换 sub2api。需要固定内容时，将 image 的标签地址替换为上面的完整 digest 地址。不要执行 down -v，不删除数据库卷。
 
-从 v0.2.8-r1 升级会包含两个新增数据库迁移（充值赠金和 TypeSafe）；所有历史 SQL 保持原样，三条历史升级路径已在本地真实 PostgreSQL/Redis 验证。本轮不连接生产服务器，线上部署由用户执行。
+从 v0.2.8-r1 升级会执行充值赠金与 TypeSafe 两份新增迁移；历史 SQL 原样保留，三条历史升级路径已通过真实 PostgreSQL/Redis 验证。生产数据仍应单独备份；迁移后回退旧镜像不能替代恢复数据库备份。本任务没有连接或更新生产服务器，线上部署由用户执行。
+
+本地发布证据位于 `E:/sub2二次开发项目/.cache/publish-v0.2.14-r1`，包括工作流检查、GitHub 运行状态、架构 digest 产物、原始 OCI JSON 和 verification.json。主目录原有未提交修改保持不变。
