@@ -5,11 +5,11 @@ import WelfareSettingsView from '../WelfareSettingsView.vue'
 const { getSettings, updateSettings, showError, showSuccess, fetchPublicSettings } = vi.hoisted(() => ({
   getSettings: vi.fn(), updateSettings: vi.fn(), showError: vi.fn(), showSuccess: vi.fn(), fetchPublicSettings: vi.fn()
 }))
-vi.mock('@/api/admin/welfare', () => ({ adminWelfareAPI: { getSettings, updateSettings } }))
+vi.mock('@/api/admin/welfare', () => ({ adminWelfareAPI: { getSettings, updateSettings, getStatistics: vi.fn().mockResolvedValue(null), getStatisticsUsers: vi.fn().mockResolvedValue(null), getStatisticsRecords: vi.fn().mockResolvedValue(null) } }))
 vi.mock('@/stores/app', () => ({ useAppStore: () => ({ showError, showSuccess, fetchPublicSettings }) }))
 vi.mock('vue-i18n', async () => ({
   ...await vi.importActual<typeof import('vue-i18n')>('vue-i18n'),
-  useI18n: () => ({ t: (key: string) => key })
+  useI18n: () => ({ t: (key: string) => key, locale: { value: 'zh-CN' } })
 }))
 
 describe('WelfareSettingsView', () => {
@@ -22,8 +22,9 @@ describe('WelfareSettingsView', () => {
   it('saves the rewards switch and refreshes public availability', async () => {
     const wrapper = mount(WelfareSettingsView, { global: { stubs: { AppLayout: { template: '<div><slot /></div>' } } } })
     await flushPromises()
+    await wrapper.get('[data-test="tab-settings"]').trigger('click')
     await wrapper.get('input[type=checkbox]').setValue(true)
-    await wrapper.get('form').trigger('submit')
+    await wrapper.get('[data-test="settings-form"]').trigger('submit')
     await flushPromises()
     expect(updateSettings).toHaveBeenCalledWith({ enabled: true })
     expect(fetchPublicSettings).toHaveBeenCalledWith(true)
@@ -34,7 +35,8 @@ describe('WelfareSettingsView', () => {
     fetchPublicSettings.mockRejectedValue(new Error('network'))
     const wrapper = mount(WelfareSettingsView, { global: { stubs: { AppLayout: { template: '<div><slot /></div>' } } } })
     await flushPromises()
-    await wrapper.get('form').trigger('submit')
+    await wrapper.get('[data-test="tab-settings"]').trigger('click')
+    await wrapper.get('[data-test="settings-form"]').trigger('submit')
     await flushPromises()
     expect(showSuccess).toHaveBeenCalled()
     expect(showError).not.toHaveBeenCalled()

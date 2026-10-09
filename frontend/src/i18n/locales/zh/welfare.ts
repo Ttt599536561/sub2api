@@ -17,6 +17,19 @@ export default {
     ruleSubscriptionRefund: '退款确认后，按该订单剩余实付金额重新计算赠送次数。多用的次数从后续获得的次数中抵扣，已获得的福利余额不收回。',
     ruleRedeem: '签到与抽奖奖励先进入福利余额，可手动按 1:1 兑换账户余额，支持部分或全部兑换，无手续费。', probabilityHint: '每次抽奖独立随机，奖励均存入福利余额。',
     errors: { WELFARE_STORAGE_UNAVAILABLE: '无法保存操作进度，请允许浏览器存储后重试。', WELFARE_OPERATION_UNRESOLVED: '上次兑换结果尚未确认，请先重试原兑换。', network: '暂时无法获取最新结果，请重试。', dateRange: '开始日期不能晚于结束日期。', WELFARE_PAUSED: '活动暂时暂停，已有福利余额仍可兑换。', WELFARE_NOT_LAUNCHED: '福利活动尚未开放。', WELFARE_NO_TICKETS: '暂无可用抽奖机会，请刷新后重试。', WELFARE_QUOTE_STALE: '福利余额已变化，请重新查看兑换金额后确认。', WELFARE_INSUFFICIENT_BALANCE: '可用福利余额不足，请重新查看兑换金额。', WELFARE_IDEMPOTENCY_CONFLICT: '本次操作信息不一致，请刷新后重试。', WELFARE_INVALID_AMOUNT: '请输入有效的兑换金额。', WELFARE_INVALID_REQUEST: '请求无效，请刷新后重试。' },
-    admin: { title: '福利管理', description: '管理福利活动的开放状态', program: '活动状态', enabledLabel: '开放签到、抽奖与消费送次数', enabledHint: '暂停期间的 API 消费和完成的套餐订单不赠送次数；用户仍可兑换已有福利余额并查看记录。', launchAt: '首次开放时间', notLaunched: '尚未开放', timezone: '活动时区', rulesVersion: '奖励规则版本', launchHint: '首次开放后，API 余额消费与人民币套餐购买分别按规则赠送次数。历史消费、历史已完成订单和首次开放前付款的订单不补发；重新开放保留已有权益。', saved: '福利设置已保存', loadFailed: '福利设置加载失败', saveFailed: '福利设置保存失败' }
+    admin: {
+      title: '福利管理', description: '查看签到与抽奖奖励统计，管理福利活动开放状态', statisticsTab: '福利统计', settingsTab: '活动设置', program: '活动状态', enabledLabel: '开放签到、抽奖与消费送次数', enabledHint: '暂停期间的 API 消费和完成的套餐订单不赠送次数；用户仍可兑换已有福利余额并查看记录。', launchAt: '首次开放时间', notLaunched: '尚未开放', timezone: '活动时区', rulesVersion: '奖励规则版本', launchHint: '首次开放后，API 余额消费与人民币套餐购买分别按规则赠送次数。历史消费、历史已完成订单和首次开放前付款的订单不补发；重新开放保留已有权益。', saved: '福利设置已保存', loadFailed: '福利设置加载失败', saveFailed: '福利设置保存失败',
+      stats: {
+        overview: '期间奖励汇总', filterTitle: '统计筛选', timezoneHint: '北京时间（Asia/Shanghai）· 最多 366 天', range: '日期范围', search: '用户邮箱', searchHint: '输入邮箱片段', userId: '用户 ID', userIdHint: '输入完整用户 ID', apply: '应用筛选', appliedRange: '已应用：',
+        presets: { today: '今天', yesterday: '昨天', last7: '近 7 天', last30: '近 30 天', month: '本月', custom: '自定义' },
+        sortBy: '排序字段', sortOrder: '排序顺序', ascending: '升序（从小到大）', descending: '降序（从大到小）',
+        invalidRange: '请输入有效日期，开始日期不得晚于结束日期，范围最多 366 天。', invalidUserId: '用户 ID 必须为有效的正整数。', loadFailed: '福利统计加载失败，请重试。',
+        daily_amount: '基础签到奖励', streak_amount: '连续签到额外奖励', checkin_amount: '签到奖励合计', draw_amount: '抽奖奖励', total_amount: '奖励总额',
+        checkinUsers: '签到人数', checkinCount: '签到次数', streakUsers: '连续奖励人数', drawUsers: '抽奖人数', drawCount: '抽奖次数', date: '业务日期',
+        dailyTitle: '每日奖励', dailyHint: '日期按北京时间划分，无奖励日期显示为零。点击日期查看当日明细。', dailyUnavailable: '每日数据暂不可用，请重试汇总数据。',
+        usersTitle: '用户奖励', usersHint: '期间奖励按上方筛选计算。历史累计为用户全部历史奖励，不随日期范围缩减。点击用户查看其奖励明细。', user: '用户', period: '期间', periodCheckinCount: '期间签到次数', lifetimeCheckinDays: '历史累计签到天数', periodTotal: '期间奖励合计', lifetimeRewards: '历史累计奖励分类', lifetimeTotal: '历史累计奖励总额', emptyUsers: '该条件下暂无参与用户',
+        recordsTitle: '奖励明细', recordsHint: '仅展示签到和抽奖发放的奖励。明细日期可在总览日期范围内进一步缩小；筛选总览会重置明细条件。', detailScope: '当前明细范围：', clearScope: '清除明细定位', detailRangeError: '明细日期必须有效且位于已应用的总览日期范围内。', rewardAmount: '奖励金额', cycleDay: '本轮连续第几天', emptyRecords: '该条件下暂无奖励明细'
+      }
+    }
   }
 }

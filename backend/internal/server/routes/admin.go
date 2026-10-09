@@ -77,6 +77,9 @@ func RegisterAdminRoutes(
 		registerSettingsRoutes(admin, h)
 		if h.Welfare != nil {
 			admin.GET("/welfare/settings", h.Welfare.GetSettings)
+			admin.GET("/welfare/statistics", h.Welfare.AdminStatistics)
+			admin.GET("/welfare/statistics/users", h.Welfare.AdminStatisticsUsers)
+			admin.GET("/welfare/statistics/records", h.Welfare.AdminStatisticsRecords)
 			admin.PUT("/welfare/settings", h.Welfare.UpdateSettings)
 		}
 

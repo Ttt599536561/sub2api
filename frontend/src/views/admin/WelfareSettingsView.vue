@@ -1,13 +1,18 @@
 <template>
   <AppLayout>
-    <div class="mx-auto max-w-3xl space-y-6">
+    <div class="mx-auto max-w-screen-2xl space-y-6">
       <div>
         <h1 class="text-2xl font-bold text-gray-900 dark:text-white">{{ t('welfare.admin.title') }}</h1>
         <p class="mt-2 text-sm text-gray-500 dark:text-dark-400">{{ t('welfare.admin.description') }}</p>
       </div>
+      <div role="tablist" :aria-label="t('welfare.admin.title')" class="flex gap-1 border-b border-gray-200 dark:border-dark-700">
+        <button v-for="tab in ['statistics', 'settings'] as const" :id="`welfare-tab-${tab}`" :key="tab" type="button" role="tab" :data-test="`tab-${tab}`" :aria-selected="activeTab === tab" :aria-controls="`welfare-panel-${tab}`" class="border-b-2 px-5 py-3 text-sm font-medium" :class="activeTab === tab ? 'border-primary-500 text-primary-600 dark:text-primary-400' : 'border-transparent text-gray-500 hover:text-gray-800 dark:text-dark-400 dark:hover:text-white'" @click="activeTab = tab">{{ t(`welfare.admin.${tab}Tab`) }}</button>
+      </div>
+      <section id="welfare-panel-statistics" v-show="activeTab === 'statistics'" role="tabpanel" aria-labelledby="welfare-tab-statistics"><WelfareStatisticsPanel /></section>
+      <section id="welfare-panel-settings" v-show="activeTab === 'settings'" role="tabpanel" aria-labelledby="welfare-tab-settings" class="mx-auto max-w-3xl">
       <div v-if="loading" class="card p-6 text-sm text-gray-500" role="status">{{ t('common.loading') }}</div>
       <div v-else-if="loadError" class="card p-6 text-sm text-red-600" role="alert">{{ loadError }}</div>
-      <form v-else class="card space-y-6 p-6" @submit.prevent="save">
+      <form v-else data-test="settings-form" class="card space-y-6 p-6" @submit.prevent="save">
         <h2 class="text-lg font-semibold text-gray-900 dark:text-white">{{ t('welfare.admin.program') }}</h2>
         <label class="flex cursor-pointer items-start gap-3">
           <input v-model="enabled" type="checkbox" :disabled="saving" class="mt-1 h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500" />
@@ -26,6 +31,7 @@
           <button type="submit" class="btn btn-primary" :disabled="saving">{{ saving ? t('common.loading') : t('common.save') }}</button>
         </div>
       </form>
+      </section>
     </div>
   </AppLayout>
 </template>
@@ -34,11 +40,13 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import AppLayout from '@/components/layout/AppLayout.vue'
+import WelfareStatisticsPanel from '@/components/admin/welfare/WelfareStatisticsPanel.vue'
 import { adminWelfareAPI, type WelfareAdminSettings } from '@/api/admin/welfare'
 import { useAppStore } from '@/stores/app'
 
 const { t } = useI18n()
 const appStore = useAppStore()
+const activeTab = ref<'statistics' | 'settings'>('statistics')
 const settings = ref<WelfareAdminSettings | null>(null)
 const enabled = ref(false)
 const loading = ref(true)
