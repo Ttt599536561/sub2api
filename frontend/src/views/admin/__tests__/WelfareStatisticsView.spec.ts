@@ -1,5 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
+import { createPinia, setActivePinia } from 'pinia'
+import { useAuthStore } from '@/stores/auth'
+import type { User } from '@/types'
 import WelfareSettingsView from '../WelfareSettingsView.vue'
 import DataTable from '@/components/common/DataTable.vue'
 import Pagination from '@/components/common/Pagination.vue'
@@ -29,6 +32,12 @@ async function applySearch(value: string) { await wrapper.get('[data-test="stats
 describe('administrator welfare statistics', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    localStorage.clear()
+    localStorage.setItem('auth_session_id', 'administrator-session')
+    localStorage.setItem('auth_user', JSON.stringify({ id: 1, role: 'admin' }))
+    localStorage.setItem('auth_token', 'administrator-token')
+    setActivePinia(createPinia())
+    useAuthStore().$patch({ user: { id: 1, role: 'admin' } as User, token: 'administrator-token' })
     vi.useFakeTimers({ toFake: ['Date'] })
     vi.setSystemTime(new Date('2026-10-08T16:30:00Z'))
     getStatistics.mockResolvedValue(overview)
@@ -36,7 +45,7 @@ describe('administrator welfare statistics', () => {
     getStatisticsRecords.mockResolvedValue(records)
     getSettings.mockResolvedValue({ enabled: false, launch_at: null, rules_version: 2 })
   })
-  afterEach(() => { wrapper?.unmount(); vi.useRealTimers() })
+  afterEach(() => { wrapper?.unmount(); localStorage.clear(); vi.useRealTimers() })
 
   it('opens statistics by default with the last seven Shanghai business dates and exact money', async () => {
     createView(); await flushPromises()

@@ -1,5 +1,8 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
+import { createPinia, setActivePinia } from 'pinia'
+import { useAuthStore } from '@/stores/auth'
+import type { User } from '@/types'
 import WelfareSettingsView from '../WelfareSettingsView.vue'
 
 const { getSettings, updateSettings, showError, showSuccess, fetchPublicSettings } = vi.hoisted(() => ({
@@ -15,10 +18,17 @@ vi.mock('vue-i18n', async () => ({
 describe('WelfareSettingsView', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    localStorage.clear()
+    localStorage.setItem('auth_session_id', 'administrator-session')
+    localStorage.setItem('auth_user', JSON.stringify({ id: 1, role: 'admin' }))
+    localStorage.setItem('auth_token', 'administrator-token')
+    setActivePinia(createPinia())
+    useAuthStore().$patch({ user: { id: 1, role: 'admin' } as User, token: 'administrator-token' })
     getSettings.mockResolvedValue({ enabled: false, launch_at: null, rules_version: 2 })
     updateSettings.mockResolvedValue({ enabled: true, launch_at: '2026-09-19T00:00:00Z', rules_version: 2 })
     fetchPublicSettings.mockResolvedValue({ welfare_enabled: true })
   })
+  afterEach(() => { localStorage.clear() })
   it('saves the rewards switch and refreshes public availability', async () => {
     const wrapper = mount(WelfareSettingsView, { global: { stubs: { AppLayout: { template: '<div><slot /></div>' } } } })
     await flushPromises()

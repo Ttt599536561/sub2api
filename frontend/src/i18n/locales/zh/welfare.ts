@@ -20,6 +20,7 @@ export default {
     admin: {
       title: '福利管理', description: '查看签到与抽奖奖励统计，管理福利活动开放状态', statisticsTab: '福利统计', settingsTab: '活动设置', program: '活动状态', enabledLabel: '开放签到、抽奖与消费送次数', enabledHint: '暂停期间的 API 消费和完成的套餐订单不赠送次数；用户仍可兑换已有福利余额并查看记录。', launchAt: '首次开放时间', notLaunched: '尚未开放', timezone: '活动时区', rulesVersion: '奖励规则版本', launchHint: '首次开放后，API 余额消费与人民币套餐购买分别按规则赠送次数。历史消费、历史已完成订单和首次开放前付款的订单不补发；重新开放保留已有权益。', saved: '福利设置已保存', loadFailed: '福利设置加载失败', saveFailed: '福利设置保存失败',
       stats: {
+        sessionChanged: '登录状态已变化，统计数据已清除。请刷新页面并确认当前账号具有管理员权限。',
         overview: '期间奖励汇总', filterTitle: '统计筛选', timezoneHint: '北京时间（Asia/Shanghai）· 最多 366 天', range: '日期范围', search: '用户邮箱', searchHint: '输入邮箱片段', userId: '用户 ID', userIdHint: '输入完整用户 ID', apply: '应用筛选', appliedRange: '已应用：',
         presets: { today: '今天', yesterday: '昨天', last7: '近 7 天', last30: '近 30 天', month: '本月', custom: '自定义' },
         sortBy: '排序字段', sortOrder: '排序顺序', ascending: '升序（从小到大）', descending: '降序（从大到小）',
