@@ -212,17 +212,26 @@ func testDeployedCustomUpgrade(t *testing.T, baseline migrationUpgradeBaseline) 
 		require.NoError(t, db.QueryRowContext(ctx, "SELECT checksum FROM schema_migrations WHERE filename=$1", name).Scan(&checksum))
 		require.Equal(t, fmt.Sprintf("%x", sha256.Sum256([]byte(strings.TrimSpace(string(contents))))), checksum, "%s", name)
 	}
-	// The two new migrations share 241: both must have applied. New platform
-	// rows work, unsupported platforms remain rejected, and a later startup
-	// must preserve an explicitly set bonus rather than reset it to the default.
+	// The two migrations sharing 241 must both have applied. Migration 242
+	// moves platform membership validation into the application, so SQL can
+	// persist a future platform without another whitelist migration. A later
+	// startup must preserve these rows and an explicitly set order bonus.
 	_, err = db.ExecContext(ctx, `INSERT INTO user_platform_quotas (user_id,platform) VALUES($1,'typesafe')`, userID)
 	require.NoError(t, err)
 	_, err = db.ExecContext(ctx, `INSERT INTO composite_model_routes (group_id,public_model,target_platform) VALUES($1,'typesafe','typesafe')`, groupID)
 	require.NoError(t, err)
-	_, err = db.ExecContext(ctx, `INSERT INTO user_platform_quotas (user_id,platform) VALUES($1,'invalid_platform')`, userID)
-	require.ErrorContains(t, err, "user_platform_quotas_platform_check")
-	_, err = db.ExecContext(ctx, `INSERT INTO composite_model_routes (group_id,public_model,target_platform) VALUES($1,'invalid','invalid_platform')`, groupID)
-	require.ErrorContains(t, err, "composite_model_routes_target_platform_check")
+	_, err = db.ExecContext(ctx, `INSERT INTO user_platform_quotas (user_id,platform) VALUES($1,'future_platform')`, userID)
+	require.NoError(t, err)
+	var futureQuotaCount int
+	require.NoError(t, db.QueryRowContext(ctx,
+		`SELECT count(*) FROM user_platform_quotas WHERE user_id=$1 AND platform='future_platform'`, userID).Scan(&futureQuotaCount))
+	require.Equal(t, 1, futureQuotaCount, "242 must allow exactly the inserted future-platform quota row")
+	_, err = db.ExecContext(ctx, `INSERT INTO composite_model_routes (group_id,public_model,target_platform) VALUES($1,'future-model','future_platform')`, groupID)
+	require.NoError(t, err)
+	var futureRouteCount int
+	require.NoError(t, db.QueryRowContext(ctx,
+		`SELECT count(*) FROM composite_model_routes WHERE group_id=$1 AND public_model='future-model' AND target_platform='future_platform'`, groupID).Scan(&futureRouteCount))
+	require.Equal(t, 1, futureRouteCount, "242 must allow exactly the inserted future-platform route row")
 	_, err = db.ExecContext(ctx, `INSERT INTO payment_orders
 		(user_id,amount,pay_amount,bonus_amount,order_type,status,paid_at,completed_at,expires_at,out_trade_no)
 		VALUES($1,110,100,10,'balance','COMPLETED',now(),now(),now()+interval '1 hour','post-upgrade-bonus-order')`, userID)

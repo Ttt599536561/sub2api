@@ -161,8 +161,10 @@ const handleClose = () => {
 }
 
 const handleEscape = (event: KeyboardEvent) => {
-  if (dialogStack.some(entry => entry.trapFocus) && topDialog() !== openEntry) return
-  if (props.show && props.closeOnEscape && event.key === 'Escape') {
+  const isTop = dialogStack.some(entry => entry.trapFocus)
+    ? topDialog() === openEntry
+    : [...openDialogs].pop() === dialogId
+  if (props.show && props.closeOnEscape && event.key === 'Escape' && isTop) {
     emit('close')
   }
 }

@@ -387,8 +387,10 @@ function closeDetail() {
 async function markAsRead(id: number) {
   const generation = identityGeneration
   try {
-    await announcementStore.markAsRead(id)
-    return true
+    const marked = await announcementStore.markAsRead(id)
+    if (generation !== identityGeneration) return false
+    if (!marked) appStore.showError(t('common.unknownError'))
+    return marked
   } catch (err: any) {
     if (generation !== identityGeneration) return
     appStore.showError(err?.message || t('common.unknownError'))

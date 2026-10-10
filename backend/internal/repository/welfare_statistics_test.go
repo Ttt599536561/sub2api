@@ -12,7 +12,7 @@ import (
 func TestWelfareAdminStatisticsRepositorySnapshotAndExactMoney(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	repo, ok := any(NewWelfareRepository(db)).(service.WelfareStatisticsRepository)
 	require.True(t, ok, "repository must read immutable reward facts")
 	mock.ExpectBegin()
@@ -31,7 +31,7 @@ func TestWelfareAdminStatisticsRepositorySnapshotAndExactMoney(t *testing.T) {
 func TestWelfareAdminStatisticsRepositoryRollbackOnQueryFailure(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	repo, ok := any(NewWelfareRepository(db)).(service.WelfareStatisticsRepository)
 	require.True(t, ok)
 	mock.ExpectBegin()
@@ -45,8 +45,9 @@ func TestWelfareAdminStatisticsRepositoryRollbackOnQueryFailure(t *testing.T) {
 func TestWelfareAdminStatisticsRepositoryLiteralSearchAndLargeAmount(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
-	defer db.Close()
-	repo := NewWelfareRepository(db).(service.WelfareStatisticsRepository)
+	defer func() { _ = db.Close() }()
+	repo, ok := NewWelfareRepository(db).(service.WelfareStatisticsRepository)
+	require.True(t, ok)
 	mock.ExpectBegin()
 	cols := []string{"date", "daily", "streak", "draw", "checkin_users", "checkin_count", "streak_users", "draw_users", "draw_count", "participants"}
 	mock.ExpectQuery(`ILIKE \$3`).WithArgs("2026-10-08", "2026-10-09", `%a\%\_\\' OR 1=1%`).WillReturnRows(sqlmock.NewRows(cols).AddRow("", "18446744073709551614", "0", "1", 1, 2, 0, 1, 1, 1))

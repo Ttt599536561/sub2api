@@ -100,7 +100,7 @@ func (r *welfareRepository) AdminStatistics(ctx context.Context, filter service.
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	result := &service.WelfareStatistics{DateFrom: filter.DateFrom, DateTo: filter.DateTo, Timezone: "Asia/Shanghai", Daily: []service.WelfareStatisticsDay{}}
 	for rows.Next() {
 		var date string
@@ -161,7 +161,7 @@ func (r *welfareRepository) AdminStatisticsUsers(ctx context.Context, filter ser
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	for rows.Next() {
 		var item service.WelfareStatisticsUser
 		var p, l welfareStatisticsTotalsScan
@@ -211,7 +211,7 @@ func (r *welfareRepository) AdminStatisticsRecords(ctx context.Context, filter s
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	for rows.Next() {
 		var item service.WelfareStatisticsRecord
 		var amount string

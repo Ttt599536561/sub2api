@@ -24,7 +24,7 @@ func TestWelfareStatisticsMigrationRecoversInvalidIndexBeforeRetry(t *testing.T)
 		t.Run(label, func(t *testing.T) {
 			db, mock, err := sqlmock.New()
 			require.NoError(t, err)
-			defer db.Close()
+			defer func() { _ = db.Close() }()
 			prepareMigrationsBootstrapExpectations(mock)
 			mock.ExpectQuery(`SELECT checksum FROM schema_migrations WHERE filename = \$1`).WithArgs(name).WillReturnError(sql.ErrNoRows)
 			mock.ExpectQuery(`SELECT EXISTS \(`).WithArgs(index).WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(invalid))

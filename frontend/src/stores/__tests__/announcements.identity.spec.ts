@@ -33,7 +33,7 @@ describe('announcement identity isolation', () => {
     const store = useAnnouncementStore()
     store.announcements = [announcement(1)]
 
-    await expect(store.markAsRead(1)).rejects.toBe(error)
+    await expect(store.markAsRead(1)).resolves.toBe(false)
     expect(store.unreadCount).toBe(1)
   })
 

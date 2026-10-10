@@ -142,7 +142,7 @@ describe('announcement callbacks and details', () => {
         expect(wrapper.text()).not.toContain('Private details 1')
       } else {
         expect(feedback.showSuccess).not.toHaveBeenCalled()
-        expect(feedback.showError).toHaveBeenCalledWith('mark read failed')
+        expect(feedback.showError).toHaveBeenCalledWith('common.unknownError')
         expect(wrapper.text()).toContain('Private details 1')
         expect(useAnnouncementStore().unreadCount).toBe(1)
       }
