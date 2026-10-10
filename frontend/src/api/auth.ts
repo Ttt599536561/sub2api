@@ -322,11 +322,13 @@ export function persistOAuthTokenContext(tokens: Partial<OAuthTokenResponse>): v
   }
 }
 
-export async function prepareOAuthBindAccessTokenCookie(): Promise<void> {
+export async function prepareOAuthBindAccessTokenCookie(owner = ownedAuthRequestConfig()): Promise<void> {
+  assertAuthSessionCurrent(owner.authIdentity.sessionID)
   if (!getAuthToken()) {
     return
   }
-  await apiClient.post('/auth/oauth/bind-token')
+  await apiClient.post('/auth/oauth/bind-token', undefined, owner)
+  assertAuthSessionCurrent(owner.authIdentity.sessionID)
 }
 
 /**

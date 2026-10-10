@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
+import { createPinia, setActivePinia } from 'pinia'
 import {
   BUILTIN_PLATFORM_CATALOG,
   resetPlatformCatalog,
@@ -49,6 +50,7 @@ vi.mock('@/api/admin/accounts', () => ({
     syncUpstreamModelsPreview
   }
 }))
+vi.mock('@/api', () => ({ authAPI: {}, passkeyAPI: {}, isTotp2FARequired: () => false }))
 
 vi.mock('@/composables/useClipboard', () => ({
   useClipboard: () => ({
@@ -87,6 +89,7 @@ function findModelRow(wrapper: ReturnType<typeof mountSelector>, modelId: string
 
 describe('ModelWhitelistSelector', () => {
   beforeEach(() => {
+    setActivePinia(createPinia())
     copyToClipboard.mockClear()
     showError.mockReset()
     showSuccess.mockReset()

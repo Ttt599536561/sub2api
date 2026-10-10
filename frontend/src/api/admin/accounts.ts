@@ -3,7 +3,8 @@
  * Handles AI platform account management for administrators
  */
 
-import { apiClient } from '../client'
+import { apiClient, ownedAuthRequestConfig } from '../client'
+import { assertAuthSessionCurrent } from '../authSession'
 import type { OpenAIReferralRefreshResult, OpenAIReferralSendResult } from '@/types/openaiReferrals'
 import type {
   Account,
@@ -637,7 +638,9 @@ export interface UpstreamModelMetadata {
  * @returns List of model IDs returned by the upstream
  */
 export async function syncUpstreamModels(id: number): Promise<SyncUpstreamModelsResult> {
-  const { data } = await apiClient.post<SyncUpstreamModelsResult>(`/admin/accounts/${id}/models/sync-upstream`)
+  const owner = ownedAuthRequestConfig()
+  const { data } = await apiClient.post<SyncUpstreamModelsResult>(`/admin/accounts/${id}/models/sync-upstream`, undefined, owner)
+  assertAuthSessionCurrent(owner.authIdentity.sessionID)
   return data
 }
 
@@ -655,7 +658,9 @@ export interface SyncUpstreamPreviewParams {
  * @returns List of model IDs returned by the upstream
  */
 export async function syncUpstreamModelsPreview(params: SyncUpstreamPreviewParams): Promise<SyncUpstreamModelsResult> {
-  const { data } = await apiClient.post<SyncUpstreamModelsResult>('/admin/accounts/models/sync-upstream-preview', params)
+  const owner = ownedAuthRequestConfig()
+  const { data } = await apiClient.post<SyncUpstreamModelsResult>('/admin/accounts/models/sync-upstream-preview', params, owner)
+  assertAuthSessionCurrent(owner.authIdentity.sessionID)
   return data
 }
 

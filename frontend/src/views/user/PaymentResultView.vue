@@ -101,14 +101,17 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onBeforeUnmount, onMounted } from 'vue'
+import { ref, computed, onBeforeUnmount, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import OrderStatusBadge from '@/components/payment/OrderStatusBadge.vue'
 import {
   PAYMENT_RECOVERY_STORAGE_KEY,
   clearPaymentRecoverySnapshot,
+  getPaymentRecoveryIdentity,
+  isPaymentRecoveryIdentityCurrent,
   readPaymentRecoverySnapshot,
+  type PaymentRecoverySnapshot,
 } from '@/components/payment/paymentFlow'
 import { usePaymentStore } from '@/stores/payment'
 import { useAuthStore } from '@/stores/auth'
@@ -147,6 +150,15 @@ const STATUS_REFRESH_MAX_ATTEMPTS = 15
 let statusRefreshTimer: ReturnType<typeof setTimeout> | null = null
 let userBalanceRefreshStarted = false
 const refreshAttempts = ref(0)
+const viewOwner = getPaymentRecoveryIdentity()
+let disposed = false
+let lifecycleGeneration = 0
+let recoveryEntry: PaymentRecoverySnapshot | null = null
+const isCurrent = () => !disposed && lifecycleGeneration === 0 && isPaymentRecoveryIdentityCurrent(viewOwner)
+watch([() => authStore.user?.id, () => authStore.sessionRevision], () => {
+  lifecycleGeneration++
+  clearStatusRefreshTimer()
+}, { flush: 'sync' })
 
 /** 充值金额 = pay_amount / (1 + fee_rate/100)，fee_rate=0 时等于 pay_amount */
 const baseAmount = computed(() => {
@@ -200,6 +212,7 @@ function formatGatewayAmount(value: number): string {
 }
 
 function setResolvedOrder(nextOrder: ResolvedOrder | null): void {
+  if (!isCurrent()) return
   order.value = nextOrder
   if (nextOrder && 'currency' in nextOrder && nextOrder.currency) {
     currency.value = normalizePaymentCurrency(nextOrder.currency)
@@ -208,7 +221,7 @@ function setResolvedOrder(nextOrder: ResolvedOrder | null): void {
 }
 
 function refreshUserBalanceForSuccessfulOrder(nextOrder: ResolvedOrder | null): void {
-  if (!nextOrder || userBalanceRefreshStarted || normalizeOrderStatus(nextOrder.status) !== 'COMPLETED') {
+  if (!isCurrent() || !nextOrder || userBalanceRefreshStarted || normalizeOrderStatus(nextOrder.status) !== 'COMPLETED') {
     return
   }
   if ('order_type' in nextOrder && nextOrder.order_type !== 'balance') {
@@ -278,9 +291,10 @@ function restoreRecoverySnapshot(context: {
   }
 
   if (context.resumeToken) {
-    return readPaymentRecoverySnapshot(rawSnapshot, {
+    recoveryEntry = readPaymentRecoverySnapshot(rawSnapshot, {
       resumeToken: context.resumeToken,
     })
+    return recoveryEntry
   }
 
   if (!context.routeOrderId && !context.routeOutTradeNo) {
@@ -300,26 +314,30 @@ function restoreRecoverySnapshot(context: {
     return null
   }
 
+  recoveryEntry = restored
   return restored
 }
 
 async function resolveOrderFromResumeToken(resumeToken: string): Promise<ResolvedOrder | null> {
+  if (!isCurrent()) return null
   try {
     const result = await paymentAPI.resolveOrderPublicByResumeToken(resumeToken)
-    return result.data
+    return isCurrent() ? result.data : null
   } catch (_err: unknown) {
     return null
   }
 }
 
 async function resolveOrderFromOutTradeNo(outTradeNo: string): Promise<ResolvedOrder | null> {
+  if (!isCurrent()) return null
   try {
     const result = await paymentAPI.verifyOrder(outTradeNo)
-    return result.data
+    return isCurrent() ? result.data : null
   } catch (_err: unknown) {
+    if (!isCurrent()) return null
     try {
       const result = await paymentAPI.verifyOrderPublic(outTradeNo)
-      return result.data
+      return isCurrent() ? result.data : null
     } catch (_innerErr: unknown) {
       return null
     }
@@ -334,8 +352,15 @@ function clearStatusRefreshTimer(): void {
 }
 
 function clearRecoverySnapshot(): void {
-  if (typeof window === 'undefined') return
-  clearPaymentRecoverySnapshot(window.localStorage, PAYMENT_RECOVERY_STORAGE_KEY)
+  if (!isCurrent() || typeof window === 'undefined' || !recoveryEntry) return
+  try {
+    const stored = JSON.parse(window.localStorage.getItem(PAYMENT_RECOVERY_STORAGE_KEY) || 'null') as PaymentRecoverySnapshot | null
+    // Another tab may have created a newer order while this result was pending.
+    // Legacy explicit-token entries remain compatible when both owners are absent.
+    if (!stored || stored.orderId !== recoveryEntry.orderId || stored.resumeToken !== recoveryEntry.resumeToken
+      || stored.owner?.userId !== recoveryEntry.owner?.userId || stored.owner?.sessionId !== recoveryEntry.owner?.sessionId) return
+    clearPaymentRecoverySnapshot(window.localStorage, PAYMENT_RECOVERY_STORAGE_KEY)
+  } catch { /* Unreadable storage cannot establish ownership of a recovery record. */ }
 }
 
 function clearRecoverySnapshotForTerminalStatus(status: string | null | undefined): void {
@@ -347,13 +372,15 @@ function clearRecoverySnapshotForTerminalStatus(status: string | null | undefine
 
 function scheduleStatusRefresh(refreshOrder: (() => Promise<ResolvedOrder | null>) | null): void {
   clearStatusRefreshTimer()
-  if (!refreshOrder || !isPending.value || refreshAttempts.value >= STATUS_REFRESH_MAX_ATTEMPTS) {
+  if (!isCurrent() || !refreshOrder || !isPending.value || refreshAttempts.value >= STATUS_REFRESH_MAX_ATTEMPTS) {
     return
   }
 
   statusRefreshTimer = setTimeout(async () => {
+    if (!isCurrent()) return
     refreshAttempts.value += 1
     const refreshedOrder = await refreshOrder()
+    if (!isCurrent()) return
     if (refreshedOrder) {
       setResolvedOrder(refreshedOrder)
       clearRecoverySnapshotForTerminalStatus(refreshedOrder.status)
@@ -366,6 +393,7 @@ function scheduleStatusRefresh(refreshOrder: (() => Promise<ResolvedOrder | null
 }
 
 onMounted(async () => {
+  if (!isCurrent()) return
   const resumeToken = readRouteQueryString('resume_token')
   const routeOrderId = Number(readRouteQueryString('order_id')) || 0
   let outTradeNo = readRouteQueryString('out_trade_no')
@@ -389,6 +417,7 @@ onMounted(async () => {
 
   if (resumeToken) {
     const resolvedOrder = await resolveOrderFromResumeToken(resumeToken)
+    if (!isCurrent()) return
     if (resolvedOrder) {
       setResolvedOrder(resolvedOrder)
       if (!orderId) {
@@ -409,14 +438,18 @@ onMounted(async () => {
 
   if (!order.value && orderId && (!resumeToken || routeOrderId > 0)) {
     try {
-      setResolvedOrder(await paymentStore.pollOrderStatus(orderId))
+      const resolvedOrder = await paymentStore.pollOrderStatus(orderId)
+      if (!isCurrent()) return
+      setResolvedOrder(resolvedOrder)
     } catch (_err: unknown) {
       // Order lookup failed, will try legacy fallback below when possible.
     }
+    if (!isCurrent()) return
   }
 
   if (!order.value && shouldUsePublicOutTradeNo && (!resumeToken || resumeTokenLookupFailed)) {
     const legacyOrder = await resolveOrderFromOutTradeNo(outTradeNo)
+    if (!isCurrent()) return
     if (legacyOrder) {
       setResolvedOrder(legacyOrder)
       if (!orderId) {
@@ -435,8 +468,10 @@ onMounted(async () => {
   }
 
   const refreshOrder = async (): Promise<ResolvedOrder | null> => {
+    if (!isCurrent()) return null
     if (resumeToken) {
       const resolvedOrder = await resolveOrderFromResumeToken(resumeToken)
+      if (!isCurrent()) return null
       if (resolvedOrder) {
         return resolvedOrder
       }
@@ -444,13 +479,15 @@ onMounted(async () => {
 
     if (orderId) {
       try {
-        return await paymentStore.pollOrderStatus(orderId)
+        const resolvedOrder = await paymentStore.pollOrderStatus(orderId)
+        return isCurrent() ? resolvedOrder : null
       } catch (_err: unknown) {
         // Fall through to legacy public verification when order polling is unavailable.
       }
     }
 
     if (shouldUsePublicOutTradeNo) {
+      if (!isCurrent()) return null
       return await resolveOrderFromOutTradeNo(outTradeNo)
     }
 
@@ -468,6 +505,8 @@ onMounted(async () => {
 })
 
 onBeforeUnmount(() => {
+  disposed = true
+  lifecycleGeneration++
   clearStatusRefreshTimer()
 })
 </script>

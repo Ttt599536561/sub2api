@@ -13,6 +13,7 @@ import (
 	dbent "github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/ent/authidentity"
 	"github.com/Wei-Shaw/sub2api/ent/authidentitychannel"
+	entuser "github.com/Wei-Shaw/sub2api/ent/user"
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
@@ -379,6 +380,19 @@ func (s *adminServiceImpl) DeleteUser(ctx context.Context, id int64) error {
 		defer func() { _ = tx.Rollback() }()
 
 		opCtx := dbent.NewTxContext(ctx, tx)
+		// Balance billing locks the user before its key counters. Follow that
+		// order before tombstoning any keys in this deletion transaction.
+		lockedUser, err := tx.User.Query().Where(entuser.IDEQ(id)).ForUpdate().Only(opCtx)
+		if dbent.IsNotFound(err) {
+			return ErrUserNotFound
+		}
+		if err != nil {
+			return err
+		}
+		// The role may have changed since the initial authorization read.
+		if lockedUser.Role == RoleAdmin {
+			return errors.New("cannot delete admin user")
+		}
 		if err := s.deleteUserWithAPIKeys(opCtx, id, apiKeys); err != nil {
 			return err
 		}

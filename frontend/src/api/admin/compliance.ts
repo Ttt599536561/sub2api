@@ -1,4 +1,5 @@
-import { apiClient } from '@/api/client'
+import { apiClient, ownedAuthRequestConfig } from '@/api/client'
+import { assertAuthSessionCurrent } from '@/api/authSession'
 
 export interface AdminComplianceAcknowledgement {
   version: string
@@ -34,7 +35,9 @@ export const adminComplianceAPI = {
   },
 
   async accept(payload: AcceptAdminComplianceRequest): Promise<AdminComplianceStatus> {
-    const { data } = await apiClient.post<AdminComplianceStatus>('/admin/compliance/accept', payload)
+    const owner = ownedAuthRequestConfig()
+    const { data } = await apiClient.post<AdminComplianceStatus>('/admin/compliance/accept', payload, owner)
+    assertAuthSessionCurrent(owner.authIdentity.sessionID)
     return data
   }
 }

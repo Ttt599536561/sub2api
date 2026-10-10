@@ -1,6 +1,7 @@
 import { mount } from '@vue/test-utils'
 import { describe, expect, it, vi } from 'vitest'
 import ProfileEditForm from '@/components/user/profile/ProfileEditForm.vue'
+vi.mock('@/i18n', () => ({ getLocale: () => 'en' }))
 
 const { updateProfileMock, showErrorMock, authState } = vi.hoisted(() => ({
   updateProfileMock: vi.fn(),

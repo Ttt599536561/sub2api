@@ -220,6 +220,8 @@ describe('oauth adoption auth api', () => {
 
     await prepareOAuthBindAccessTokenCookie()
 
-    expect(post).toHaveBeenCalledWith('/auth/oauth/bind-token')
+    expect(post).toHaveBeenCalledWith('/auth/oauth/bind-token', undefined, {
+      authIdentity: { userID: null, sessionID: null }
+    })
   })
 })

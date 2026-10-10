@@ -115,7 +115,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, watch, computed } from 'vue'
+import { ref, reactive, watch, computed, onBeforeUnmount, onMounted } from 'vue'
+import { getAuthSessionID } from '@/api/authSession'
+import { ownedAuthRequestConfig } from '@/api/client'
+import { useAuthStore } from '@/stores/auth'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
 import { adminAPI } from '@/api/admin'
@@ -128,6 +131,7 @@ const emit = defineEmits(['close', 'success'])
 
 const { t } = useI18n()
 const appStore = useAppStore()
+const authStore = useAuthStore()
 
 interface QuotaRow {
   platform: PlatformQuotaPlatform
@@ -149,6 +153,37 @@ const resetting = reactive<Record<string, boolean>>({})
 const quotas = ref<QuotaRow[]>([])
 // 已保存且至少配置了一档限额的平台。只有这些平台在后端有配额记录，重置用量窗口才有对象。
 const savedConfigured = ref<Set<PlatformQuotaPlatform>>(new Set())
+let formGeneration = 0
+let disposed = false
+let sessionOwner = ownedAuthRequestConfig().authIdentity
+
+function formOwner() {
+  return { generation: formGeneration, userId: props.user?.id, session: getAuthSessionID() }
+}
+function formIsCurrent(owner: ReturnType<typeof formOwner>) {
+  return !disposed && props.show && owner.generation === formGeneration && owner.userId === props.user?.id && owner.session === getAuthSessionID()
+}
+onBeforeUnmount(() => {
+  disposed = true; formGeneration++
+  window.removeEventListener('storage', onSessionStorage)
+})
+onMounted(() => window.addEventListener('storage', onSessionStorage))
+function resetForm() {
+  sessionOwner = ownedAuthRequestConfig().authIdentity
+  formGeneration++
+  quotas.value = []
+  savedConfigured.value = new Set()
+  loading.value = false
+  submitting.value = false
+  for (const key of Object.keys(resetting)) delete resetting[key]
+  if (props.show && props.user && !disposed) void load()
+}
+function onSessionStorage(event: StorageEvent) {
+  if (event.key && !['auth_session_id', 'auth_user'].includes(event.key)) return
+  const next = ownedAuthRequestConfig().authIdentity
+  if (next.sessionID !== sessionOwner.sessionID || next.userID !== sessionOwner.userID) resetForm()
+}
+watch([() => authStore.user?.id, () => authStore.sessionRevision], resetForm, { flush: 'sync' })
 
 function configuredPlatforms(items: PlatformQuotaItem[]): Set<PlatformQuotaPlatform> {
   const out = new Set<PlatformQuotaPlatform>()
@@ -196,24 +231,28 @@ function formatUsage(n: number): string {
 }
 
 async function load() {
-  if (!props.user) return
+  if (!props.show || !props.user || disposed) return
+  const owner = formOwner()
   loading.value = true
   try {
-    const data = await adminAPI.users.getPlatformQuotas(props.user.id)
+    const data = await adminAPI.users.getPlatformQuotas(owner.userId!)
+    if (!formIsCurrent(owner)) return
     quotas.value = normalize(data.platform_quotas || [])
     savedConfigured.value = configuredPlatforms(data.platform_quotas || [])
   } catch {
+    if (!formIsCurrent(owner)) return
     appStore.showError(t('admin.users.platformQuota.loadFailed'))
     quotas.value = platformQuotaPlatforms().map(emptyRow)
     savedConfigured.value = new Set()
   } finally {
-    loading.value = false
+    if (formIsCurrent(owner)) loading.value = false
   }
 }
 
 watch(
-  () => props.show,
-  (s) => { if (s && props.user) load() },
+  [() => props.show, () => props.user?.id],
+  resetForm,
+  { immediate: true, flush: 'sync' }
 )
 
 function onClearAll() {
@@ -229,7 +268,8 @@ function onClearAll() {
 }
 
 async function onSave() {
-  if (!props.user) return
+  if (!props.show || !props.user || loading.value || submitting.value || disposed) return
+  const owner = formOwner()
   // 拒绝非法数值，避免 normalizeLimit 将其静默转换为 null（无限额）。
   const invalid: string[] = []
   for (const row of quotas.value) {
@@ -253,14 +293,16 @@ async function onSave() {
       weekly_limit_usd: normalizeLimit(r.weekly_limit_usd),
       monthly_limit_usd: normalizeLimit(r.monthly_limit_usd),
     }))
-    await adminAPI.users.updatePlatformQuotas(props.user.id, payload)
+    await adminAPI.users.updatePlatformQuotas(owner.userId!, payload)
+    if (!formIsCurrent(owner)) return
     appStore.showSuccess(t('admin.users.platformQuota.updateSuccess'))
     emit('success')
     emit('close')
   } catch (e: any) {
+    if (!formIsCurrent(owner)) return
     appStore.showError(e?.response?.data?.message || t('admin.users.platformQuota.updateFailed'))
   } finally {
-    submitting.value = false
+    if (formIsCurrent(owner)) submitting.value = false
   }
 }
 
@@ -273,23 +315,26 @@ function normalizeLimit(v: number | null | undefined): number | null {
 }
 
 async function onReset(platform: PlatformQuotaPlatform, quotaWindow: PlatformQuotaWindow) {
-  if (!props.user) return
+  if (!props.show || !props.user || disposed) return
+  const owner = formOwner()
   const windowLabel = t(`admin.users.platformQuota.window${quotaWindow.charAt(0).toUpperCase() + quotaWindow.slice(1)}`)
   const confirmed = window.confirm(
     t('admin.users.platformQuota.reset.confirm', { platform, window: windowLabel })
   )
-  if (!confirmed) return
+  if (!confirmed || !formIsCurrent(owner)) return
   const key = `${platform}.${quotaWindow}`
   resetting[key] = true
   try {
-    const data = await adminAPI.users.resetPlatformQuotaWindow(props.user.id, platform, quotaWindow)
+    const data = await adminAPI.users.resetPlatformQuotaWindow(owner.userId!, platform, quotaWindow)
+    if (!formIsCurrent(owner)) return
     quotas.value = normalize(data.platform_quotas || [])
     savedConfigured.value = configuredPlatforms(data.platform_quotas || [])
     appStore.showSuccess(t('admin.users.platformQuota.reset.success', { platform, window: windowLabel }))
   } catch (e: any) {
+    if (!formIsCurrent(owner)) return
     appStore.showError(e?.response?.data?.message || t('admin.users.platformQuota.reset.failed'))
   } finally {
-    resetting[key] = false
+    if (formIsCurrent(owner)) resetting[key] = false
   }
 }
 </script>

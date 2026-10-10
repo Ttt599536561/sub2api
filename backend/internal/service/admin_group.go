@@ -298,6 +298,8 @@ func defaultModelsListCandidateIDs(platform string) []string {
 		return xai.DefaultModelIDs()
 	case PlatformOpenCodeGo:
 		return DefaultOpenCodeGoModelIDs()
+	case PlatformCline:
+		return []string{DefaultClineTestModel}
 	case PlatformTypeSafe:
 		return []string{typesafe.JevLatestModel}
 	case PlatformComposite:

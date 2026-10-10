@@ -987,7 +987,7 @@ func (s *PaymentService) revokeRefundSubscription(ctx context.Context, p *Refund
 func (s *PaymentService) restoreRefundSubscription(ctx context.Context, p *RefundPlan) error {
 	revoked := p.revokedSubscription
 	if revoked == nil {
-		_, err := s.subscriptionSvc.ExtendSubscription(ctx, p.SubscriptionID, p.SubDaysToDeduct)
+		_, err := s.subscriptionSvc.restoreSubscriptionDaysAfterRefund(ctx, p.SubscriptionID, p.SubDaysToDeduct)
 		return err
 	}
 	if revoked.DeletedAt == nil {

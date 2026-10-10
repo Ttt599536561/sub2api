@@ -3,7 +3,8 @@
  * Handles user management for administrators
  */
 
-import { apiClient } from '../client'
+import { apiClient, ownedAuthRequestConfig } from '../client'
+import { assertAuthSessionCurrent } from '../authSession'
 import { listPlatformIds } from '@/constants/platformCatalog'
 import type { AccountPlatform, AdminUser, UpdateUserRequest, PaginatedResponse, ApiKey } from '@/types'
 
@@ -369,9 +370,11 @@ export interface PlatformQuotasResponse {
  * Get user's platform quotas
  */
 export async function getPlatformQuotas(id: number): Promise<PlatformQuotasResponse> {
+  const owner = ownedAuthRequestConfig()
   const { data } = await apiClient.get<PlatformQuotasResponse>(
-    `/admin/users/${id}/platform-quotas`
+    `/admin/users/${id}/platform-quotas`, owner
   )
+  assertAuthSessionCurrent(owner.authIdentity.sessionID)
   return data
 }
 
@@ -382,10 +385,12 @@ export async function updatePlatformQuotas(
   id: number,
   quotas: PlatformQuotaUpdateItem[]
 ): Promise<PlatformQuotasResponse> {
+  const owner = ownedAuthRequestConfig()
   const { data } = await apiClient.put<PlatformQuotasResponse>(
     `/admin/users/${id}/platform-quotas`,
-    { quotas }
+    { quotas }, owner
   )
+  assertAuthSessionCurrent(owner.authIdentity.sessionID)
   return data
 }
 
@@ -397,10 +402,12 @@ export async function resetPlatformQuotaWindow(
   platform: PlatformQuotaPlatform,
   window: PlatformQuotaWindow
 ): Promise<PlatformQuotasResponse> {
+  const owner = ownedAuthRequestConfig()
   const { data } = await apiClient.post<PlatformQuotasResponse>(
     `/admin/users/${id}/platform-quotas/reset`,
-    { platform, window }
+    { platform, window }, owner
   )
+  assertAuthSessionCurrent(owner.authIdentity.sessionID)
   return data
 }
 

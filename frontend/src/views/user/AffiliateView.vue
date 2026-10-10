@@ -140,7 +140,8 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { ownedAuthRequestConfig } from '@/api/client'
 import { useI18n } from 'vue-i18n'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import Icon from '@/components/icons/Icon.vue'
@@ -160,6 +161,33 @@ const { copyToClipboard } = useClipboard()
 const loading = ref(true)
 const transferring = ref(false)
 const detail = ref<UserAffiliateDetail | null>(null)
+let sessionOwner = ownedAuthRequestConfig().authIdentity
+let generation = 0
+let disposed = false
+let mounted = false
+function context() { return { generation, owner: ownedAuthRequestConfig().authIdentity } }
+function isCurrent(caller: ReturnType<typeof context>) {
+  const current = ownedAuthRequestConfig().authIdentity
+  return !disposed && caller.generation === generation && caller.owner.sessionID === current.sessionID && caller.owner.userID === current.userID
+}
+function invalidateIdentity() {
+  const next = ownedAuthRequestConfig().authIdentity
+  if (next.sessionID === sessionOwner.sessionID && next.userID === sessionOwner.userID) return
+  sessionOwner = next
+  generation++
+  detail.value = null
+  loading.value = false
+  transferring.value = false
+  if (mounted && !disposed) void loadAffiliateDetail()
+}
+function onSessionStorage(event: StorageEvent) {
+  if (!event.key || ['auth_session_id', 'auth_user'].includes(event.key)) invalidateIdentity()
+}
+watch([() => authStore.user?.id, () => authStore.sessionRevision], invalidateIdentity, { flush: 'sync' })
+onBeforeUnmount(() => {
+  disposed = true; generation++
+  window.removeEventListener('storage', onSessionStorage)
+})
 
 const inviteLink = computed(() => {
   if (!detail.value) return ''
@@ -180,15 +208,19 @@ function formatCount(value: number): string {
 }
 
 async function loadAffiliateDetail(silent = false): Promise<void> {
+  const caller = context()
   if (!silent) {
     loading.value = true
   }
   try {
-    detail.value = await userAPI.getAffiliateDetail()
+    const next = await userAPI.getAffiliateDetail()
+    if (!isCurrent(caller)) return
+    detail.value = next
   } catch (error) {
+    if (!isCurrent(caller)) return
     appStore.showError(extractApiErrorMessage(error, t('affiliate.loadFailed')))
   } finally {
-    if (!silent) {
+    if (!silent && isCurrent(caller)) {
       loading.value = false
     }
   }
@@ -206,22 +238,27 @@ async function copyInviteLink(): Promise<void> {
 
 async function transferQuota(): Promise<void> {
   if (!detail.value || detail.value.aff_quota <= 0 || transferring.value) return
+  const caller = context()
   transferring.value = true
   try {
     const resp = await userAPI.transferAffiliateQuota()
+    if (!isCurrent(caller)) return
     appStore.showSuccess(t('affiliate.transfer.success', { amount: formatCurrency(resp.transferred_quota) }))
     await Promise.all([
       loadAffiliateDetail(true),
       authStore.refreshUser().catch(() => undefined),
     ])
   } catch (error) {
+    if (!isCurrent(caller)) return
     appStore.showError(extractApiErrorMessage(error, t('affiliate.transferFailed')))
   } finally {
-    transferring.value = false
+    if (isCurrent(caller)) transferring.value = false
   }
 }
 
 onMounted(() => {
+  mounted = true
+  window.addEventListener('storage', onSessionStorage)
   void loadAffiliateDetail()
 })
 </script>

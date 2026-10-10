@@ -740,6 +740,55 @@ func (s *SubscriptionService) ExtendSubscription(ctx context.Context, subscripti
 	return sub, nil
 }
 
+// restoreSubscriptionDaysAfterRefund compensates an already-applied shortening.
+// Even if that shortened expiry has passed, this is not a new subscription term:
+// add back only the deducted days and preserve current usage and preferences.
+func (s *SubscriptionService) restoreSubscriptionDaysAfterRefund(ctx context.Context, subscriptionID int64, days int) (*UserSubscription, error) {
+	if days <= 0 {
+		return nil, ErrInvalidInput
+	}
+	if days > MaxValidityDays {
+		days = MaxValidityDays
+	}
+	var sub *UserSubscription
+	err := s.withSubscriptionUpdateTx(ctx, func(txCtx context.Context) error {
+		var err error
+		sub, err = s.userSubRepo.GetByIDForUpdate(txCtx, subscriptionID)
+		if err != nil {
+			return err
+		}
+		newExpiresAt := sub.ExpiresAt.AddDate(0, 0, days)
+		if newExpiresAt.After(MaxExpiresAt) {
+			newExpiresAt = MaxExpiresAt
+		}
+		if err := s.userSubRepo.ExtendExpiry(txCtx, subscriptionID, newExpiresAt); err != nil {
+			return err
+		}
+		now := time.Now()
+		if s.now != nil {
+			now = s.now()
+		}
+		if sub.Status == SubscriptionStatusExpired && newExpiresAt.After(now) {
+			if err := s.userSubRepo.UpdateStatus(txCtx, subscriptionID, SubscriptionStatusActive); err != nil {
+				return err
+			}
+		}
+		// Keep refresh failure inside the transaction so retry cannot add days twice.
+		sub, err = s.userSubRepo.GetByID(txCtx, subscriptionID)
+		return err
+	})
+	if err != nil {
+		return nil, err
+	}
+	if dbent.TxFromContext(ctx) == nil {
+		// A cache failure cannot make committed compensation safe to repeat.
+		if cacheErr := s.invalidateSubscriptionCaches(sub.UserID, sub.GroupID); cacheErr != nil {
+			log.Printf("refund subscription compensation cache invalidation: %v", cacheErr)
+		}
+	}
+	return sub, nil
+}
+
 // GetByID 根据ID获取订阅
 func (s *SubscriptionService) GetByID(ctx context.Context, id int64) (*UserSubscription, error) {
 	return s.userSubRepo.GetByID(ctx, id)

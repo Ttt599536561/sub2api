@@ -196,7 +196,9 @@
 </template>
 
 <script setup lang="ts">
-import { computed, reactive, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { getAuthSessionID } from '@/api/authSession'
+import { ownedAuthRequestConfig } from '@/api/client'
 import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
 import {
@@ -253,6 +255,31 @@ const isBindingEmail = ref(false)
 const isEmailBindingFormDirty = ref(false)
 const isEmailFormExpanded = ref(!props.compact)
 const unbindingProvider = ref<BindableProvider | null>(null)
+let mutationGeneration = 0
+let disposed = false
+let sessionOwner = ownedAuthRequestConfig().authIdentity
+function invalidateLogin() {
+  sessionOwner = ownedAuthRequestConfig().authIdentity
+  mutationGeneration++
+  isSendingEmailCode.value = false
+  isBindingEmail.value = false
+  unbindingProvider.value = null
+}
+function onSessionStorage(event: StorageEvent) {
+  if (event.key && !['auth_session_id', 'auth_user'].includes(event.key)) return
+  const next = ownedAuthRequestConfig().authIdentity
+  if (next.sessionID !== sessionOwner.sessionID || next.userID !== sessionOwner.userID) invalidateLogin()
+}
+watch([() => authStore.user?.id, () => authStore.sessionRevision], invalidateLogin, { flush: 'sync' })
+onMounted(() => window.addEventListener('storage', onSessionStorage))
+onBeforeUnmount(() => {
+  disposed = true; mutationGeneration++
+  window.removeEventListener('storage', onSessionStorage)
+})
+
+function mutationIsCurrent(generation: number, session: string | null): boolean {
+  return !disposed && generation === mutationGeneration && session === getAuthSessionID()
+}
 const emailBindingForm = reactive({
   email: '',
   verifyCode: '',
@@ -562,14 +589,22 @@ function toggleEmailForm(): void {
   isEmailFormExpanded.value = !isEmailFormExpanded.value
 }
 
-function startBinding(provider: UserAuthProvider): void {
+async function startBinding(provider: UserAuthProvider): Promise<void> {
   if (provider === 'email') {
     return
   }
-  startOAuthBinding(provider, {
-    redirectTo: route.fullPath || '/profile',
-    wechatOAuthSettings: provider === 'wechat' ? wechatOAuthSettings.value : null,
-  })
+  const generation = mutationGeneration
+  const session = getAuthSessionID()
+  try {
+    await startOAuthBinding(provider, {
+      redirectTo: route.fullPath || '/profile',
+      wechatOAuthSettings: provider === 'wechat' ? wechatOAuthSettings.value : null,
+      isCurrent: () => mutationIsCurrent(generation, session)
+    })
+  } catch (error) {
+    if (!mutationIsCurrent(generation, session)) return
+    appStore.showError((error as { message?: string }).message || t('common.tryAgain'))
+  }
 }
 
 function applyUpdatedUser(user: User): void {
@@ -578,15 +613,19 @@ function applyUpdatedUser(user: User): void {
 }
 
 async function handleUnbind(provider: BindableProvider, providerLabel: string): Promise<void> {
+  const generation = mutationGeneration
+  const session = getAuthSessionID()
   unbindingProvider.value = provider
   try {
     const user = await unbindAuthIdentity(provider)
+    if (!mutationIsCurrent(generation, session)) return
     applyUpdatedUser(user)
     appStore.showSuccess(t('profile.authBindings.unbindSuccess', { providerName: providerLabel }))
   } catch (error) {
+    if (!mutationIsCurrent(generation, session)) return
     appStore.showError((error as { message?: string }).message || t('common.tryAgain'))
   } finally {
-    unbindingProvider.value = null
+    if (mutationIsCurrent(generation, session)) unbindingProvider.value = null
   }
 }
 
@@ -627,14 +666,18 @@ async function sendEmailCode(): Promise<void> {
   }
 
   isEmailBindingFormDirty.value = true
+  const generation = mutationGeneration
+  const session = getAuthSessionID()
   isSendingEmailCode.value = true
   try {
     await sendEmailBindingCode(emailBindingForm.email)
+    if (!mutationIsCurrent(generation, session)) return
     appStore.showSuccess(t('profile.authBindings.codeSentTo', { email: emailBindingForm.email }))
   } catch (error) {
+    if (!mutationIsCurrent(generation, session)) return
     appStore.showError((error as { message?: string }).message || t('auth.sendCodeFailed'))
   } finally {
-    isSendingEmailCode.value = false
+    if (mutationIsCurrent(generation, session)) isSendingEmailCode.value = false
   }
 }
 
@@ -644,6 +687,8 @@ async function bindEmail(): Promise<void> {
   }
 
   isEmailBindingFormDirty.value = true
+  const generation = mutationGeneration
+  const session = getAuthSessionID()
   isBindingEmail.value = true
   try {
     const user = await bindEmailIdentity({
@@ -651,6 +696,7 @@ async function bindEmail(): Promise<void> {
       verify_code: emailBindingForm.verifyCode,
       password: emailBindingForm.password,
     })
+    if (!mutationIsCurrent(generation, session)) return
     const replacingBoundEmail = emailBound.value
     applyUpdatedUser(user)
     resetEmailBindingForm(user)
@@ -663,9 +709,10 @@ async function bindEmail(): Promise<void> {
         : t('profile.authBindings.bindSuccess')
     )
   } catch (error) {
+    if (!mutationIsCurrent(generation, session)) return
     appStore.showError((error as { message?: string }).message || t('common.tryAgain'))
   } finally {
-    isBindingEmail.value = false
+    if (mutationIsCurrent(generation, session)) isBindingEmail.value = false
   }
 }
 </script>

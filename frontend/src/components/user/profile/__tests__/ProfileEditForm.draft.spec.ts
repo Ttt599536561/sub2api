@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils'
 import { defineComponent, reactive } from 'vue'
 import ProfileEditForm from '../ProfileEditForm.vue'
+vi.mock('@/i18n', () => ({ getLocale: () => 'en' }))
 
 const mocks = vi.hoisted(() => ({ updateProfile: vi.fn(), state: { user: { username: 'alice' } } }))
 vi.mock('@/api', () => ({ userAPI: { updateProfile: mocks.updateProfile } }))

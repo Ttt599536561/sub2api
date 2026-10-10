@@ -1253,6 +1253,10 @@ func (h *GatewayHandler) Models(c *gin.Context) {
 		return
 	}
 
+	if platform == service.PlatformCline {
+		writeModelsList(c, platform, defaultModelIDsForPlatform(platform))
+		return
+	}
 	writeModelsListResponse(c, claude.DefaultModels)
 }
 
@@ -1536,6 +1540,8 @@ func defaultModelIDsForPlatform(platform string) []string {
 		return xai.DefaultModelIDs()
 	case service.PlatformOpenCodeGo:
 		return service.DefaultOpenCodeGoModelIDs()
+	case service.PlatformCline:
+		return []string{service.DefaultClineTestModel}
 	case service.PlatformTypeSafe:
 		return []string{"jev-latest"}
 	case service.PlatformComposite:

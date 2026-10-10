@@ -3,7 +3,8 @@
  * Handles user profile management and password changes
  */
 
-import { apiClient } from './client'
+import { apiClient, ownedAuthRequestConfig } from './client'
+import { assertAuthSessionCurrent } from './authSession'
 import {
   resolveWeChatOAuthStartStrict,
   prepareOAuthBindAccessTokenCookie,
@@ -24,7 +25,9 @@ import type {
  * @returns User profile data
  */
 export async function getProfile(): Promise<User> {
-  const { data } = await apiClient.get<User>('/user/profile')
+  const owner = ownedAuthRequestConfig()
+  const { data } = await apiClient.get<User>('/user/profile', owner)
+  assertAuthSessionCurrent(owner.authIdentity.sessionID)
   return data
 }
 
@@ -40,7 +43,9 @@ export async function updateProfile(profile: {
   balance_notify_threshold?: number | null
   balance_notify_extra_emails?: NotifyEmailEntry[]
 }): Promise<User> {
-  const { data } = await apiClient.put<User>('/user', profile)
+  const owner = ownedAuthRequestConfig()
+  const { data } = await apiClient.put<User>('/user', profile, owner)
+  assertAuthSessionCurrent(owner.authIdentity.sessionID)
   return data
 }
 
@@ -58,7 +63,9 @@ export async function changePassword(
     new_password: newPassword
   }
 
-  const { data } = await apiClient.put<{ message: string }>('/user/password', payload)
+  const owner = ownedAuthRequestConfig()
+  const { data } = await apiClient.put<{ message: string }>('/user/password', payload, owner)
+  assertAuthSessionCurrent(owner.authIdentity.sessionID)
   return data
 }
 
@@ -67,7 +74,9 @@ export async function changePassword(
  * @param email - Email address to verify
  */
 export async function sendNotifyEmailCode(email: string): Promise<void> {
-  await apiClient.post('/user/notify-email/send-code', { email })
+  const owner = ownedAuthRequestConfig()
+  await apiClient.post('/user/notify-email/send-code', { email }, owner)
+  assertAuthSessionCurrent(owner.authIdentity.sessionID)
 }
 
 /**
@@ -76,7 +85,9 @@ export async function sendNotifyEmailCode(email: string): Promise<void> {
  * @param code - Verification code
  */
 export async function verifyNotifyEmail(email: string, code: string): Promise<void> {
-  await apiClient.post('/user/notify-email/verify', { email, code })
+  const owner = ownedAuthRequestConfig()
+  await apiClient.post('/user/notify-email/verify', { email, code }, owner)
+  assertAuthSessionCurrent(owner.authIdentity.sessionID)
 }
 
 /**
@@ -84,7 +95,9 @@ export async function verifyNotifyEmail(email: string, code: string): Promise<vo
  * @param email - Email address to remove
  */
 export async function removeNotifyEmail(email: string): Promise<void> {
-  await apiClient.delete('/user/notify-email', { data: { email } })
+  const owner = ownedAuthRequestConfig()
+  await apiClient.delete('/user/notify-email', { ...owner, data: { email } })
+  assertAuthSessionCurrent(owner.authIdentity.sessionID)
 }
 
 /**
@@ -93,12 +106,16 @@ export async function removeNotifyEmail(email: string): Promise<void> {
  * @param disabled - Whether to disable the email
  */
 export async function toggleNotifyEmail(email: string, disabled: boolean): Promise<User> {
-  const { data } = await apiClient.put<User>('/user/notify-email/toggle', { email, disabled })
+  const owner = ownedAuthRequestConfig()
+  const { data } = await apiClient.put<User>('/user/notify-email/toggle', { email, disabled }, owner)
+  assertAuthSessionCurrent(owner.authIdentity.sessionID)
   return data
 }
 
 export async function sendEmailBindingCode(email: string): Promise<void> {
-  await apiClient.post('/user/account-bindings/email/send-code', { email })
+  const owner = ownedAuthRequestConfig()
+  await apiClient.post('/user/account-bindings/email/send-code', { email }, owner)
+  assertAuthSessionCurrent(owner.authIdentity.sessionID)
 }
 
 export async function bindEmailIdentity(payload: {
@@ -106,12 +123,16 @@ export async function bindEmailIdentity(payload: {
   verify_code: string
   password: string
 }): Promise<User> {
-  const { data } = await apiClient.post<User>('/user/account-bindings/email', payload)
+  const owner = ownedAuthRequestConfig()
+  const { data } = await apiClient.post<User>('/user/account-bindings/email', payload, owner)
+  assertAuthSessionCurrent(owner.authIdentity.sessionID)
   return data
 }
 
 export async function unbindAuthIdentity(provider: BindableOAuthProvider): Promise<User> {
-  const { data } = await apiClient.delete<User>(`/user/account-bindings/${provider}`)
+  const owner = ownedAuthRequestConfig()
+  const { data } = await apiClient.delete<User>(`/user/account-bindings/${provider}`, owner)
+  assertAuthSessionCurrent(owner.authIdentity.sessionID)
   return data
 }
 
@@ -120,6 +141,8 @@ export type BindableOAuthProvider = Exclude<UserAuthProvider, 'email'>
 interface BuildOAuthBindingStartURLOptions {
   redirectTo?: string
   wechatOAuthSettings?: WeChatOAuthPublicSettings | null
+  /** The requesting component may leave while the binding cookie is prepared. */
+  isCurrent?: () => boolean
 }
 
 export function resolveWeChatOAuthMode(): 'open' | 'mp' {
@@ -168,11 +191,15 @@ export async function startOAuthBinding(
   if (typeof window === 'undefined') {
     return
   }
+  const owner = ownedAuthRequestConfig()
+  if (options.isCurrent && !options.isCurrent()) return
   const startURL = buildOAuthBindingStartURL(provider, options)
   if (!startURL) {
     return
   }
-  await prepareOAuthBindAccessTokenCookie()
+  await prepareOAuthBindAccessTokenCookie(owner)
+  assertAuthSessionCurrent(owner.authIdentity.sessionID)
+  if (options.isCurrent && !options.isCurrent()) return
   window.location.href = startURL
 }
 
@@ -182,7 +209,9 @@ export async function getAffiliateDetail(): Promise<UserAffiliateDetail> {
 }
 
 export async function transferAffiliateQuota(): Promise<AffiliateTransferResponse> {
-  const { data } = await apiClient.post<AffiliateTransferResponse>('/user/aff/transfer')
+  const owner = ownedAuthRequestConfig()
+  const { data } = await apiClient.post<AffiliateTransferResponse>('/user/aff/transfer', undefined, owner)
+  assertAuthSessionCurrent(owner.authIdentity.sessionID)
   return data
 }
 

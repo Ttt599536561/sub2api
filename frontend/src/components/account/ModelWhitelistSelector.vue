@@ -145,7 +145,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onBeforeUnmount, onMounted, watch } from 'vue'
+import { getAuthSessionID } from '@/api/authSession'
+import { ownedAuthRequestConfig } from '@/api/client'
+import { useAuthStore } from '@/stores/auth'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
 import { accountsAPI } from '@/api/admin/accounts'
@@ -178,6 +181,7 @@ const emit = defineEmits<{
 }>()
 
 const appStore = useAppStore()
+const authStore = useAuthStore()
 const { copyToClipboard } = useClipboard()
 
 const showDropdown = ref(false)
@@ -185,6 +189,34 @@ const searchQuery = ref('')
 const customModel = ref('')
 const isComposing = ref(false)
 const isSyncingUpstream = ref(false)
+let syncGeneration = 0
+let disposed = false
+let sessionOwner = ownedAuthRequestConfig().authIdentity
+function invalidateLogin() {
+  sessionOwner = ownedAuthRequestConfig().authIdentity
+  syncGeneration++
+  isSyncingUpstream.value = false
+}
+function onSessionStorage(event: StorageEvent) {
+  if (event.key && !['auth_session_id', 'auth_user'].includes(event.key)) return
+  const next = ownedAuthRequestConfig().authIdentity
+  if (next.sessionID !== sessionOwner.sessionID || next.userID !== sessionOwner.userID) invalidateLogin()
+}
+watch([() => authStore.user?.id, () => authStore.sessionRevision], invalidateLogin, { flush: 'sync' })
+onMounted(() => window.addEventListener('storage', onSessionStorage))
+watch([
+  () => props.accountId,
+  () => props.platform,
+  () => props.platforms?.join('\0'),
+  () => JSON.stringify(props.syncCredentials)
+], () => {
+  syncGeneration++
+  isSyncingUpstream.value = false
+}, { flush: 'sync' })
+onBeforeUnmount(() => {
+  disposed = true; syncGeneration++
+  window.removeEventListener('storage', onSessionStorage)
+})
 const normalizedPlatforms = computed(() => {
   const rawPlatforms =
     props.platforms && props.platforms.length > 0
@@ -292,6 +324,9 @@ const fillRelated = () => {
 const syncUpstreamModels = async () => {
   if (isSyncingUpstream.value || !canSyncUpstream.value) return
 
+  const generation = ++syncGeneration
+  const session = getAuthSessionID()
+  const isCurrent = () => !disposed && generation === syncGeneration && session === getAuthSessionID()
   isSyncingUpstream.value = true
   try {
     let result
@@ -302,6 +337,7 @@ const syncUpstreamModels = async () => {
     } else {
       return
     }
+    if (!isCurrent()) return
 
     const upstreamModels = result.models.map(model => model.trim()).filter(Boolean)
     if (upstreamModels.length === 0) {
@@ -343,10 +379,11 @@ const syncUpstreamModels = async () => {
       appStore.showWarning(t('admin.accounts.syncUpstreamModelsMetadataPartial'))
     }
   } catch (error) {
+    if (!isCurrent()) return
     const message = error instanceof Error ? error.message : t('admin.accounts.syncUpstreamModelsFailed')
     appStore.showError(t('admin.accounts.syncUpstreamModelsError', { message }))
   } finally {
-    isSyncingUpstream.value = false
+    if (isCurrent()) isSyncingUpstream.value = false
   }
 }
 
