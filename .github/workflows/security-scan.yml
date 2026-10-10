@@ -47,6 +47,8 @@ jobs:
       - name: Install dependencies
         working-directory: frontend
         run: pnpm install --frozen-lockfile
+      - name: Test audit report validation
+        run: python -m unittest discover -s tools -p 'test_check_pnpm_audit_exceptions.py'
       - name: Run pnpm audit
         working-directory: frontend
         run: |

@@ -9,6 +9,40 @@ HIGH_SEVERITIES = {"high", "critical"}
 REQUIRED_FIELDS = {"package", "advisory", "severity", "mitigation", "expires_on"}
 
 
+def validate_audit_report(data: object) -> None:
+    """Reject failed or malformed reports before treating their findings as empty."""
+    if not isinstance(data, dict):
+        raise ValueError("report must be a JSON object")
+    if "error" in data:
+        raise ValueError("pnpm audit returned an error response")
+    sections = [key for key in ("advisories", "vulnerabilities") if key in data]
+    if not sections:
+        raise ValueError("report must contain advisories or vulnerabilities")
+    for section in sections:
+        entries = data[section]
+        if not isinstance(entries, dict):
+            raise ValueError(f"{section} must be a JSON object")
+        for key, entry in entries.items():
+            location = f"{section}[{key!r}]"
+            if not isinstance(entry, dict):
+                raise ValueError(f"{location} must be a JSON object")
+            severity = entry.get("severity")
+            if not isinstance(severity, str) or not severity.strip():
+                raise ValueError(f"{location}.severity must be a non-empty string")
+            if section == "advisories":
+                name = entry.get("module_name") or entry.get("name")
+                if not isinstance(name, str) or not name.strip():
+                    raise ValueError(f"{location} must have a non-empty package name")
+            else:
+                via = entry.get("via", [])
+                if not isinstance(via, (list, str)):
+                    raise ValueError(f"{location}.via must be a list or string")
+                if isinstance(via, list) and any(
+                    not isinstance(item, (dict, str)) for item in via
+                ):
+                    raise ValueError(f"{location}.via entries must be objects or strings")
+
+
 def split_kv(line: str) -> tuple[str, str]:
     # 解析 "key: value" 形式的简单 YAML 行，并去除引号。
     key, value = line.split(":", 1)
@@ -145,8 +179,13 @@ def main() -> int:
     parser.add_argument("--exceptions", required=True)
     args = parser.parse_args()
 
-    with open(args.audit, "r", encoding="utf-8") as handle:
-        audit = json.load(handle)
+    try:
+        with open(args.audit, "r", encoding="utf-8") as handle:
+            audit = json.load(handle)
+        validate_audit_report(audit)
+    except (OSError, UnicodeError, ValueError) as error:
+        sys.stderr.write(f"Invalid pnpm audit report: {error}\n")
+        return 1
 
     # 读取异常清单并建立索引，便于快速匹配包名 + advisory。
     exceptions = parse_exceptions(args.exceptions)
