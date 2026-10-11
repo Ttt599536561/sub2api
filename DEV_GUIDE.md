@@ -2,12 +2,25 @@
 
 > 本文档记录项目环境配置、常见坑点和注意事项，供 Claude Code 和团队成员参考。
 
+## 更新记录与交接规范
+
+接手项目先阅读 [更新日志](CHANGELOG.md) 和 [当前交接](docs/HANDOFF.md)。已发布镜像的地址、源码与升级说明见 [0.2.15-r1 发布记录](deploy/CUSTOM_IMAGE_0.2.15-r1.md)；旧报告的版本与验证数字仅代表其历史阶段。
+
+- 每次提交项目自身的代码更新，包括功能、修复、兼容、配置、迁移及 CI/发布变更，都要同步维护 `CHANGELOG.md`。上游批量合并以一次升级汇总，不逐条抄录所有上游提交；后续本地兼容修正仍分别记录。
+- 记录日期（Asia/Shanghai）、稳定的变更名称或编号、改了什么、原因与影响、实际验证结果，以及部署/迁移注意事项。普通改动几行即可；重大升级在 `docs/changes/YYYY-MM-DD-主题.md` 保存详情并从日志链接。
+- 提交前使用稳定变更标识与实际提交主题关联；同一提交不能预知自身 SHA，不写猜测值。提交后可在下一次记录整理补充已存在的 SHA，或通过 `git log -- CHANGELOG.md` 追溯。已发布版本必须写明固定源码提交。纯文档更正直接维护原条目，避免重复生成文档自引用记录。
+- 发布、部署状态、二开规则、待办或未提交工作变化时，同步更新 `docs/HANDOFF.md`；清楚区分工作区、已提交源码、已发布镜像和线上部署。发布记录保存在 `deploy/`，不要把“镜像发布成功”写成“生产已升级”。
+- 验证只记录实际执行结果：注明命令/范围、通过或失败/跳过、对应源码与环境。未执行的检查标明原因；不得用旧阶段测试数字宣称当前源码通过。本机工作区包含未提交改动时，说明它与发布源码的区别。
+- `output/` 与 `.cache/` 是本机产物和原始证据目录，不随 Git 交接。关键结论、提交、行为变化与验证摘要必须归档到受跟踪文档；引用本机证据可作附注，不能作为唯一的交接说明。
+- 提交前检查文档链接、提交引用和 `git diff --check`；用 `git check-ignore` 与 `git ls-files` 确认新记录已纳入 Git。新增目录需精确配置忽略例外，避免把缓存和构建产物一起纳入。
+- 更新记录与对应代码放在同一提交，保留已有用户修改。若文档是事后补录，明确历史日期和代码基线，单独提交；不为整理文档重新运行无关应用测试。
+
 ## 一、项目基本信息
 
 | 项目 | 说明 |
 |------|------|
 | **上游仓库** | Wei-Shaw/sub2api |
-| **Fork 仓库** | bayma888/sub2api-bmai |
+| **Fork 仓库** | Ttt599536561/sub2api |
 | **技术栈** | Go 后端 (Ent ORM + Gin) + Vue3 前端 (pnpm) |
 | **数据库** | PostgreSQL 16 + Redis |
 | **包管理** | 后端: go modules, 前端: **pnpm**（不是 npm） |
@@ -53,7 +66,7 @@ npm install -g pnpm
 
 ### CI 要求
 
-- Go 版本必须是 **1.27.0**：三个 workflow 都用 `go-version-file: backend/go.mod` 取版本，随后硬断言 `go version | grep -q 'go1.27.0'`。升级 Go 时要同时改 `backend/go.mod`、`backend-ci.yml`（两处）、`release.yml`、`security-scan.yml` 里的这句断言，**以及三个 Dockerfile 里的 Go 构建镜像**（`Dockerfile` / `deploy/Dockerfile` 的 `ARG GOLANG_IMAGE`、`backend/Dockerfile` 的 `FROM golang:`）。前者漏了 CI 会在版本校验步骤直接失败；**后者漏了 CI 不会报，而是等到有人用这些 Dockerfile 构建时才失败**（`go.mod requires go >= X (running Y; GOTOOLCHAIN=local)`）。
+- Go 版本必须是 **1.27.2**：三个 workflow 都用 `go-version-file: backend/go.mod` 取版本，随后硬断言 `go version | grep -q 'go1.27.2'`。升级 Go 时要同时改 `backend/go.mod`、`backend-ci.yml`（两处）、`release.yml`、`security-scan.yml` 里的这句断言，**以及三个 Dockerfile 里的 Go 构建镜像**（`Dockerfile` / `deploy/Dockerfile` 的 `ARG GOLANG_IMAGE`、`backend/Dockerfile` 的 `FROM golang:`）。前者漏了 CI 会在版本校验步骤直接失败；**后者漏了 CI 不会报，而是等到有人用这些 Dockerfile 构建时才失败**（`go.mod requires go >= X (running Y; GOTOOLCHAIN=local)`）。
 - 前端使用 `pnpm install --frozen-lockfile`，必须提交 `pnpm-lock.yaml`
 
 ### 本地测试命令

@@ -167,3 +167,13 @@ issues/
 .vite/
 # 本地闭源插件开发目录及构建产物不进入 Sub2API 仓库
 /plugins/
+
+# Shared development records and handoff documents
+!docs/HANDOFF.md
+!docs/changes/
+!docs/changes/*.md
+!docs/superpowers/
+docs/superpowers/*
+!docs/superpowers/plans/
+docs/superpowers/plans/*
+!docs/superpowers/plans/2026-10-11-development-records.md
