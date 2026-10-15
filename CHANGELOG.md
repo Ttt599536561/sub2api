@@ -6,7 +6,9 @@
 
 ## 2026-10-16
 
-- **c7f623da5 再次审查修复**：未知缓存创建结果不再自动重复 POST；新建账号默认映射使用独立副本并防止迟到载入覆盖编辑；补齐 Claude 文本顺序与空签名转换，保留分帧结束状态和完整用量。基线 `c7f623da5`，稳定主题 `fix: guard cache creation and preserve mappings and response metadata`；修复、回归与本轮验证边界见 [再次审查记录](docs/changes/2026-10-16-review-c7f623da5.md)。未发布。
+- **7fb9f26d7 回归审查修复**：初始建连失败恢复安全换号，已发送后的重定向错误仍禁止重复创建；未知创建结果可跨声明支持的网关传递；主 candidate 身份和结束状态稳定；补图片 token 计费字段并在 DONE 后及时关闭上游。基线 `7fb9f26d7`，稳定主题 `fix: preserve safe cache failover and final stream accounting`，未发布。4 个相关后端包、前端专项及 Linux 编译通过；用户要求的缓存清理已完成证据归档，但删除被自动审批拒绝。详见 [回归审查与清理记录](docs/changes/2026-10-16-review-7fb9f26d7.md)。
+
+- **c7f623da5 再次审查修复**：未知缓存创建结果不再自动重复 POST；新建账号默认映射使用独立副本并防止迟到载入覆盖编辑；补齐 Claude 文本顺序与空签名转换，保留分帧结束状态和完整用量。基线 `c7f623da5`，修复提交 `7fb9f26d7`（`fix: guard cache creation and preserve mappings and response metadata`）；修复、回归与本轮验证边界见 [再次审查记录](docs/changes/2026-10-16-review-c7f623da5.md)。未发布。
 
 - **7ad7757be 合并版本追加审查修复**：缓存绝对截止时间保留精度，排队不延后期限，同一时间戳 PATCH 不再误收费；Antigravity 非流式聚合保留签名片段边界；账号专用模型同步绑定会话、账号与弹窗周期，阻止迟到回包污染配置。同时将两条负载敏感的旧时间测试改为虚拟时钟验证，并隔离验证码本地测试的代理环境。原 296 份历史 SQL 无变化，本轮无新增迁移。基线 `7ad7757be`，修复提交 `c7f623da5`（`fix: preserve cache deadlines, signed parts, and account sync ownership`）；实际验证与审查边界见 [追加审查记录](docs/changes/2026-10-16-review-7ad7757be.md)。未发布。
 

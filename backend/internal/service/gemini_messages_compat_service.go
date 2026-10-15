@@ -2551,25 +2551,21 @@ func mergeGeminiCollectedResponseChunk(previous, chunk map[string]any) map[strin
 			}
 			prior, _ := result[key].([]any)
 			candidates := append([]any(nil), prior...)
-			for position, value := range incoming {
+			for _, value := range incoming {
 				candidate, ok := value.(map[string]any)
 				if !ok {
 					continue
 				}
-				index := position
-				if explicit, ok := asInt(candidate["index"]); ok {
-					index = explicit
-				}
+				// Omitted protobuf scalar indexes identify candidate zero, even
+				// when a secondary candidate arrived earlier in the stream.
+				index, _ := asInt(candidate["index"])
 				found := false
 				for oldPosition, oldValue := range candidates {
 					old, ok := oldValue.(map[string]any)
 					if !ok {
 						continue
 					}
-					oldIndex := oldPosition
-					if explicit, ok := asInt(old["index"]); ok {
-						oldIndex = explicit
-					}
+					oldIndex, _ := asInt(old["index"])
 					if oldIndex == index {
 						candidates[oldPosition] = mergeGeminiCollectedResponseChunk(old, candidate)
 						found = true
@@ -2580,6 +2576,15 @@ func mergeGeminiCollectedResponseChunk(previous, chunk map[string]any) map[strin
 					candidates = append(candidates, candidate)
 				}
 			}
+			// Downstream collectors read candidates[0]. Keep the primary
+			// candidate there regardless of which candidate emitted metadata first.
+			sort.SliceStable(candidates, func(i, j int) bool {
+				left, _ := candidates[i].(map[string]any)
+				right, _ := candidates[j].(map[string]any)
+				leftIndex, _ := asInt(left["index"])
+				rightIndex, _ := asInt(right["index"])
+				return leftIndex < rightIndex
+			})
 			result[key] = candidates
 			continue
 		}

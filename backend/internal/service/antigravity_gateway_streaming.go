@@ -977,6 +977,7 @@ func (s *AntigravityGatewayService) handleClaudeStreamingResponse(c *gin.Context
 			OutputTokens:             agUsage.OutputTokens,
 			CacheCreationInputTokens: agUsage.CacheCreationInputTokens,
 			CacheReadInputTokens:     agUsage.CacheReadInputTokens,
+			ImageOutputTokens:        agUsage.ImageOutputTokens,
 		}
 	}
 
@@ -1105,6 +1106,12 @@ func (s *AntigravityGatewayService) handleClaudeStreamingResponse(c *gin.Context
 					firstTokenMs = &ms
 				}
 				cw.Write(claudeEvents)
+			}
+			if processor.MessageStopSent() {
+				// [DONE] completes the message even if the HTTP body stays open.
+				// Closing it also releases the scanner's pending read.
+				_ = resp.Body.Close()
+				return &antigravityStreamResult{usage: finishUsage(), firstTokenMs: firstTokenMs, clientDisconnect: cw.Disconnected()}, nil
 			}
 
 		case <-intervalCh:

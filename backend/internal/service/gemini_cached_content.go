@@ -10,13 +10,16 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"net"
 	"net/http"
+	"net/http/httptrace"
 	"net/url"
 	"regexp"
 	"slices"
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 	"unicode/utf8"
 
@@ -29,6 +32,9 @@ import (
 )
 
 const (
+	// GeminiCachedContentCreateOutcomeHeader carries an uncertain create result across compatible gateways.
+	GeminiCachedContentCreateOutcomeHeader  = "X-Sub2api-Cached-Content-Outcome"
+	GeminiCachedContentCreateOutcomeUnknown = "unknown"
 	// GeminiCachedContentNamePrefix 是缓存资源名前缀，网关与上游 AI Studio 一致。
 	GeminiCachedContentNamePrefix = "cachedContents/"
 	// GeminiCachedContentNotFoundMessage 与上游对不存在、已过期或无权访问的缓存返回的文案一致。
@@ -69,6 +75,8 @@ var (
 	ErrGeminiCachedContentMutationConflict = infraerrors.New(http.StatusConflict, "GEMINI_CACHED_CONTENT_MUTATION_CONFLICT", "another update to this cached content is in progress")
 	// ErrGeminiCachedContentRequestNotSent 表示上游缓存请求在发出前失败（地址、凭据等），上游状态未被改变。
 	ErrGeminiCachedContentRequestNotSent = errors.New("gemini cached content request was not sent")
+	// ErrGeminiCachedContentCreateOutcomeUnknown means a compatible gateway cannot confirm whether the POST created a cache.
+	ErrGeminiCachedContentCreateOutcomeUnknown = errors.New("gemini cached content create outcome is unknown")
 	// errGeminiCachedContentAccountUnsupported 表示持有缓存的账号存在，但当前不支持显式缓存（能力被关闭或认证方式不支持）。
 	errGeminiCachedContentAccountUnsupported = errors.New("gemini cached content account does not support explicit caching")
 
@@ -1074,6 +1082,15 @@ func (s *GeminiCachedContentService) doUpstream(ctx context.Context, account *Ac
 	}
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), timeout)
 	defer cancel()
+	// A redirect can fail to dial after the first POST was already accepted.
+	// Track all writes through the shared context before classifying a dial failure.
+	var requestWritten atomic.Bool
+	if method == http.MethodPost {
+		ctx = httptrace.WithClientTrace(ctx, &httptrace.ClientTrace{
+			WroteHeaders: func() { requestWritten.Store(true) },
+			WroteRequest: func(httptrace.WroteRequestInfo) { requestWritten.Store(true) },
+		})
+	}
 	var reader io.Reader
 	if body != nil {
 		reader = bytes.NewReader(body)
@@ -1110,6 +1127,10 @@ func (s *GeminiCachedContentService) doUpstream(ctx context.Context, account *Ac
 	}
 	resp, err := s.compat.httpUpstream.Do(req, proxyURL, account.ID, account.Concurrency)
 	if err != nil {
+		var dialErr *net.OpError
+		if method == http.MethodPost && !requestWritten.Load() && errors.As(err, &dialErr) && dialErr.Op == "dial" {
+			return nil, geminiCachedContentNotSent(err)
+		}
 		return nil, err
 	}
 	defer func() { _ = resp.Body.Close() }()
@@ -1122,6 +1143,10 @@ func (s *GeminiCachedContentService) doUpstream(ctx context.Context, account *Ac
 		return nil, err
 	}
 	if !success {
+		if method == http.MethodPost && account.GeminiExplicitCacheUpstreamEnabled() &&
+			resp.Header.Get(GeminiCachedContentCreateOutcomeHeader) == GeminiCachedContentCreateOutcomeUnknown {
+			return nil, fmt.Errorf("%w: upstream HTTP %d", ErrGeminiCachedContentCreateOutcomeUnknown, resp.StatusCode)
+		}
 		return nil, &GeminiCachedContentUpstreamError{StatusCode: resp.StatusCode, Body: respBody, UpstreamGateway: account.GeminiExplicitCacheUpstreamEnabled()}
 	}
 	return respBody, nil

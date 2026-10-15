@@ -92,6 +92,12 @@ func (h *GatewayHandler) checkGeminiCachedContentBilling(c *gin.Context, reqLog 
 	return true
 }
 
+// writeGeminiCachedContentCreateOutcomeUnknown preserves the no-retry decision through compatible gateways.
+func writeGeminiCachedContentCreateOutcomeUnknown(c *gin.Context, message string) {
+	c.Header(service.GeminiCachedContentCreateOutcomeHeader, service.GeminiCachedContentCreateOutcomeUnknown)
+	googleError(c, http.StatusBadGateway, message)
+}
+
 // GeminiCachedContentsCreate POST /v1beta/cachedContents
 // 创建请求内一次性收取缓存 token 的输入费与整个有效期的存储费。
 func (h *GatewayHandler) GeminiCachedContentsCreate(c *gin.Context) {
@@ -265,7 +271,7 @@ func (h *GatewayHandler) GeminiCachedContentsCreate(c *gin.Context) {
 				if malformed.Name != "" {
 					h.cleanupGeminiCachedContentUpstream(reqLog, account, malformed.Name)
 				}
-				googleError(c, http.StatusBadGateway, "Upstream returned an invalid cached content response")
+				writeGeminiCachedContentCreateOutcomeUnknown(c, "Upstream returned an invalid cached content response")
 				return
 			}
 			if failoverClientGone(c) {
@@ -275,7 +281,7 @@ func (h *GatewayHandler) GeminiCachedContentsCreate(c *gin.Context) {
 				reqLog.Warn("gemini.cached_content.upstream_create_outcome_unknown", zap.Int64("account_id", account.ID), zap.Error(err))
 				// A lost response can hide a successfully created cache. Repeating
 				// this non-idempotent POST would create additional orphan resources.
-				googleError(c, http.StatusBadGateway, "Upstream request failed")
+				writeGeminiCachedContentCreateOutcomeUnknown(c, "Upstream request failed")
 				return
 			}
 			reqLog.Warn("gemini.cached_content.upstream_create_error", zap.Int64("account_id", account.ID), zap.Error(err))

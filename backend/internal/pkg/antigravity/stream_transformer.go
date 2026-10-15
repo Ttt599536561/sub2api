@@ -198,6 +198,11 @@ func (p *StreamingProcessor) MessageStartSent() bool {
 	return p.messageStartSent
 }
 
+// MessageStopSent reports whether the final message_stop event has been emitted.
+func (p *StreamingProcessor) MessageStopSent() bool {
+	return p.messageStopSent
+}
+
 // HasContent reports whether any substantive text, thinking, or tool calls were emitted.
 func (p *StreamingProcessor) HasContent() bool {
 	return p.hasContent
