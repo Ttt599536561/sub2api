@@ -6,6 +6,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"io/fs"
 	"strings"
@@ -27,6 +28,23 @@ func migrationUpgradeHistoryQuery(t *testing.T, fixture fs.FS) string {
 		names[i] = "'" + strings.ReplaceAll(name, "'", "''") + "'"
 	}
 	return "SELECT jsonb_agg(to_jsonb(t) ORDER BY filename)::text FROM schema_migrations t WHERE filename IN (" + strings.Join(names, ",") + ")"
+}
+
+// migrationUpgradeExpectedGroupI18n adds only the newly introduced column to
+// the expected old rows. The actual snapshot remains untouched: every old
+// field is still compared, and every migrated row must contain exactly {}.
+func migrationUpgradeExpectedGroupI18n(t *testing.T, snapshot string) string {
+	t.Helper()
+	var groups []map[string]json.RawMessage
+	require.NoError(t, json.Unmarshal([]byte(snapshot), &groups))
+	require.NotEmpty(t, groups, "the historical fixture must contain existing groups")
+	for _, group := range groups {
+		require.NotContains(t, group, "i18n", "the pinned source fixture must predate group translations")
+		group["i18n"] = json.RawMessage(`{}`)
+	}
+	expected, err := json.Marshal(groups)
+	require.NoError(t, err)
+	return string(expected)
 }
 
 // Start from the upstream migration set, with existing customer data, rather
@@ -90,6 +108,7 @@ func TestSubscriptionDailyResetUpgradeReview3_ExistingUpstreamDataAndMigrationHi
 	for name, query := range queries {
 		before[name] = snapshot(query)
 	}
+	before["groups"] = migrationUpgradeExpectedGroupI18n(t, before["groups"])
 
 	require.NoError(t, ApplyMigrations(ctx, db))
 	for name, query := range queries {
@@ -118,6 +137,7 @@ func TestSubscriptionDailyResetUpgradeReview3_ExistingUpstreamDataAndMigrationHi
 		"235_group_model_allowlist.sql", customMigration,
 		"239_channel_reasoning_effort_multipliers.sql", welfareMigration,
 		"240_affiliate_ledger_operation_id.sql", subscriptionRewardsMigration,
+		"242_drop_platform_check_constraints.sql", "242_group_i18n.sql",
 	} {
 		contents, readErr := migrations.FS.ReadFile(name)
 		require.NoError(t, readErr)

@@ -4,13 +4,14 @@
  * - Dashboard overview (raw path)
  */
 
-import { apiClient, buildGatewayUrl } from '../client'
+import { apiClient, buildGatewayUrl, ownedAuthRequestConfig } from '../client'
 import type { PaginatedResponse } from '@/types'
 
 export type OpsQueryMode = 'auto' | 'raw' | 'preagg'
 
 export interface OpsRequestOptions {
   signal?: AbortSignal
+  authIdentity?: ReturnType<typeof ownedAuthRequestConfig>['authIdentity']
 }
 
 export type OpsUpstreamErrorEvent = {
@@ -1178,8 +1179,8 @@ export async function listRequestErrorUpstreamErrors(
   return data
 }
 
-export async function listRequestDetails(params: OpsRequestDetailsParams): Promise<OpsRequestDetailsResponse> {
-  const { data } = await apiClient.get<OpsRequestDetailsResponse>('/admin/ops/requests', { params })
+export async function listRequestDetails(params: OpsRequestDetailsParams, options?: OpsRequestOptions): Promise<OpsRequestDetailsResponse> {
+  const { data } = await apiClient.get<OpsRequestDetailsResponse>('/admin/ops/requests', { ...options, params })
   return data
 }
 

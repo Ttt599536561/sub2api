@@ -1,13 +1,16 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useMediaQuery } from '@vueuse/core'
 import { useI18n } from 'vue-i18n'
 import BaseDialog from '@/components/common/BaseDialog.vue'
 import Pagination from '@/components/common/Pagination.vue'
 import { useClipboard } from '@/composables/useClipboard'
 import { useAppStore } from '@/stores'
+import { useAuthStore } from '@/stores/auth'
+import { ownedAuthRequestConfig } from '@/api/client'
 import { opsAPI, type OpsRequestDetailsParams, type OpsRequestDetail } from '@/api/admin/ops'
 import { parseTimeRangeMinutes, formatDateTime } from '../utils/opsFormatters'
+import { clearAccountNameCache, getAccountNameMap } from '../utils/accountNameMap'
 
 export interface OpsRequestDetailsPreset {
   title: string
@@ -34,6 +37,7 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 const appStore = useAppStore()
+const authStore = useAuthStore()
 const { copyToClipboard } = useClipboard()
 
 // 与 DataTable 一致：< 768px 切换为卡片视图，避免宽表在移动端被截断。
@@ -44,6 +48,37 @@ const items = ref<OpsRequestDetail[]>([])
 const total = ref(0)
 const page = ref(1)
 const pageSize = ref(10)
+const accountNameById = ref<Map<number, string>>(new Map())
+let requestGeneration = 0
+let disposed = false
+let requestController: AbortController | null = null
+
+function stopRequests() {
+  requestGeneration++
+  requestController?.abort()
+  requestController = null
+  loading.value = false
+}
+
+function resetPrivateState() {
+  stopRequests()
+  items.value = []
+  total.value = 0
+  accountNameById.value = new Map()
+  clearAccountNameCache()
+}
+
+function onSessionStorage(event: StorageEvent) {
+  if (!event.key || ['auth_session_id', 'auth_user'].includes(event.key)) resetPrivateState()
+}
+
+watch([() => authStore.user?.id, () => authStore.sessionRevision, () => authStore.isAdmin], resetPrivateState, { flush: 'sync' })
+onMounted(() => window.addEventListener('storage', onSessionStorage))
+onBeforeUnmount(() => {
+  disposed = true
+  stopRequests()
+  window.removeEventListener('storage', onSessionStorage)
+})
 
 const close = () => emit('update:modelValue', false)
 
@@ -72,7 +107,18 @@ function buildTimeParams(): Pick<OpsRequestDetailsParams, 'start_time' | 'end_ti
 }
 
 const fetchData = async () => {
-  if (!props.modelValue) return
+  if (!props.modelValue || disposed || !authStore.isAdmin) return
+  stopRequests()
+  const generation = requestGeneration
+  const request = ownedAuthRequestConfig()
+  const controller = new AbortController()
+  requestController = controller
+  const isCurrent = () => {
+    const current = ownedAuthRequestConfig().authIdentity
+    return !disposed && props.modelValue && authStore.isAdmin && !controller.signal.aborted &&
+      generation === requestGeneration && request.authIdentity.sessionID === current.sessionID &&
+      request.authIdentity.userID === current.userID
+  }
   loading.value = true
   try {
     const params: OpsRequestDetailsParams = {
@@ -90,29 +136,34 @@ const fetchData = async () => {
     if (typeof props.preset.min_duration_ms === 'number') params.min_duration_ms = props.preset.min_duration_ms
     if (typeof props.preset.max_duration_ms === 'number') params.max_duration_ms = props.preset.max_duration_ms
 
-    const res = await opsAPI.listRequestDetails(params)
+    const res = await opsAPI.listRequestDetails(params, { ...request, signal: controller.signal })
+    if (!isCurrent()) return
     items.value = res.items || []
     total.value = res.total || 0
+    void refreshAccountNames(isCurrent, controller.signal)
   } catch (e: any) {
+    if (!isCurrent()) return
     console.error('[OpsRequestDetailsModal] Failed to fetch request details', e)
     appStore.showError(e?.message || t('admin.ops.requestDetails.failedToLoad'))
     items.value = []
     total.value = 0
   } finally {
-    loading.value = false
+    if (isCurrent()) loading.value = false
   }
 }
 
 watch(
   () => props.modelValue,
   (open) => {
+    stopRequests()
     if (open) {
       if (props.resumeState) return
       page.value = 1
       pageSize.value = 10
       fetchData()
     }
-  }
+  },
+  { flush: 'sync' }
 )
 
 watch(
@@ -158,6 +209,30 @@ function openErrorDetail(errorId: number | null | undefined) {
 const kindBadgeClass = (kind: string) => {
   if (kind === 'error') return 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300'
   return 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300'
+}
+
+// 明细行只带 account_id；账号名来自 lite 账号列表映射，缺项时强制刷新一次缓存（新建账号场景）。
+async function refreshAccountNames(isCurrent: () => boolean, signal: AbortSignal) {
+  const ids = items.value
+    .map(row => row.account_id)
+    .filter((id): id is number => typeof id === 'number' && id > 0)
+  if (ids.length === 0) return
+  try {
+    let map = await getAccountNameMap(false, signal)
+    if (!isCurrent()) return
+    if (ids.some(id => !map.has(id))) map = await getAccountNameMap(true, signal)
+    if (!isCurrent()) return
+    accountNameById.value = map
+  } catch (e) {
+    if (!isCurrent()) return
+    console.warn('[OpsRequestDetailsModal] Failed to load account names', e)
+  }
+}
+
+function accountLabel(row: OpsRequestDetail): string {
+  const id = row.account_id
+  if (typeof id !== 'number' || id <= 0) return '-'
+  return accountNameById.value.get(id) || `#${id}`
 }
 </script>
 
@@ -212,6 +287,9 @@ const kindBadgeClass = (kind: string) => {
                     <span class="ml-auto text-[11px] text-gray-500 dark:text-gray-400">{{ formatDateTime(row.created_at) }}</span>
                   </div>
                   <div class="break-all text-xs text-gray-600 dark:text-gray-300">{{ row.model || '-' }}</div>
+                  <div v-if="typeof row.account_id === 'number' && row.account_id > 0" class="break-all text-xs text-gray-500 dark:text-gray-400" :title="accountLabel(row)">
+                    {{ t('admin.ops.requestDetails.table.account') }}: {{ accountLabel(row) }}
+                  </div>
                   <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-600 dark:text-gray-300">
                     <span>{{ latencyLabel }}: {{ formatLatency(row) }}</span>
                     <span>{{ row.status_code ?? '-' }}</span>
@@ -252,6 +330,9 @@ const kindBadgeClass = (kind: string) => {
                     {{ t('admin.ops.requestDetails.table.model') }}
                   </th>
                   <th class="px-4 py-3 text-left text-[11px] font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                    {{ t('admin.ops.requestDetails.table.account') }}
+                  </th>
+                  <th class="px-4 py-3 text-left text-[11px] font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">
                     {{ latencyLabel }}
                   </th>
                   <th class="px-4 py-3 text-left text-[11px] font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">
@@ -280,6 +361,9 @@ const kindBadgeClass = (kind: string) => {
                   </td>
                   <td class="max-w-[240px] truncate px-4 py-3 text-xs text-gray-600 dark:text-gray-300" :title="row.model || ''">
                     {{ row.model || '-' }}
+                  </td>
+                  <td class="max-w-[180px] truncate px-4 py-3 text-xs text-gray-600 dark:text-gray-300" :title="accountLabel(row)">
+                    {{ accountLabel(row) }}
                   </td>
                   <td class="whitespace-nowrap px-4 py-3 text-xs text-gray-600 dark:text-gray-300">
                     {{ formatLatency(row) }}

@@ -19,9 +19,9 @@ type dailyResetResponse struct {
 	CheckError      string                `json:"check_error,omitempty"`
 }
 
-func resetResponse(out *service.DailyResetOutcome) *dailyResetResponse {
+func resetResponse(out *service.DailyResetOutcome, language string) *dailyResetResponse {
 	return &dailyResetResponse{OperationID: out.OperationID, Replayed: out.Replayed,
-		Subscription: dto.UserSubscriptionFromService(out.Subscription), ResetPerformed: out.ResetPerformed,
+		Subscription: dto.UserSubscriptionFromService(out.Subscription).Localized(language), ResetPerformed: out.ResetPerformed,
 		PreferenceSaved: out.PreferenceSaved, CheckError: out.CheckError}
 }
 
@@ -57,7 +57,7 @@ func (h *SubscriptionHandler) ResetDaily(c *gin.Context) {
 		response.ErrorFrom(c, err)
 		return
 	}
-	response.Success(c, resetResponse(out))
+	response.Success(c, resetResponse(out, c.GetHeader("Accept-Language")))
 }
 
 func (h *SubscriptionHandler) SetAutoDailyReset(c *gin.Context) {
@@ -78,7 +78,7 @@ func (h *SubscriptionHandler) SetAutoDailyReset(c *gin.Context) {
 		response.ErrorFrom(c, err)
 		return
 	}
-	response.Success(c, resetResponse(out))
+	response.Success(c, resetResponse(out, c.GetHeader("Accept-Language")))
 }
 
 func (h *SubscriptionHandler) GetDailyResetState(c *gin.Context) {
@@ -91,7 +91,7 @@ func (h *SubscriptionHandler) GetDailyResetState(c *gin.Context) {
 		response.ErrorFrom(c, err)
 		return
 	}
-	response.Success(c, dto.UserSubscriptionFromService(sub))
+	response.Success(c, dto.UserSubscriptionFromService(sub).Localized(c.GetHeader("Accept-Language")))
 }
 
 func (h *SubscriptionHandler) GetDailyResetOperation(c *gin.Context) {
@@ -104,5 +104,5 @@ func (h *SubscriptionHandler) GetDailyResetOperation(c *gin.Context) {
 		response.ErrorFrom(c, err)
 		return
 	}
-	response.Success(c, resetResponse(out))
+	response.Success(c, resetResponse(out, c.GetHeader("Accept-Language")))
 }

@@ -59,15 +59,16 @@ export async function list(
   },
   options?: {
     signal?: AbortSignal
+    authIdentity?: ReturnType<typeof ownedAuthRequestConfig>['authIdentity']
   }
 ): Promise<PaginatedResponse<AccountListItem>> {
   const { data } = await apiClient.get<PaginatedResponse<AccountListItem>>('/admin/accounts', {
+    ...options,
     params: {
       page,
       page_size: pageSize,
       ...filters
-    },
-    signal: options?.signal
+    }
   })
   return data
 }
