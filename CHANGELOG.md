@@ -6,7 +6,7 @@
 
 ## 2026-10-16
 
-- **准备发布 0.2.16-r1**：应用源码采用 `7c8161b777f8f6314df31e6b62f8c2f3ff9ee9cf`，新增手动双架构发布流程，要求同一 main 提交的 CI 和安全扫描通过，并校验版本、源码、安装状态与前端资源；最终版本标签禁止覆盖。稳定主题 `ci: publish reviewed Sub2API 0.2.16-r1 from main`。当前待推送、构建与发布验证，尚未部署生产；新增迁移和升级步骤见 [镜像与升级说明](deploy/CUSTOM_IMAGE_0.2.16-r1.md)。
+- **准备发布 0.2.16-r1**：应用源码采用 `7c8161b777f8f6314df31e6b62f8c2f3ff9ee9cf`，新增手动双架构发布流程，要求同一 main 提交的 CI 和安全扫描通过，并校验版本、源码、安装状态与前端资源；最终版本标签禁止覆盖。稳定主题 `ci: publish reviewed Sub2API 0.2.16-r1 from main`。发布准备 `4be3da680` 和同树检查触发 `c0fc687a5` 已推送 main；GitHub 以 Actions 已禁用（HTTP 422）拒绝启动，重新启用设置后仍受阻，镜像未构建/发布，生产未部署；新增迁移和升级步骤见 [镜像与升级说明](deploy/CUSTOM_IMAGE_0.2.16-r1.md)。
 
 - **7fb9f26d7 回归审查修复**：初始建连失败恢复安全换号，已发送后的重定向错误仍禁止重复创建；未知创建结果可跨声明支持的网关传递；主 candidate 身份和结束状态稳定；补图片 token 计费字段并在 DONE 后及时关闭上游。基线 `7fb9f26d7`，稳定主题 `fix: preserve safe cache failover and final stream accounting`，未发布。4 个相关后端包、前端专项及 Linux 编译通过；用户要求的缓存清理已完成证据归档，但删除被自动审批拒绝。详见 [回归审查与清理记录](docs/changes/2026-10-16-review-7fb9f26d7.md)。
 

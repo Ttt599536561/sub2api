@@ -9,7 +9,7 @@
 | 项目仓库 | `https://github.com/Ttt599536561/sub2api`；上游为 `Wei-Shaw/sub2api`。 |
 | 已发布应用代码基线 | `570e2e00d733ebb20d6692c394c21f05101d0381`；本次后续文档提交不改变这个镜像的源码。 |
 | 上一版本复审源码 | `7fb9f26d72ed608850228aa09f5d3452e0ada95a`，已包含 R17–R20；本轮回归审查修复 R21–R25。 |
-| 本轮修复来源 | `7c8161b777f8f6314df31e6b62f8c2f3ff9ee9cf`（`fix: preserve safe cache failover and final stream accounting`）；准备发布为 0.2.16-r1。 |
+| 本轮修复来源 | `7c8161b777f8f6314df31e6b62f8c2f3ff9ee9cf`（`fix: preserve safe cache failover and final stream accounting`）；已推送，准备发布为 0.2.16-r1；Actions 平台禁用导致发布受阻。 |
 | 本轮合入官方基线 | `698d142468ab15374bc22bd5247759e5b7352006`，官方 `0.2.16` 及发布后主分支更新；本地分支 `codex/merge-upstream-20261015`，未发布。 |
 | 已发布版本的复审源码 | `15d7c43413313bce676e66c7a1254d9591d05322`。发布准备只调整 CI 和发布工具，应用源码沿用此提交。 |
 | 源码版本文件 | 本轮工作树 `backend/cmd/server/VERSION` 为 `0.2.16`；已发布二开版本仍为 `0.2.15-r1`，二者用途不同。 |
@@ -22,7 +22,7 @@
 
 ## 2026-10-16 发布准备
 
-用户已授权推送最新审查源码并在 GitHub 构建、发布镜像，服务器由用户自行升级。本次新增 `publish-custom-v0216.yml`，沿用同一 main SHA 的 CI / Security Scan 门禁、原生 amd64/arm64 构建、容器运行校验及最终标签不可覆盖规则。应用代码保持 `7c8161b77`；当前待推送和实际运行，发布结果将补入 [0.2.16-r1 发布记录](../deploy/CUSTOM_IMAGE_0.2.16-r1.md)。主目录 WIP 保留；没有操作生产服务器。
+用户已授权推送最新审查源码并在 GitHub 构建、发布镜像，服务器由用户自行升级。本次新增 `publish-custom-v0216.yml`，沿用同一 main SHA 的 CI / Security Scan 门禁、原生 amd64/arm64 构建、容器运行校验及最终标签不可覆盖规则。应用代码保持 `7c8161b77`；发布准备 `4be3da680` 和同树触发提交 `c0fc687a5` 已推送 main；GitHub 返回 `HTTP 422: Actions has been disabled for this repository`，普通启用设置未能解除，没有本次 CI 或镜像构建运行，需要账号持有人解除限制。恢复后重新触发同一 main SHA 的 CI / Security Scan，均通过再发布；实际结果将补入 [0.2.16-r1 发布记录](../deploy/CUSTOM_IMAGE_0.2.16-r1.md)。主目录 WIP 保留；没有操作生产服务器。
 
 ## 2026-10-15 本地上游合并
 

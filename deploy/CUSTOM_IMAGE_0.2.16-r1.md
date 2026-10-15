@@ -1,6 +1,6 @@
-# Sub2API 二开 0.2.16-r1 发布与升级记录（待发布）
+# Sub2API 二开 0.2.16-r1 发布与升级记录（GitHub Actions 禁用，待发布）
 
-准备日期：2026-10-16（Asia/Shanghai）。本文件是发布准备草稿：应用修复已提交，目标镜像仍待 GitHub 构建、发布与拉取验证。当前已确认发布的版本仍为 [0.2.15-r1](CUSTOM_IMAGE_0.2.15-r1.md)。本次未连接或更新生产服务器；服务器升级由用户自行执行，镜像发布成功也不代表生产已部署。
+准备日期：2026-10-16（Asia/Shanghai）。最新审查源码和发布工作流已推送到 GitHub main。GitHub Actions 拒绝创建运行，返回 `HTTP 422: Actions has been disabled for this repository`；目标镜像尚未构建或发布。当前已确认发布的版本仍为 [0.2.15-r1](CUSTOM_IMAGE_0.2.15-r1.md)。本次未连接或更新生产服务器；服务器升级由用户自行执行，镜像发布成功也不代表生产已部署。
 
 ## 目标版本与发布结果
 
@@ -17,9 +17,10 @@ ghcr.io/ttt599536561/sub2api-custom:0.2.16-r1
 | 本地官方合并提交 | `5fc3298e74a9c6423ce0463ec2eb5c9b59f6c584` |
 | 合入的官方 main | `698d142468ab15374bc22bd5247759e5b7352006`，包含官方 `v0.2.16` 及其后更新 |
 | 上一版已发布镜像源码 | `570e2e00d733ebb20d6692c394c21f05101d0381` / `0.2.15-r1` |
-| 镜像实际源码 / OCI revision | 待发布准备提交确定，并与 GitHub 构建输入和镜像标签交叉验证 |
-| GitHub CI / Security Scan | 待核对本次发布源码对应的实际运行、结果与链接 |
-| GitHub 镜像构建与发布 | 待执行或核对完成结果；尚无已验证的本版运行链接 |
+| 已推送发布准备 / 检查触发提交 | `4be3da680a85efa6e7c36a86dc53189f53fedb44` / `c0fc687a54c38a7420c9df2e7ae8bb6c9ad12b6f`；后者为空提交，树内容相同 |
+| 镜像实际源码 / OCI revision | 尚无镜像；解除 Actions 限制后，采用通过同一 main SHA 检查的源码，并记录实际 revision |
+| GitHub CI / Security Scan | 两次推送均无本次运行；Actions 被平台拒绝，未通过本版云端检查 |
+| GitHub 镜像构建与发布 | 手动触发两次返回 HTTP 422；没有新运行链接、构建产物或发布结果 |
 | 目标架构 | `linux/amd64`、`linux/arm64`；均待本版 GitHub 构建与运行检查 |
 | 多架构 index digest | 待发布后读取并验证；尚不能提供本版固定 digest 地址 |
 | 各架构运行镜像 digest / OCI config digest | 待从最终 manifest 与镜像配置核对，不沿用上一版值 |
@@ -29,6 +30,14 @@ ghcr.io/ttt599536561/sub2api-custom:0.2.16-r1
 发布后应以实际结果补全本表，包括最终源码 SHA、对应 GitHub 运行链接、index digest、两种架构的镜像身份和验证时间；只有这些证据匹配后，才将状态改为已发布。发布准备如继续修改 CI、工具或文档，应区分最终镜像来源提交与上表应用修复提交，并核对应用源码是否保持一致。
 
 维护入口：[变更记录](../CHANGELOG.md)、[当前交接](../docs/HANDOFF.md)。历史报告中的“未发布”描述当时阶段，不能用旧运行结果替代本次发布验证。
+
+## GitHub Actions 阻塞与续接
+
+2026-10-16 实际检查：仓库权限 API 显示 `enabled: true`、`allowed_actions: all`，CI / Security Scan / 本版发布工作流均为 active；仓库未归档或禁用。正常快进推送成功，但没有 Actions 运行。为重触发检查增加一个空提交后仍无运行，手动发布请求明确返回上述 HTTP 422。
+
+随后调用仓库 Actions 启用接口和三个工作流的启用接口均成功，但再次手动触发仍返回同一禁用错误；因此没有降低或绕过发布门禁。GitHub [官方说明](https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/enabling-features-for-your-repository/managing-github-actions-settings-for-a-repository)指出，平台独立禁用状态无法通过普通仓库设置恢复，应联系 GitHub Support 复核。具体禁用原因尚未确认，不能据此断言欠费或其他原因。
+
+由账号持有人在 [Actions 页面](https://github.com/Ttt599536561/sub2api/actions)核对提示并解除限制后：正常推送新的检查触发提交；等待该 main SHA 的 CI 和 Security Scan 均成功；再手动运行 `publish-custom-v0216.yml`。最后核对双架构运行结果、匿名 registry 可访问性、revision 和最终 index digest，补全本记录。恢复前不要把本文件的目标标签当成可部署镜像。
 
 ## 本版主要变化
 
