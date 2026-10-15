@@ -8,6 +8,7 @@ import (
 	"reflect"
 	"sync"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/stretchr/testify/require"
@@ -634,22 +635,27 @@ func TestRefreshIfNeeded_RequestPathDBRereadMissingGrokRefreshCredentialReturnsP
 }
 
 func TestRefreshIfNeeded_LateSuccessAfterDeadlineDoesNotPersist(t *testing.T) {
-	account := &Account{ID: 85, Platform: PlatformGrok, Type: AccountTypeOAuth, Status: StatusActive}
-	repo := &refreshAPIAccountRepo{account: account}
-	executor := &refreshAPIExecutorStub{
-		needsRefresh: true,
-		credentials:  map[string]any{"access_token": "late-token"},
-		delay:        30 * time.Millisecond,
-	}
-	api := NewOAuthRefreshAPI(repo, nil)
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
-	defer cancel()
+	// Ensure deadline cancellation runs before the ignored-context executor returns.
+	synctest.Test(t, func(t *testing.T) {
+		account := &Account{ID: 85, Platform: PlatformGrok, Type: AccountTypeOAuth, Status: StatusActive}
+		repo := &refreshAPIAccountRepo{account: account}
+		executor := &refreshAPIExecutorStub{
+			needsRefresh: true,
+			credentials:  map[string]any{"access_token": "late-token"},
+			delay:        30 * time.Millisecond,
+		}
+		api := NewOAuthRefreshAPI(repo, nil)
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+		defer cancel()
 
-	result, err := api.RefreshIfNeeded(ctx, account, executor, time.Hour)
+		result, err := api.RefreshIfNeeded(ctx, account, executor, time.Hour)
 
-	require.ErrorIs(t, err, context.DeadlineExceeded)
-	require.Nil(t, result)
-	require.Zero(t, repo.updateCredentialsCalls, "late credentials must not cross the unified API persistence boundary")
+		require.ErrorIs(t, err, context.DeadlineExceeded)
+		require.Nil(t, result)
+		require.Equal(t, 1, executor.refreshCalls)
+		require.Zero(t, repo.successCASCalls, "late credentials must not reach conditional persistence")
+		require.Zero(t, repo.updateCredentialsCalls, "late credentials must not cross the unified API persistence boundary")
+	})
 }
 
 func TestRefreshIfNeeded_NilCredentials(t *testing.T) {

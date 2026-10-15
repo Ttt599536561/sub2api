@@ -282,7 +282,8 @@ func (h *GatewayHandler) GeminiCachedContentsCreate(c *gin.Context) {
 		// Quote only the lifetime actually made available by the upstream. Capture
 		// one time before admission so persistence latency cannot change the quote.
 		storageStartedAt := svc.Now()
-		expireTime := service.ClampGeminiCachedContentExpire(upstream.ExpireTime, storageStartedAt.Add(ttl))
+		expireLimit := service.ClampGeminiCachedContentExpire(req.ExpireTime, storageStartedAt.Add(ttl))
+		expireTime := service.ClampGeminiCachedContentExpire(upstream.ExpireTime, expireLimit)
 		storageTokenHours := service.GeminiCachedContentStorageTokenHours(tokens, expireTime.Sub(storageStartedAt))
 		quoteInput := &service.RecordUsageInput{
 			Result: &service.ForwardResult{
@@ -452,7 +453,7 @@ func (h *GatewayHandler) GeminiCachedContentsPatch(c *gin.Context) {
 
 	subscription, _ := middleware.GetSubscriptionFromContext(c)
 	var costQuote *service.UsageCostQuote
-	if extension := targetExpireTime.Sub(record.ExpireTime); extension > 0 {
+	if extension := service.GeminiCachedContentStorageExtension(record.ExpireTime, targetExpireTime); extension > 0 {
 		usage := &service.RecordUsageInput{
 			Result: &service.ForwardResult{
 				Model: record.Model, UpstreamModel: record.UpstreamModelID(),
@@ -533,7 +534,7 @@ func (h *GatewayHandler) GeminiCachedContentsPatch(c *gin.Context) {
 		return
 	}
 	// 提交前库中的到期时间一直是修改前的值：按本次实际推进的时长收费。
-	if extended := expireTime.Sub(mutation.Baseline()); extended > 0 {
+	if extended := service.GeminiCachedContentStorageExtension(mutation.Baseline(), expireTime); extended > 0 {
 		h.submitGeminiCachedContentUsage(c, apiKey, account, subscription, pricingAt,
 			service.GeminiCachedContentPatchUsageRequestID(record.PublicID), record.Model, record.UpstreamModelID(), 0,
 			service.GeminiCachedContentStorageTokenHours(record.TotalTokenCount, extended), record.ChannelUsage, body,

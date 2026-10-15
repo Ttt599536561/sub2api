@@ -3233,6 +3233,7 @@ import { useAppStore } from '@/stores/app'
 
 import { adminAPI } from '@/api/admin'
 import { useQuotaNotifyState } from '@/composables/useQuotaNotifyState'
+import { useAdminDialogSession } from '@/composables/useAdminDialogSession'
 import type {
   Account,
   Proxy,
@@ -3794,6 +3795,12 @@ const antigravityModelRestrictionMode = ref<'whitelist' | 'mapping'>('whitelist'
 const antigravityWhitelistModels = ref<string[]>([])
 const antigravityModelMappings = ref<ModelMapping[]>([])
 const isSyncingAntigravityUpstream = ref(false)
+const antigravitySyncSession = useAdminDialogSession(
+  () => props.show,
+  () => props.account?.id,
+  () => { isSyncingAntigravityUpstream.value = false },
+  () => emit('close')
+)
 const tempUnschedEnabled = ref(false)
 const accountSchedulingThresholdOverrideEnabled = ref(false)
 const accountSchedulingThresholdOverrideValue = ref(100)
@@ -4789,10 +4796,13 @@ const addAntigravityPresetMapping = (from: string, to: string) => {
 
 const syncAntigravityUpstreamModels = async () => {
   if (!props.account?.id || isSyncingAntigravityUpstream.value) return
+  const owner = antigravitySyncSession.capture()
+  if (!antigravitySyncSession.isCurrent(owner)) return
 
   isSyncingAntigravityUpstream.value = true
   try {
     const result = await adminAPI.accounts.syncUpstreamModels(props.account.id)
+    if (!antigravitySyncSession.isCurrent(owner)) return
     const upstreamModels = result.models.map((model) => model.trim()).filter(Boolean)
     if (upstreamModels.length === 0) {
       appStore.showInfo(t('admin.accounts.syncUpstreamModelsEmpty'))
@@ -4828,10 +4838,11 @@ const syncAntigravityUpstreamModels = async () => {
       appStore.showWarning(t('admin.accounts.syncUpstreamModelsMetadataPartial'))
     }
   } catch (error) {
+    if (!antigravitySyncSession.isCurrent(owner)) return
     const message = extractApiErrorMessage(error, t('admin.accounts.syncUpstreamModelsFailed'))
     appStore.showError(t('admin.accounts.syncUpstreamModelsError', { message }))
   } finally {
-    isSyncingAntigravityUpstream.value = false
+    if (antigravitySyncSession.isCurrent(owner)) isSyncingAntigravityUpstream.value = false
   }
 }
 

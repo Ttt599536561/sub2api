@@ -177,7 +177,7 @@ func TestGeminiCachedContentTTLRoundsUpToWholeSeconds(t *testing.T) {
 
 	req, err = ParseGeminiCachedContentCreateRequest([]byte(`{"model":"gemini-3.8-flash","expireTime":"2026-10-09T08:00:10.2Z"}`), now, 24*time.Hour)
 	require.NoError(t, err)
-	require.Equal(t, 11*time.Second, req.TTL, "expireTime 折算的有效期与发往上游的整秒 ttl 一致")
+	require.Equal(t, 10200*time.Millisecond, req.TTL, "expireTime 保留绝对截止时间的精度")
 }
 
 func TestGeminiCachedContentCreateKeepsNumbersVerbatim(t *testing.T) {

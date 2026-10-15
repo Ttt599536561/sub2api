@@ -375,6 +375,8 @@ type GeminiCachedContentCreateRequest struct {
 	Model       string
 	TTL         time.Duration
 	DisplayName string
+	// ExpireTime preserves a client-specified absolute deadline across admission and upstream latency.
+	ExpireTime time.Time
 	// ttlExplicit 表示客户端显式指定了 ttl 或 expireTime。
 	ttlExplicit bool
 	payload     map[string]any
@@ -442,10 +444,15 @@ func ParseGeminiCachedContentCreateRequest(body []byte, now time.Time, maxTTL ti
 		displayName = s
 	}
 
+	var expireTime time.Time
+	if payload["expireTime"] != nil {
+		expireTime = now.Add(ttl)
+	}
+
 	for _, key := range []string{"name", "model", "displayName", "ttl", "expireTime", "createTime", "updateTime", "usageMetadata"} {
 		delete(payload, key)
 	}
-	return &GeminiCachedContentCreateRequest{Model: model, TTL: ttl, DisplayName: displayName, ttlExplicit: ttlExplicit, payload: payload}, nil
+	return &GeminiCachedContentCreateRequest{Model: model, TTL: ttl, DisplayName: displayName, ExpireTime: expireTime, ttlExplicit: ttlExplicit, payload: payload}, nil
 }
 
 // ParseGeminiCachedContentPatchRequest 校验更新请求，只允许修改有效期，返回新的 TTL（自 now 起算）。
@@ -516,7 +523,7 @@ func decodeGeminiCachedContentPayload(body []byte) (map[string]any, error) {
 	return payload, nil
 }
 
-// parseGeminiCachedContentExpiration 解析 ttl / expireTime（二选一），未设置时返回 0；结果向上取整到秒，与发往上游的 ttl 一致。
+// parseGeminiCachedContentExpiration 解析 ttl / expireTime（二选一），未设置时返回 0；相对 ttl 向上取整到秒，绝对 expireTime 保留原始精度。
 func parseGeminiCachedContentExpiration(payload map[string]any, now time.Time) (time.Duration, error) {
 	rawTTL, hasTTL := payload["ttl"]
 	rawExpire, hasExpire := payload["expireTime"]
@@ -545,7 +552,7 @@ func parseGeminiCachedContentExpiration(payload map[string]any, now time.Time) (
 		if ttl <= 0 {
 			return 0, errors.New("expireTime must be in the future")
 		}
-		return time.Duration(math.Ceil(ttl.Seconds())) * time.Second, nil
+		return ttl, nil
 	}
 	return 0, nil
 }
@@ -697,6 +704,18 @@ func GeminiCachedContentStorageTokenHours(tokens int64, duration time.Duration) 
 		return 0
 	}
 	return float64(tokens) * duration.Hours()
+}
+
+// GeminiCachedContentStorageExtension returns the billable increase in lifetime.
+// PostgreSQL timestamps retain microseconds, so replaying a nanosecond deadline
+// from a create/patch response can differ from the persisted value by less than
+// one microsecond. Admission and settlement must both ignore that precision loss.
+func GeminiCachedContentStorageExtension(baseline, expireTime time.Time) time.Duration {
+	extension := expireTime.Sub(baseline)
+	if extension < time.Microsecond {
+		return 0
+	}
+	return extension
 }
 
 // ClampGeminiCachedContentExpire 返回本地记录与计费采用的到期时间：上游回报的到期时间不晚于 limit，缺失时取 limit。
@@ -962,7 +981,11 @@ func (s *GeminiCachedContentService) CreateUpstream(ctx context.Context, account
 		payload[k] = v
 	}
 	payload["model"] = upstreamModel
-	payload["ttl"] = fmt.Sprintf("%ds", int64(math.Ceil(ttl.Seconds())))
+	if !req.ExpireTime.IsZero() {
+		payload["expireTime"] = req.ExpireTime.UTC().Format(time.RFC3339Nano)
+	} else {
+		payload["ttl"] = fmt.Sprintf("%ds", int64(math.Ceil(ttl.Seconds())))
+	}
 	payload["displayName"] = geminiCachedContentUpstreamTagPrefix + publicID
 	body, err := json.Marshal(payload)
 	if err != nil {

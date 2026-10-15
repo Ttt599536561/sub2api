@@ -565,27 +565,29 @@ func mergeCollectedPartsToResponse(response map[string]any, collectedParts []map
 
 	// 合并策略：
 	// 1. 保持原始顺序
-	// 2. 连续的普通 text parts 合并为一个，并保留关联的 thoughtSignature
+	// 2. 仅合并连续的无签名普通 text parts；带签名的 part 必须原样保留
 	// 3. thinking、functionCall、inlineData 等保持原样
 	var mergedParts []any
 	var textBuffer strings.Builder
-	var textSignature string
 
 	flushTextBuffer := func() {
-		if textBuffer.Len() > 0 || textSignature != "" {
+		if textBuffer.Len() > 0 {
 			part := map[string]any{
 				"text": textBuffer.String(),
 			}
-			if textSignature != "" {
-				part["thoughtSignature"] = textSignature
-			}
 			mergedParts = append(mergedParts, part)
 			textBuffer.Reset()
-			textSignature = ""
 		}
 	}
 
 	for _, part := range collectedParts {
+		// thoughtSignature belongs to this exact part. Merging it with either
+		// signed or unsigned text changes the history clients must replay.
+		if signature, _ := part["thoughtSignature"].(string); signature != "" {
+			flushTextBuffer()
+			mergedParts = append(mergedParts, part)
+			continue
+		}
 		// 检查是否是普通 text part
 		if text, ok := part["text"].(string); ok {
 			// 检查是否有 thought 标记
@@ -596,9 +598,6 @@ func mergeCollectedPartsToResponse(response map[string]any, collectedParts []map
 			} else {
 				// 普通 text，累积到 buffer
 				_, _ = textBuffer.WriteString(text)
-				if sig, ok := part["thoughtSignature"].(string); ok && sig != "" {
-					textSignature = sig
-				}
 			}
 		} else {
 			// 非 text part（functionCall、inlineData 等），先刷新 text buffer，然后保留原样

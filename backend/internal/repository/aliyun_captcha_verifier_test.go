@@ -13,9 +13,20 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/service"
 )
 
+// isolateAliyunCaptchaTestProxy keeps local fixtures off user-configured proxies.
+// The SDK reads proxy environment variables itself and matches NO_PROXY against
+// host:port, so the usual localhost entry does not bypass its proxy transport.
+func isolateAliyunCaptchaTestProxy(t *testing.T) {
+	t.Helper()
+	for _, name := range []string{"HTTP_PROXY", "http_proxy", "HTTPS_PROXY", "https_proxy"} {
+		t.Setenv(name, "")
+	}
+}
+
 // newAliyunCaptchaTestTarget 起一个假的阿里云端点，让真实 SDK 走完整的签名/序列化链路。
 func newAliyunCaptchaTestTarget(t *testing.T, handler http.HandlerFunc) (*aliyunCaptchaVerifier, service.AliyunCaptchaCredentials) {
 	t.Helper()
+	isolateAliyunCaptchaTestProxy(t)
 	server := httptest.NewServer(handler)
 	t.Cleanup(server.Close)
 
@@ -74,6 +85,7 @@ func TestAliyunCaptchaVerifier_APIErrorNormalized(t *testing.T) {
 }
 
 func TestAliyunCaptchaVerifier_TransportError(t *testing.T) {
+	isolateAliyunCaptchaTestProxy(t)
 	server := httptest.NewServer(http.NotFoundHandler())
 	endpoint := strings.TrimPrefix(server.URL, "http://")
 	server.Close() // 立即关闭，制造连接失败
@@ -89,5 +101,5 @@ func TestAliyunCaptchaVerifier_TransportError(t *testing.T) {
 	_, err := verifier.VerifyCaptcha(context.Background(), cred, "param")
 	require.Error(t, err)
 	var apiErr *service.AliyunCaptchaAPIError
-	require.False(t, errors.As(err, &apiErr), "transport errors must not be normalized to API errors")
+	require.False(t, errors.As(err, &apiErr), "transport errors must not be normalized to API errors; endpoint=%s, got %T: %+v", endpoint, err, err)
 }
