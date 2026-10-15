@@ -25,6 +25,7 @@
           <div class="relative flex-1">
             <input
               v-model="searchQuery"
+              :disabled="!entriesLoaded"
               type="text"
               autocomplete="off"
               class="input w-full"
@@ -63,7 +64,7 @@
           <button
             type="button"
             class="btn btn-primary shrink-0"
-            :disabled="!selectedUser || newRate == null || newRate <= 0"
+            :disabled="!entriesLoaded || !selectedUser || newRate == null || newRate <= 0"
             @click="handleAddLocal"
           >
             {{ t('common.add') }}
@@ -225,7 +226,7 @@
             v-if="isDirty"
             type="button"
             class="btn btn-primary btn-sm px-4 py-1.5"
-            :disabled="saving"
+            :disabled="!entriesLoaded || saving || loading"
             @click="handleSave"
           >
             <Icon v-if="saving" name="refresh" size="sm" class="mr-1 animate-spin" />
@@ -269,6 +270,8 @@ const { t } = useI18n()
 const appStore = useAppStore()
 
 const loading = ref(false)
+// A failed or invalidated load must never become a replacement empty list.
+const entriesLoaded = ref(false)
 const saving = ref(false)
 const serverEntries = ref<GroupRateMultiplierEntry[]>([])
 const localEntries = ref<LocalEntry[]>([])
@@ -288,6 +291,7 @@ const dialog = useAdminDialogSession(() => props.show, () => props.group?.id, ()
   clearTimeout(searchTimeout)
   searchVersion++
   loading.value = false
+  entriesLoaded.value = false
   saving.value = false
   batchFactor.value = null
   serverEntries.value = []
@@ -296,7 +300,7 @@ const dialog = useAdminDialogSession(() => props.show, () => props.group?.id, ()
   searchQuery.value = ''
   selectedUser.value = null
   showDropdown.value = false
-})
+}, () => emit('close'))
 
 const platformColorClass = computed(() => {
   switch (props.group?.platform) {
@@ -340,6 +344,7 @@ const loadEntries = async () => {
   const owner = dialog.capture()
   if (!dialog.isCurrent(owner)) return
   loading.value = true
+  entriesLoaded.value = false
   serverEntries.value = []
   localEntries.value = []
   try {
@@ -348,6 +353,7 @@ const loadEntries = async () => {
     // 仅显示已设置 rate_multiplier 的条目；rpm_override 在另一个弹窗管理，保留不动
     serverEntries.value = raw.filter(e => e.rate_multiplier != null)
     localEntries.value = cloneEntries(serverEntries.value)
+    entriesLoaded.value = true
     adjustPage()
   } catch (error) {
     if (!dialog.isCurrent(owner)) return
@@ -390,7 +396,7 @@ const handleSearchUsers = () => {
   selectedUser.value = null
   searchResults.value = []
   showDropdown.value = false
-  if (!query || !dialog.isCurrent(owner)) return
+  if (!entriesLoaded.value || !query || !dialog.isCurrent(owner)) return
   const isCurrent = () => version === searchVersion && dialog.isCurrent(owner)
   searchTimeout = setTimeout(async () => {
     if (!isCurrent()) return
@@ -414,7 +420,7 @@ const selectUser = (user: AdminUser) => {
 
 // 本地添加（或覆盖已有用户）
 const handleAddLocal = () => {
-  if (!selectedUser.value || newRate.value == null || newRate.value <= 0) return
+  if (!entriesLoaded.value || !selectedUser.value || newRate.value == null || newRate.value <= 0) return
   const user = selectedUser.value
   const idx = localEntries.value.findIndex(e => e.user_id === user.id)
   const entry: LocalEntry = {
@@ -481,7 +487,7 @@ const handleCancel = () => {
 
 // 保存：一次性提交所有数据（只提交 rate_multiplier；rpm_override 由独立弹窗管理）
 const handleSave = async () => {
-  if (!props.group || saving.value || loading.value) return
+  if (!props.group || !entriesLoaded.value || saving.value || loading.value) return
   const owner = dialog.capture()
   if (!dialog.isCurrent(owner)) return
   saving.value = true

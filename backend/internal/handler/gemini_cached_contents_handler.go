@@ -279,7 +279,11 @@ func (h *GatewayHandler) GeminiCachedContentsCreate(c *gin.Context) {
 		// 缓存 token 数在上游创建后才确定：按确定金额校验余额 / 额度并预留，不足时删除上游缓存，
 		// 只收取已发生的缓存 token 输入费。
 		tokens := upstream.TotalTokenCount
-		storageTokenHours := service.GeminiCachedContentStorageTokenHours(tokens, ttl)
+		// Quote only the lifetime actually made available by the upstream. Capture
+		// one time before admission so persistence latency cannot change the quote.
+		storageStartedAt := svc.Now()
+		expireTime := service.ClampGeminiCachedContentExpire(upstream.ExpireTime, storageStartedAt.Add(ttl))
+		storageTokenHours := service.GeminiCachedContentStorageTokenHours(tokens, expireTime.Sub(storageStartedAt))
 		quoteInput := &service.RecordUsageInput{
 			Result: &service.ForwardResult{
 				Model: modelName, UpstreamModel: mappedModel,
@@ -300,7 +304,6 @@ func (h *GatewayHandler) GeminiCachedContentsCreate(c *gin.Context) {
 		}
 		defer chargeDone()
 
-		expireTime := service.ClampGeminiCachedContentExpire(upstream.ExpireTime, svc.Now().Add(ttl))
 		record := &service.GeminiCachedContent{
 			PublicID:        publicID,
 			UserID:          authSubject.UserID,

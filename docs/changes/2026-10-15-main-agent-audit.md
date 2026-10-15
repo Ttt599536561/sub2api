@@ -72,3 +72,52 @@ Go 数字包含父测试和子测试事件；unit / integration 有重叠，不�
 本轮复审范围内已确认的问题均已修复，未留下已确认的 P1/P2 阻塞项；这不是对所有历史代码或外部服务的无缺陷保证。测试数据库容器已按本轮创建的固定 ID 核对并停止，保留日志与摘要，清理本轮临时构建文件。
 
 本轮不推送、不发布镜像、不连接生产环境。真实模型、支付、OAuth、TypeSafe 及未提供的插件运行时仍需对应外部环境验证。原始证据位于主项目 `.cache/main-audit-20261015`，重要结论保存在本文件。
+
+## 对 108c63d01 的再次审查（2026-10-15，审查时待修复）
+
+本节是用户指定 `108c63d011e16b05dafa7f0aebf3b9376f4d1a27` 后的再次独立审查，不覆盖上文历史记录。仅主代理执行，没有启用子代理或外部代码审查代理。比较 `11fe558f0..108c63d01`（314 个文件），重点核对新合并代码、冲突处理、最新修复及财务/订阅/福利/会话归属调用链。验证使用 E 盘同一工作树的 `43eec7181`：相对目标仅有 4 份文档差异；backend、frontend、CI、Dockerfile、deploy、tools 差异为零。主目录未提交修改未参与验证。
+
+**审查时结论：三个 P2 已复现，当时未修改业务代码。** 以下保留原始复现和审查数字。用户随后授权修复，后续实现、回归及最终复审以[三项修复记录](2026-10-15-review-fixes.md)为准，不混用两个阶段的验证结果。
+
+### R11 / P2：会话变化清空表单后，新增保存会清除原有配置
+
+定位：`frontend/src/composables/useAdminDialogSession.ts:11`；调用方 `GroupRateMultipliersModal.vue:287`、`GroupRPMOverridesModal.vue:252`。会话变化时，invalidate 立即接纳新 owner，并清空 serverEntries/localEntries、解除 loading；加载 watcher 只监听 show/group ID，弹窗仍打开时不重读列表。继续搜索、添加用户并保存，会发送只有新增行的整组替换请求。
+
+倍率和 RPM 两项独立组件回归均复现：原有 user 1，另一标签页同一管理员重新登录后添加 user 2，实际 payload 仅含 user 2。后端 `user_group_rate_repo.go` 的两个 SyncGroup 方法会清空 entries 之外的用户配置，因此 user 1 的配置丢失。已核对父页面/App，不存在自动关闭这两个弹窗的会话监听。
+
+这是 `108c63d01` 引入的回归。建议会话变化时关闭弹窗，或重载权威列表并在加载成功前禁止编辑、提交；不能将旧会话数据清空视为服务端列表为空。
+
+### R12 / P2：缓存实际有效期缩短，创建费用仍按原 TTL 收取
+
+定位：`backend/internal/handler/gemini_cached_contents_handler.go:281-290`、303、332。用原 ttl 计算存储量、冻结报价后才采用更早的 upstream.ExpireTime；最终结算未减少存储量或报价。
+
+handler 回归：1,000,000 token，请求 24 小时，上游返回 12 小时；记录确为 12 小时，但实际计费 **$109.25**（输入 $1.25、存储 $108），按实际时长应为 **$55.25**，多收 **$54**。同样可能错误拒绝足以支付实际较短时长的余额。此场景用上游测试桩注入，不声称真实 Google 服务会主动缩短 TTL。
+
+该问题来自本轮新缓存创建路径，最新报价修复没有覆盖。建议在固定金额准入前统一实际到期时间和计费时长，结算传递相同报价快照，保留输入费用。
+
+### R13 / P2：RPM 清空未完成时仍可同时保存
+
+定位：`frontend/src/components/admin/group/GroupRPMOverridesModal.vue:425-435`。清空入口检查 saving，保存入口未检查 clearing，保存按钮也仅按 saving 禁用。修改任一 RPM 后点击清空，在 DELETE 未完成时点击保存，会同时派发 DELETE/PUT。
+
+组件回归确认 clear promise 仍 pending 时批量保存 API 已被调用。DELETE 晚于 PUT 执行会清除刚保存的配置；反序则重新写回被要求清空的旧草稿。相同会话代次的 owner 检查无法解决顺序冲突。建议两项 mutation 共用互斥状态，并同时约束按钮与方法入口。此缺口在 `11fe558f0` 已存在，属于目标版本保留的旧问题，不归为本次新增。
+
+### 本次实际验证
+
+| 检查 | 结果 |
+| --- | --- |
+| 后端全量 unit | `go test -p 2 -count=1 -timeout=20m -tags=unit -json ./...`：退出 0；58 个有测试包、23,682 个通过事件、18 个条件跳过、0 失败。 |
+| 后端全量 integration | `go test -p 2 -count=1 -timeout=20m -tags=integration -json ./...`：退出 0；52 个有测试包、14,501 个通过事件、16 个条件跳过、0 失败。 |
+| 前端全量 Vitest | 421 个文件、3,575 项通过，0 失败；maxWorkers=12、minWorkers=1。 |
+| TypeScript / ESLint | vue-tsc --noEmit、pnpm run lint:check 均退出 0。 |
+| 前端生产构建 | pnpm exec vite build，outDir 指定本轮 E 盘缓存目录，退出 0；保留 Browserslist 时效及大 chunk 提示。 |
+| Linux/amd64 后端构建 | CGO_ENABLED=0，go build -p 2 -trimpath ./cmd/server 退出 0；本次不含 embed 标签，未执行镜像发布或运行冒烟。 |
+| 新增问题复现 | 4 个断言按预期失败：倍率会话、RPM 会话、RPM 并发、缓存较短有效期；证明问题存在，不计作通过。 |
+| SQL / 源码边界 | 按 Git blob 比较，296 份历史 SQL 无改动/删除，新增 4 份；合并增量 git diff --check 无错误。 |
+
+Go 数字含父/子测试事件，unit 与 integration 不可相加为独立用例总数。unit 的 18 项跳过含 9 项缺少显式 PG/Redis 地址的安全审计测试，及既有 OAuth 占位、外部 TLS/CLI 抓包、SQLite 历史 NULL、真实 TypeSafe/OpenAI、插件运行时条件。未访问生产、真实模型/支付/OAuth 服务，不用旧报告数字代替本次证据。
+
+全部命令加载主项目 tools/project-env.ps1，日志/摘要/复现位于主项目 `.cache/review-108c63d01-20261015`。Docker 设置和实际 VHD 均核对到 E 盘。后端复现使用 Go overlay，前端使用缓存目录中的独立 Vitest 配置，未写入业务源码。结论和复现步骤在此归档；本次仅修改审查/交接文档，未提交、推送、发布或部署。
+
+集成跳过的 16 项已单独记录：同样缺少显式 PG/Redis 地址的 9 项安全审计，及既有 OAuth 占位、外部抓包、禁用的并发缓存子用例、真实 TypeSafe/OpenAI/插件条件。数据库与 Redis 容器集成、历史升级测试实际运行。复现筛选中另外 21 个未选中的组件用例属于筛选跳过，不混入全量结果。
+
+清理限制：自动审批审查拒绝了删除本次前端构建目录、临时 Linux 二进制和临时依赖联接的命令，只返回 blocked by policy，未说明细因。该命令未执行，相关产物保留在上述 E 盘缓存目录；未绕过拒绝。原始日志、统计摘要及复现材料也保留，未清理其它工作区或共享依赖缓存。测试容器由测试框架收尾；最终 docker ps 无运行中容器。

@@ -24,6 +24,7 @@
           <div class="relative flex-1">
             <input
               v-model="searchQuery"
+              :disabled="!entriesLoaded"
               type="text"
               autocomplete="off"
               class="input w-full"
@@ -62,7 +63,7 @@
           <button
             type="button"
             class="btn btn-primary shrink-0"
-            :disabled="!selectedUser || newRpm == null || !Number.isInteger(newRpm) || newRpm < 0"
+            :disabled="!entriesLoaded || !selectedUser || newRpm == null || !Number.isInteger(newRpm) || newRpm < 0"
             @click="handleAddLocal"
           >
             {{ t('common.add') }}
@@ -72,7 +73,7 @@
         <div v-if="localEntries.length > 0" class="mt-3 flex items-center justify-end border-t border-gray-100 pt-3 dark:border-dark-600">
           <button
             type="button"
-            :disabled="clearing"
+            :disabled="!entriesLoaded || clearing || saving || loading"
             class="rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-sm font-medium text-red-600 transition-colors hover:bg-red-100 disabled:opacity-50 dark:border-red-800 dark:bg-red-900/20 dark:text-red-400 dark:hover:bg-red-900/40"
             @click="clearAllLocal"
           >
@@ -193,7 +194,7 @@
             v-if="isDirty"
             type="button"
             class="btn btn-primary btn-sm px-4 py-1.5"
-            :disabled="saving"
+            :disabled="!entriesLoaded || saving || clearing || loading"
             @click="handleSave"
           >
             <Icon v-if="saving" name="refresh" size="sm" class="mr-1 animate-spin" />
@@ -236,6 +237,8 @@ const { t } = useI18n()
 const appStore = useAppStore()
 
 const loading = ref(false)
+// A failed or invalidated load must never become a replacement empty list.
+const entriesLoaded = ref(false)
 const saving = ref(false)
 const serverEntries = ref<GroupRPMOverrideEntry[]>([])
 const localEntries = ref<LocalEntry[]>([])
@@ -254,6 +257,7 @@ const dialog = useAdminDialogSession(() => props.show, () => props.group?.id, ()
   clearTimeout(searchTimeout)
   searchVersion++
   loading.value = false
+  entriesLoaded.value = false
   saving.value = false
   clearing.value = false
   serverEntries.value = []
@@ -262,7 +266,7 @@ const dialog = useAdminDialogSession(() => props.show, () => props.group?.id, ()
   searchQuery.value = ''
   selectedUser.value = null
   showDropdown.value = false
-})
+}, () => emit('close'))
 
 const platformColorClass = computed(() => {
   switch (props.group?.platform) {
@@ -293,6 +297,7 @@ const loadEntries = async () => {
   const owner = dialog.capture()
   if (!dialog.isCurrent(owner)) return
   loading.value = true
+  entriesLoaded.value = false
   serverEntries.value = []
   localEntries.value = []
   try {
@@ -300,6 +305,7 @@ const loadEntries = async () => {
     if (!dialog.isCurrent(owner)) return
     serverEntries.value = entries
     localEntries.value = cloneEntries(serverEntries.value)
+    entriesLoaded.value = true
     adjustPage()
   } catch (error) {
     if (!dialog.isCurrent(owner)) return
@@ -339,7 +345,7 @@ const handleSearchUsers = () => {
   selectedUser.value = null
   searchResults.value = []
   showDropdown.value = false
-  if (!query || !dialog.isCurrent(owner)) return
+  if (!entriesLoaded.value || !query || !dialog.isCurrent(owner)) return
   const isCurrent = () => version === searchVersion && dialog.isCurrent(owner)
   searchTimeout = setTimeout(async () => {
     if (!isCurrent()) return
@@ -362,7 +368,7 @@ const selectUser = (user: AdminUser) => {
 }
 
 const handleAddLocal = () => {
-  if (!selectedUser.value || newRpm.value == null || !Number.isInteger(newRpm.value) || newRpm.value < 0) return
+  if (!entriesLoaded.value || !selectedUser.value || newRpm.value == null || !Number.isInteger(newRpm.value) || newRpm.value < 0) return
   const user = selectedUser.value
   const idx = localEntries.value.findIndex(e => e.user_id === user.id)
   const entry: LocalEntry = {
@@ -398,7 +404,7 @@ const removeLocal = (userId: number) => {
 }
 
 const clearAllLocal = async () => {
-  if (!props.group || clearing.value || loading.value || saving.value) return
+  if (!props.group || !entriesLoaded.value || clearing.value || loading.value || saving.value) return
   const owner = dialog.capture()
   if (!dialog.isCurrent(owner)) return
   clearing.value = true
@@ -423,7 +429,7 @@ const handleCancel = () => {
 }
 
 const handleSave = async () => {
-  if (!props.group || saving.value || loading.value) return
+  if (!props.group || !entriesLoaded.value || saving.value || clearing.value || loading.value) return
   const owner = dialog.capture()
   if (!dialog.isCurrent(owner)) return
   saving.value = true
