@@ -271,6 +271,13 @@ func (h *GatewayHandler) GeminiCachedContentsCreate(c *gin.Context) {
 			if failoverClientGone(c) {
 				return
 			}
+			if !errors.Is(err, service.ErrGeminiCachedContentRequestNotSent) {
+				reqLog.Warn("gemini.cached_content.upstream_create_outcome_unknown", zap.Int64("account_id", account.ID), zap.Error(err))
+				// A lost response can hide a successfully created cache. Repeating
+				// this non-idempotent POST would create additional orphan resources.
+				googleError(c, http.StatusBadGateway, "Upstream request failed")
+				return
+			}
 			reqLog.Warn("gemini.cached_content.upstream_create_error", zap.Int64("account_id", account.ID), zap.Error(err))
 			excluded[account.ID] = struct{}{}
 			continue

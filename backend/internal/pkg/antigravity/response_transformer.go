@@ -143,7 +143,7 @@ func (p *NonStreamingProcessor) processPart(part *GeminiPart) {
 	}
 
 	// 2. Text 处理
-	if part.Text != "" || part.Thought {
+	if part.Text != "" || part.Thought || (signature != "" && part.InlineData == nil) {
 		if part.Thought {
 			// Thinking part
 			p.flushText()
@@ -159,16 +159,25 @@ func (p *NonStreamingProcessor) processPart(part *GeminiPart) {
 				p.trailingSignature = ""
 			}
 
-			p.thinkingBuilder += part.Text
 			if signature != "" {
-				p.thinkingSignature = signature
+				p.flushThinking()
+				p.contentBlocks = append(p.contentBlocks, ClaudeContentItem{
+					Type: "thinking", Thinking: part.Text, Signature: signature,
+				})
+			} else {
+				p.thinkingBuilder += part.Text
 			}
 		} else {
 			// 普通 Text
 			if part.Text == "" {
-				// 空 text 带签名 - 暂存
+				// Emit a signature-only part at its original position. In particular,
+				// consecutive empty signed parts must not overwrite one another.
 				if signature != "" {
-					p.trailingSignature = signature
+					p.flushThinking()
+					p.flushText()
+					p.contentBlocks = append(p.contentBlocks, ClaudeContentItem{
+						Type: "thinking", Signature: signature,
+					})
 				}
 				return
 			}
@@ -188,6 +197,7 @@ func (p *NonStreamingProcessor) processPart(part *GeminiPart) {
 
 			// 非空 text 带签名 - 特殊处理：先输出 text，再输出空 thinking 块
 			if signature != "" {
+				p.flushText()
 				p.contentBlocks = append(p.contentBlocks, ClaudeContentItem{
 					Type: "text",
 					Text: part.Text,

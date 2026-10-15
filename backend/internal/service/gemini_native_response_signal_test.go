@@ -476,7 +476,7 @@ func TestGeminiForwardNative_CountTokensBodyLeavesNoMark(t *testing.T) {
 	require.Empty(t, upstreamErrorEventsFromContext(t, c))
 }
 
-func TestCollectGeminiSSEObserved_SeesTerminalChunkEvenWhenAggregateDropsIt(t *testing.T) {
+func TestCollectGeminiSSEObserved_ObservesAndPreservesTerminalChunk(t *testing.T) {
 	var observed []string
 	collected, usage, stats, err := collectGeminiSSEObserved(strings.NewReader(geminiSignalTestProhibitedSSE), false, func(raw []byte) {
 		observed = append(observed, string(raw))
@@ -495,8 +495,10 @@ func TestCollectGeminiSSEObserved_SeesTerminalChunkEvenWhenAggregateDropsIt(t *t
 		}
 	}
 	require.True(t, hit)
-	// 聚合结果沿用"最后一个带 parts 的块"，本身不携带末块的 finishReason；检测必须逐事件进行。
+	// 逐事件检测继续覆盖终止信号；聚合结果也必须保留末块的状态。
 	aggregated, err := json.Marshal(collected)
 	require.NoError(t, err)
-	require.NotContains(t, string(aggregated), "PROHIBITED_CONTENT")
+	aggregatedSignal, ok := detectGeminiResponseSignal(aggregated)
+	require.True(t, ok)
+	require.Equal(t, geminiSignalContentFilter, aggregatedSignal.Kind)
 }

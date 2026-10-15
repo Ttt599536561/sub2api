@@ -2445,11 +2445,21 @@ type geminiSSECollectStats struct {
 func collectGeminiSSEObserved(body io.Reader, isOAuth bool, observe func(rawBytes []byte)) (map[string]any, *ClaudeUsage, geminiSSECollectStats, error) {
 	reader := bufio.NewReader(body)
 
-	var last map[string]any
-	var lastWithParts map[string]any
+	collected := map[string]any{}
 	var collectedTextParts []string // Collect all text parts for aggregation
-	usage := &ClaudeUsage{}
 	stats := geminiSSECollectStats{fallback: &geminiSSEFallbackBody{}}
+	finish := func() (map[string]any, *ClaudeUsage, geminiSSECollectStats, error) {
+		usage := &ClaudeUsage{}
+		// Read billing and client-visible usage from the same accumulated fields.
+		if metadata, ok := collected["usageMetadata"]; ok {
+			if raw, err := json.Marshal(map[string]any{"usageMetadata": metadata}); err == nil {
+				if finalUsage := extractGeminiUsage(raw); finalUsage != nil {
+					usage = finalUsage
+				}
+			}
+		}
+		return mergeCollectedTextParts(collected, collectedTextParts), usage, stats, nil
+	}
 
 	for {
 		line, err := reader.ReadString('\n')
@@ -2464,7 +2474,7 @@ func collectGeminiSSEObserved(body io.Reader, isOAuth bool, observe func(rawByte
 				switch payload {
 				case "", "[DONE]":
 					if payload == "[DONE]" {
-						return mergeCollectedTextParts(pickGeminiCollectResult(last, lastWithParts), collectedTextParts), usage, stats, nil
+						return finish()
 					}
 				default:
 					var parsed map[string]any
@@ -2486,12 +2496,8 @@ func collectGeminiSSEObserved(body io.Reader, isOAuth bool, observe func(rawByte
 						}
 					}
 					if parsed != nil {
-						last = parsed
-						if u := extractGeminiUsage(rawBytes); u != nil {
-							usage = u
-						}
+						collected = mergeGeminiCollectedResponseChunk(collected, parsed)
 						if parts := extractGeminiParts(parsed); len(parts) > 0 {
-							lastWithParts = parsed
 							// Collect text from each part for aggregation
 							for _, part := range parts {
 								if text, ok := part["text"].(string); ok && text != "" {
@@ -2512,17 +2518,79 @@ func collectGeminiSSEObserved(body io.Reader, isOAuth bool, observe func(rawByte
 		}
 	}
 
-	return mergeCollectedTextParts(pickGeminiCollectResult(last, lastWithParts), collectedTextParts), usage, stats, nil
+	return finish()
 }
 
-func pickGeminiCollectResult(last map[string]any, lastWithParts map[string]any) map[string]any {
-	if lastWithParts != nil {
-		return lastWithParts
+// mergeGeminiCollectedResponseChunk keeps metadata across content, finish-reason,
+// and usage-only events. Each caller retains its existing part aggregation policy.
+// Merge candidate metadata by index so an update never overwrites another
+// candidate's state; this does not change the collectors' first-candidate policy.
+func mergeGeminiCollectedResponseChunk(previous, chunk map[string]any) map[string]any {
+	if chunk == nil {
+		return previous
 	}
-	if last != nil {
-		return last
+	result := make(map[string]any, len(previous)+len(chunk))
+	for key, value := range previous {
+		result[key] = value
 	}
-	return map[string]any{}
+	for key, value := range chunk {
+		// A terminal content object can have empty/null parts. Preserve the last
+		// actual parts, as callers may only collect text separately.
+		if (key == "content" || key == "parts") && value == nil {
+			continue
+		}
+		if key == "parts" {
+			if parts, ok := value.([]any); ok && len(parts) == 0 {
+				continue
+			}
+		}
+		if key == "candidates" {
+			incoming, ok := value.([]any)
+			if !ok || len(incoming) == 0 {
+				continue
+			}
+			prior, _ := result[key].([]any)
+			candidates := append([]any(nil), prior...)
+			for position, value := range incoming {
+				candidate, ok := value.(map[string]any)
+				if !ok {
+					continue
+				}
+				index := position
+				if explicit, ok := asInt(candidate["index"]); ok {
+					index = explicit
+				}
+				found := false
+				for oldPosition, oldValue := range candidates {
+					old, ok := oldValue.(map[string]any)
+					if !ok {
+						continue
+					}
+					oldIndex := oldPosition
+					if explicit, ok := asInt(old["index"]); ok {
+						oldIndex = explicit
+					}
+					if oldIndex == index {
+						candidates[oldPosition] = mergeGeminiCollectedResponseChunk(old, candidate)
+						found = true
+						break
+					}
+				}
+				if !found {
+					candidates = append(candidates, candidate)
+				}
+			}
+			result[key] = candidates
+			continue
+		}
+		if update, ok := value.(map[string]any); ok {
+			prior, _ := result[key].(map[string]any)
+			result[key] = mergeGeminiCollectedResponseChunk(prior, update)
+		} else {
+			result[key] = value
+		}
+	}
+	return result
 }
 
 // mergeCollectedTextParts merges all collected text chunks into the final response.

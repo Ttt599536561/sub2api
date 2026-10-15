@@ -27,6 +27,8 @@ type StreamingProcessor struct {
 	blockIndex        int
 	messageStartSent  bool
 	messageStopSent   bool
+	finishReason      string
+	usageMetadata     GeminiUsageMetadata
 	usedTool          bool
 	pendingSignature  string
 	trailingSignature string
@@ -81,41 +83,59 @@ func (p *StreamingProcessor) ProcessLine(line string) []byte {
 	}
 
 	data := strings.TrimSpace(strings.TrimPrefix(line, "data:"))
-	if data == "" || data == "[DONE]" {
+	if data == "" || p.messageStopSent {
 		return nil
 	}
-
-	// 解包 v1internal 响应
-	var v1Resp V1InternalResponse
-	if err := json.Unmarshal([]byte(data), &v1Resp); err != nil {
-		// 尝试直接解析为 GeminiResponse
-		var directResp GeminiResponse
-		if err2 := json.Unmarshal([]byte(data), &directResp); err2 != nil {
-			return nil
-		}
-		v1Resp.Response = directResp
-		v1Resp.ResponseID = directResp.ResponseID
-		v1Resp.ModelVersion = directResp.ModelVersion
+	if data == "[DONE]" {
+		final, _ := p.Finish()
+		return final
 	}
 
+	// Inspect the response field explicitly: unmarshalling a direct response
+	// into a wrapper succeeds but silently leaves its Response empty.
+	type streamResponse struct {
+		Response      json.RawMessage   `json:"response"`
+		ResponseID    string            `json:"responseId"`
+		ModelVersion  string            `json:"modelVersion"`
+		Candidates    []GeminiCandidate `json:"candidates"`
+		UsageMetadata json.RawMessage   `json:"usageMetadata"`
+	}
+	var envelope streamResponse
+	if data == "null" || json.Unmarshal([]byte(data), &envelope) != nil {
+		return nil
+	}
+	parsed := envelope
+	if len(envelope.Response) > 0 {
+		parsed = streamResponse{}
+		if bytes.Equal(bytes.TrimSpace(envelope.Response), []byte("null")) || json.Unmarshal(envelope.Response, &parsed) != nil {
+			return nil
+		}
+	}
+	v1Resp := V1InternalResponse{
+		Response: GeminiResponse{
+			Candidates: parsed.Candidates, ResponseID: parsed.ResponseID, ModelVersion: parsed.ModelVersion,
+		},
+		ResponseID: envelope.ResponseID, ModelVersion: envelope.ModelVersion,
+	}
 	geminiResp := &v1Resp.Response
 
+	// Unmarshal into the prior metadata so absent fields retain their latest
+	// values, while explicit zero values still replace them.
+	if len(parsed.UsageMetadata) > 0 {
+		metadata := p.usageMetadata
+		if json.Unmarshal(parsed.UsageMetadata, &metadata) == nil {
+			p.usageMetadata = metadata
+			p.inputTokens = metadata.PromptTokenCount - metadata.CachedContentTokenCount
+			p.outputTokens = metadata.CandidatesTokenCount + metadata.ThoughtsTokenCount
+			p.cacheReadTokens = metadata.CachedContentTokenCount
+			p.imageOutputTokens = metadata.ImageOutputTokens()
+		}
+	}
 	var result bytes.Buffer
 
 	// 发送 message_start
 	if !p.messageStartSent {
 		_, _ = result.Write(p.emitMessageStart(&v1Resp))
-	}
-
-	// 更新 usage
-	// 注意：Gemini 的 promptTokenCount 包含 cachedContentTokenCount，
-	// 但 Claude 的 input_tokens 不包含 cache_read_input_tokens，需要减去
-	if geminiResp.UsageMetadata != nil {
-		cached := geminiResp.UsageMetadata.CachedContentTokenCount
-		p.inputTokens = geminiResp.UsageMetadata.PromptTokenCount - cached
-		p.outputTokens = geminiResp.UsageMetadata.CandidatesTokenCount + geminiResp.UsageMetadata.ThoughtsTokenCount
-		p.cacheReadTokens = cached
-		p.imageOutputTokens = geminiResp.UsageMetadata.ImageOutputTokens()
 	}
 
 	// 处理 parts
@@ -141,7 +161,9 @@ func (p *StreamingProcessor) ProcessLine(line string) []byte {
 			}
 		}
 		if finishReason != "" {
-			_, _ = result.Write(p.emitFinish(finishReason))
+			// Usage may arrive after the terminal candidate. Close the message
+			// only at [DONE] or Finish(), after all metadata has been consumed.
+			p.finishReason = finishReason
 		}
 	}
 
@@ -165,7 +187,7 @@ func (p *StreamingProcessor) Finish() ([]byte, *ClaudeUsage) {
 
 	var result bytes.Buffer
 	if !p.messageStopSent {
-		_, _ = result.Write(p.emitFinish(""))
+		_, _ = result.Write(p.emitFinish(p.finishReason))
 	}
 
 	return result.Bytes(), usage
@@ -187,15 +209,12 @@ func (p *StreamingProcessor) emitMessageStart(v1Resp *V1InternalResponse) []byte
 		return nil
 	}
 
-	usage := ClaudeUsage{}
-	if v1Resp.Response.UsageMetadata != nil {
-		cached := v1Resp.Response.UsageMetadata.CachedContentTokenCount
-		usage.InputTokens = v1Resp.Response.UsageMetadata.PromptTokenCount - cached
-		usage.OutputTokens = v1Resp.Response.UsageMetadata.CandidatesTokenCount + v1Resp.Response.UsageMetadata.ThoughtsTokenCount
-		usage.CacheReadInputTokens = cached
-		usage.ImageOutputTokens = v1Resp.Response.UsageMetadata.ImageOutputTokens()
+	usage := ClaudeUsage{
+		InputTokens:          p.inputTokens,
+		OutputTokens:         p.outputTokens,
+		CacheReadInputTokens: p.cacheReadTokens,
+		ImageOutputTokens:    p.imageOutputTokens,
 	}
-
 	responseID := v1Resp.ResponseID
 	if responseID == "" {
 		responseID = v1Resp.Response.ResponseID
@@ -250,7 +269,7 @@ func (p *StreamingProcessor) processPart(part *GeminiPart) []byte {
 	}
 
 	// 2. Text 处理
-	if part.Text != "" || part.Thought {
+	if part.Text != "" || part.Thought || (signature != "" && part.InlineData == nil) {
 		if part.Thought {
 			_, _ = result.Write(p.processThinking(part.Text, signature))
 		} else {
@@ -294,7 +313,7 @@ func (p *StreamingProcessor) processThinking(text, signature string) []byte {
 	}
 
 	// 开始或继续 thinking 块
-	if p.blockType != BlockTypeThinking {
+	if p.blockType != BlockTypeThinking || signature != "" {
 		_, _ = result.Write(p.startBlock(BlockTypeThinking, map[string]any{
 			"type":      "thinking",
 			"thinking":  "",
@@ -309,9 +328,11 @@ func (p *StreamingProcessor) processThinking(text, signature string) []byte {
 		}))
 	}
 
-	// 暂存签名
+	// A signed thinking part has its own boundary; later thinking text must
+	// not reuse this signature or replace it with another part's signature.
 	if signature != "" {
 		p.pendingSignature = signature
+		_, _ = result.Write(p.endBlock())
 	}
 
 	return result.Bytes()
@@ -321,12 +342,13 @@ func (p *StreamingProcessor) processThinking(text, signature string) []byte {
 func (p *StreamingProcessor) processText(text, signature string) []byte {
 	var result bytes.Buffer
 
-	// 空 text 带签名 - 暂存
+	// Keep each signature-only part in order, including consecutive empty parts.
 	if text == "" {
 		if signature != "" {
-			p.trailingSignature = signature
+			_, _ = result.Write(p.endBlock())
+			_, _ = result.Write(p.emitEmptyThinkingWithSignature(signature))
 		}
-		return nil
+		return result.Bytes()
 	}
 
 	// 处理之前的 trailingSignature

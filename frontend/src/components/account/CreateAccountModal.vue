@@ -5090,9 +5090,7 @@ watch(
       // Antigravity: 默认使用映射模式并填充默认映射
       if (form.platform === 'antigravity') {
         antigravityModelRestrictionMode.value = 'mapping'
-        fetchAntigravityDefaultMappings().then(mappings => {
-          antigravityModelMappings.value = [...mappings]
-        })
+        antigravityModelMappings.value = []
         antigravityWhitelistModels.value = []
       } else {
         antigravityWhitelistModels.value = []
@@ -5163,9 +5161,7 @@ watch(
     // Antigravity: 默认使用映射模式并填充默认映射
     if (newPlatform === 'antigravity') {
       antigravityModelRestrictionMode.value = 'mapping'
-      fetchAntigravityDefaultMappings().then(mappings => {
-        antigravityModelMappings.value = [...mappings]
-      })
+      antigravityModelMappings.value = []
       antigravityWhitelistModels.value = []
       accountCategory.value = 'oauth-based'
       antigravityAccountType.value = 'oauth'
@@ -5235,6 +5231,26 @@ watch(
     geminiOAuth.resetState()
     antigravityOAuth.resetState()
     grokOAuth.resetState()
+  }
+)
+
+// Defaults belong to this visible platform selection and must not replace manual edits.
+watch(
+  [() => props.show, () => form.platform],
+  ([show, platform], _previous, onCleanup) => {
+    if (!show || platform !== 'antigravity') return
+    let current = true
+    const stopWatchingMappings = watch(antigravityModelMappings, () => {
+      current = false
+    }, { deep: true, flush: 'sync' })
+    onCleanup(() => {
+      current = false
+      stopWatchingMappings()
+    })
+    void fetchAntigravityDefaultMappings().then(mappings => {
+      stopWatchingMappings()
+      if (current) antigravityModelMappings.value = mappings
+    })
   }
 )
 
@@ -5648,9 +5664,7 @@ const resetForm = () => {
 
   antigravityModelRestrictionMode.value = 'mapping'
   antigravityWhitelistModels.value = []
-  fetchAntigravityDefaultMappings().then(mappings => {
-    antigravityModelMappings.value = [...mappings]
-  })
+  antigravityModelMappings.value = []
   poolModeEnabled.value = false
   poolModeRetryCount.value = DEFAULT_POOL_MODE_RETRY_COUNT
   poolModeRetryStatusCodesInput.value = ''
