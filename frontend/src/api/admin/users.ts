@@ -81,6 +81,7 @@ export async function list(
   },
   options?: {
     signal?: AbortSignal
+    authIdentity?: ReturnType<typeof ownedAuthRequestConfig>['authIdentity']
   }
 ): Promise<PaginatedResponse<AdminUser>> {
   // Build params with attribute filters in attr[id]=value format
@@ -106,8 +107,8 @@ export async function list(
     }
   }
   const { data } = await apiClient.get<PaginatedResponse<AdminUser>>('/admin/users', {
-    params,
-    signal: options?.signal
+    ...options,
+    params
   })
   return data
 }

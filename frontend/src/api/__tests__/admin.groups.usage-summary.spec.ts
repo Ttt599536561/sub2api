@@ -4,7 +4,8 @@ const { get } = vi.hoisted(() => ({
   get: vi.fn(),
 }))
 
-vi.mock('@/api/client', () => ({
+vi.mock('@/api/client', async (importOriginal) => ({
+  ...await importOriginal<typeof import('@/api/client')>(),
   apiClient: { get },
 }))
 
@@ -24,6 +25,7 @@ describe('admin group usage summary API', () => {
 
     await expect(getUsageSummary()).resolves.toEqual(summary)
 
-    expect(get).toHaveBeenCalledWith('/admin/groups/usage-summary')
+    expect(get).toHaveBeenCalledWith('/admin/groups/usage-summary', expect.objectContaining({ authIdentity: expect.any(Object) }))
+    expect(get.mock.calls[0][1].params).toBeUndefined()
   })
 })

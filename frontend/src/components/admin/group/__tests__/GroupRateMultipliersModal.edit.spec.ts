@@ -1,3 +1,5 @@
+vi.mock('@/i18n', () => ({ getLocale: () => 'en' }))
+vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ user: { id: 7 }, sessionRevision: 0, isAdmin: true }) }))
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils'
 import type { AdminGroup } from '@/types'

@@ -243,6 +243,8 @@ import { ref, computed, watch, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
 import { adminAPI } from '@/api/admin'
+import { ownedAuthRequestConfig } from '@/api/client'
+import { useAdminDialogSession } from '@/composables/useAdminDialogSession'
 import type { GroupRateMultiplierEntry } from '@/api/admin/groups'
 import type { AdminGroup, AdminUser } from '@/types'
 import BaseDialog from '@/components/common/BaseDialog.vue'
@@ -280,7 +282,21 @@ const pageSize = ref(10)
 const batchFactor = ref<number | null>(null)
 
 let searchTimeout: ReturnType<typeof setTimeout>
-let loadVersion = 0
+let searchVersion = 0
+
+const dialog = useAdminDialogSession(() => props.show, () => props.group?.id, () => {
+  clearTimeout(searchTimeout)
+  searchVersion++
+  loading.value = false
+  saving.value = false
+  batchFactor.value = null
+  serverEntries.value = []
+  localEntries.value = []
+  searchResults.value = []
+  searchQuery.value = ''
+  selectedUser.value = null
+  showDropdown.value = false
+})
 
 const platformColorClass = computed(() => {
   switch (props.group?.platform) {
@@ -321,23 +337,24 @@ const cloneEntries = (entries: GroupRateMultiplierEntry[]): LocalEntry[] => {
 
 const loadEntries = async () => {
   if (!props.group) return
-  const version = loadVersion
+  const owner = dialog.capture()
+  if (!dialog.isCurrent(owner)) return
   loading.value = true
   serverEntries.value = []
   localEntries.value = []
   try {
     const raw = await adminAPI.groups.getGroupRateMultipliers(props.group.id)
-    if (version !== loadVersion) return
+    if (!dialog.isCurrent(owner)) return
     // 仅显示已设置 rate_multiplier 的条目；rpm_override 在另一个弹窗管理，保留不动
     serverEntries.value = raw.filter(e => e.rate_multiplier != null)
     localEntries.value = cloneEntries(serverEntries.value)
     adjustPage()
   } catch (error) {
-    if (version !== loadVersion) return
+    if (!dialog.isCurrent(owner)) return
     appStore.showError(t('admin.groups.failedToLoad'))
     console.error('Error loading group rate multipliers:', error)
   } finally {
-    if (version === loadVersion) loading.value = false
+    if (dialog.isCurrent(owner)) loading.value = false
   }
 }
 
@@ -349,7 +366,6 @@ const adjustPage = () => {
 }
 
 watch([() => props.show, () => props.group?.id], ([show]) => {
-  loadVersion++
   if (show && props.group) {
     currentPage.value = 1
     batchFactor.value = null
@@ -368,19 +384,23 @@ const handlePageSizeChange = (newSize: number) => {
 
 const handleSearchUsers = () => {
   clearTimeout(searchTimeout)
+  const version = ++searchVersion
+  const owner = dialog.capture()
+  const query = searchQuery.value.trim()
   selectedUser.value = null
-  if (!searchQuery.value.trim()) {
-    searchResults.value = []
-    showDropdown.value = false
-    return
-  }
+  searchResults.value = []
+  showDropdown.value = false
+  if (!query || !dialog.isCurrent(owner)) return
+  const isCurrent = () => version === searchVersion && dialog.isCurrent(owner)
   searchTimeout = setTimeout(async () => {
+    if (!isCurrent()) return
     try {
-      const res = await adminAPI.users.list(1, 10, { search: searchQuery.value.trim() })
+      const res = await adminAPI.users.list(1, 10, { search: query }, { authIdentity: ownedAuthRequestConfig().authIdentity })
+      if (!isCurrent()) return
       searchResults.value = res.items
       showDropdown.value = true
     } catch {
-      searchResults.value = []
+      if (isCurrent()) searchResults.value = []
     }
   }, 300)
 }
@@ -461,7 +481,9 @@ const handleCancel = () => {
 
 // 保存：一次性提交所有数据（只提交 rate_multiplier；rpm_override 由独立弹窗管理）
 const handleSave = async () => {
-  if (!props.group) return
+  if (!props.group || saving.value || loading.value) return
+  const owner = dialog.capture()
+  if (!dialog.isCurrent(owner)) return
   saving.value = true
   try {
     const entries = localEntries.value
@@ -471,14 +493,16 @@ const handleSave = async () => {
         rate_multiplier: e.rate_multiplier as number
       }))
     await adminAPI.groups.batchSetGroupRateMultipliers(props.group.id, entries)
+    if (!dialog.isCurrent(owner)) return
     appStore.showSuccess(t('admin.groups.rateSaved'))
     emit('success')
     emit('close')
   } catch (error) {
+    if (!dialog.isCurrent(owner)) return
     appStore.showError(t('admin.groups.failedToSave'))
     console.error('Error saving rate multipliers:', error)
   } finally {
-    saving.value = false
+    if (dialog.isCurrent(owner)) saving.value = false
   }
 }
 
@@ -499,7 +523,6 @@ if (typeof document !== 'undefined') {
   document.addEventListener('click', handleClickOutside)
 }
 onUnmounted(() => {
-  loadVersion++
   clearTimeout(searchTimeout)
   document.removeEventListener('click', handleClickOutside)
 })

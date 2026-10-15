@@ -1,15 +1,17 @@
+vi.mock('@/i18n', () => ({ getLocale: () => 'en' }))
+vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ user: { id: 7 }, sessionRevision: 0, isAdmin: true }) }))
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils'
 import type { AdminGroup } from '@/types'
 import GroupRateMultipliersModal from '../GroupRateMultipliersModal.vue'
 
-const mocks = vi.hoisted(() => ({ getGroupRateMultipliers: vi.fn(), batchSetGroupRateMultipliers: vi.fn(), showError: vi.fn() }))
-vi.mock('@/api/admin', () => ({ adminAPI: { groups: mocks } }))
+const mocks = vi.hoisted(() => ({ getGroupRateMultipliers: vi.fn(), batchSetGroupRateMultipliers: vi.fn(), showError: vi.fn(), list: vi.fn(), clearGroupRPMOverrides: vi.fn() }))
+vi.mock('@/api/admin', () => ({ adminAPI: { groups: mocks, users: { list: mocks.list } } }))
 vi.mock('@/stores/app', () => ({ useAppStore: () => ({ showError: mocks.showError, showSuccess: vi.fn() }) }))
 vi.mock('vue-i18n', () => ({ useI18n: () => ({ t: (key: string) => key }) }))
 enableAutoUnmount(afterEach)
-beforeEach(() => vi.resetAllMocks())
-afterEach(() => vi.restoreAllMocks())
+beforeEach(() => { vi.resetAllMocks(); localStorage.clear() })
+afterEach(() => { vi.restoreAllMocks(); vi.useRealTimers(); localStorage.clear() })
 
 function deferred() {
   let resolve!: (value: unknown) => void
@@ -96,4 +98,69 @@ describe('group rate multiplier request ownership', () => {
     await flushPromises()
     expect(mocks.showError).not.toHaveBeenCalled()
   })
+})
+
+it('does not close a new group when an old save finishes', async () => {
+  const old = deferred()
+  mocks.getGroupRateMultipliers.mockResolvedValueOnce(entries(1)).mockResolvedValueOnce(entries(2))
+  mocks.batchSetGroupRateMultipliers.mockReturnValueOnce(old.promise)
+  const wrapper = await openGroup()
+  await flushPromises()
+  await wrapper.get('tbody input[type="number"]').setValue('300')
+  await wrapper.findAll('button').find(button => button.text() === 'common.save')!.trigger('click')
+  await wrapper.setProps({ show:false })
+  await wrapper.setProps({ show:true,group:group(2) })
+  await flushPromises()
+  old.resolve({})
+  await flushPromises()
+  expect(wrapper.emitted('close')).toBeUndefined()
+  expect(wrapper.emitted('success')).toBeUndefined()
+  expect(wrapper.get('tbody').text()).toContain('user2@example.com')
+})
+it('keeps a newer save busy when an older save rejects', async () => {
+  vi.spyOn(console, 'error').mockImplementation(() => {})
+  const old = deferred(), current = deferred()
+  mocks.getGroupRateMultipliers.mockResolvedValueOnce(entries(1)).mockResolvedValueOnce(entries(2))
+  mocks.batchSetGroupRateMultipliers.mockReturnValueOnce(old.promise).mockReturnValueOnce(current.promise)
+  const wrapper = await openGroup(); await flushPromises()
+  await wrapper.get('tbody input[type="number"]').setValue('300')
+  await wrapper.findAll('button').find(b => b.text() === 'common.save')!.trigger('click')
+  await wrapper.setProps({show:false}); await wrapper.setProps({show:true,group:group(2)}); await flushPromises()
+  await wrapper.get('tbody input[type="number"]').setValue('400')
+  await wrapper.findAll('button').find(b => b.text() === 'common.save')!.trigger('click')
+  old.reject(new Error('old')); await flushPromises()
+  expect(mocks.showError).not.toHaveBeenCalled()
+  expect(wrapper.findAll('button').find(b => b.text() === 'common.save')!.attributes('disabled')).toBeDefined()
+  current.resolve({}); await flushPromises()
+})
+
+it('drops loaded private rows on a replacement login', async () => {
+  mocks.getGroupRateMultipliers.mockResolvedValueOnce(entries(1))
+  const wrapper=await openGroup(); await flushPromises()
+  localStorage.setItem('auth_session_id','new-login')
+  window.dispatchEvent(new StorageEvent('storage',{key:'auth_session_id'})); await flushPromises()
+  expect(wrapper.text()).not.toContain('user1@example.com')
+})
+
+it('ignores stale search results and cancels a pending search on close', async () => {
+  vi.useFakeTimers()
+  const old=deferred()
+  mocks.getGroupRateMultipliers.mockResolvedValue([])
+  mocks.list.mockReturnValueOnce(old.promise).mockResolvedValueOnce({items:[{id:2,email:'new@example.com'}]})
+  const wrapper=await openGroup(); await flushPromises()
+  await wrapper.get('input[type="text"]').setValue('old'); await vi.advanceTimersByTimeAsync(300)
+  await wrapper.get('input[type="text"]').setValue('new'); await vi.advanceTimersByTimeAsync(300); await flushPromises()
+  old.resolve({items:[{id:1,email:'old@example.com'}]}); await flushPromises()
+  expect(wrapper.text()).not.toContain('old@example.com'); expect(wrapper.text()).toContain('new@example.com')
+  await wrapper.get('input[type="text"]').setValue('late'); await wrapper.setProps({show:false})
+  await vi.advanceTimersByTimeAsync(300); expect(mocks.list).toHaveBeenCalledTimes(2)
+})
+
+it('does not submit an old draft before the storage event is delivered', async () => {
+ mocks.getGroupRateMultipliers.mockResolvedValueOnce(entries(1))
+ const wrapper=await openGroup(); await flushPromises()
+ await wrapper.get('tbody input[type="number"]').setValue('300')
+ localStorage.setItem('auth_session_id','replacement-before-event')
+ await wrapper.findAll('button').find(b=>b.text()==='common.save')!.trigger('click')
+ expect(mocks.batchSetGroupRateMultipliers).not.toHaveBeenCalled()
 })

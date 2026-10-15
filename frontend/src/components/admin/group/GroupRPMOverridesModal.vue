@@ -210,6 +210,8 @@ import { ref, computed, watch, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
 import { adminAPI } from '@/api/admin'
+import { ownedAuthRequestConfig } from '@/api/client'
+import { useAdminDialogSession } from '@/composables/useAdminDialogSession'
 import type { GroupRPMOverrideEntry } from '@/api/admin/groups'
 import type { AdminGroup, AdminUser } from '@/types'
 import BaseDialog from '@/components/common/BaseDialog.vue'
@@ -246,7 +248,21 @@ const currentPage = ref(1)
 const pageSize = ref(10)
 
 let searchTimeout: ReturnType<typeof setTimeout>
-let loadVersion = 0
+let searchVersion = 0
+const clearing = ref(false)
+const dialog = useAdminDialogSession(() => props.show, () => props.group?.id, () => {
+  clearTimeout(searchTimeout)
+  searchVersion++
+  loading.value = false
+  saving.value = false
+  clearing.value = false
+  serverEntries.value = []
+  localEntries.value = []
+  searchResults.value = []
+  searchQuery.value = ''
+  selectedUser.value = null
+  showDropdown.value = false
+})
 
 const platformColorClass = computed(() => {
   switch (props.group?.platform) {
@@ -274,22 +290,23 @@ const cloneEntries = (entries: GroupRPMOverrideEntry[]): LocalEntry[] => {
 
 const loadEntries = async () => {
   if (!props.group) return
-  const version = loadVersion
+  const owner = dialog.capture()
+  if (!dialog.isCurrent(owner)) return
   loading.value = true
   serverEntries.value = []
   localEntries.value = []
   try {
     const entries = await adminAPI.groups.getGroupRPMOverrides(props.group.id)
-    if (version !== loadVersion) return
+    if (!dialog.isCurrent(owner)) return
     serverEntries.value = entries
     localEntries.value = cloneEntries(serverEntries.value)
     adjustPage()
   } catch (error) {
-    if (version !== loadVersion) return
+    if (!dialog.isCurrent(owner)) return
     appStore.showError(t('admin.groups.failedToLoad'))
     console.error('Error loading RPM overrides:', error)
   } finally {
-    if (version === loadVersion) loading.value = false
+    if (dialog.isCurrent(owner)) loading.value = false
   }
 }
 
@@ -299,7 +316,6 @@ const adjustPage = () => {
 }
 
 watch([() => props.show, () => props.group?.id], ([show]) => {
-  loadVersion++
   if (show && props.group) {
     currentPage.value = 1
     searchQuery.value = ''
@@ -317,19 +333,23 @@ const handlePageSizeChange = (newSize: number) => {
 
 const handleSearchUsers = () => {
   clearTimeout(searchTimeout)
+  const version = ++searchVersion
+  const owner = dialog.capture()
+  const query = searchQuery.value.trim()
   selectedUser.value = null
-  if (!searchQuery.value.trim()) {
-    searchResults.value = []
-    showDropdown.value = false
-    return
-  }
+  searchResults.value = []
+  showDropdown.value = false
+  if (!query || !dialog.isCurrent(owner)) return
+  const isCurrent = () => version === searchVersion && dialog.isCurrent(owner)
   searchTimeout = setTimeout(async () => {
+    if (!isCurrent()) return
     try {
-      const res = await adminAPI.users.list(1, 10, { search: searchQuery.value.trim() })
+      const res = await adminAPI.users.list(1, 10, { search: query }, { authIdentity: ownedAuthRequestConfig().authIdentity })
+      if (!isCurrent()) return
       searchResults.value = res.items
       showDropdown.value = true
     } catch {
-      searchResults.value = []
+      if (isCurrent()) searchResults.value = []
     }
   }, 300)
 }
@@ -377,20 +397,23 @@ const removeLocal = (userId: number) => {
   adjustPage()
 }
 
-const clearing = ref(false)
 const clearAllLocal = async () => {
-  if (!props.group || clearing.value) return
+  if (!props.group || clearing.value || loading.value || saving.value) return
+  const owner = dialog.capture()
+  if (!dialog.isCurrent(owner)) return
   clearing.value = true
   try {
     await adminAPI.groups.clearGroupRPMOverrides(props.group.id)
+    if (!dialog.isCurrent(owner)) return
     localEntries.value = []
     serverEntries.value = []
     appStore.showSuccess(t('admin.groups.rpmSaved'))
   } catch (error) {
+    if (!dialog.isCurrent(owner)) return
     appStore.showError(t('admin.groups.failedToSave'))
     console.error('Error clearing RPM overrides:', error)
   } finally {
-    clearing.value = false
+    if (dialog.isCurrent(owner)) clearing.value = false
   }
 }
 
@@ -400,7 +423,9 @@ const handleCancel = () => {
 }
 
 const handleSave = async () => {
-  if (!props.group) return
+  if (!props.group || saving.value || loading.value) return
+  const owner = dialog.capture()
+  if (!dialog.isCurrent(owner)) return
   saving.value = true
   try {
     const entries = localEntries.value.map(e => ({
@@ -408,14 +433,16 @@ const handleSave = async () => {
       rpm_override: e.rpm_override
     }))
     await adminAPI.groups.batchSetGroupRPMOverrides(props.group.id, entries)
+    if (!dialog.isCurrent(owner)) return
     appStore.showSuccess(t('admin.groups.rpmSaved'))
     emit('success')
     emit('close')
   } catch (error) {
+    if (!dialog.isCurrent(owner)) return
     appStore.showError(t('admin.groups.failedToSave'))
     console.error('Error saving RPM overrides:', error)
   } finally {
-    saving.value = false
+    if (dialog.isCurrent(owner)) saving.value = false
   }
 }
 
@@ -431,7 +458,6 @@ if (typeof document !== 'undefined') {
   document.addEventListener('click', handleClickOutside)
 }
 onUnmounted(() => {
-  loadVersion++
   clearTimeout(searchTimeout)
   document.removeEventListener('click', handleClickOutside)
 })

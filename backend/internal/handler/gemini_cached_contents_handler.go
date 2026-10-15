@@ -280,20 +280,21 @@ func (h *GatewayHandler) GeminiCachedContentsCreate(c *gin.Context) {
 		// 只收取已发生的缓存 token 输入费。
 		tokens := upstream.TotalTokenCount
 		storageTokenHours := service.GeminiCachedContentStorageTokenHours(tokens, ttl)
-		amount := h.gatewayService.QuoteUsageCost(c.Request.Context(), &service.RecordUsageInput{
+		quoteInput := &service.RecordUsageInput{
 			Result: &service.ForwardResult{
 				Model: modelName, UpstreamModel: mappedModel,
 				Usage: service.ClaudeUsage{InputTokens: int(tokens)}, CacheStorageTokenHours: storageTokenHours,
 			},
 			APIKey: apiKey, User: apiKey.User, Subscription: subscription, PricingAt: pricingAt, ChannelUsageFields: usageFields,
-		})
+		}
+		amount := h.gatewayService.QuoteUsageCost(c.Request.Context(), quoteInput)
 		inflightRelease()
 		chargeDone, err := h.reserveGeminiCachedContentCharge(c, apiKey, subscription, amount)
 		if err != nil {
 			reqLog.Info("gemini.cached_content.storage_charge_rejected", zap.Float64("amount", amount), zap.Error(err))
 			h.cleanupGeminiCachedContentUpstream(reqLog, account, upstream.Name)
 			h.submitGeminiCachedContentUsage(c, apiKey, account, subscription, pricingAt,
-				service.GeminiCachedContentCreateUsageRequestID(publicID), modelName, mappedModel, int(tokens), 0, usageFields, body)
+				service.GeminiCachedContentCreateUsageRequestID(publicID), modelName, mappedModel, int(tokens), 0, usageFields, body, quoteInput.CostQuote.WithCacheStorageTokenHours(0))
 			writeGeminiCachedContentBillingError(c, err)
 			return
 		}
@@ -321,13 +322,13 @@ func (h *GatewayHandler) GeminiCachedContentsCreate(c *gin.Context) {
 			reqLog.Error("gemini.cached_content.save_failed", zap.Int64("account_id", account.ID), zap.Error(err))
 			h.cleanupGeminiCachedContentUpstream(reqLog, account, record.UpstreamName)
 			h.submitGeminiCachedContentUsage(c, apiKey, account, subscription, pricingAt,
-				service.GeminiCachedContentCreateUsageRequestID(publicID), modelName, mappedModel, int(tokens), 0, usageFields, body)
+				service.GeminiCachedContentCreateUsageRequestID(publicID), modelName, mappedModel, int(tokens), 0, usageFields, body, quoteInput.CostQuote.WithCacheStorageTokenHours(0))
 			googleError(c, http.StatusInternalServerError, "Failed to persist cached content")
 			return
 		}
 
 		h.submitGeminiCachedContentUsage(c, apiKey, account, subscription, pricingAt,
-			service.GeminiCachedContentCreateUsageRequestID(publicID), modelName, mappedModel, int(tokens), storageTokenHours, usageFields, body)
+			service.GeminiCachedContentCreateUsageRequestID(publicID), modelName, mappedModel, int(tokens), storageTokenHours, usageFields, body, quoteInput.CostQuote)
 		c.JSON(http.StatusOK, service.GeminiCachedContentView(record))
 		return
 	}
@@ -447,6 +448,7 @@ func (h *GatewayHandler) GeminiCachedContentsPatch(c *gin.Context) {
 	c.Request = c.Request.WithContext(pricingCtx)
 
 	subscription, _ := middleware.GetSubscriptionFromContext(c)
+	var costQuote *service.UsageCostQuote
 	if extension := targetExpireTime.Sub(record.ExpireTime); extension > 0 {
 		usage := &service.RecordUsageInput{
 			Result: &service.ForwardResult{
@@ -463,7 +465,9 @@ func (h *GatewayHandler) GeminiCachedContentsPatch(c *gin.Context) {
 		if !h.checkGeminiCachedContentBilling(c, reqLog, apiKey, subscription) {
 			return
 		}
-		chargeDone, err := h.reserveGeminiCachedContentCharge(c, apiKey, subscription, h.gatewayService.QuoteUsageCost(c.Request.Context(), usage))
+		amount := h.gatewayService.QuoteUsageCost(c.Request.Context(), usage)
+		costQuote = usage.CostQuote
+		chargeDone, err := h.reserveGeminiCachedContentCharge(c, apiKey, subscription, amount)
 		if err != nil {
 			reqLog.Info("gemini.cached_content.storage_charge_rejected", zap.Error(err))
 			writeGeminiCachedContentBillingError(c, err)
@@ -529,7 +533,8 @@ func (h *GatewayHandler) GeminiCachedContentsPatch(c *gin.Context) {
 	if extended := expireTime.Sub(mutation.Baseline()); extended > 0 {
 		h.submitGeminiCachedContentUsage(c, apiKey, account, subscription, pricingAt,
 			service.GeminiCachedContentPatchUsageRequestID(record.PublicID), record.Model, record.UpstreamModelID(), 0,
-			service.GeminiCachedContentStorageTokenHours(record.TotalTokenCount, extended), record.ChannelUsage, body)
+			service.GeminiCachedContentStorageTokenHours(record.TotalTokenCount, extended), record.ChannelUsage, body,
+			costQuote.WithCacheStorageTokenHours(service.GeminiCachedContentStorageTokenHours(record.TotalTokenCount, extended)))
 	}
 	c.JSON(http.StatusOK, service.GeminiCachedContentView(record))
 }
@@ -685,6 +690,7 @@ func (h *GatewayHandler) submitGeminiCachedContentUsage(
 	storageTokenHours float64,
 	usageFields service.ChannelUsageFields,
 	payload []byte,
+	quotes ...*service.UsageCostQuote,
 ) {
 	if inputTokens <= 0 && storageTokenHours <= 0 {
 		return
@@ -705,8 +711,13 @@ func (h *GatewayHandler) submitGeminiCachedContentUsage(
 	clientIP := ip.GetClientIP(c)
 	requestPayloadHash := service.HashUsageRequestPayload(payload)
 	quotaPlatform := service.QuotaPlatform(c.Request.Context(), apiKey)
+	var costQuote *service.UsageCostQuote
+	if len(quotes) > 0 {
+		costQuote = quotes[0]
+	}
 	h.submitMandatoryUsageRecordTask(c.Request.Context(), func(ctx context.Context) {
 		if err := h.gatewayService.RecordUsage(ctx, &service.RecordUsageInput{
+			CostQuote:          costQuote,
 			Result:             result,
 			APIKey:             apiKey,
 			User:               apiKey.User,

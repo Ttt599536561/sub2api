@@ -3,7 +3,8 @@
  * Handles API key group management for administrators
  */
 
-import { apiClient } from '../client'
+import { apiClient, ownedAuthRequestConfig } from '../client'
+import { assertAuthSessionCurrent } from '../authSession'
 import type {
   AdminGroup,
   GroupPlatform,
@@ -15,6 +16,17 @@ import type {
   UpdateGroupRequest,
   PaginatedResponse
 } from '@/types'
+
+// Capture before Axios queues interceptors; validate again before exposing a reply.
+async function ownedGroupRequest<T>(send: (owner: ReturnType<typeof ownedAuthRequestConfig>) => Promise<T>): Promise<T> {
+  const owner = ownedAuthRequestConfig()
+  const response = await send(owner)
+  assertAuthSessionCurrent(owner.authIdentity.sessionID)
+  if (owner.authIdentity.userID !== ownedAuthRequestConfig().authIdentity.userID) {
+    throw { code: 'AUTH_SESSION_CHANGED', message: 'Administrator changed before request completed.' }
+  }
+  return response
+}
 
 export interface LiveCapability {
   supported: boolean
@@ -43,14 +55,14 @@ export async function list(
     signal?: AbortSignal
   }
 ): Promise<PaginatedResponse<AdminGroup>> {
-  const { data } = await apiClient.get<PaginatedResponse<AdminGroup>>('/admin/groups', {
+  const { data } = await ownedGroupRequest(owner => apiClient.get<PaginatedResponse<AdminGroup>>('/admin/groups', { ...owner,
     params: {
       page,
       page_size: pageSize,
       ...filters
     },
     signal: options?.signal
-  })
+  }))
   return data
 }
 
@@ -60,9 +72,9 @@ export async function list(
  * @returns List of all active groups
  */
 export async function getAll(platform?: GroupPlatform): Promise<AdminGroup[]> {
-  const { data } = await apiClient.get<AdminGroup[]>('/admin/groups/all', {
+  const { data } = await ownedGroupRequest(owner => apiClient.get<AdminGroup[]>('/admin/groups/all', { ...owner,
     params: platform ? { platform } : undefined
-  })
+  }))
   return data
 }
 
@@ -71,9 +83,9 @@ export async function getAll(platform?: GroupPlatform): Promise<AdminGroup[]> {
  * that admins can filter users whose keys are still bound to a now-disabled group.
  */
 export async function getAllIncludingInactive(): Promise<AdminGroup[]> {
-  const { data } = await apiClient.get<AdminGroup[]>('/admin/groups/all', {
+  const { data } = await ownedGroupRequest(owner => apiClient.get<AdminGroup[]>('/admin/groups/all', { ...owner,
     params: { include_inactive: true }
-  })
+  }))
   return data
 }
 
@@ -88,7 +100,7 @@ export async function getByPlatform(platform: GroupPlatform): Promise<AdminGroup
 
 /** 获取当前 Sub2API 服务端的 Live 运行环境能力。 */
 export async function getLiveCapability(): Promise<LiveCapability> {
-  const { data } = await apiClient.get<LiveCapability>('/admin/groups/live-capability')
+  const { data } = await ownedGroupRequest(owner => apiClient.get<LiveCapability>('/admin/groups/live-capability', owner))
   return data
 }
 
@@ -98,7 +110,7 @@ export async function getLiveCapability(): Promise<LiveCapability> {
  * @returns Group details
  */
 export async function getById(id: number): Promise<AdminGroup> {
-  const { data } = await apiClient.get<AdminGroup>(`/admin/groups/${id}`)
+  const { data } = await ownedGroupRequest(owner => apiClient.get<AdminGroup>(`/admin/groups/${id}`, owner))
   return data
 }
 
@@ -110,12 +122,9 @@ export async function getModelAllowlistCandidates(
   id: number,
   platform?: GroupPlatform
 ): Promise<string[]> {
-  const { data } = await apiClient.get<{ models: string[] }>(
-    `/admin/groups/${id}/model-allowlist-candidates`,
-    {
+  const { data } = await ownedGroupRequest(owner => apiClient.get<{ models: string[] }>(`/admin/groups/${id}/model-allowlist-candidates`, { ...owner,
       params: platform ? { platform } : undefined
-    }
-  )
+    }))
   return data.models || []
 }
 
@@ -125,7 +134,7 @@ export async function getModelAllowlistCandidates(
  * @returns Created group
  */
 export async function create(groupData: CreateGroupRequest): Promise<AdminGroup> {
-  const { data } = await apiClient.post<AdminGroup>('/admin/groups', groupData)
+  const { data } = await ownedGroupRequest(owner => apiClient.post<AdminGroup>('/admin/groups', groupData, owner))
   return data
 }
 
@@ -198,9 +207,9 @@ export async function duplicate(id: number): Promise<AdminGroup> {
     storeDuplicateOperationKey(scope.key, idempotencyKey)
   }
 
-  const { data } = await apiClient.post<AdminGroup>(`/admin/groups/${id}/duplicate`, undefined, {
+  const { data } = await ownedGroupRequest(owner => apiClient.post<AdminGroup>(`/admin/groups/${id}/duplicate`, undefined, { ...owner,
     headers: { 'Idempotency-Key': idempotencyKey }
-  })
+  }))
 
   if (scope) {
     duplicateOperationKeys.delete(scope.key)
@@ -216,7 +225,7 @@ export async function duplicate(id: number): Promise<AdminGroup> {
  * @returns Updated group
  */
 export async function update(id: number, updates: UpdateGroupRequest): Promise<AdminGroup> {
-  const { data } = await apiClient.put<AdminGroup>(`/admin/groups/${id}`, updates)
+  const { data } = await ownedGroupRequest(owner => apiClient.put<AdminGroup>(`/admin/groups/${id}`, updates, owner))
   return data
 }
 
@@ -226,7 +235,7 @@ export async function update(id: number, updates: UpdateGroupRequest): Promise<A
  * @returns Success confirmation
  */
 export async function deleteGroup(id: number): Promise<{ message: string }> {
-  const { data } = await apiClient.delete<{ message: string }>(`/admin/groups/${id}`)
+  const { data } = await ownedGroupRequest(owner => apiClient.delete<{ message: string }>(`/admin/groups/${id}`, owner))
   return data
 }
 
@@ -251,12 +260,12 @@ export async function getStats(id: number): Promise<{
   total_requests: number
   total_cost: number
 }> {
-  const { data } = await apiClient.get<{
+  const { data } = await ownedGroupRequest(owner => apiClient.get<{
     total_api_keys: number
     active_api_keys: number
     total_requests: number
     total_cost: number
-  }>(`/admin/groups/${id}/stats`)
+  }>(`/admin/groups/${id}/stats`, owner))
   return data
 }
 
@@ -272,14 +281,14 @@ export async function getGroupApiKeys(
   page: number = 1,
   pageSize: number = 20
 ): Promise<PaginatedResponse<any>> {
-  const { data } = await apiClient.get<PaginatedResponse<any>>(`/admin/groups/${id}/api-keys`, {
+  const { data } = await ownedGroupRequest(owner => apiClient.get<PaginatedResponse<any>>(`/admin/groups/${id}/api-keys`, { ...owner,
     params: { page, page_size: pageSize }
-  })
+  }))
   return data
 }
 
 export async function listCompositeRoutes(id: number): Promise<CompositeModelRoute[]> {
-  const { data } = await apiClient.get<CompositeModelRoute[]>(`/admin/groups/${id}/composite-routes`)
+  const { data } = await ownedGroupRequest(owner => apiClient.get<CompositeModelRoute[]>(`/admin/groups/${id}/composite-routes`, owner))
   return data
 }
 
@@ -287,10 +296,7 @@ export async function createCompositeRoute(
   id: number,
   route: CompositeModelRouteInput
 ): Promise<CompositeModelRoute> {
-  const { data } = await apiClient.post<CompositeModelRoute>(
-    `/admin/groups/${id}/composite-routes`,
-    route
-  )
+  const { data } = await ownedGroupRequest(owner => apiClient.post<CompositeModelRoute>(`/admin/groups/${id}/composite-routes`, route, owner))
   return data
 }
 
@@ -299,10 +305,7 @@ export async function updateCompositeRoute(
   routeId: number,
   route: CompositeModelRouteInput
 ): Promise<CompositeModelRoute> {
-  const { data } = await apiClient.put<CompositeModelRoute>(
-    `/admin/groups/${id}/composite-routes/${routeId}`,
-    route
-  )
+  const { data } = await ownedGroupRequest(owner => apiClient.put<CompositeModelRoute>(`/admin/groups/${id}/composite-routes/${routeId}`, route, owner))
   return data
 }
 
@@ -310,9 +313,7 @@ export async function deleteCompositeRoute(
   id: number,
   routeId: number
 ): Promise<{ message: string }> {
-  const { data } = await apiClient.delete<{ message: string }>(
-    `/admin/groups/${id}/composite-routes/${routeId}`
-  )
+  const { data } = await ownedGroupRequest(owner => apiClient.delete<{ message: string }>(`/admin/groups/${id}/composite-routes/${routeId}`, owner))
   return data
 }
 
@@ -320,10 +321,7 @@ export async function previewCompositeRoute(
   id: number,
   request: CompositeRoutePreviewRequest
 ): Promise<CompositeRouteDecision> {
-  const { data } = await apiClient.post<CompositeRouteDecision>(
-    `/admin/groups/${id}/composite-routes/preview`,
-    request
-  )
+  const { data } = await ownedGroupRequest(owner => apiClient.post<CompositeRouteDecision>(`/admin/groups/${id}/composite-routes/preview`, request, owner))
   return data
 }
 
@@ -346,9 +344,7 @@ export interface GroupRateMultiplierEntry {
  * @returns List of user rate multiplier entries
  */
 export async function getGroupRateMultipliers(id: number): Promise<GroupRateMultiplierEntry[]> {
-  const { data } = await apiClient.get<GroupRateMultiplierEntry[]>(
-    `/admin/groups/${id}/rate-multipliers`
-  )
+  const { data } = await ownedGroupRequest(owner => apiClient.get<GroupRateMultiplierEntry[]>(`/admin/groups/${id}/rate-multipliers`, owner))
   return data
 }
 
@@ -360,9 +356,9 @@ export async function getGroupRateMultipliers(id: number): Promise<GroupRateMult
 export async function updateSortOrder(
   updates: Array<{ id: number; sort_order: number }>
 ): Promise<{ message: string }> {
-  const { data } = await apiClient.put<{ message: string }>('/admin/groups/sort-order', {
+  const { data } = await ownedGroupRequest(owner => apiClient.put<{ message: string }>('/admin/groups/sort-order', {
     updates
-  })
+  }, owner))
   return data
 }
 
@@ -372,7 +368,7 @@ export async function updateSortOrder(
  * @returns Success confirmation
  */
 export async function clearGroupRateMultipliers(id: number): Promise<{ message: string }> {
-  const { data } = await apiClient.delete<{ message: string }>(`/admin/groups/${id}/rate-multipliers`)
+  const { data } = await ownedGroupRequest(owner => apiClient.delete<{ message: string }>(`/admin/groups/${id}/rate-multipliers`, owner))
   return data
 }
 
@@ -384,10 +380,7 @@ export async function batchSetGroupRateMultipliers(
   id: number,
   entries: Array<{ user_id: number; rate_multiplier: number }>
 ): Promise<{ message: string }> {
-  const { data } = await apiClient.put<{ message: string }>(
-    `/admin/groups/${id}/rate-multipliers`,
-    { entries }
-  )
+  const { data } = await ownedGroupRequest(owner => apiClient.put<{ message: string }>(`/admin/groups/${id}/rate-multipliers`, { entries }, owner))
   return data
 }
 
@@ -407,9 +400,7 @@ export interface GroupRPMOverrideEntry {
  * Get RPM overrides for users in a group (subset of rate-multipliers endpoint).
  */
 export async function getGroupRPMOverrides(id: number): Promise<GroupRPMOverrideEntry[]> {
-  const { data } = await apiClient.get<GroupRateMultiplierEntry[]>(
-    `/admin/groups/${id}/rate-multipliers`
-  )
+  const { data } = await ownedGroupRequest(owner => apiClient.get<GroupRateMultiplierEntry[]>(`/admin/groups/${id}/rate-multipliers`, owner))
   return data
     .filter(e => e.rpm_override != null)
     .map(e => ({
@@ -430,10 +421,7 @@ export async function batchSetGroupRPMOverrides(
   id: number,
   entries: Array<{ user_id: number; rpm_override: number }>
 ): Promise<{ message: string }> {
-  const { data } = await apiClient.put<{ message: string }>(
-    `/admin/groups/${id}/rpm-overrides`,
-    { entries }
-  )
+  const { data } = await ownedGroupRequest(owner => apiClient.put<{ message: string }>(`/admin/groups/${id}/rpm-overrides`, { entries }, owner))
   return data
 }
 
@@ -441,7 +429,7 @@ export async function batchSetGroupRPMOverrides(
  * Clear all RPM overrides for a group (preserves rate_multiplier).
  */
 export async function clearGroupRPMOverrides(id: number): Promise<{ message: string }> {
-  const { data } = await apiClient.delete<{ message: string }>(`/admin/groups/${id}/rpm-overrides`)
+  const { data } = await ownedGroupRequest(owner => apiClient.delete<{ message: string }>(`/admin/groups/${id}/rpm-overrides`, owner))
   return data
 }
 
@@ -452,9 +440,7 @@ export async function clearGroupRPMOverrides(id: number): Promise<{ message: str
 export async function getUsageSummary(): Promise<
   { group_id: number; today_cost: number; yesterday_cost: number; total_cost: number }[]
 > {
-  const { data } = await apiClient.get<
-    { group_id: number; today_cost: number; yesterday_cost: number; total_cost: number }[]
-  >('/admin/groups/usage-summary')
+  const { data } = await ownedGroupRequest(owner => apiClient.get<{ group_id: number; today_cost: number; yesterday_cost: number; total_cost: number }[]>('/admin/groups/usage-summary', owner))
   return data
 }
 
@@ -464,9 +450,7 @@ export async function getUsageSummary(): Promise<
 export async function getCapacitySummary(): Promise<
   { group_id: number; concurrency_used: number; concurrency_max: number; sessions_used: number; sessions_max: number; rpm_used: number; rpm_max: number }[]
 > {
-  const { data } = await apiClient.get<
-    { group_id: number; concurrency_used: number; concurrency_max: number; sessions_used: number; sessions_max: number; rpm_used: number; rpm_max: number }[]
-  >('/admin/groups/capacity-summary')
+  const { data } = await ownedGroupRequest(owner => apiClient.get<{ group_id: number; concurrency_used: number; concurrency_max: number; sessions_used: number; sessions_max: number; rpm_used: number; rpm_max: number }[]>('/admin/groups/capacity-summary', owner))
   return data
 }
 

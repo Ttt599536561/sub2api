@@ -194,3 +194,25 @@ func TestGeminiCachedContentsPatch_DelayDoesNotIncreaseCharge(t *testing.T) {
 		})
 	}
 }
+
+func TestMainAuditCachedPatchPassesQuoteThroughUpstreamWork(t *testing.T) {
+	env := newCachedBillingEnv(t, 500, 900)
+	cache := &cachedBillingReservationCache{balance: 500}
+	enableCachedBillingReservations(t, env, cache)
+	env.seed(time.Now().Add(time.Hour))
+	var reserved float64
+	env.upstream.beforePost = func(int) {
+		cache.mu.Lock()
+		for _, amount := range cache.reserved["user:3"] {
+			reserved += amount
+		}
+		cache.mu.Unlock()
+		env.group.RateMultiplier = 10
+	}
+	rec := env.patchTTL("abc", "7200s")
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	env.waitForUsage(t, 1)
+	require.Positive(t, reserved)
+	require.InDelta(t, reserved, env.usage.first().ActualCost, 1e-9)
+	require.Equal(t, 1.0, env.usage.first().RateMultiplier)
+}

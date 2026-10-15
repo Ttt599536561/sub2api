@@ -38,6 +38,7 @@ func (s *GatewayService) ResolveUserGroupRateMultiplier(ctx context.Context, use
 // RecordUsageInput 记录使用量的输入参数。
 // 异步 worker 只接收计费所需快照，不能持有 ParsedRequest/RequestBodyRef 这类大请求体引用。
 type RecordUsageInput struct {
+	CostQuote          *UsageCostQuote // Fixed-charge price snapshot captured before admission.
 	Result             *ForwardResult
 	APIKey             *APIKey
 	User               *User
@@ -659,6 +660,7 @@ func writeUsageLogBestEffort(ctx context.Context, repo UsageLogRepository, usage
 // RecordUsage 记录使用量并扣费（或更新订阅用量）
 func (s *GatewayService) RecordUsage(ctx context.Context, input *RecordUsageInput) error {
 	return s.recordUsageCore(ctx, &recordUsageCoreInput{
+		CostQuote:          input.CostQuote,
 		Result:             input.Result,
 		APIKey:             input.APIKey,
 		User:               input.User,
@@ -680,6 +682,7 @@ func (s *GatewayService) RecordUsage(ctx context.Context, input *RecordUsageInpu
 
 // recordUsageCoreInput 是 recordUsageCore 的公共输入字段，从两种输入结构体中提取。
 type recordUsageCoreInput struct {
+	CostQuote          *UsageCostQuote
 	Result             *ForwardResult
 	APIKey             *APIKey
 	User               *User
@@ -799,9 +802,21 @@ func (s *GatewayService) recordUsageCore(ctx context.Context, input *recordUsage
 		cacheTTLOverridden = (result.Usage.CacheCreation5mTokens + result.Usage.CacheCreation1hTokens) > 0
 	}
 
-	multiplier, imageMultiplier, pricingAt := s.recordUsageMultipliers(ctx, apiKey, user, input.PricingAt)
-	billingModel := s.recordUsageBillingModel(ctx, apiKey, result, input.ChannelUsageFields)
-	cacheStorageCost := s.cacheStorageCost(result, billingModel)
+	var multiplier, imageMultiplier, cacheStorageCost float64
+	var pricingAt time.Time
+	var billingModel string
+	var cost *CostBreakdown
+	if quote := input.CostQuote; quote != nil {
+		multiplier, imageMultiplier, pricingAt = quote.multiplier, quote.imageMultiplier, quote.pricingAt
+		billingModel, cacheStorageCost = quote.billingModel, quote.storageCost
+		copyCost := quote.cost
+		cost = &copyCost
+	} else {
+		multiplier, imageMultiplier, pricingAt = s.recordUsageMultipliers(ctx, apiKey, user, input.PricingAt)
+		billingModel = s.recordUsageBillingModel(ctx, apiKey, result, input.ChannelUsageFields)
+		cacheStorageCost = s.cacheStorageCost(result, billingModel)
+		cost = s.calculateRecordUsageCost(ctx, result, apiKey, billingModel, multiplier, imageMultiplier, pricingAt)
+	}
 
 	// 确定 RequestedModel（渠道映射前的原始模型）
 	requestedModel := result.Model
@@ -809,8 +824,6 @@ func (s *GatewayService) recordUsageCore(ctx context.Context, input *recordUsage
 		requestedModel = input.OriginalModel
 	}
 
-	// 计算费用
-	cost := s.calculateRecordUsageCost(ctx, result, apiKey, billingModel, multiplier, imageMultiplier, pricingAt)
 	// response_model：按上游成功响应自报的模型计费（渠道显式开启才生效）。
 	// 采纳条件见 responseModelBillingDeclaration + hasIdentifiedResponseModelPricing
 	// + responseModelBillingAdoptable。任一条件不满足都静默回落基线，即开启本模式前的
@@ -989,7 +1002,44 @@ func (s *GatewayService) CacheStoragePriced(ctx context.Context, input *RecordUs
 	return s.cacheStoragePrice(input.Result, billingModel) > 0
 }
 
-// QuoteUsageCost 按与 RecordUsage 相同的倍率、计费模型与定价计算 input.Result 的应付金额（倍率后 USD），不记录也不扣费。
+// UsageCostQuote freezes a fixed charge's prices and multipliers. Its fields are
+// private so callers can pass the quote to a worker without sharing mutable pricing.
+type UsageCostQuote struct {
+	cost                           CostBreakdown
+	multiplier, imageMultiplier    float64
+	billingModel                   string
+	pricingAt                      time.Time
+	storageCost, storageTokenHours float64
+}
+
+// WithCacheStorageTokenHours derives a settlement quote for no more than the
+// admitted storage duration (e.g. cleanup after Save fails or an earlier expiry).
+// The input charge and original quote remain unchanged.
+func (q *UsageCostQuote) WithCacheStorageTokenHours(hours float64) *UsageCostQuote {
+	if q == nil {
+		return nil
+	}
+	copyQuote := *q
+	if hours < 0 {
+		hours = 0
+	}
+	if hours > q.storageTokenHours {
+		hours = q.storageTokenHours
+	}
+	if q.storageTokenHours > 0 {
+		copyQuote.storageCost = q.storageCost * hours / q.storageTokenHours
+		delta := copyQuote.storageCost - q.storageCost
+		copyQuote.cost.TotalCost += delta
+		copyQuote.cost.ActualCost += delta * q.multiplier
+	}
+	copyQuote.cost.CacheStorageCost = copyQuote.storageCost
+	copyQuote.storageTokenHours = hours
+	return &copyQuote
+}
+
+// QuoteUsageCost calculates admission cost and attaches the immutable quote to
+// input.CostQuote. Pass that same quote to RecordUsage after the upstream work;
+// live price or user-rate changes must not exceed an already admitted charge.
 func (s *GatewayService) QuoteUsageCost(ctx context.Context, input *RecordUsageInput) float64 {
 	user := input.User
 	if user == nil {
@@ -999,8 +1049,9 @@ func (s *GatewayService) QuoteUsageCost(ctx context.Context, input *RecordUsageI
 	billingModel := s.recordUsageBillingModel(ctx, input.APIKey, input.Result, input.ChannelUsageFields)
 	cost := s.calculateRecordUsageCost(ctx, input.Result, input.APIKey, billingModel, multiplier, imageMultiplier, pricingAt)
 	if cost == nil {
-		return 0
+		cost = &CostBreakdown{}
 	}
+	input.CostQuote = &UsageCostQuote{cost: *cost, multiplier: multiplier, imageMultiplier: imageMultiplier, billingModel: billingModel, pricingAt: pricingAt, storageCost: cost.CacheStorageCost, storageTokenHours: input.Result.CacheStorageTokenHours}
 	return cost.ActualCost
 }
 
@@ -1077,6 +1128,7 @@ func (s *GatewayService) calculateRecordUsageCost(
 		if tokenCost == nil {
 			tokenCost = &CostBreakdown{}
 		}
+		tokenCost.CacheStorageCost = storageCost
 		tokenCost.TotalCost += storageCost
 		tokenCost.ActualCost += storageCost * multiplier
 	}

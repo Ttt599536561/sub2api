@@ -272,7 +272,10 @@ func (s *GeminiMessagesCompatService) doGeminiModelsGET(req *http.Request, accou
 	defer func() { _ = resp.Body.Close() }()
 
 	bodyLimit := resolveModelsListReadLimit(s.cfg)
-	body, _ := io.ReadAll(io.LimitReader(resp.Body, bodyLimit+1))
+	body, err := io.ReadAll(io.LimitReader(resp.Body, bodyLimit+1))
+	if err != nil {
+		return nil, fmt.Errorf("read upstream model list: %w", err)
+	}
 	if int64(len(body)) > bodyLimit {
 		return nil, fmt.Errorf("upstream model list response exceeds %d bytes", bodyLimit)
 	}

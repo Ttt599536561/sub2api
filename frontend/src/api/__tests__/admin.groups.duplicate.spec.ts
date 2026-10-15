@@ -4,7 +4,8 @@ const { post } = vi.hoisted(() => ({
   post: vi.fn()
 }))
 
-vi.mock('@/api/client', () => ({
+vi.mock('@/api/client', async (importOriginal) => ({
+  ...await importOriginal<typeof import('@/api/client')>(),
   apiClient: { post }
 }))
 
@@ -27,11 +28,11 @@ describe('admin group duplicate API', () => {
   it('sends a stable idempotency key with the duplicate request', async () => {
     const group = await duplicate(42)
 
-    expect(post).toHaveBeenCalledWith('/admin/groups/42/duplicate', undefined, {
+    expect(post).toHaveBeenCalledWith('/admin/groups/42/duplicate', undefined, expect.objectContaining({
       headers: {
         'Idempotency-Key': 'group-duplicate-7-42-11111111-1111-4111-8111-111111111111'
       }
-    })
+    }))
     expect(group).toEqual({ id: 43, name: 'primary (Copy)', status: 'inactive' })
     expect(sessionStorage.length).toBe(0)
   })

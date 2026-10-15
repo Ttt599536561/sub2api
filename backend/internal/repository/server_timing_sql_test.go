@@ -176,8 +176,11 @@ func TestServerTimingConnectorRecordsDriverCallsWithoutRowLifetime(t *testing.T)
 		t.Fatal(err)
 	}
 
-	// Application work between row reads must remain app time.
+	// Application work between row reads must remain app time, independently
+	// of how long driver calls take under host scheduling pressure.
+	gapStarted := time.Now()
 	time.Sleep(30 * time.Millisecond)
+	gapMillis := float64(time.Since(gapStarted)) / float64(time.Millisecond)
 	if err := rows.Next(values); err != io.EOF {
 		t.Fatalf("rows.Next() = %v, want EOF", err)
 	}
@@ -192,8 +195,8 @@ func TestServerTimingConnectorRecordsDriverCallsWithoutRowLifetime(t *testing.T)
 	if strings.Contains(header, "sensitive") {
 		t.Fatalf("SQL text leaked into header: %q", header)
 	}
-	if app, db := metricDuration(t, header, "app"), metricDuration(t, header, "db"); app <= db {
-		t.Fatalf("row processing gap was counted as DB time: app=%.1fms db=%.1fms header=%q", app, db, header)
+	if app := metricDuration(t, header, "app"); app+0.1 < gapMillis {
+		t.Fatalf("row processing gap was counted as DB time: app=%.1fms gap=%.1fms header=%q", app, gapMillis, header)
 	}
 }
 
