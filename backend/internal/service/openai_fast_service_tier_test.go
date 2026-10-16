@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/ctxkey"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 	"github.com/tidwall/gjson"
@@ -451,6 +452,47 @@ func TestForward_ResponsesServiceTierFastNormalizedToPriorityUpstream(t *testing
 	// 计费上下文：result 携带归一化后的 tier。
 	require.NotNil(t, result.ServiceTier)
 	require.Equal(t, "priority", *result.ServiceTier)
+}
+
+func TestForward_GroupForceUltrafastSurvivesGlobalFilter(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	settings := &OpenAIFastPolicySettings{Rules: []OpenAIFastPolicyRule{{
+		ServiceTier: OpenAIFastTierUltrafast, Action: BetaPolicyActionFilter, Scope: BetaPolicyScopeAll,
+	}}}
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	body := []byte(`{"model":"gpt-6-astra","service_tier":"priority","input":"hello","stream":false}`)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/responses", bytes.NewReader(body))
+	c.Request.Header.Set("Content-Type", "application/json")
+	upstream := &httpUpstreamRecorder{resp: &http.Response{
+		StatusCode: http.StatusOK,
+		Header:     http.Header{"Content-Type": []string{"application/json"}},
+		Body:       io.NopCloser(strings.NewReader(`{"id":"resp_ultra","object":"response","status":"completed","model":"gpt-6-astra","output":[],"usage":{"input_tokens":1,"output_tokens":1}}`)),
+	}}
+	svc := &OpenAIGatewayService{
+		cfg:            &config.Config{Security: config.SecurityConfig{URLAllowlist: config.URLAllowlistConfig{Enabled: false}}},
+		httpUpstream:   upstream,
+		settingService: NewSettingService(&openAIFastPolicyRepoStub{values: map[string]string{}}, &config.Config{}),
+	}
+	policyRepo := &openAIFastPolicyRepoStub{values: map[string]string{}}
+	policyJSON, err := json.Marshal(settings)
+	require.NoError(t, err)
+	policyRepo.values[SettingKeyOpenAIFastPolicySettings] = string(policyJSON)
+	svc.settingService = NewSettingService(policyRepo, &config.Config{})
+	account := &Account{
+		ID: 87, Name: "openai-key", Platform: PlatformOpenAI, Type: AccountTypeAPIKey,
+		Concurrency: 1, Credentials: map[string]any{"api_key": "sk-ultra"},
+		Extra: map[string]any{"openai_responses_supported": true}, Status: StatusActive, Schedulable: true,
+	}
+	groupCtx := context.WithValue(context.Background(), ctxkey.Group, &Group{
+		ID: 87, Platform: PlatformOpenAI, Status: StatusActive, Hydrated: true, ForceOpenAIUltrafast: true,
+	})
+
+	result, err := svc.Forward(groupCtx, c, account, body)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.NotNil(t, upstream.lastBody)
+	require.Equal(t, OpenAIFastTierUltrafast, gjson.GetBytes(upstream.lastBody, "service_tier").String())
 }
 
 func TestForward_ResponsesServiceTierOmittedStaysOmitted(t *testing.T) {

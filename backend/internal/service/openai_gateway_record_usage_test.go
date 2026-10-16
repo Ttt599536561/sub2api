@@ -3154,6 +3154,104 @@ func TestOpenAIGatewayServiceRecordUsage_ShadowUsesParentCredentialTierContract(
 	require.InDelta(t, fastCost.TotalCost, usageRepo.lastLog.TotalCost, 1e-10)
 }
 
+func TestOpenAIGatewayServiceRecordUsage_GroupUltrafastChargesEightTimesOnlyWhenEnabled(t *testing.T) {
+	for _, modelCase := range []struct {
+		model string
+	}{
+		{model: "gpt-6.1-sol"},
+		{model: "gpt-6-astra"},
+	} {
+		for _, enabled := range []bool{false, true} {
+			t.Run(modelCase.model+"/enabled="+map[bool]string{false: "false", true: "true"}[enabled], func(t *testing.T) {
+				usageRepo := &openAIRecordUsageLogRepoStub{inserted: true}
+				svc := newOpenAIRecordUsageServiceForTest(
+					usageRepo,
+					&openAIRecordUsageUserRepoStub{},
+					&openAIRecordUsageSubRepoStub{},
+					nil,
+				)
+				svc.resolver = NewModelPricingResolver(nil, svc.billingService)
+				groupID := int64(880)
+				serviceTier := "ultrafast"
+				tokens := UsageTokens{InputTokens: 75, OutputTokens: 50, CacheReadTokens: 25}
+				inputPrice, outputPrice, cacheReadPrice, cacheWritePrice := 0.001, 0.002, 0.0004, 0.003
+				group := &Group{
+					ID: groupID, Platform: PlatformOpenAI, Status: StatusActive, Hydrated: true,
+					RateMultiplier: 0.5, FreeOpenAIFast: true, ForceOpenAIUltrafast: enabled,
+					ModelPricing: []ChannelModelPricing{{
+						Models: []string{modelCase.model}, BillingMode: BillingModeToken,
+						InputPrice: &inputPrice, OutputPrice: &outputPrice,
+						CacheReadPrice: &cacheReadPrice, CacheWritePrice: &cacheWritePrice,
+					}},
+				}
+				apiKey := &APIKey{ID: 1880, GroupID: &groupID, Group: group}
+
+				err := svc.RecordUsage(context.Background(), &OpenAIRecordUsageInput{
+					Result: &OpenAIForwardResult{
+						RequestID:   "resp_group_ultrafast_" + modelCase.model,
+						ServiceTier: &serviceTier, Usage: OpenAIUsage{InputTokens: tokens.InputTokens + tokens.CacheReadTokens, OutputTokens: tokens.OutputTokens, CacheReadInputTokens: tokens.CacheReadTokens},
+						Model: modelCase.model, UpstreamModel: modelCase.model, Duration: time.Second,
+					},
+					APIKey: apiKey, User: &User{ID: 2880},
+					Account: &Account{ID: 3880, Platform: PlatformOpenAI, Type: AccountTypeAPIKey},
+				})
+				require.NoError(t, err)
+				require.NotNil(t, usageRepo.lastLog)
+
+				standard, calcErr := svc.billingService.CalculateCostUnified(CostInput{
+					Model: modelCase.model, GroupID: &groupID, Group: group, Tokens: tokens,
+					RateMultiplier: group.RateMultiplier, Resolver: svc.resolver,
+				})
+				require.NoError(t, calcErr)
+				legacyUltrafast, calcErr := svc.billingService.CalculateCostUnified(CostInput{
+					Model: modelCase.model, GroupID: &groupID, Group: group, Tokens: tokens,
+					RateMultiplier: group.RateMultiplier, ServiceTier: OpenAIFastTierUltrafast, Resolver: svc.resolver,
+				})
+				require.NoError(t, calcErr)
+				want := legacyUltrafast.ActualCost
+				if enabled {
+					want = standard.ActualCost * 8
+				}
+				require.InDelta(t, want, usageRepo.lastLog.ActualCost, 1e-10,
+					"enabled=%t must use group effective Standard pricing and its existing multiplier", enabled)
+			})
+		}
+	}
+}
+
+func TestOpenAIGatewayServiceRecordUsage_GroupUltrafastDowngradeDoesNotChargeEightTimes(t *testing.T) {
+	usageRepo := &openAIRecordUsageLogRepoStub{inserted: true}
+	svc := newOpenAIRecordUsageServiceForTest(
+		usageRepo,
+		&openAIRecordUsageUserRepoStub{},
+		&openAIRecordUsageSubRepoStub{},
+		nil,
+	)
+	svc.resolver = NewModelPricingResolver(nil, svc.billingService)
+	groupID := int64(881)
+	serviceTier := "ultrafast"
+	tokens := UsageTokens{InputTokens: 75, OutputTokens: 50, CacheReadTokens: 25}
+	group := &Group{ID: groupID, Platform: PlatformOpenAI, Status: StatusActive, Hydrated: true, RateMultiplier: 1, ForceOpenAIUltrafast: true}
+	apiKey := &APIKey{ID: 1881, GroupID: &groupID, Group: group}
+
+	err := svc.RecordUsage(context.Background(), &OpenAIRecordUsageInput{
+		Result: &OpenAIForwardResult{
+			RequestID: "resp_group_ultrafast_downgrade", ServiceTier: &serviceTier,
+			UpstreamResponseServiceTier: "default",
+			Usage:                       OpenAIUsage{InputTokens: tokens.InputTokens + tokens.CacheReadTokens, OutputTokens: tokens.OutputTokens, CacheReadInputTokens: tokens.CacheReadTokens},
+			Model:                       "gpt-6-astra", UpstreamModel: "gpt-6-astra", Duration: time.Second,
+		},
+		APIKey: apiKey, User: &User{ID: 2881}, Account: &Account{ID: 3881, Platform: PlatformOpenAI, Type: AccountTypeAPIKey},
+	})
+	require.NoError(t, err)
+	require.NotNil(t, usageRepo.lastLog)
+	require.NotNil(t, usageRepo.lastLog.ServiceTier)
+	require.Equal(t, "default", *usageRepo.lastLog.ServiceTier)
+	standard, calcErr := svc.billingService.CalculateCost("gpt-6-astra", tokens, 1)
+	require.NoError(t, calcErr)
+	require.InDelta(t, standard.ActualCost, usageRepo.lastLog.ActualCost, 1e-10)
+}
+
 func TestOpenAIGatewayServiceRecordUsage_FreeOpenAIFastChargesStandard(t *testing.T) {
 	usageRepo := &openAIRecordUsageLogRepoStub{inserted: true}
 	svc := newOpenAIRecordUsageServiceForTest(

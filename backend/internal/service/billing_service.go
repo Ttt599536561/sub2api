@@ -172,6 +172,15 @@ func configuredServiceTierMultiplier(serviceTier string, pricing *ModelPricing) 
 	return serviceTierCostMultiplier(serviceTier)
 }
 
+func applyUltrafastMultiplierOverride(pricing *ModelPricing, override *float64) *ModelPricing {
+	if pricing == nil || override == nil {
+		return pricing
+	}
+	cloned := *pricing
+	cloned.UltrafastMultiplier = *override
+	return &cloned
+}
+
 func pricingWithPriorityMultiplier(base *ModelPricing, multiplier float64) *ModelPricing {
 	if base == nil {
 		return nil
@@ -1537,6 +1546,9 @@ type CostInput struct {
 	LongContextBillingEnabled *bool
 	// DisableModelLongContextPricing 豁免模型价卡的长上下文附加费，不改变自定义区间价格。
 	DisableModelLongContextPricing bool
+	// UltrafastMultiplierOverride replaces the model's default Ultrafast multiplier
+	// for this request only. OpenAI derives it from the trusted group/model/tier.
+	UltrafastMultiplierOverride *float64
 }
 
 // CalculateCostUnified 统一计费入口，支持三种计费模式。
@@ -1552,6 +1564,7 @@ func (s *BillingService) CalculateCostUnified(input CostInput) (*CostBreakdown, 
 		if err != nil {
 			return nil, err
 		}
+		pricing = applyUltrafastMultiplierOverride(pricing, input.UltrafastMultiplierOverride)
 		breakdown := s.computeTokenBreakdown(pricing, input.Tokens, input.RateMultiplier, input.ServiceTier, applyLongContextBilling && !input.DisableModelLongContextPricing)
 		applyCostBreakdownMultiplier(breakdown, reasoningEffortBillingMultiplier(input.ReasoningEffort, pricing.ReasoningEffortMultipliers))
 		return breakdown, nil
@@ -1623,6 +1636,7 @@ func (s *BillingService) calculateTokenCost(resolved *ResolvedPricing, input Cos
 	// 默认价卡（Source=LiteLLM）应用 DeepSeek 官方价强制覆盖（幂等，GetModelPricing
 	// 内部已强制过）；分组/渠道自定义定价保留运营者配置，不强制覆盖官方价。
 	pricing = s.applyModelSpecificPricingPolicyEx(input.Model, pricing, resolved.Source == PricingSourceLiteLLM, pricingAt)
+	pricing = applyUltrafastMultiplierOverride(pricing, input.UltrafastMultiplierOverride)
 
 	// DeepSeek 模型默认价卡按官方峰谷口径调整：高峰时段（01:00–04:00 与
 	// 06:00–10:00 UTC，仅工作日；北京时间周末全天低谷）按 2× 低谷价计费。

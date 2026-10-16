@@ -116,6 +116,10 @@ func isOpenAIGPT6AstraModel(model string) bool {
 	return normalized == "gpt-6" || normalized == "gpt-6-astra" || strings.HasPrefix(normalized, "gpt-6-astra-")
 }
 
+func isOpenAIGroupUltrafastTargetModel(model string) bool {
+	return isOpenAIGPT6AstraModel(model) || openai.IsGPT61SolModelSpelling(model)
+}
+
 func appendUsageBillingModelCandidate(candidates []string, seen map[string]struct{}, model string) []string {
 	trimmed := strings.TrimSpace(model)
 	if trimmed == "" {

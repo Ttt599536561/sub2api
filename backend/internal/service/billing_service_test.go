@@ -2170,6 +2170,44 @@ func TestAstraUltrafastPricingUsesSixTimesStandard(t *testing.T) {
 	require.Equal(t, 2.0, configuredServiceTierMultiplier("ultrafast", p))
 }
 
+func TestCalculateCostUnified_GroupScopedUltrafastPricingUsesEightTimesStandard(t *testing.T) {
+	svc := newTestBillingService()
+	tokens := UsageTokens{InputTokens: 1000, OutputTokens: 500, CacheReadTokens: 200}
+
+	standard, err := svc.CalculateCostUnified(CostInput{
+		Model: "gpt-6-astra", Tokens: tokens, RateMultiplier: 1,
+	})
+	require.NoError(t, err)
+
+	group := &Group{Platform: PlatformOpenAI, ForceOpenAIUltrafast: true}
+	eight := 8.0
+	groupUltrafast, err := svc.CalculateCostUnified(CostInput{
+		Model: "gpt-6-astra", Group: group, Tokens: tokens, RateMultiplier: 1,
+		ServiceTier: "ultrafast", UltrafastMultiplierOverride: &eight,
+	})
+	require.NoError(t, err)
+	require.InDelta(t, standard.TotalCost*8, groupUltrafast.TotalCost, 1e-12)
+
+	legacyUltrafast, err := svc.CalculateCostUnified(CostInput{
+		Model: "gpt-6-astra", Group: &Group{Platform: PlatformOpenAI}, Tokens: tokens, RateMultiplier: 1,
+		ServiceTier: "ultrafast",
+	})
+	require.NoError(t, err)
+	require.InDelta(t, standard.TotalCost*6, legacyUltrafast.TotalCost, 1e-12)
+
+	nonTarget, err := svc.CalculateCostUnified(CostInput{
+		Model: "gpt-6-astra", Group: group, Tokens: tokens, RateMultiplier: 1,
+		ServiceTier: "ultrafast",
+	})
+	require.NoError(t, err)
+	legacyNonTarget, err := svc.CalculateCostUnified(CostInput{
+		Model: "gpt-6-astra", Group: &Group{Platform: PlatformOpenAI}, Tokens: tokens, RateMultiplier: 1,
+		ServiceTier: "ultrafast",
+	})
+	require.NoError(t, err)
+	require.InDelta(t, legacyNonTarget.TotalCost, nonTarget.TotalCost, 1e-12)
+}
+
 func TestGPT61SolExplicitZeroCacheWriteAcrossTiers(t *testing.T) {
 	pricing := &PricingService{}
 	var err error
