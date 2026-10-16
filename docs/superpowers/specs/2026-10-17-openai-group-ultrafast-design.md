@@ -50,7 +50,7 @@
 - 开启 Ultrafast 的 OpenAI 分组调用目标模型时，无论入站 `service_tier` 为空、`priority/fast`、`flex` 或其他已识别值，均按“强制 Ultrafast”改写为 `ultrafast`。
 - 目标模型在未开启分组中不被本开关改写；用户自行传入 `ultrafast` 时，保持当前版本原有请求和计费语义，不套用新增的分组 8 倍规则。
 - 目标模型在已开启分组中，即使 Ultrafast 来自用户显式请求而不是开关自动写入，只要最终仍按 Ultrafast 结算，也属于该分组的 Ultrafast 计费范围。
-- 现有全局 OpenAI Fast/Flex 策略继续运行。分组强制值先写入，再经过现有策略的过滤、拦截或改写；因此全局策略仍可阻止或改变最终 tier。最终计费以既有的响应 tier 降级结算逻辑为准。
+- 现有全局 OpenAI Fast/Flex 策略继续参与判断，但对命中本分组强制规则的目标模型只允许 `block` 拒绝请求；`filter` 和 `force_priority` 不得把已强制的 `ultrafast` 降级或删除。非本功能命中的请求继续使用现有全局策略语义。最终成功请求按 `ultrafast` 计费，显式被 `block` 的请求不产生费用。
 - **不做账号类型或上游能力预探测**：不因为 API Key、OAuth、Base URL 或能力清单不同而跳过强制，也不自动降级、改回普通 tier 或静默重试。只要分组和模型命中，就发送 `service_tier=ultrafast`；如果上游不支持，由上游错误原样进入现有错误处理链路。
 - HTTP、Chat Completions/Responses 转换、原生透传、回退路径和 WebSocket（包括现有 v1/v2 入口）必须使用同一套判断逻辑，避免不同协议出现不同 Ultrafast 行为。
 - 管理员保存后，新请求立即读取新配置；已建立的 WebSocket 会话沿用项目当前策略快照/重连语义，不承诺中途改变已建立会话。
@@ -177,7 +177,7 @@ groups.force_openai_ultrafast BOOLEAN NOT NULL DEFAULT FALSE
 ```text
 解析/映射最终模型
 → 分组强制 Ultrafast（仅目标模型）
-→ 现有全局 Fast/Flex policy
+→ 现有全局 Fast/Flex policy（命中强制 Ultrafast 时仅 block 生效）
 → 上游转发
 → 记录请求 tier 与上游观察 tier
 → 既有降级解析
@@ -214,7 +214,7 @@ OpenAIUltrafastGroupPricing bool
 - 目标模型规范名、现有别名/后缀命中；非目标模型不命中；
 - 开关开启时目标模型的空 tier、priority、flex 均改为 Ultrafast；关闭时请求体字节/字段保持原语义；
 - HTTP、原生透传、回退和 WS 首帧/后续帧行为一致；
-- 全局 policy 的 filter/block/force 行为继续生效；
+- 对强制 Ultrafast 目标模型，全局 policy 的 block 行为继续生效，filter/force_priority 不得降级；非目标请求的既有 filter/block/force 行为不变；
 - API Key、OAuth 等不同账号类型均强制发送 Ultrafast；不支持的上游返回错误，系统不做能力探测或自动降级；
 - 开启分组 + 目标模型 + 最终 Ultrafast = Standard × 8；
 - 开启分组但最终 Standard/Fast/Flex 不乘 8；
@@ -262,6 +262,6 @@ OpenAIUltrafastGroupPricing bool
 
 ## 9. 已确认的实现选择
 
-1. **“强制”覆盖入站 tier**：已开启分组的两个目标模型即使客户端传入 `priority` 或 `flex`，也先改为 `ultrafast`；之后仍接受现有全局 Fast/Flex policy 的过滤、拦截或改写。
+1. **“强制”覆盖入站 tier**：已开启分组的两个目标模型即使客户端传入 `priority` 或 `flex`，也先改为 `ultrafast`；全局策略只有 `block` 可以拒绝该请求，`filter`/`force_priority` 不得把它改成其他 tier。
 2. **不预探测账号能力**：不区分 API Key、OAuth 或其他 OpenAI 账号类型；命中分组和模型后都发送 `ultrafast`。上游不支持时返回上游错误，不自动降级或静默改回普通 tier。
 3. **现有模型别名兼容**：沿用项目已有规范化逻辑，`gpt-6` 等已明确归为 Astra 的别名按 Astra 处理；不额外扩展未知别名。
