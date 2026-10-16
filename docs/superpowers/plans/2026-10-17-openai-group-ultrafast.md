@@ -159,6 +159,8 @@ go test ./internal/handler/admin ./internal/handler/dto ./internal/service -run 
 
 Expected: compile failures mentioning missing `ForceOpenAIUltrafast`/`force_openai_ultrafast` fields.
 
+Before running the cache contract tests, increment `apiKeyAuthSnapshotVersion` from `24` to `25` and extend `api_key_auth_cache_openai_fast_test.go` (or add a new adjacent test) to round-trip `ForceOpenAIUltrafast`; the version bump is required so existing Redis snapshots are refreshed instead of silently losing the new flag.
+
 - [ ] **Step 7: Implement the domain/API/cache/repository plumbing.**
 
 Add `ForceOpenAIUltrafast bool` to `service.Group`, the create/update inputs, admin handler request structs, admin DTO mapper, and API-key auth cache/snapshot structs. Add Ent setters/fields through generation rather than hand-editing generated code. Set/read the field in:
