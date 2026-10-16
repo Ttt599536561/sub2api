@@ -4397,6 +4397,7 @@ import {
 import {
   normalizeGroupOpenAIFast,
   normalizeGroupOpenAIUltrafast,
+  normalizeGroupOpenAIUltrafastState,
   setGroupOpenAIFast,
   setGroupOpenAIUltrafast,
   supportsGroupOpenAIFast,
@@ -6783,6 +6784,7 @@ watch(
 watch(
   () => createForm.platform,
   (newVal) => {
+    normalizeGroupOpenAIUltrafastState(newVal, createForm);
     if (!["anthropic", "antigravity"].includes(newVal)) {
       createForm.fallback_group_id_on_invalid_request = null;
     }
@@ -6840,6 +6842,7 @@ watch(
 watch(
   () => editForm.platform,
   (newVal) => {
+    normalizeGroupOpenAIUltrafastState(newVal, editForm);
     if (!["anthropic", "antigravity"].includes(newVal)) {
       editForm.fallback_group_id_on_invalid_request = null;
     }

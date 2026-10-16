@@ -7,7 +7,7 @@
 
 ## 已实现行为
 
-- 管理员 OpenAI 分组新增 `force_openai_ultrafast` 开关；Composite 和其他平台归一为关闭。
+- 管理员 OpenAI 分组新增 `force_openai_ultrafast` 开关；Composite 和其他平台归一为关闭，前端平台切换时也立即清除残留状态。
 - 强制 Ultrafast 与强制 Fast 互斥，后端以 Ultrafast 优先；免费 Fast 保持独立，不作用于 Ultrafast。
 - 只对 `gpt-6.1-sol` 与 `gpt-6-astra`（沿用项目已有别名规范化）强制出站 `service_tier=ultrafast`。
 - 不区分 API Key、OAuth 或上游能力清单；命中后统一发送 Ultrafast，上游不支持时返回现有上游错误，不自动降级。
@@ -22,6 +22,7 @@
 - `c261a20d8`：管理员 UI、类型、国际化、OpenAI-only 显示和 Fast/Ultrafast 互斥交互。
 - `26dab2c3b`：HTTP、WS、Responses patch 请求策略及全局策略优先级。
 - `c928288eb`：分组感知的 Ultrafast 8× token 计费与回归测试。
+- 待提交补充：平台切换时清除不可见 Ultrafast 状态，并补充前端归一化回归测试。
 
 ## 实际验证
 

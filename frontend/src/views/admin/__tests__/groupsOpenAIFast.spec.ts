@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   normalizeGroupOpenAIFast,
   normalizeGroupOpenAIUltrafast,
+  normalizeGroupOpenAIUltrafastState,
   setGroupOpenAIFast,
   setGroupOpenAIUltrafast,
   supportsGroupOpenAIFast,
@@ -31,6 +32,12 @@ describe("groupsOpenAIFast", () => {
     expect(supportsGroupOpenAIUltrafast("anthropic")).toBe(false);
     expect(normalizeGroupOpenAIUltrafast("openai", true)).toBe(true);
     expect(normalizeGroupOpenAIUltrafast("composite", true)).toBe(false);
+  });
+
+  it("clears stale Ultrafast state when leaving the OpenAI platform", () => {
+    const state = { force_openai_fast: false, force_openai_ultrafast: true };
+    normalizeGroupOpenAIUltrafastState("composite", state);
+    expect(state.force_openai_ultrafast).toBe(false);
   });
 
   it("keeps forced Fast and Ultrafast mutually exclusive", () => {

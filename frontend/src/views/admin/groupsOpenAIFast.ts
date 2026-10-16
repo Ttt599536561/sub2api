@@ -25,6 +25,18 @@ export type OpenAIFastToggleState = {
   force_openai_ultrafast: boolean;
 };
 
+export function normalizeGroupOpenAIUltrafastState(
+  platform: string,
+  state: OpenAIFastToggleState,
+): void {
+  if (!supportsGroupOpenAIUltrafast(platform)) {
+    state.force_openai_ultrafast = false;
+  }
+  if (state.force_openai_ultrafast) {
+    state.force_openai_fast = false;
+  }
+}
+
 export function setGroupOpenAIFast(
   state: OpenAIFastToggleState,
   enabled: boolean,
