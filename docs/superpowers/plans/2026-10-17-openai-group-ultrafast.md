@@ -14,7 +14,7 @@
 
 ### Persistence and trusted group data
 
-- Create: `backend/migrations/<next>_group_force_openai_ultrafast.sql`
+- Create: `backend/migrations/246_group_force_openai_ultrafast.sql`
 - Create: `backend/migrations/group_force_openai_ultrafast_migration_test.go`
 - Modify: `backend/ent/schema/group.go`
 - Generate: `backend/ent/group.go`, `backend/ent/group/group.go`, `backend/ent/group_create.go`, `backend/ent/group_update.go`, `backend/ent/mutation.go`, `backend/ent/runtime/runtime.go`, and any Ent files changed by `go generate ./ent`
@@ -40,7 +40,7 @@
 - Modify: `frontend/src/types/index.ts`
 - Modify: `frontend/src/views/admin/GroupsView.vue`
 - Modify: `frontend/src/views/admin/groupsOpenAIFast.ts` or add a focused `groupsOpenAIUltrafast.ts` helper if keeping platform predicates separate is clearer
-- Modify: `frontend/src/views/admin/__tests__/groupsOpenAIFast.spec.ts` and add a focused UI test if needed
+- Modify: `frontend/src/views/admin/__tests__/groupsOpenAIFast.spec.ts` and add `frontend/src/views/admin/__tests__/GroupsView.openaiUltrafast.spec.ts` for create/edit mutual-exclusion payload behavior
 - Modify: `frontend/src/i18n/locales/zh/admin/overview.ts`, `frontend/src/i18n/locales/en/admin/overview.ts`
 
 ### Project records
@@ -57,7 +57,7 @@
 - Test: `backend/migrations/group_force_openai_ultrafast_migration_test.go`
 - Test: `backend/internal/repository/migrations_schema_integration_test.go`
 - Test: existing group handler/mapper/admin service tests
-- Modify: `backend/migrations/<next>_group_force_openai_ultrafast.sql`
+- Modify: `backend/migrations/246_group_force_openai_ultrafast.sql`
 - Modify: `backend/ent/schema/group.go`
 - Modify: domain, handler DTO, service input, repository, cache, and duplicate files listed above
 
@@ -95,7 +95,7 @@ Expected: FAIL because the migration file is absent.
 
 - [ ] **Step 3: Add the append-only SQL migration and Ent schema field.**
 
-Use this migration shape, replacing `<next>` with the actual next number:
+Use this exact migration shape in `backend/migrations/246_group_force_openai_ultrafast.sql`:
 
 ```sql
 ALTER TABLE groups
@@ -252,7 +252,7 @@ Add `admin.groups.openaiFast.ultrafast` and `ultrafastHint` in Chinese and Engli
 
 - [ ] **Step 3: Add the switch to create/edit forms and enforce mutual exclusion in the UI.**
 
-Add the new toggle between the existing Force Fast and Free Fast rows. Gate the section with the existing Fast section only if needed, but gate the new toggle itself by `supportsGroupOpenAIUltrafast(platform)` so Composite does not display it. Add form defaults, reset, load-from-group, and create/update payload normalization.
+Add the new toggle between the existing Force Fast and Free Fast rows. Keep the existing Fast section container and gate the new toggle itself by `supportsGroupOpenAIUltrafast(platform)` so Composite does not display it. Add form defaults, reset, load-from-group, and create/update payload normalization.
 
 Use explicit update handlers rather than relying on two-way binding alone:
 
@@ -456,7 +456,7 @@ git add backend/internal/service/billing_service.go backend/internal/service/bil
 **Files:**
 - Test: repository/cache/duplicate/group integration tests touched by Tasks 1–4
 - Modify: `CHANGELOG.md`, `docs/HANDOFF.md`
-- Create: `docs/changes/2026-10-17-openai-group-ultrafast.md` if needed
+- Create: `docs/changes/2026-10-17-openai-group-ultrafast.md`
 
 - [ ] **Step 1: Run all focused backend tests from the feature worktree.**
 
