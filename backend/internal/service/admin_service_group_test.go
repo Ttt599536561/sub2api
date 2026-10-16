@@ -1362,9 +1362,50 @@ func TestAdminService_CreateGroup_NormalizesForceOpenAIFastByPlatform(t *testing
 	}
 }
 
+func TestAdminService_CreateGroup_NormalizesForceOpenAIUltrafastByPlatform(t *testing.T) {
+	for _, tt := range []struct {
+		name     string
+		platform string
+		want     bool
+	}{
+		{name: "openai", platform: PlatformOpenAI, want: true},
+		{name: "composite", platform: PlatformComposite, want: false},
+		{name: "anthropic", platform: PlatformAnthropic, want: false},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			repo := &groupRepoStubForAdmin{}
+			svc := &adminServiceImpl{groupRepo: repo}
+
+			group, err := svc.CreateGroup(context.Background(), &CreateGroupInput{
+				Name: "ultra-" + tt.name, Platform: tt.platform, RateMultiplier: 1, ForceOpenAIUltrafast: true,
+			})
+
+			require.NoError(t, err)
+			require.NotNil(t, group)
+			require.Equal(t, tt.want, repo.created.ForceOpenAIUltrafast)
+		})
+	}
+}
+
+func TestAdminService_UpdateGroup_ForceOpenAIUltrafastWinsOverFast(t *testing.T) {
+	existingGroup := &Group{ID: 1, Name: "existing-ultra", Platform: PlatformOpenAI, Status: StatusActive}
+	repo := &groupRepoStubForAdmin{getByID: existingGroup}
+	svc := &adminServiceImpl{groupRepo: repo}
+	fast, ultra := true, true
+
+	group, err := svc.UpdateGroup(context.Background(), existingGroup.ID, &UpdateGroupInput{
+		ForceOpenAIFast: &fast, ForceOpenAIUltrafast: &ultra,
+	})
+
+	require.NoError(t, err)
+	require.NotNil(t, group)
+	require.True(t, repo.updated.ForceOpenAIUltrafast)
+	require.False(t, repo.updated.ForceOpenAIFast)
+}
+
 func TestAdminService_UpdateGroup_ClearsForceOpenAIFastWhenPlatformChanges(t *testing.T) {
 	existingGroup := &Group{
-		ID: 1, Name: "existing-fast", Platform: PlatformOpenAI, Status: StatusActive, ForceOpenAIFast: true, FreeOpenAIFast: true,
+		ID: 1, Name: "existing-fast", Platform: PlatformOpenAI, Status: StatusActive, ForceOpenAIFast: true, ForceOpenAIUltrafast: true, FreeOpenAIFast: true,
 	}
 	repo := &groupRepoStubForAdmin{getByID: existingGroup}
 	svc := &adminServiceImpl{groupRepo: repo}
@@ -1376,6 +1417,7 @@ func TestAdminService_UpdateGroup_ClearsForceOpenAIFastWhenPlatformChanges(t *te
 	require.NoError(t, err)
 	require.NotNil(t, group)
 	require.False(t, repo.updated.ForceOpenAIFast)
+	require.False(t, repo.updated.ForceOpenAIUltrafast)
 	require.False(t, repo.updated.FreeOpenAIFast)
 }
 
