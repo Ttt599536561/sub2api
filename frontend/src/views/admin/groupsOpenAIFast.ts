@@ -8,3 +8,39 @@ export function normalizeGroupOpenAIFast(
 ): boolean {
   return supportsGroupOpenAIFast(platform) && enabled;
 }
+
+export function supportsGroupOpenAIUltrafast(platform: string): boolean {
+  return platform === "openai";
+}
+
+export function normalizeGroupOpenAIUltrafast(
+  platform: string,
+  enabled: boolean,
+): boolean {
+  return supportsGroupOpenAIUltrafast(platform) && enabled;
+}
+
+export type OpenAIFastToggleState = {
+  force_openai_fast: boolean;
+  force_openai_ultrafast: boolean;
+};
+
+export function setGroupOpenAIFast(
+  state: OpenAIFastToggleState,
+  enabled: boolean,
+): void {
+  state.force_openai_fast = enabled;
+  if (enabled) {
+    state.force_openai_ultrafast = false;
+  }
+}
+
+export function setGroupOpenAIUltrafast(
+  state: OpenAIFastToggleState,
+  enabled: boolean,
+): void {
+  state.force_openai_ultrafast = enabled;
+  if (enabled) {
+    state.force_openai_fast = false;
+  }
+}

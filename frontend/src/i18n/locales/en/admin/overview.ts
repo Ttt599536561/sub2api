@@ -1273,6 +1273,8 @@ export default {
         title: 'OpenAI Fast mode',
         force: 'Force Fast (priority)',
         hint: 'Forces service_tier=priority on OpenAI requests in this group. The global Fast/Flex policy can still filter or block it. New requests update immediately after saving; existing WebSocket sessions must reconnect.',
+        ultrafast: 'Force Ultrafast',
+        ultrafastHint: 'Only affects GPT-6.1 Sol and GPT-6 Astra in this OpenAI group, forcing Ultrafast and charging 8× the effective Standard price. Mutually exclusive with Force Fast; Free Fast does not apply to Ultrafast. No account capability probing is performed; unsupported upstreams return their errors.',
         free: 'Free Fast',
         freeHint: 'Fast requests in this group still use the priority tier, but customers are charged the equivalent Standard price.'
       },
