@@ -4,6 +4,10 @@
 
 最新已发布代码基线为 **`084673c73` / `0.2.16-r1`**。这是已发布镜像的来源提交；后续发布记录文档不改变该基线。
 
+## 2026-10-17
+
+- **OpenAI 分组强制 Ultrafast（未发布）**：新增 OpenAI-only 分组开关，目标为 `gpt-6.1-sol` / `gpt-6-astra`，与强制 Fast 互斥；命中启用分组且最终 tier 为 Ultrafast 时按有效 Standard token 价格 × 8，未启用分组和其他模型保持既有行为。全局策略对命中目标只允许 block，API Key/OAuth 不做能力探测或静默降级。代码提交：`718f9b457`、`c261a20d8`、`26dab2c3b`、`c928288eb`；新增迁移 246。实施、验证和未发布边界见 [实施与验证记录](docs/changes/2026-10-17-openai-group-ultrafast.md)。
+
 ## 2026-10-16
 
 - **发布 0.2.16-r1**：应用修复基线 `7c8161b77`，镜像来源 `084673c73`；官方 0.2.16 合并和各轮审查修复已推送 main，并发布 `linux/amd64`、`linux/arm64` 镜像。同一 SHA 的 CI / Security Scan、两种镜像运行检查、匿名完整运行层与 digest 校验均通过。Actions 禁用问题已解除，服务器尚未部署。新增 4 份迁移、固定 digest 及升级步骤见 [镜像与升级说明](deploy/CUSTOM_IMAGE_0.2.16-r1.md)。

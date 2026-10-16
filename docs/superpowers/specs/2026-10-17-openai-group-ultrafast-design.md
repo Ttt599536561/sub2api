@@ -186,18 +186,18 @@ groups.force_openai_ultrafast BOOLEAN NOT NULL DEFAULT FALSE
 
 ### 5.3 分组感知计费
 
-推荐在现有 `TokenCostRequest` / `CostInput` 链路增加一个窄用途的请求级覆盖字段，或等价的内部计费上下文：
+推荐在现有 `CostInput` 链路增加一个窄用途的请求级覆盖字段：
 
 ```text
-OpenAIUltrafastGroupPricing bool
+UltrafastMultiplierOverride *float64
 ```
 
-该标记只能由服务端根据 `apiKey.Group`、最终计费模型和最终 service tier 派生，不能接受前端或用户请求体直接传入。
+该覆盖值只能由 OpenAI 用量服务根据可信 `apiKey.Group`、最终出站模型和最终结算 tier 派生：仅命中已开启的 OpenAI 分组、目标模型且最终 tier 为 Ultrafast 时传入 `8`，其余请求为 `nil`。不能接受前端或用户请求体直接传入。
 
 计费层处理原则：
 
 1. 先按现有 Resolver 得到本次有效 Standard 定价；
-2. 只在标记为真、模型为两个目标模型、tier 为 `ultrafast` 时，对克隆的有效定价应用 `8.0` Ultrafast multiplier；
+2. 只有 OpenAI 用量服务派生出非 nil 覆盖值时，才对克隆的有效定价应用该 Ultrafast multiplier（本功能固定为 `8.0`）；
 3. 不改写共享缓存、全局 fallback 表或其他分组使用的定价对象；
 4. 继续通过现有 `CostBreakdown` 写入 TotalCost、ActualCost、usage log 和余额/订阅扣减；
 5. `free_openai_fast` 的 Standard 重算路径明确排除 `ultrafast`，避免出现“8×后又免费”的组合。

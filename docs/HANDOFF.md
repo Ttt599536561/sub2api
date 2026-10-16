@@ -20,6 +20,10 @@
 
 [0.2.15 已发布版本归档](changes/2026-10-11-v0.2.15-r1.md) 保留代码变化、对应提交和历史验证范围。历史报告中的“未发布”“未推送”描述其当时阶段；后续发布状态以对应日期的发布记录为准。
 
+## 2026-10-17 OpenAI 分组强制 Ultrafast（未发布）
+
+功能已在 E 盘独立工作树 `E:\sub2二次开发项目\.worktrees\openai-group-ultrafast-20261017` 完成源码实现，分支为 `codex/openai-group-ultrafast-20261017`。新增迁移 `246_group_force_openai_ultrafast.sql`，仅对启用开关的 OpenAI 分组目标模型应用最终 Ultrafast 的 Standard × 8 token 计费；Composite、未启用分组、其他模型及已发布 `0.2.16-r1` 均不包含本功能。代码提交为 `718f9b457`、`c261a20d8`、`26dab2c3b`、`c928288eb`，验证和限制见 [实施与验证记录](changes/2026-10-17-openai-group-ultrafast.md)。本功能尚未推送、构建发布镜像、执行在线迁移或部署生产；主目录既有未提交修改未触碰。
+
 ## 2026-10-16 发布完成
 
 用户授权的源码推送及 GitHub 镜像发布已经完成。此前 GitHub Actions 禁用造成的阻塞已解除；恢复后的镜像来源为 `084673c739ddfa3b5429cf5b27f792e82f640fbc`。同一提交的 [CI](https://github.com/Ttt599536561/sub2api/actions/runs/38899063095) 与 [Security Scan](https://github.com/Ttt599536561/sub2api/actions/runs/38899063075) 通过，[双架构发布](https://github.com/Ttt599536561/sub2api/actions/runs/38900492932) 成功；两种原生架构的版本、提交、安装接口、前端和运行资源检查均通过。匿名读取最终索引、manifest、config，并完整下载和校验 24 个运行层，确认最终 digest 与通过运行检查的产物一致。

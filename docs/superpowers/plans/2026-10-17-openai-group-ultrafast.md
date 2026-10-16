@@ -4,7 +4,7 @@
 
 **Goal:** Add a mutually exclusive OpenAI-group Ultrafast switch that forces `gpt-6.1-sol`/`gpt-6-astra` to `service_tier=ultrafast` and charges only that enabled group at Standard effective pricing × 8.
 
-**Architecture:** Persist a group-scoped boolean, carry it through the trusted group/API-key cache projection, and centralize outbound tier forcing beside the existing OpenAI Fast policy. Add a request-local billing flag to the shared token-pricing path so the global model Ultrafast multiplier remains unchanged for groups without the switch. For an enabled target request, the global policy may block but may not filter or rewrite the forced Ultrafast tier.
+**Architecture:** Persist a group-scoped boolean, carry it through the trusted group/API-key cache projection, and centralize outbound tier forcing beside the existing OpenAI Fast policy. Add a request-local Ultrafast multiplier override to the shared token-pricing path so the global model Ultrafast multiplier remains unchanged for groups without the switch. For an enabled target request, the global policy may block but may not filter or rewrite the forced Ultrafast tier.
 
 **Tech Stack:** Go 1.27 + Gin + Ent + PostgreSQL migrations; Vue 3 + TypeScript + Vitest + pnpm; existing OpenAI HTTP/WebSocket gateway and billing resolver.
 
@@ -32,7 +32,7 @@
 - Modify: `backend/internal/service/openai_ws_forwarder_ingress.go` or the shared WS caller only where the existing helper is invoked
 - Modify: `backend/internal/service/openai_ws_v2_passthrough_adapter.go` or the shared WS caller only where the existing helper is invoked
 - Modify: `backend/internal/service/service_tier_billing.go` only if a shared target-model/billing helper belongs there; otherwise keep the helper in the OpenAI policy/billing file
-- Modify: `backend/internal/service/billing_service.go`, `backend/internal/service/billing_token_cost_request.go`, `backend/internal/service/openai_gateway_usage.go`
+- Modify: `backend/internal/service/billing_service.go`, `backend/internal/service/openai_gateway_usage.go`
 - Test: `backend/internal/service/openai_fast_policy_test.go`, `backend/internal/service/openai_fast_policy_ws_test.go`, `backend/internal/service/openai_fast_service_tier_test.go`, `backend/internal/service/openai_gateway_record_usage_test.go`, `backend/internal/service/billing_service_test.go`, and focused gateway tests
 
 ### Admin UI
@@ -40,7 +40,7 @@
 - Modify: `frontend/src/types/index.ts`
 - Modify: `frontend/src/views/admin/GroupsView.vue`
 - Modify: `frontend/src/views/admin/groupsOpenAIFast.ts` or add a focused `groupsOpenAIUltrafast.ts` helper if keeping platform predicates separate is clearer
-- Modify: `frontend/src/views/admin/__tests__/groupsOpenAIFast.spec.ts` and add `frontend/src/views/admin/__tests__/GroupsView.openaiUltrafast.spec.ts` for create/edit mutual-exclusion payload behavior
+- Modify: `frontend/src/views/admin/__tests__/groupsOpenAIFast.spec.ts` for platform scope, localized labels, and mutual exclusion
 - Modify: `frontend/src/i18n/locales/zh/admin/overview.ts`, `frontend/src/i18n/locales/en/admin/overview.ts`
 
 ### Project records
@@ -294,7 +294,8 @@ git commit -m "feat: add OpenAI group ultrafast switch"
 
 **Files:**
 - Test: `backend/internal/service/openai_fast_policy_test.go`, `backend/internal/service/openai_fast_policy_ws_test.go`, `backend/internal/service/openai_fast_service_tier_test.go`, relevant forwarder tests
-- Modify: `backend/internal/service/openai_gateway_request_body.go`, `backend/internal/service/openai_gateway_forward.go`, and only the shared WS caller files needed to route the helper
+- Modify: `backend/internal/service/openai_gateway_request_body.go`, `backend/internal/service/openai_gateway_forward.go`
+- No WS caller changes: both existing WS entry points already call the shared `applyOpenAIFastPolicyToWSResponseCreate` helper
 
 - [ ] **Step 1: Add pure helper tests for target models and platform scope.**
 
@@ -372,7 +373,7 @@ git commit -m "feat: force ultrafast for selected OpenAI group models"
 
 **Files:**
 - Test: `backend/internal/service/billing_service_test.go`, `backend/internal/service/openai_gateway_record_usage_test.go`, `backend/internal/service/openai_fast_service_tier_test.go`
-- Modify: `backend/internal/service/billing_service.go`, `backend/internal/service/billing_token_cost_request.go`, `backend/internal/service/openai_gateway_usage.go`
+- Modify: `backend/internal/service/billing_service.go`, `backend/internal/service/openai_gateway_usage.go`
 
 - [ ] **Step 1: Add a failing pure billing test.**
 
@@ -387,7 +388,7 @@ standard, _ := billing.CalculateCostUnified(CostInput{
 ultrafast8x, _ := billing.CalculateCostUnified(CostInput{
     Model: "gpt-6-astra", Group: enabledGroup, GroupID: &enabledGroup.ID,
     Tokens: tokens, RateMultiplier: 1, ServiceTier: "ultrafast",
-    OpenAIUltrafastGroupPricing: true, Resolver: resolver,
+    UltrafastMultiplierOverride: &eight, Resolver: resolver,
 })
 require.InDelta(t, standard.TotalCost*8, ultrafast8x.TotalCost, 1e-12)
 ```
@@ -400,13 +401,13 @@ Add companion assertions that the same `ultrafast` request without the request-l
 go test ./internal/service -run 'Ultrafast.*(Billing|Cost)|CalculateCostUnified.*Ultrafast' -count=1
 ```
 
-Expected: compile failure because `OpenAIUltrafastGroupPricing` is not yet defined, or a red assertion if the test uses an existing request shape.
+Expected: compile failure because `UltrafastMultiplierOverride` is not yet defined.
 
 - [ ] **Step 3: Add the request-local billing flag and apply it only to cloned effective token pricing.**
 
-Add `OpenAIUltrafastGroupPricing bool` to `TokenCostRequest` and `CostInput`. In the OpenAI usage path, set it only when the API key group has `ForceOpenAIUltrafast`, the final service tier is `ultrafast`, and the billing model canonicalizes to `gpt-6.1-sol` or `gpt-6-astra`.
+Add `UltrafastMultiplierOverride *float64` to the shared `CostInput` type. In `openai_gateway_usage.go`, derive a pointer to `8.0` only when the trusted `apiKey.Group` is OpenAI with `ForceOpenAIUltrafast`, the final settled service tier is `ultrafast`, and `result.UpstreamModel` (falling back to `result.Model`) canonicalizes to `gpt-6.1-sol` or `gpt-6-astra`. Do not expose this override through `TokenCostRequest` or user-controlled request fields.
 
-In both `CalculateCostUnified` resolver and no-resolver token branches, after obtaining the effective Standard/interval pricing and after existing model-specific policy adjustments, clone the `ModelPricing` and set only:
+In both `CalculateCostUnified` resolver and no-resolver token branches, after obtaining the effective Standard/interval pricing and after existing model-specific policy adjustments, apply a helper that clones the `ModelPricing` only when the override pointer is non-nil and sets only:
 
 ```go
 pricing.UltrafastMultiplier = 8
@@ -415,14 +416,12 @@ pricing.UltrafastMultiplier = 8
 Apply this clone only when all of these are true:
 
 ```go
-input.OpenAIUltrafastGroupPricing
-normalizeBillingServiceTier(input.ServiceTier) == OpenAIFastTierUltrafast
-isOpenAIGroupUltrafastBillingModel(input.Model)
+input.UltrafastMultiplierOverride != nil
 ```
 
 Do not mutate shared fallback/channel/group pricing. Do not change `ModelPricing.UltrafastMultiplier` defaults. Do not apply this override to per-request/image/video modes.
 
-Pass the flag from `calculateOpenAIRecordUsageTokenCost` and ensure the response-model re-evaluation uses the same group-scoped decision. Keep `groupBillsOpenAIFastAtStandard` unchanged so Free Fast does not match Ultrafast.
+Derive the override inside `calculateOpenAIRecordUsageCost` from the final tier and actual upstream model, then pass it into `calculateOpenAIRecordUsageTokenCost`. Make both resolver and no-resolver billing paths call `CalculateCostUnified` so the request-local override is honored consistently. Response-model re-evaluation recomputes the same group-scoped override from the same outbound result. Keep `groupBillsOpenAIFastAtStandard` unchanged so Free Fast does not match Ultrafast.
 
 - [ ] **Step 4: Add end-to-end usage billing tests.**
 
