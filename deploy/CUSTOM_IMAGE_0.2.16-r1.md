@@ -1,10 +1,10 @@
-# Sub2API 二开 0.2.16-r1 发布与升级记录（GitHub Actions 禁用，待发布）
+# Sub2API 二开 0.2.16-r1 发布与升级记录
 
-准备日期：2026-10-16（Asia/Shanghai）。最新审查源码和发布工作流已推送到 GitHub main。GitHub Actions 拒绝创建运行，返回 `HTTP 422: Actions has been disabled for this repository`；目标镜像尚未构建或发布。当前已确认发布的版本仍为 [0.2.15-r1](CUSTOM_IMAGE_0.2.15-r1.md)。本次未连接或更新生产服务器；服务器升级由用户自行执行，镜像发布成功也不代表生产已部署。
+发布日期：2026-10-16（Asia/Shanghai）。`0.2.16-r1` 已通过同一源码提交的 CI、安全扫描及 GitHub 双架构构建与运行检查，已发布到 GHCR，并完成匿名完整运行层下载校验。本次未连接或更新生产服务器，服务器升级由用户自行执行。上一版记录见 [0.2.15-r1](CUSTOM_IMAGE_0.2.15-r1.md)。
 
-## 目标版本与发布结果
+## 镜像与发布结果
 
-目标标签如下，**发布验证完成前不能据此认定标签已存在或可用**：
+可部署标签如下，Docker 会按服务器架构选择对应镜像：
 
 ```text
 ghcr.io/ttt599536561/sub2api-custom:0.2.16-r1
@@ -12,32 +12,50 @@ ghcr.io/ttt599536561/sub2api-custom:0.2.16-r1
 
 | 身份或检查 | 当前记录 |
 | --- | --- |
-| 目标版本 | `0.2.16-r1` |
+| 目标版本 | `0.2.16-r1`（已发布） |
 | 最终应用修复源码 | `7c8161b777f8f6314df31e6b62f8c2f3ff9ee9cf` |
 | 本地官方合并提交 | `5fc3298e74a9c6423ce0463ec2eb5c9b59f6c584` |
 | 合入的官方 main | `698d142468ab15374bc22bd5247759e5b7352006`，包含官方 `v0.2.16` 及其后更新 |
 | 上一版已发布镜像源码 | `570e2e00d733ebb20d6692c394c21f05101d0381` / `0.2.15-r1` |
 | 已推送发布准备 / 检查触发提交 | `4be3da680a85efa6e7c36a86dc53189f53fedb44` / `c0fc687a54c38a7420c9df2e7ae8bb6c9ad12b6f`；后者为空提交，树内容相同 |
-| 镜像实际源码 / OCI revision | 尚无镜像；解除 Actions 限制后，采用通过同一 main SHA 检查的源码，并记录实际 revision |
-| GitHub CI / Security Scan | 两次推送均无本次运行；Actions 被平台拒绝，未通过本版云端检查 |
-| GitHub 镜像构建与发布 | 手动触发两次返回 HTTP 422；没有新运行链接、构建产物或发布结果 |
-| 目标架构 | `linux/amd64`、`linux/arm64`；均待本版 GitHub 构建与运行检查 |
-| 多架构 index digest | 待发布后读取并验证；尚不能提供本版固定 digest 地址 |
-| 各架构运行镜像 digest / OCI config digest | 待从最终 manifest 与镜像配置核对，不沿用上一版值 |
-| 匿名完整拉取、版本与启动检查 | 待发布后逐架构核对；当前不宣称可匿名拉取或启动通过 |
+| 镜像实际源码 / OCI revision | `084673c739ddfa3b5429cf5b27f792e82f640fbc` |
+| GitHub CI / Security Scan | [CI](https://github.com/Ttt599536561/sub2api/actions/runs/38899063095) / [Security Scan](https://github.com/Ttt599536561/sub2api/actions/runs/38899063075) 均成功，SHA 与镜像一致 |
+| GitHub 镜像构建与发布 | [发布运行](https://github.com/Ttt599536561/sub2api/actions/runs/38900492932) 成功；两个原生架构检查及最终发布全部通过 |
+| 目标架构 | `linux/amd64`、`linux/arm64` |
+| 多架构 index digest | `sha256:b4102fe7f60206d0ea46179b647d825e64b9274d836f5dea89d676c05e4208f9` |
+| 各架构运行镜像 digest / OCI config digest | 见下表；已从最终索引递归核对，与架构构建产物一致 |
+| 匿名完整拉取、版本与启动检查 | 匿名 Registry API 已下载并核验全部 24 个运行层（89,288,796 字节）；版本与启动由两个 GitHub 原生 runner 执行通过 |
 | 生产部署和业务验收 | 未执行；待用户在服务器升级后确认 |
 
-发布后应以实际结果补全本表，包括最终源码 SHA、对应 GitHub 运行链接、index digest、两种架构的镜像身份和验证时间；只有这些证据匹配后，才将状态改为已发布。发布准备如继续修改 CI、工具或文档，应区分最终镜像来源提交与上表应用修复提交，并核对应用源码是否保持一致。
+固定内容地址：
+
+```text
+ghcr.io/ttt599536561/sub2api-custom@sha256:b4102fe7f60206d0ea46179b647d825e64b9274d836f5dea89d676c05e4208f9
+```
+
+| 架构 | Runtime manifest digest | OCI config digest |
+| --- | --- | --- |
+| `linux/amd64` | `sha256:f79a25d7bdcc07c05156f9d182f33399b47a681a88e67e89ced041ab8a8b650d` | `sha256:40fb0cd2d3edcb91684854a10c8d9c54913304f1413bb267ad917082924567e8` |
+| `linux/arm64` | `sha256:5c3be11fa96d96a935fe84ed26337cc71116059fb4f378fa911efb5af915ed02` | `sha256:d88ec35b07f5fd5647e992aa395e3be83e32e3dc2a06bec50a858d6b8ef5466e` |
+
+架构构建产物（包含证明材料的 index）与最终运行 manifest 已逐一绑定：
+
+- `amd64`：`sha256:8bafec441331ca3086014d0c3a2e1e21ce5f20cee05a35e504f17e386a56c1f2`。
+- `arm64`：`sha256:7448b61c429a018663bdc187caa2c38cfe4b4af54a5385a670e90ecf99a15c7a`。
+
+验证时间：2026-10-16 20:33:53（Asia/Shanghai）。校验包括索引与 manifest 原始 SHA256、descriptor 大小、平台 os/architecture、config 标签，以及每个运行层的大小与 SHA256。本机未执行 Docker 拉取/启动；完整层以匿名 Registry HTTP 流式读取，未落盘为镜像缓存，容器运行检查由 GitHub 原生 runner 完成。证明材料不计入运行层下载结论。
+
+镜像源码为 `084673c739ddfa3b5429cf5b27f792e82f640fbc`；发布准备与恢复仅增加 CI/文档及检查触发提交，`backend`、`frontend`、Dockerfile、忽略规则和入口脚本相对应用修复 `7c8161b77` 无差异。后续发布记录提交不改变镜像源码。
 
 维护入口：[变更记录](../CHANGELOG.md)、[当前交接](../docs/HANDOFF.md)。历史报告中的“未发布”描述当时阶段，不能用旧运行结果替代本次发布验证。
 
-## GitHub Actions 阻塞与续接
+## GitHub Actions 恢复与发布过程
 
-2026-10-16 实际检查：仓库权限 API 显示 `enabled: true`、`allowed_actions: all`，CI / Security Scan / 本版发布工作流均为 active；仓库未归档或禁用。正常快进推送成功，但没有 Actions 运行。为重触发检查增加一个空提交后仍无运行，手动发布请求明确返回上述 HTTP 422。
+2026-10-16 实际检查：仓库权限 API 显示 `enabled: true`、`allowed_actions: all`，CI / Security Scan / 本版发布工作流均为 active；仓库未归档或禁用。正常快进推送成功，但没有 Actions 运行。为重触发检查增加一个空提交后仍无运行，手动发布请求明确返回 `HTTP 422: Actions has been disabled for this repository`。
 
 随后调用仓库 Actions 启用接口和三个工作流的启用接口均成功，但再次手动触发仍返回同一禁用错误；因此没有降低或绕过发布门禁。GitHub [官方说明](https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/enabling-features-for-your-repository/managing-github-actions-settings-for-a-repository)指出，平台独立禁用状态无法通过普通仓库设置恢复，应联系 GitHub Support 复核。具体禁用原因尚未确认，不能据此断言欠费或其他原因。
 
-由账号持有人在 [Actions 页面](https://github.com/Ttt599536561/sub2api/actions)核对提示并解除限制后：正常推送新的检查触发提交；等待该 main SHA 的 CI 和 Security Scan 均成功；再手动运行 `publish-custom-v0216.yml`。最后核对双架构运行结果、匿名 registry 可访问性、revision 和最终 index digest，补全本记录。恢复前不要把本文件的目标标签当成可部署镜像。
+用户处理后，2026-10-16 恢复运行。推送同树空提交 `084673c739ddfa3b5429cf5b27f792e82f640fbc`，该 SHA 的 CI 与 Security Scan 均成功；随后执行 `publish-custom-v0216.yml`，双架构构建、运行检查、最终索引发布及匿名完整层验证全部通过。此前禁用仅作为历史过程保留，当前版本已经发布。
 
 ## 本版主要变化
 
@@ -88,11 +106,11 @@ X-Sub2api-Cached-Content-Outcome: unknown
 
 ## 发布准备检查
 
-新工作流相对 0.2.15-r1 仅替换版本名称、并发组、镜像版本和源码 VERSION 断言；YAML 结构、全部 Bash 段语法及文档链接检查通过。发布工具的 7 项跨平台 Python 测试在显式 UTF-8 环境通过。初次 Windows 全量调用遇到默认 GBK 编码、默认 bash 指向不可用 WSL 和 POSIX 文件权限差异；3 项 Linux shell/mock/权限用例交由同一发布 SHA 的 GitHub CI 执行，不将本机结果写成全量通过。
+新工作流相对 0.2.15-r1 仅替换版本名称、并发组、镜像版本和源码 VERSION 断言；YAML 结构、全部 Bash 段语法及文档链接检查通过。发布工具的 7 项跨平台 Python 测试在显式 UTF-8 环境通过。初次 Windows 全量调用遇到默认 GBK 编码、默认 bash 指向不可用 WSL 和 POSIX 文件权限差异；3 项 Linux shell/mock/权限用例随后在同一发布 SHA 的 GitHub CI 执行通过，完整发布工具套件共 10 项通过；本机初次失败保留为环境边界记录。
 
 ## 验证依据与当前边界
 
-以下是已归档的源码阶段证据，不是本版镜像已验证的声明：
+以下按阶段区分历史源码验证与本次发布验证：
 
 | 阶段 | 已执行结果与边界 |
 | --- | --- |
@@ -101,13 +119,13 @@ X-Sub2api-Cached-Content-Outcome: unknown
 | R14–R16 | 前端 423 文件 / 3,600 项通过；后端 unit 各包最终覆盖无未解决失败，integration 14,501 个通过事件 / 16 条件跳过；unit 存在修正旧测试后整包复测的过程，不能描述为一次全量直接通过。见[追加审查](../docs/changes/2026-10-16-review-7ad7757be.md) |
 | R17–R20 | 前端 36 文件 / 576 项通过；四个受影响后端包最终覆盖通过，类型、目标 lint 和前后端构建通过；未重跑整个项目与数据库集成。见[再次审查](../docs/changes/2026-10-16-review-c7f623da5.md) |
 | 最终应用修复 R21–R25 | 四个受影响后端包本轮 unit 命令退出 0：19,559 个通过事件、5 条件跳过、0 失败；前端未改，相关 2 文件 / 9 项通过；Linux/amd64 编译通过。未重跑完整项目、数据库集成或前端生产构建，未使用 embed 标签或执行发布镜像。见[回归审查](../docs/changes/2026-10-16-review-7fb9f26d7.md) |
-| 本次 GitHub 发布与最终镜像 | 待本次实际运行核对，不能用上述历史数字或上一版镜像验证替代 |
+| 本次 GitHub 发布与最终镜像 | `084673c73` 的后端 unit 58 个包、integration 52 个包通过；前端类型检查及 30 文件 / 581 项关键测试通过；Go lint、部署脚本、发布工具 10 项测试及安全扫描通过；两个镜像均通过版本/源码、PostgreSQL 18.6 客户端、定价资源、安装状态和前端资源检查 |
 
-Go 数字包含父测试与子测试事件，unit/integration 不相加当作独立用例数，条件跳过不计为通过。没有调用真实模型、支付或 OAuth 服务；本地签名/协议回归不代表真实上游签名验签，也不代表生产业务验收。
+历史 Go 数字包含父测试与子测试事件，unit/integration 不相加当作独立用例数，条件跳过不计为通过。本次 CI 的 58/52 为通过的包数，非独立用例总数；非详细模式未输出逐条 skip 数量。安全扫描按仓库现有依赖例外策略通过；govulncheck 未报告代码可达漏洞，仍提示 7 个未被代码调用的模块级漏洞，不能描述成依赖绝无漏洞。没有调用真实模型、支付或 OAuth 服务；本地签名/协议回归不代表真实上游签名验签，也不代表生产业务验收。
 
-## 发布完成后升级现有 Compose 部署
+## 升级现有 Compose 部署
 
-**以下是发布验证完成后的服务器操作模板，目前未执行。**先完成备份和恢复准备，再在现有 Compose 配置中只替换最终生效的应用 `image`；保留原数据库、Redis、配置、环境变量、端口、网络和持久卷。示例应用服务名为 `sub2api`，与现有部署不一致时换成实际服务名：
+**镜像发布验证已完成；以下服务器操作尚未执行。**先完成备份和恢复准备，再在现有 Compose 配置中只替换最终生效的应用 `image`；保留原数据库、Redis、配置、环境变量、端口、网络和持久卷。示例应用服务名为 `sub2api`，与现有部署不一致时换成实际服务名：
 
 ```yaml
 services:
@@ -115,7 +133,7 @@ services:
     image: ghcr.io/ttt599536561/sub2api-custom:0.2.16-r1
 ```
 
-需要固定内容时，发布结果验证完成后使用本表提供的完整 index digest 地址。本草稿没有可用的 0.2.16-r1 digest，不要复制上一版 digest 或自行猜填。
+需要固定内容时，将 `image` 设置为本文已验证的完整 index digest 地址。
 
 在服务器原部署目录操作。下列 Bash 数组仅为参数形状示例；执行前把路径、项目名和全部参数逐项替换为**现有部署原本使用的完整调用**，包含所有 `-f`（保持顺序）、`--env-file`、`-p`、`--profile` 和其它选项，不要用示例新建另一个 Compose 项目。
 
