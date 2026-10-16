@@ -28,12 +28,12 @@
 以下命令均在 E 盘功能工作树执行，并在同一次 PowerShell 调用中显式加载 `tools/project-env.ps1`：
 
 - `go generate ./ent`：通过，生成 Ent 字段和迁移 schema 代码。
-- `go test -tags=unit ./migrations ./internal/handler/admin ./internal/handler/dto ./internal/service`：通过。
-- `go test -tags=unit ./internal/service -count=1`：通过。
+- `go test -tags=unit ./...`：通过；Windows 测试进程显式把 Git `usr/bin` 加入 PATH，以满足既有 `pg_dump` 测试夹具调用 `sh` 的环境前提。
 - OpenAI Fast/Ultrafast、WS、计费和用量记录聚焦测试：通过。
-- 前端 `vitest`：分组 Ultrafast 与 i18n 完整性共 8 项通过。
-- 前端 `vue-tsc --noEmit`：通过。
-- 前端 Vite production build：通过；仅有既存 chunk size / dynamic import / Browserslist 提示，无构建错误。
+- 前端全量 `vitest`：424 个测试文件、3607 项测试通过；包含本功能的分组和 i18n 测试。
+- 前端 `vue-tsc -b`：通过。
+- 前端 production build：通过；项目脚本通过临时 pnpm 9.15.9 shim 执行，直接构建器也通过；仅有既存 chunk size / dynamic import / Browserslist 提示，无构建错误。
+- 前端 `pnpm install --offline --frozen-lockfile`：通过，复用 E 盘共享 pnpm store，未下载新包。
 - 未执行数据库集成测试、Docker 构建或生产服务器操作；因此不能据此宣称迁移已在线执行或已发布。
 
 前端验证复用了主项目 E 盘现有依赖目录的临时 junction，验证后已删除 junction；没有复制、下载或删除主项目依赖。
