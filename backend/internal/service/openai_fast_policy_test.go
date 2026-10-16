@@ -583,3 +583,65 @@ func TestSetOpenAIFastPolicySettings_Validation(t *testing.T) {
 	require.Equal(t, BetaPolicyActionPass, got.Rules[1].Action)
 	require.Equal(t, OpenAIFastPolicyActionForcePriority, got.Rules[2].Action)
 }
+
+func TestApplyOpenAIFastPolicyToBody_GroupForceUltrafastTargetsOnlySupportedModels(t *testing.T) {
+	svc := newOpenAIGatewayServiceWithSettings(t, DefaultOpenAIFastPolicySettings())
+	account := &Account{Platform: PlatformOpenAI, Type: AccountTypeOAuth}
+	ctx := context.WithValue(context.Background(), ctxkey.Group, &Group{
+		ID: 8, Platform: PlatformOpenAI, Status: StatusActive, Hydrated: true, ForceOpenAIUltrafast: true,
+	})
+
+	for _, model := range []string{"gpt-6.1-sol", "gpt-6-astra"} {
+		for _, body := range [][]byte{
+			[]byte(`{"model":"` + model + `"}`),
+			[]byte(`{"model":"` + model + `","service_tier":"priority"}`),
+			[]byte(`{"model":"` + model + `","service_tier":"flex"}`),
+		} {
+			updated, err := svc.applyOpenAIFastPolicyToBody(ctx, account, model, body)
+			require.NoError(t, err)
+			require.Equal(t, OpenAIFastTierUltrafast, gjson.GetBytes(updated, "service_tier").String())
+		}
+	}
+
+	for _, model := range []string{"gpt-6-sol", "gpt-6-luna", "gpt-5.6-sol"} {
+		body := []byte(`{"model":"` + model + `","service_tier":"priority"}`)
+		updated, err := svc.applyOpenAIFastPolicyToBody(ctx, account, model, body)
+		require.NoError(t, err)
+		require.Equal(t, OpenAIFastTierPriority, gjson.GetBytes(updated, "service_tier").String())
+	}
+}
+
+func TestApplyOpenAIFastPolicyToBody_GroupForceUltrafastIgnoresFilterAndForcePriority(t *testing.T) {
+	settings := &OpenAIFastPolicySettings{Rules: []OpenAIFastPolicyRule{
+		{ServiceTier: OpenAIFastTierUltrafast, Action: BetaPolicyActionFilter, Scope: BetaPolicyScopeAll},
+		{ServiceTier: OpenAIFastTierAny, Action: OpenAIFastPolicyActionForcePriority, Scope: BetaPolicyScopeAll},
+	}}
+	svc := newOpenAIGatewayServiceWithSettings(t, settings)
+	account := &Account{Platform: PlatformOpenAI, Type: AccountTypeOAuth}
+	ctx := context.WithValue(context.Background(), ctxkey.Group, &Group{
+		ID: 8, Platform: PlatformOpenAI, Status: StatusActive, Hydrated: true, ForceOpenAIUltrafast: true,
+	})
+
+	updated, err := svc.applyOpenAIFastPolicyToBody(ctx, account, "gpt-6-astra", []byte(`{"model":"gpt-6-astra"}`))
+	require.NoError(t, err)
+	require.Equal(t, OpenAIFastTierUltrafast, gjson.GetBytes(updated, "service_tier").String())
+}
+
+func TestApplyOpenAIFastPolicyToBody_GroupForceUltrafastStillHonorsBlock(t *testing.T) {
+	settings := &OpenAIFastPolicySettings{Rules: []OpenAIFastPolicyRule{{
+		ServiceTier: OpenAIFastTierUltrafast, Action: BetaPolicyActionBlock, Scope: BetaPolicyScopeAll,
+		ErrorMessage: "ultrafast blocked", ModelWhitelist: []string{"gpt-6-astra"}, FallbackAction: BetaPolicyActionPass,
+	}}}
+	svc := newOpenAIGatewayServiceWithSettings(t, settings)
+	account := &Account{Platform: PlatformOpenAI, Type: AccountTypeOAuth}
+	ctx := context.WithValue(context.Background(), ctxkey.Group, &Group{
+		ID: 8, Platform: PlatformOpenAI, Status: StatusActive, Hydrated: true, ForceOpenAIUltrafast: true,
+	})
+
+	updated, err := svc.applyOpenAIFastPolicyToBody(ctx, account, "gpt-6-astra", []byte(`{"model":"gpt-6-astra"}`))
+	require.Error(t, err)
+	var blocked *OpenAIFastBlockedError
+	require.ErrorAs(t, err, &blocked)
+	require.Contains(t, blocked.Message, "ultrafast blocked")
+	require.Equal(t, OpenAIFastTierUltrafast, gjson.GetBytes(updated, "service_tier").String())
+}

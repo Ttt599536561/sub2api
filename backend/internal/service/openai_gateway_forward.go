@@ -647,10 +647,11 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 	}
 
 	rawTier := requestView.ServiceTier
-	if openAIGroupForcesFast(ctx, account) {
-		rawTier = OpenAIFastTierPriority
-		if requestView.ServiceTier != OpenAIFastTierPriority {
-			markPatchSet("service_tier", OpenAIFastTierPriority)
+	forcedTier := openAIGroupForcedServiceTier(ctx, account, upstreamModel)
+	if forcedTier != "" {
+		rawTier = forcedTier
+		if requestView.ServiceTier != forcedTier {
+			markPatchSet("service_tier", forcedTier)
 		}
 	}
 	if rawTier != "" {
@@ -666,9 +667,11 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 				writeOpenAIFastPolicyBlockedResponse(c, blocked)
 				return nil, blocked
 			case BetaPolicyActionFilter:
-				markPatchDelete("service_tier")
+				if forcedTier != OpenAIFastTierUltrafast {
+					markPatchDelete("service_tier")
+				}
 			case OpenAIFastPolicyActionForcePriority:
-				if rawTier != OpenAIFastTierPriority {
+				if forcedTier != OpenAIFastTierUltrafast && rawTier != OpenAIFastTierPriority {
 					markPatchSet("service_tier", OpenAIFastTierPriority)
 				}
 			default:

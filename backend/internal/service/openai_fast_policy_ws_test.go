@@ -154,6 +154,47 @@ func TestWSResponseCreate_ForcePriorityInjectsMissingTier(t *testing.T) {
 	require.Equal(t, OpenAIFastTierPriority, gjson.GetBytes(updated, "service_tier").String())
 }
 
+func TestWSResponseCreate_GroupForceUltrafastOverridesTierAndSurvivesFilter(t *testing.T) {
+	settings := &OpenAIFastPolicySettings{Rules: []OpenAIFastPolicyRule{{
+		ServiceTier: OpenAIFastTierUltrafast, Action: BetaPolicyActionFilter, Scope: BetaPolicyScopeAll,
+	}}}
+	svc := newOpenAIGatewayServiceWithSettings(t, settings)
+	account := &Account{Platform: PlatformOpenAI, Type: AccountTypeOAuth}
+	ctx := context.WithValue(context.Background(), ctxkey.Group, &Group{
+		ID: 9, Platform: PlatformOpenAI, Status: StatusActive, Hydrated: true, ForceOpenAIUltrafast: true,
+	})
+
+	for _, tier := range []string{"", "priority", "flex"} {
+		frame := []byte(`{"type":"response.create","model":"gpt-6-astra","service_tier":"` + tier + `"}`)
+		if tier == "" {
+			frame = []byte(`{"type":"response.create","model":"gpt-6-astra"}`)
+		}
+		updated, blocked, err := svc.applyOpenAIFastPolicyToWSResponseCreate(ctx, account, "gpt-6-astra", frame)
+		require.NoError(t, err)
+		require.Nil(t, blocked)
+		require.Equal(t, OpenAIFastTierUltrafast, gjson.GetBytes(updated, "service_tier").String())
+	}
+}
+
+func TestWSResponseCreate_GroupForceUltrafastStillHonorsBlock(t *testing.T) {
+	settings := &OpenAIFastPolicySettings{Rules: []OpenAIFastPolicyRule{{
+		ServiceTier: OpenAIFastTierUltrafast, Action: BetaPolicyActionBlock, Scope: BetaPolicyScopeAll,
+		ErrorMessage: "ws ultrafast blocked", ModelWhitelist: []string{"gpt-6.1-sol"}, FallbackAction: BetaPolicyActionPass,
+	}}}
+	svc := newOpenAIGatewayServiceWithSettings(t, settings)
+	account := &Account{Platform: PlatformOpenAI, Type: AccountTypeOAuth}
+	ctx := context.WithValue(context.Background(), ctxkey.Group, &Group{
+		ID: 9, Platform: PlatformOpenAI, Status: StatusActive, Hydrated: true, ForceOpenAIUltrafast: true,
+	})
+	frame := []byte(`{"type":"response.create","model":"gpt-6.1-sol"}`)
+
+	updated, blocked, err := svc.applyOpenAIFastPolicyToWSResponseCreate(ctx, account, "gpt-6.1-sol", frame)
+	require.NoError(t, err)
+	require.NotNil(t, blocked)
+	require.Contains(t, blocked.Message, "ws ultrafast blocked")
+	require.Equal(t, OpenAIFastTierUltrafast, gjson.GetBytes(updated, "service_tier").String())
+}
+
 func TestWSResponseCreate_GroupForceDoesNotTouchOtherFrames(t *testing.T) {
 	svc := newOpenAIGatewayServiceWithSettings(t, DefaultOpenAIFastPolicySettings())
 	account := &Account{Platform: PlatformOpenAI, Type: AccountTypeOAuth}
