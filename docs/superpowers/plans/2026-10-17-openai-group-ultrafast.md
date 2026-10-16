@@ -1,6 +1,6 @@
 # OpenAI Group Ultrafast Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Add a mutually exclusive OpenAI-group Ultrafast switch that forces `gpt-6.1-sol`/`gpt-6-astra` to `service_tier=ultrafast` and charges only that enabled group at Standard effective pricing × 8.
 
@@ -61,7 +61,7 @@
 - Modify: `backend/ent/schema/group.go`
 - Modify: domain, handler DTO, service input, repository, cache, and duplicate files listed above
 
-- [ ] **Step 1: Identify the next migration number and write the migration test.**
+- [x] **Step 1: Identify the next migration number and write the migration test.**
 
 Run from the feature worktree:
 
@@ -85,7 +85,7 @@ Add a schema-parity assertion in `backend/internal/repository/migrations_schema_
 requireColumn(t, tx, "groups", "force_openai_ultrafast", "boolean", 0, false)
 ```
 
-- [ ] **Step 2: Run the new migration test before adding the SQL or schema.**
+- [x] **Step 2: Run the new migration test before adding the SQL or schema.**
 
 ```powershell
 go test ./migrations -run 'TestGroupForceOpenAIUltrafastMigration' -count=1
@@ -93,7 +93,7 @@ go test ./migrations -run 'TestGroupForceOpenAIUltrafastMigration' -count=1
 
 Expected: FAIL because the migration file is absent.
 
-- [ ] **Step 3: Add the append-only SQL migration and Ent schema field.**
+- [x] **Step 3: Add the append-only SQL migration and Ent schema field.**
 
 Use this exact migration shape in `backend/migrations/246_group_force_openai_ultrafast.sql`:
 
@@ -113,7 +113,7 @@ field.Bool("force_openai_ultrafast").
     Comment("是否强制此 OpenAI 分组的 GPT-6.1 Sol/Astra 请求使用 service_tier=ultrafast"),
 ```
 
-- [ ] **Step 4: Generate Ent code and rerun migration tests.**
+- [x] **Step 4: Generate Ent code and rerun migration tests.**
 
 ```powershell
 go generate ./ent
@@ -122,7 +122,7 @@ go generate ./ent
 
 Expected: the focused migration test passes and generated Ent code contains `ForceOpenaiUltrafast` plus the `force_openai_ultrafast` field constant.
 
-- [ ] **Step 5: Add failing contract tests for the new field.**
+- [x] **Step 5: Add failing contract tests for the new field.**
 
 Extend the existing group request decode test to assert create/update decoding:
 
@@ -151,7 +151,7 @@ input := &UpdateGroupInput{
 // after normalization/update: ForceOpenAIUltrafast=true, ForceOpenAIFast=false
 ```
 
-- [ ] **Step 6: Run the new contract tests to verify they fail for the missing field.**
+- [x] **Step 6: Run the new contract tests to verify they fail for the missing field.**
 
 ```powershell
 go test ./internal/handler/admin ./internal/handler/dto ./internal/service -run 'Group.*(OpenAIFast|Ultrafast)|Mapper.*Ultrafast' -count=1
@@ -161,7 +161,7 @@ Expected: compile failures mentioning missing `ForceOpenAIUltrafast`/`force_open
 
 Before running the cache contract tests, increment `apiKeyAuthSnapshotVersion` from `24` to `25` and extend `api_key_auth_cache_openai_fast_test.go` (or add a new adjacent test) to round-trip `ForceOpenAIUltrafast`; the version bump is required so existing Redis snapshots are refreshed instead of silently losing the new flag.
 
-- [ ] **Step 7: Implement the domain/API/cache/repository plumbing.**
+- [x] **Step 7: Implement the domain/API/cache/repository plumbing.**
 
 Add `ForceOpenAIUltrafast bool` to `service.Group`, the create/update inputs, admin handler request structs, admin DTO mapper, and API-key auth cache/snapshot structs. Add Ent setters/fields through generation rather than hand-editing generated code. Set/read the field in:
 
@@ -190,7 +190,7 @@ func sanitizeGroupOpenAIUltrafast(group *Group) {
 
 Call this alongside the existing `sanitizeGroupOpenAIFast` without changing that helper's OpenAI/Composite behavior. Keep `FreeOpenAIFast` independent; do not clear it merely because Ultrafast is enabled on an OpenAI group.
 
-- [ ] **Step 8: Run contract, repository, and migration tests.**
+- [x] **Step 8: Run contract, repository, and migration tests.**
 
 ```powershell
 go test ./migrations ./internal/handler/admin ./internal/handler/dto ./internal/repository ./internal/service -run 'Group.*(OpenAIFast|Ultrafast)|Mapper.*Ultrafast|APIKey.*OpenAIFast|Migration' -count=1
@@ -198,7 +198,7 @@ go test ./migrations ./internal/handler/admin ./internal/handler/dto ./internal/
 
 Expected: all focused tests pass.
 
-- [ ] **Step 9: Commit the persistence/API slice.**
+- [x] **Step 9: Commit the persistence/API slice.**
 
 ```powershell
 git add backend/ent backend/migrations backend/internal/handler backend/internal/repository backend/internal/service
@@ -213,7 +213,7 @@ git add backend/ent backend/migrations backend/internal/handler backend/internal
 - Test: `frontend/src/views/admin/__tests__/groupsOpenAIFast.spec.ts` and focused GroupsView test
 - Modify: `frontend/src/types/index.ts`, `frontend/src/views/admin/GroupsView.vue`, `frontend/src/views/admin/groupsOpenAIFast.ts`, `frontend/src/i18n/locales/zh/admin/overview.ts`, `frontend/src/i18n/locales/en/admin/overview.ts`
 
-- [ ] **Step 1: Add failing helper and locale assertions.**
+- [x] **Step 1: Add failing helper and locale assertions.**
 
 Extend the helper tests with the approved platform boundary:
 
@@ -233,7 +233,7 @@ pnpm exec vitest run src/views/admin/__tests__/groupsOpenAIFast.spec.ts
 
 Expected: FAIL because the helper/key does not exist.
 
-- [ ] **Step 2: Add types, helper, and locale keys.**
+- [x] **Step 2: Add types, helper, and locale keys.**
 
 Add `force_openai_ultrafast: boolean` to `AdminGroup`, and optional create/update request fields. Add a helper with the exact platform rule:
 
@@ -252,7 +252,7 @@ export function normalizeGroupOpenAIUltrafast(
 
 Add `admin.groups.openaiFast.ultrafast` and `ultrafastHint` in Chinese and English. The hint must say it affects only GPT-6.1 Sol/GPT-6 Astra, uses 8× Standard pricing for this group, is mutually exclusive with forced Fast, does not apply Free Fast, and does not promise account capability fallback.
 
-- [ ] **Step 3: Add the switch to create/edit forms and enforce mutual exclusion in the UI.**
+- [x] **Step 3: Add the switch to create/edit forms and enforce mutual exclusion in the UI.**
 
 Add the new toggle between the existing Force Fast and Free Fast rows. Keep the existing Fast section container and gate the new toggle itself by `supportsGroupOpenAIUltrafast(platform)` so Composite does not display it. Add form defaults, reset, load-from-group, and create/update payload normalization.
 
@@ -272,7 +272,7 @@ function toggleGroupOpenAIFast(form: GroupForm, enabled: boolean) {
 
 When switching away from OpenAI, normalize the new field to false. Preserve `free_openai_fast` independently.
 
-- [ ] **Step 4: Run frontend focused tests and typecheck.**
+- [x] **Step 4: Run frontend focused tests and typecheck.**
 
 ```powershell
 pnpm exec vitest run src/views/admin/__tests__/groupsOpenAIFast.spec.ts
@@ -281,7 +281,7 @@ pnpm exec vue-tsc --noEmit
 
 Expected: focused tests and typecheck pass.
 
-- [ ] **Step 5: Commit the admin UI slice.**
+- [x] **Step 5: Commit the admin UI slice.**
 
 ```powershell
 git add frontend/src/types/index.ts frontend/src/views/admin frontend/src/i18n/locales/zh/admin/overview.ts frontend/src/i18n/locales/en/admin/overview.ts
@@ -297,7 +297,7 @@ git commit -m "feat: add OpenAI group ultrafast switch"
 - Modify: `backend/internal/service/openai_gateway_request_body.go`, `backend/internal/service/openai_gateway_forward.go`
 - No WS caller changes: both existing WS entry points already call the shared `applyOpenAIFastPolicyToWSResponseCreate` helper
 
-- [ ] **Step 1: Add pure helper tests for target models and platform scope.**
+- [x] **Step 1: Add pure helper tests for target models and platform scope.**
 
 Add tests for a helper such as `openAIGroupForcesUltrafast(ctx, account, model)`:
 
@@ -314,7 +314,7 @@ require.False(t, openAIGroupForcesUltrafast(ctxWithDisabledGroup, openAIAccount,
 
 Run the focused test before implementation and expect a compile failure for the helper/field.
 
-- [ ] **Step 2: Add HTTP body tests for precedence.**
+- [x] **Step 2: Add HTTP body tests for precedence.**
 
 Cover these exact cases for `applyOpenAIFastPolicyToBody`:
 
@@ -329,7 +329,7 @@ Cover these exact cases for `applyOpenAIFastPolicyToBody`:
 
 Run the test and verify the new cases fail before implementation.
 
-- [ ] **Step 3: Implement one centralized forced-tier resolver and apply it to HTTP/WS paths.**
+- [x] **Step 3: Implement one centralized forced-tier resolver and apply it to HTTP/WS paths.**
 
 Add a resolver that returns the group-forced tier with Ultrafast precedence:
 
@@ -351,7 +351,7 @@ In `applyOpenAIFastPolicyToBody`, set the forced tier before policy evaluation. 
 
 Update the inline `openAIGroupForcesFast` branch in `openai_gateway_forward.go` to use the centralized forced-tier resolver and the same block-only precedence. Do not add account capability detection or automatic fallback.
 
-- [ ] **Step 4: Run HTTP/WS policy tests.**
+- [x] **Step 4: Run HTTP/WS policy tests.**
 
 ```powershell
 Set-Location 'E:\sub2二次开发项目\.worktrees\openai-group-ultrafast-20261017\backend'
@@ -360,7 +360,7 @@ go test ./internal/service -run 'OpenAIFastPolicy|OpenAI.*ServiceTier|OpenAI.*WS
 
 Expected: all focused policy tests pass, including the new filter/force/block precedence cases.
 
-- [ ] **Step 5: Commit the request policy slice.**
+- [x] **Step 5: Commit the request policy slice.**
 
 ```powershell
 git add backend/internal/service/openai_gateway_request_body.go backend/internal/service/openai_gateway_forward.go backend/internal/service/openai_ws_forwarder_ingress.go backend/internal/service/openai_ws_v2_passthrough_adapter.go backend/internal/service/*fast*test.go
@@ -375,7 +375,7 @@ git commit -m "feat: force ultrafast for selected OpenAI group models"
 - Test: `backend/internal/service/billing_service_test.go`, `backend/internal/service/openai_gateway_record_usage_test.go`, `backend/internal/service/openai_fast_service_tier_test.go`
 - Modify: `backend/internal/service/billing_service.go`, `backend/internal/service/openai_gateway_usage.go`
 
-- [ ] **Step 1: Add a failing pure billing test.**
+- [x] **Step 1: Add a failing pure billing test.**
 
 Add a test that constructs the same effective Standard pricing for an enabled and disabled group and asserts:
 
@@ -395,7 +395,7 @@ require.InDelta(t, standard.TotalCost*8, ultrafast8x.TotalCost, 1e-12)
 
 Add companion assertions that the same `ultrafast` request without the request-local flag retains the existing model multiplier, and that a non-target model with the flag does not change price.
 
-- [ ] **Step 2: Run the pure billing test before adding the new field/logic.**
+- [x] **Step 2: Run the pure billing test before adding the new field/logic.**
 
 ```powershell
 go test ./internal/service -run 'Ultrafast.*(Billing|Cost)|CalculateCostUnified.*Ultrafast' -count=1
@@ -403,7 +403,7 @@ go test ./internal/service -run 'Ultrafast.*(Billing|Cost)|CalculateCostUnified.
 
 Expected: compile failure because `UltrafastMultiplierOverride` is not yet defined.
 
-- [ ] **Step 3: Add the request-local billing flag and apply it only to cloned effective token pricing.**
+- [x] **Step 3: Add the request-local billing flag and apply it only to cloned effective token pricing.**
 
 Add `UltrafastMultiplierOverride *float64` to the shared `CostInput` type. In `openai_gateway_usage.go`, derive a pointer to `8.0` only when the trusted `apiKey.Group` is OpenAI with `ForceOpenAIUltrafast`, the final settled service tier is `ultrafast`, and `result.UpstreamModel` (falling back to `result.Model`) canonicalizes to `gpt-6.1-sol` or `gpt-6-astra`. Do not expose this override through `TokenCostRequest` or user-controlled request fields.
 
@@ -423,7 +423,7 @@ Do not mutate shared fallback/channel/group pricing. Do not change `ModelPricing
 
 Derive the override inside `calculateOpenAIRecordUsageCost` from the final tier and actual upstream model, then pass it into `calculateOpenAIRecordUsageTokenCost`. Make both resolver and no-resolver billing paths call `CalculateCostUnified` so the request-local override is honored consistently. Response-model re-evaluation recomputes the same group-scoped override from the same outbound result. Keep `groupBillsOpenAIFastAtStandard` unchanged so Free Fast does not match Ultrafast.
 
-- [ ] **Step 4: Add end-to-end usage billing tests.**
+- [x] **Step 4: Add end-to-end usage billing tests.**
 
 Extend `openai_gateway_record_usage_test.go` with these cases:
 
@@ -435,7 +435,7 @@ Extend `openai_gateway_record_usage_test.go` with these cases:
 - enabled group + Ultrafast + `FreeOpenAIFast=true` → Ultrafast remains billable, not free;
 - upstream downgrade to a cheaper tier → existing downgrade resolution removes the 8× condition.
 
-- [ ] **Step 5: Run billing tests and the focused gateway package.**
+- [x] **Step 5: Run billing tests and the focused gateway package.**
 
 ```powershell
 go test ./internal/service -run 'Ultrafast|OpenAIGatewayServiceRecordUsage|ServiceTierBilling' -count=1
@@ -443,7 +443,7 @@ go test ./internal/service -run 'Ultrafast|OpenAIGatewayServiceRecordUsage|Servi
 
 Expected: all focused billing and tier-resolution tests pass.
 
-- [ ] **Step 6: Commit the billing slice.**
+- [x] **Step 6: Commit the billing slice.**
 
 ```powershell
 git add backend/internal/service/billing_service.go backend/internal/service/billing_token_cost_request.go backend/internal/service/openai_gateway_usage.go backend/internal/service/*billing*test.go backend/internal/service/openai_gateway_record_usage_test.go
@@ -459,7 +459,7 @@ git add backend/internal/service/billing_service.go backend/internal/service/bil
 - Modify: `CHANGELOG.md`, `docs/HANDOFF.md`
 - Create: `docs/changes/2026-10-17-openai-group-ultrafast.md`
 
-- [ ] **Step 1: Run all focused backend tests from the feature worktree.**
+- [x] **Step 1: Run all focused backend tests from the feature worktree.**
 
 ```powershell
 . 'E:\sub2二次开发项目\tools\project-env.ps1'
@@ -469,7 +469,7 @@ go test ./migrations ./internal/handler/admin ./internal/handler/dto ./internal/
 
 Expected: exit code 0. If an integration test requires PostgreSQL/Redis unavailable in the local environment, record the exact skipped command and reason rather than claiming it passed.
 
-- [ ] **Step 2: Run the focused frontend suite and production checks.**
+- [x] **Step 2: Run the focused frontend suite and production checks.**
 
 ```powershell
 . 'E:\sub2二次开发项目\tools\project-env.ps1'
@@ -481,7 +481,7 @@ pnpm run build
 
 Expected: all commands exit 0; `build` must include the i18n completeness check and Vite build.
 
-- [ ] **Step 3: Update the changelog and handoff records.**
+- [x] **Step 3: Update the changelog and handoff records.**
 
 Add a dated `2026-10-17` changelog entry describing:
 
@@ -496,7 +496,7 @@ Add the new feature to `docs/HANDOFF.md` under current work/retained custom capa
 
 If the verification details are lengthy, create `docs/changes/2026-10-17-openai-group-ultrafast.md` and link it from both records. Do not claim a release, image build, or production upgrade.
 
-- [ ] **Step 4: Run repository hygiene checks.**
+- [x] **Step 4: Run repository hygiene checks.**
 
 ```powershell
 Set-Location 'E:\sub2二次开发项目\.worktrees\openai-group-ultrafast-20261017'
@@ -508,7 +508,7 @@ git diff HEAD~1 --stat
 
 Expected: no whitespace errors, all intended source/docs files tracked, and no generated `output/`/`.cache/` files included.
 
-- [ ] **Step 5: Commit project records.**
+- [x] **Step 5: Commit project records.**
 
 ```powershell
 git add CHANGELOG.md docs/HANDOFF.md docs/changes
@@ -519,13 +519,13 @@ git add CHANGELOG.md docs/HANDOFF.md docs/changes
 
 ## Final verification checklist
 
-- [ ] `go test` focused backend packages pass on the feature worktree.
-- [ ] Frontend focused Vitest, `pnpm run typecheck`, and `pnpm run build` pass.
-- [ ] Migration is append-only and schema parity covers the new column.
-- [ ] Only OpenAI groups expose/persist the switch; Composite and other platforms normalize false.
-- [ ] Fast and Ultrafast force switches are mutually exclusive in UI and backend.
-- [ ] Force behavior is target-model-only and capability-agnostic; unsupported upstreams return existing errors.
-- [ ] Global policy can block forced Ultrafast but cannot filter or rewrite it to another tier.
-- [ ] Only enabled groups with target model + final Ultrafast receive Standard × 8; disabled groups retain prior behavior.
-- [ ] Free Fast does not make Ultrafast free.
-- [ ] Existing user changes in the primary worktree are untouched.
+- [x] `go test` focused backend packages pass on the feature worktree.
+- [x] Frontend focused Vitest, `pnpm run typecheck`, and `pnpm run build` pass.
+- [x] Migration is append-only and schema parity covers the new column.
+- [x] Only OpenAI groups expose/persist the switch; Composite and other platforms normalize false.
+- [x] Fast and Ultrafast force switches are mutually exclusive in UI and backend.
+- [x] Force behavior is target-model-only and capability-agnostic; unsupported upstreams return existing errors.
+- [x] Global policy can block forced Ultrafast but cannot filter or rewrite it to another tier.
+- [x] Only enabled groups with target model + final Ultrafast receive Standard × 8; disabled groups retain prior behavior.
+- [x] Free Fast does not make Ultrafast free.
+- [x] Existing user changes in the primary worktree are untouched.
