@@ -22,7 +22,7 @@
 - `c261a20d8`：管理员 UI、类型、国际化、OpenAI-only 显示和 Fast/Ultrafast 互斥交互。
 - `26dab2c3b`：HTTP、WS、Responses patch 请求策略及全局策略优先级。
 - `c928288eb`：分组感知的 Ultrafast 8× token 计费与回归测试。
-- 待提交补充：平台切换时清除不可见 Ultrafast 状态，并补充前端归一化回归测试。
+- `ea6156c4d`：平台切换时清除不可见 Ultrafast 状态，并补充前端归一化回归测试。
 
 ## 实际验证
 
