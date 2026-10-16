@@ -24,7 +24,7 @@
 
 用户授权的源码推送及 GitHub 镜像发布已经完成。此前 GitHub Actions 禁用造成的阻塞已解除；恢复后的镜像来源为 `084673c739ddfa3b5429cf5b27f792e82f640fbc`。同一提交的 [CI](https://github.com/Ttt599536561/sub2api/actions/runs/38899063095) 与 [Security Scan](https://github.com/Ttt599536561/sub2api/actions/runs/38899063075) 通过，[双架构发布](https://github.com/Ttt599536561/sub2api/actions/runs/38900492932) 成功；两种原生架构的版本、提交、安装接口、前端和运行资源检查均通过。匿名读取最终索引、manifest、config，并完整下载和校验 24 个运行层，确认最终 digest 与通过运行检查的产物一致。
 
-本次后端 unit 58 个包、integration 52 个包通过；前端类型检查和 30 文件 / 581 项关键测试、Go lint、部署脚本及发布工具 10 项测试通过。详细身份、验证边界、4 份迁移和升级模板见 [0.2.16-r1 发布记录](../deploy/CUSTOM_IMAGE_0.2.16-r1.md)。应用修复仍为 `7c8161b77`，主目录既有 WIP 保留；本机未运行新 Docker 镜像，未操作生产服务器。后续纯文档提交不改变已发布镜像的来源 SHA。
+本次后端 unit 58 个包、integration 52 个包通过；前端类型检查和 30 文件 / 581 项关键测试、Go lint、部署脚本及发布工具 10 项测试通过。详细身份、验证边界、4 份迁移和升级模板见 [0.2.16-r1 发布记录](../deploy/CUSTOM_IMAGE_0.2.16-r1.md)。应用修复仍为 `7c8161b77`，主目录既有 WIP 保留；本机未运行新 Docker 镜像，未操作生产服务器。后续纯文档提交不改变已发布镜像的来源 SHA。 本次发布证据已归档；9 个发布临时文件的删除被自动审批审查拒绝，仍留在 `.cache/publish-v0.2.16-r1`，详见发布记录。
 
 ## 2026-10-15 本地上游合并
 
