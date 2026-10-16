@@ -169,16 +169,15 @@ Add `ForceOpenAIUltrafast bool` to `service.Group`, the create/update inputs, ad
 - `backend/internal/service/admin_group_duplicate.go` group duplication;
 - `backend/internal/service/admin_group.go` create/update and platform normalization.
 
-Use OpenAI-only normalization and the approved precedence:
+Use a new OpenAI-only normalizer for the new field and preserve the existing Fast/Free Fast platform behavior:
 
 ```go
-func sanitizeGroupOpenAIFast(group *Group) {
-    if group == nil || group.Platform != PlatformOpenAI {
-        if group != nil {
-            group.ForceOpenAIFast = false
-            group.FreeOpenAIFast = false
-            group.ForceOpenAIUltrafast = false
-        }
+func sanitizeGroupOpenAIUltrafast(group *Group) {
+    if group == nil {
+        return
+    }
+    if group.Platform != PlatformOpenAI {
+        group.ForceOpenAIUltrafast = false
         return
     }
     if group.ForceOpenAIUltrafast {
@@ -187,7 +186,7 @@ func sanitizeGroupOpenAIFast(group *Group) {
 }
 ```
 
-Keep `FreeOpenAIFast` independent; do not clear it merely because Ultrafast is enabled on an OpenAI group.
+Call this alongside the existing `sanitizeGroupOpenAIFast` without changing that helper's OpenAI/Composite behavior. Keep `FreeOpenAIFast` independent; do not clear it merely because Ultrafast is enabled on an OpenAI group.
 
 - [ ] **Step 8: Run contract, repository, and migration tests.**
 
