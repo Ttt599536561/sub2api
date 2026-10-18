@@ -1037,6 +1037,12 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 	agentTaskRecoveryTried := false
 	rejectedFieldRetryState := openAIResponsesRejectedFieldRetryStateForRequest(c, body)
 	for {
+		if compactModelFallbackRetried {
+			body, err = s.applyOpenAICompactFallbackServiceTierPolicy(ctx, c, account, canonicalImageIntentBody, body)
+			if err != nil {
+				return nil, err
+			}
+		}
 		// Build upstream request
 		upstreamCtx, releaseUpstreamCtx := detachUpstreamContext(ctx)
 		var headerGuard *openAIFirstOutputHeaderGuard

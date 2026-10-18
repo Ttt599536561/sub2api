@@ -4,6 +4,10 @@
 
 最新已发布代码基线为 **`084673c73` / `0.2.16-r1`**。这是已发布镜像的来源提交；后续发布记录文档不改变该基线。
 
+## 2026-10-18
+
+- **Ultrafast 中断复审修复（未发布）**：接续对 `fcaf5f054` 功能提交链的审查，修复 8× 结算与余额预占不一致、无分组/无解析器旧计费回归、compact 回退后 tier/策略不重算，以及部分更新不能从 Ultrafast 切回 Fast；最终复核补齐完整账号候选、compact 路由元数据和二级映射。新增 99 个永久回归场景，并补仓储测试夹具及真实数据库往返测试。稳定提交主题：`fix: align ultrafast pricing, retries, and group updates`，源码与记录同一提交；当前验证和 10 月 17 日历史验证分开记录，见 [中断续审记录](docs/changes/2026-10-17-openai-group-ultrafast.md#2026-10-18-中断续审)。没有新增迁移，原功能迁移 246 仍需随版本升级。
+
 ## 2026-10-17
 
 - **OpenAI 分组强制 Ultrafast（未发布）**：新增 OpenAI-only 分组开关，目标为 `gpt-6.1-sol` / `gpt-6-astra`，与强制 Fast 互斥；命中启用分组且最终 tier 为 Ultrafast 时按有效 Standard token 价格 × 8，未启用分组和其他模型保持既有行为。全局策略对命中目标只允许 block，API Key/OAuth 不做能力探测或静默降级。代码提交：`718f9b457`、`c261a20d8`、`26dab2c3b`、`c928288eb`；新增迁移 246。实施、验证和未发布边界见 [实施与验证记录](docs/changes/2026-10-17-openai-group-ultrafast.md)。

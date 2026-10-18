@@ -26,10 +26,11 @@ func requestMaxOutputTokens(body []byte) int {
 // tokenInflightEstimate 文本类请求的估算输入。
 func tokenInflightEstimate(model string, body []byte) service.InflightEstimateRequest {
 	return service.InflightEstimateRequest{
-		Model:     model,
-		BodyBytes: len(body),
-		MaxTokens: requestMaxOutputTokens(body),
-		Kind:      service.InflightEstimateToken,
+		Model:                    model,
+		BodyBytes:                len(body),
+		MaxTokens:                requestMaxOutputTokens(body),
+		Kind:                     service.InflightEstimateToken,
+		OpenAICompactionFallback: service.HasCompactionTriggerInInput(body),
 	}
 }
 
@@ -53,6 +54,7 @@ func reserveInflightBalance(
 	if c == nil || c.Request == nil {
 		return inflightNoop, nil
 	}
+	req.OpenAICompactPath = service.IsOpenAIResponsesCompactPath(c)
 	ctx, done, err := reserveInflightBalanceCtx(c.Request.Context(), billing, estimator, apiKey, subscription, req)
 	if err != nil {
 		return inflightNoop, err

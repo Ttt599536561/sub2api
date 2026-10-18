@@ -365,6 +365,12 @@ func (s *OpenAIGatewayService) forwardOpenAIPassthrough(
 	imageCount := 0
 	var imageOutputSizes []string
 	for {
+		if compactModelFallbackRetried {
+			body, err = s.applyOpenAICompactFallbackServiceTierPolicy(ctx, c, account, canonicalImageIntentBody, body)
+			if err != nil {
+				return nil, err
+			}
+		}
 		actualModel := strings.TrimSpace(gjson.GetBytes(body, "model").String())
 		if actualModel == "" {
 			actualModel = reqModel

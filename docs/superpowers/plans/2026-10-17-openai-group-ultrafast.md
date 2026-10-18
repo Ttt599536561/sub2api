@@ -529,3 +529,29 @@ git add CHANGELOG.md docs/HANDOFF.md docs/changes
 - [x] Only enabled groups with target model + final Ultrafast receive Standard × 8; disabled groups retain prior behavior.
 - [x] Free Fast does not make Ultrafast free.
 - [x] Existing user changes in the primary worktree are untouched.
+
+## 2026-10-17 追加复审与修复计划（基线 `fcaf5f054`）
+
+**目标**：复核原功能各入口，修复已复现的实际偏差，不扩展模型或平台范围；保留主目录已有未提交修改。
+
+- [x] 以干净的 E 盘功能工作树和现有设计为基线；执行 Ultrafast/Fast 聚焦测试，原有测试通过。
+- [x] 在 `backend/internal/service/openai_group_ultrafast_compact_fallback_test.go` 增加真实 `Forward` 回归：原生/透传两条路径，非目标→目标、目标→非目标、显式 tier 保留、全局 filter/force_priority/block、未启用分组。
+- [x] 先执行 `go test -tags=unit ./internal/service -run '^TestForward_GroupUltrafastCompactFallbackReappliesTierForActualModel$' -count=1`，确认失败来自回退模型未重算 tier，而不是夹具或编译错误。
+- [x] 在 compact 模型回退后的下一次 HTTP attempt，恢复 canonical 入站 body 的 `service_tier`，再按实际回退模型应用现有分组与全局策略；仅对启用 Ultrafast 的可信 OpenAI 分组生效，避免把先前自动注入的 tier 误当作客户端意图。
+- [x] 同时在原生和透传 retry loop 应用同一辅助函数；遇到全局 block 返回既有策略错误，禁止发出第二个上游请求。
+- [x] 重跑上述回归及 compact/Fast/Ultrafast/WS 相关测试；独立复核管理端、存储、缓存、计费报告，并对确认的问题逐一先写失败测试再最小修复。
+- [x] 完成后端单元测试、前端验证、`git diff --check` 和文档链接检查；把当前验证、未执行项和发布/部署边界同步到 `CHANGELOG.md`、`docs/HANDOFF.md` 和功能变更记录。
+
+### 计费与管理端独立复核后的追加任务
+
+- [x] `openai_group_ultrafast_inflight_test.go`：先复现两模型预占 0.15 / 结算 1.20 的偏差，以及 1.50 余额不应接纳两笔 1.20 请求；覆盖 requested 定价与渠道/账号模型映射、无 Resolver 路径。
+- [x] 让 `TokenCostRequest` 透传请求级 Ultrafast 覆盖，并让预占按实际映射候选是否命中强制模型确定 tier 与 8×；非 token 项不乘倍，未启用分组不变。
+- [x] `openai_gateway_usage.go`：无分组或无 Resolver 的非本功能请求恢复既有直接计费分支；永久回归验证无分组且账号关闭长上下文时仍按 Standard 价格结算。本功能命中时保留 8× 路径。
+- [x] `admin_group.go`：显式只提交 Fast=true 时清除旧 Ultrafast；同次显式双 true 仍以 Ultrafast 优先，其他字段不变。用 handler→service→repo 回归验证响应、持久化与缓存失效。
+
+### 2026-10-18 中断续审补充
+
+- [x] 恢复并核对中断补丁、原始 RED/GREEN 证据和真实 Git 状态。
+- [x] 复核最后补入的完整账号候选及 legacy/native compact 元数据传递。
+- [x] 对二级 compact 映入/映出目标模型分别补永久回归并确认 RED；预占复用真实 compact 模型解析顺序。
+- [x] 完成当前专项、受影响包最终回归与 Linux 构建，核对文档链接和差异后将源码、测试、记录一并提交。

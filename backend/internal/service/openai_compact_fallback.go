@@ -2,15 +2,20 @@ package service
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"strings"
 
+	"github.com/Wei-Shaw/sub2api/internal/config"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/ctxkey"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
 	"github.com/gin-gonic/gin"
 	"github.com/tidwall/gjson"
+	"github.com/tidwall/sjson"
 )
 
 type openAICompactFallbackSignal struct {
@@ -53,6 +58,14 @@ func isExplicitOpenAICompactRequest(c *gin.Context, body []byte) bool {
 // for the client-visible model. The process-wide fallback is used only when
 // that account has no matching compact rule.
 func (s *OpenAIGatewayService) resolveOpenAICompactFallbackModel(account *Account, requestedModel string) string {
+	var cfg *config.Config
+	if s != nil {
+		cfg = s.cfg
+	}
+	return resolveOpenAICompactFallbackModelWithConfig(cfg, account, requestedModel)
+}
+
+func resolveOpenAICompactFallbackModelWithConfig(cfg *config.Config, account *Account, requestedModel string) string {
 	requestedModel = strings.TrimSpace(requestedModel)
 	if account != nil {
 		if mapped, matched := account.ResolveCompactMappedModel(requestedModel); matched {
@@ -61,10 +74,10 @@ func (s *OpenAIGatewayService) resolveOpenAICompactFallbackModel(account *Accoun
 			}
 		}
 	}
-	if s == nil || s.cfg == nil {
+	if cfg == nil {
 		return ""
 	}
-	fallback := strings.TrimSpace(s.cfg.Gateway.OpenAICompactModel)
+	fallback := strings.TrimSpace(cfg.Gateway.OpenAICompactModel)
 	if fallback == "" {
 		return ""
 	}
@@ -229,6 +242,46 @@ func (s *OpenAIGatewayService) appendOpenAICompactFallbackRetryOps(
 		Detail:               detail,
 		UpstreamResponseBody: detail,
 	})
+}
+
+// applyOpenAICompactFallbackServiceTierPolicy recomputes group-forced Ultrafast
+// after a compact retry changes the upstream model. Restore the client's tier
+// first: a tier injected for the previous model is not client intent and must
+// not leak to a non-target fallback. Other groups retain their existing retry
+// behavior.
+func (s *OpenAIGatewayService) applyOpenAICompactFallbackServiceTierPolicy(
+	ctx context.Context,
+	c *gin.Context,
+	account *Account,
+	originalBody, retryBody []byte,
+) ([]byte, error) {
+	if ctx == nil || account == nil || account.Platform != PlatformOpenAI {
+		return retryBody, nil
+	}
+	group, _ := ctx.Value(ctxkey.Group).(*Group)
+	if !IsGroupContextValid(group) || group.Platform != PlatformOpenAI || !group.ForceOpenAIUltrafast {
+		return retryBody, nil
+	}
+
+	originalTier := gjson.GetBytes(originalBody, "service_tier")
+	var err error
+	if originalTier.Exists() {
+		retryBody, err = sjson.SetRawBytes(retryBody, "service_tier", []byte(originalTier.Raw))
+	} else {
+		retryBody, err = sjson.DeleteBytes(retryBody, "service_tier")
+	}
+	if err != nil {
+		return nil, fmt.Errorf("restore service_tier for compact fallback: %w", err)
+	}
+	model := strings.TrimSpace(gjson.GetBytes(retryBody, "model").String())
+	updated, err := s.applyOpenAIFastPolicyToBody(ctx, account, model, retryBody)
+	if err != nil {
+		var blocked *OpenAIFastBlockedError
+		if errors.As(err, &blocked) {
+			writeOpenAIFastPolicyBlockedResponse(c, blocked)
+		}
+	}
+	return updated, err
 }
 
 // prepareOpenAICompactFallbackRetry returns a body for one safe, same-account

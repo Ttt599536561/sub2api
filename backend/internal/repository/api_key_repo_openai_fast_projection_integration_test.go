@@ -45,3 +45,33 @@ func TestGetByKeyForAuthCarriesGroupForceOpenAIFast(t *testing.T) {
 	require.True(t, got.Group.FreeOpenAIFast)
 	require.True(t, got.Group.ForceOpenAIUltrafast)
 }
+
+func TestGroupForceOpenAIUltrafastRoundTrip(t *testing.T) {
+	ctx := context.Background()
+	repo := NewGroupRepository(integrationEntClient, integrationDB)
+	group := &service.Group{
+		Name:     fmt.Sprintf("ultrafast-roundtrip-%d", time.Now().UnixNano()),
+		Platform: service.PlatformOpenAI, Status: service.StatusActive,
+		SubscriptionType: service.SubscriptionTypeStandard, RateMultiplier: 1,
+		ForceOpenAIUltrafast: true, FreeOpenAIFast: true,
+	}
+	require.NoError(t, repo.Create(ctx, group))
+	t.Cleanup(func() {
+		_, err := integrationDB.ExecContext(ctx, "DELETE FROM groups WHERE id = $1", group.ID)
+		require.NoError(t, err)
+	})
+	got, err := repo.GetByID(ctx, group.ID)
+	require.NoError(t, err)
+	require.True(t, got.ForceOpenAIUltrafast)
+	require.False(t, got.ForceOpenAIFast)
+	require.True(t, got.FreeOpenAIFast)
+
+	got.ForceOpenAIUltrafast = false
+	got.ForceOpenAIFast = true
+	require.NoError(t, repo.Update(ctx, got))
+	updated, err := repo.GetByID(ctx, group.ID)
+	require.NoError(t, err)
+	require.False(t, updated.ForceOpenAIUltrafast)
+	require.True(t, updated.ForceOpenAIFast)
+	require.True(t, updated.FreeOpenAIFast)
+}

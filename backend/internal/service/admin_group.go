@@ -1029,6 +1029,10 @@ func (s *adminServiceImpl) UpdateGroup(ctx context.Context, id int64, input *Upd
 	}
 	if input.ForceOpenAIFast != nil {
 		group.ForceOpenAIFast = *input.ForceOpenAIFast
+		// 单独开启 Fast 时替换旧 Ultrafast；同时显式提交时保留既有归一化优先级。
+		if *input.ForceOpenAIFast && input.ForceOpenAIUltrafast == nil {
+			group.ForceOpenAIUltrafast = false
+		}
 	}
 	if input.ForceOpenAIUltrafast != nil {
 		group.ForceOpenAIUltrafast = *input.ForceOpenAIUltrafast

@@ -760,6 +760,18 @@ func (s *OpenAIGatewayService) calculateOpenAIRecordUsageTokenCost(
 	modelLongContextExempt bool,
 	ultrafastMultiplierOverride *float64,
 ) (*CostBreakdown, error) {
+	// Preserve the legacy fallback unless this request needs the group Ultrafast override.
+	// In particular, a missing group must not enable unified long-context pricing.
+	if ultrafastMultiplierOverride == nil && (s.resolver == nil || apiKey.Group == nil) {
+		return s.billingService.calculateCostWithServiceTierPolicy(
+			billingModel,
+			tokens,
+			multiplier,
+			serviceTier,
+			(longContextBillingGate == nil || *longContextBillingGate) && !modelLongContextExempt,
+		)
+	}
+
 	input := CostInput{
 		Ctx: ctx, Model: billingModel, Group: apiKey.Group,
 		Tokens: tokens, RequestCount: 1, RateMultiplier: multiplier, PricingAt: pricingAt,
