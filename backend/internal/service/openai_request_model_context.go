@@ -7,6 +7,11 @@ import (
 
 type openAIRequestModelResolverKey struct{}
 type openAIRequestTransportKey struct{}
+type openAIMessagesModelRoutingKey struct{}
+type openAIMessagesModelRouting struct {
+	model         string
+	dispatchModel string
+}
 type openAIRequestModelResolver func(*Account, string, bool) string
 
 // WithOpenAINativeModelMapping selects the mapping used by Messages and Chat
@@ -14,6 +19,22 @@ type openAIRequestModelResolver func(*Account, string, bool) string
 // passthrough is enabled on the same account.
 func WithOpenAINativeModelMapping(ctx context.Context) context.Context {
 	return context.WithValue(ctx, openAIRequestModelResolverKey{}, openAIRequestModelResolver(resolveOpenAINativeRequestModel))
+}
+
+// WithOpenAIMessagesModelRouting preserves the channel input separately from
+// the group dispatch fallback. Account mappings have first refusal on that
+// input; a selected fallback is already a wire model and is not mapped again.
+func WithOpenAIMessagesModelRouting(ctx context.Context, model, dispatchModel string) context.Context {
+	dispatchModel = strings.TrimSpace(dispatchModel)
+	if dispatchModel == "" {
+		return WithOpenAINativeModelMapping(ctx)
+	}
+	routing := openAIMessagesModelRouting{model: NormalizeOpenAICompatRequestedModel(model), dispatchModel: dispatchModel}
+	ctx = context.WithValue(ctx, openAIMessagesModelRoutingKey{}, routing)
+	resolver := openAIRequestModelResolver(func(account *Account, _ string, _ bool) string {
+		return normalizeOpenAIModelForUpstream(account, resolveOpenAIForwardModel(account, routing.model, routing.dispatchModel))
+	})
+	return context.WithValue(ctx, openAIRequestModelResolverKey{}, resolver)
 }
 
 func resolveOpenAINativeRequestModel(account *Account, model string, _ bool) string {

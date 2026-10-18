@@ -201,6 +201,7 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 		requestedReasoningEffort *string
 	}
 	ingressSessionOriginalModel := ""
+	ingressSessionUpstreamModel := ""
 
 	applyPayloadMutation := func(current []byte, path string, value any) ([]byte, error) {
 		next, err := sjson.SetBytes(current, path, value)
@@ -470,6 +471,7 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 		}
 		normalized = policyApplied
 		ingressSessionOriginalModel = originalModel
+		ingressSessionUpstreamModel = upstreamModel
 
 		return openAIWSClientPayload{
 			payloadRaw:               normalized,
@@ -885,7 +887,7 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 			if isOpenAIWSSessionPreempted(ctx) {
 				return nil, errOpenAIWSSessionPreempted
 			}
-			canonicalModel := canonicalOpenAIAccountSchedulingModel(account, ingressSessionOriginalModel)
+			canonicalModel := ingressSessionUpstreamModel
 			s.handleOpenAIWSDialTransientFailure(ctx, account, canonicalModel, acquireErr)
 			dialStatus, dialClass, dialCloseStatus, dialCloseReason, dialRespServer, dialRespVia, dialRespCFRay, dialRespReqID := summarizeOpenAIWSDialError(acquireErr)
 			logOpenAIWSModeInfo(

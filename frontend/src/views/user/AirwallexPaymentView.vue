@@ -49,9 +49,12 @@ const errorMessage = ref('')
 let disposed = false
 let invalidated = false
 const viewOwner = getPaymentRecoveryIdentity()
+// Vue Router reuses this component when only the checkout query changes.
+const checkoutRouteIdentity = () => JSON.stringify([route.query.order_id, route.query.out_trade_no, route.query.resume_token])
+const viewRoute = checkoutRouteIdentity()
 
-function invalidateChangedIdentity() {
-  if (invalidated || isPaymentRecoveryIdentityCurrent(viewOwner)) return
+function invalidateChangedContext() {
+  if (invalidated || (isPaymentRecoveryIdentityCurrent(viewOwner) && checkoutRouteIdentity() === viewRoute)) return
   invalidated = true
   loading.value = false
   errorMessage.value = t('payment.airwallexMissingParams')
@@ -59,15 +62,16 @@ function invalidateChangedIdentity() {
 
 function isCurrent() {
   if (disposed) return false
-  invalidateChangedIdentity()
+  invalidateChangedContext()
   return !invalidated
 }
 
 function onAuthStorageChange(event: StorageEvent) {
-  if (!event.key || ['auth_user', 'auth_session_id'].includes(event.key)) invalidateChangedIdentity()
+  if (!event.key || ['auth_user', 'auth_session_id'].includes(event.key)) invalidateChangedContext()
 }
 
-watch([() => authStore.user?.id, () => authStore.sessionRevision], invalidateChangedIdentity, { flush: 'sync' })
+watch([() => authStore.user?.id, () => authStore.sessionRevision], invalidateChangedContext, { flush: 'sync' })
+watch(checkoutRouteIdentity, invalidateChangedContext, { flush: 'sync' })
 onUnmounted(() => {
   disposed = true
   window.removeEventListener('storage', onAuthStorageChange)

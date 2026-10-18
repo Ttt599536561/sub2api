@@ -473,10 +473,10 @@ func inflightAccountUltrafastTargetFromSnapshot(list inflightSnapshotLister, res
 			if account.Platform != PlatformOpenAI {
 				continue
 			}
-			if !req.OpenAICompactPath && !req.OpenAICompactionFallback && !account.IsModelSupported(model) {
+			if !req.OpenAICompactPath && !req.OpenAICompactionFallback && !supportsOpenAIRequestModelWithContext(ctx, account, model, false) {
 				continue
 			}
-			actual := resolveOpenAIAccountUpstreamModelForRequest(account, model, req.OpenAICompactPath)
+			actual := resolveOpenAIRequestModelWithContext(ctx, account, model, req.OpenAICompactPath)
 			if req.OpenAICompactPath {
 				// Legacy compact resolves its dedicated mapping/config before the first attempt.
 				if compact := resolveOpenAICompactFallbackModelWithConfig(cfg, account, model); compact != "" {

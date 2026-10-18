@@ -431,12 +431,16 @@ func (s *OpenAIGatewayService) getOpenAIAccountModelTransientState() *openAIAcco
 }
 
 func canonicalOpenAIAccountSchedulingModel(account *Account, requestedModel string) string {
+	return canonicalOpenAIAccountSchedulingModelWithContext(context.Background(), account, requestedModel, false)
+}
+
+func canonicalOpenAIAccountSchedulingModelWithContext(ctx context.Context, account *Account, requestedModel string, requireCompact bool) string {
 	model := strings.TrimSpace(requestedModel)
 	if account == nil || model == "" {
 		return model
 	}
 	if account.IsOpenAI() {
-		return resolveOpenAIAccountUpstreamModelForRequest(account, model, false)
+		return resolveOpenAIRequestModelWithContext(ctx, account, model, requireCompact)
 	}
 	if mapped := strings.TrimSpace(account.GetMappedModel(model)); mapped != "" {
 		return mapped
@@ -468,6 +472,10 @@ func (s *OpenAIGatewayService) clearOpenAIAccountModelTransientState(accountID i
 }
 
 func (s *OpenAIGatewayService) isOpenAIAccountModelRuntimeBlocked(account *Account, requestedModel string) bool {
+	return s.isOpenAIAccountModelRuntimeBlockedWithContext(context.Background(), account, requestedModel, false)
+}
+
+func (s *OpenAIGatewayService) isOpenAIAccountModelRuntimeBlockedWithContext(ctx context.Context, account *Account, requestedModel string, requireCompact bool) bool {
 	if s == nil || account == nil {
 		return false
 	}
@@ -475,7 +483,7 @@ func (s *OpenAIGatewayService) isOpenAIAccountModelRuntimeBlocked(account *Accou
 	if state == nil {
 		return false
 	}
-	canonicalModel := canonicalOpenAIAccountSchedulingModel(account, requestedModel)
+	canonicalModel := canonicalOpenAIAccountSchedulingModelWithContext(ctx, account, requestedModel, requireCompact)
 	return state.isBlocked(account.ID, openAIAccountModelTransientModel(canonicalModel), time.Now())
 }
 
@@ -556,6 +564,10 @@ func (s *OpenAIGatewayService) clearOpenAIAccountRuntimeBlockIfUnchanged(account
 // are left alone. This is fail-open if a DB write failed or the snapshot has
 // not caught up yet: empty cooldown fields drop the local account-level block.
 func (s *OpenAIGatewayService) isOpenAIAccountRequestRuntimeBlocked(account *Account, requestedModel string) bool {
+	return s.isOpenAIAccountRequestRuntimeBlockedWithContext(context.Background(), account, requestedModel, false)
+}
+
+func (s *OpenAIGatewayService) isOpenAIAccountRequestRuntimeBlockedWithContext(ctx context.Context, account *Account, requestedModel string, requireCompact bool) bool {
 	if s == nil {
 		return false
 	}
@@ -566,7 +578,7 @@ func (s *OpenAIGatewayService) isOpenAIAccountRequestRuntimeBlocked(account *Acc
 		}
 		s.clearOpenAIAccountRuntimeBlockIfUnchanged(account.ID, snapshot)
 	}
-	return s.isOpenAIAccountModelRuntimeBlocked(account, requestedModel)
+	return s.isOpenAIAccountModelRuntimeBlockedWithContext(ctx, account, requestedModel, requireCompact)
 }
 
 func (s *OpenAIGatewayService) recordOpenAIOAuth429() {

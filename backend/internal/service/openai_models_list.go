@@ -166,7 +166,7 @@ func standardOpenAIModelsBody(body []byte, fromManifest bool) ([]byte, error) {
 // would interpret upstream names as aliases and can retain retired targets or
 // discard metadata needed by a valid replacement alias.
 func projectAccountModelsBody(body []byte, account *Account, group *Group, codex bool, channelMappings ...func(string) string) ([]byte, error) {
-	projected, err := projectAccountModelAliases(body, account, group, codex)
+	projected, err := projectAccountModelAliases(body, account, group, codex, channelMappings...)
 	if err != nil {
 		return nil, err
 	}
@@ -189,7 +189,7 @@ func openAIModelsChannelMapper(ctx context.Context, channels *ChannelService, gr
 
 // projectAccountModelAliases retains the source entry's metadata, never changes
 // the shared response, and never synthesizes models absent from this account.
-func projectAccountModelAliases(body []byte, account *Account, group *Group, codex bool) ([]byte, error) {
+func projectAccountModelAliases(body []byte, account *Account, group *Group, codex bool, channelMappings ...func(string) string) ([]byte, error) {
 	if account.IsOpenAIPassthroughEnabled() || len(account.GetModelMapping()) == 0 {
 		return body, nil
 	}
@@ -249,7 +249,11 @@ func projectAccountModelAliases(body []byte, account *Account, group *Group, cod
 		if _, ok := seen[id]; ok {
 			continue
 		}
-		target, matched := account.ResolveMappedModel(id)
+		requestModel := id
+		if len(channelMappings) > 0 && channelMappings[0] != nil {
+			requestModel = channelMappings[0](id)
+		}
+		target, matched := account.ResolveMappedModel(requestModel)
 		raw, available := byID[strings.TrimSpace(target)]
 		if !matched || !available {
 			continue

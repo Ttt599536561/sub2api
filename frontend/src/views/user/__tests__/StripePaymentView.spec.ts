@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { enableAutoUnmount, flushPromises, shallowMount } from '@vue/test-utils'
 import { useAuthStore } from '@/stores/auth'
+import { useRoute } from 'vue-router'
 
 enableAutoUnmount(afterEach)
 afterEach(() => { vi.clearAllTimers(); vi.useRealTimers() })
@@ -33,9 +34,11 @@ const stripeInstance = vi.hoisted(() => ({
 
 vi.mock('vue-router', async () => {
   const actual = await vi.importActual<typeof import('vue-router')>('vue-router')
+  const { reactive } = await import('vue')
+  const route = reactive(routeState)
   return {
     ...actual,
-    useRoute: () => routeState,
+    useRoute: () => route,
     useRouter: () => ({ push: routerPush }),
   }
 })
@@ -375,6 +378,79 @@ describe('StripePaymentView', () => {
     await vi.advanceTimersByTimeAsync(2000)
     expect(routerPush).toHaveBeenCalledTimes(unmounted ? 0 : 1)
     expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it.each(['order_id', 'method', 'resume_token'])('stops old checkout initialization when %s changes on the same route', async key => {
+    routeState.query.method = 'alipay'
+    const pending = deferred<{ data: PaymentOrder }>()
+    getOrder.mockReturnValueOnce(pending.promise)
+    const wrapper = mountView()
+    await flushPromises()
+    useRoute().query[key] = key === 'order_id' ? '43' : 'replacement'
+    pending.resolve({ data: orderFactory() })
+    await flushPromises()
+    await flushPromises()
+    expect(stripeInstance.confirmAlipayPayment).not.toHaveBeenCalled()
+    expect(loadStripe).not.toHaveBeenCalled()
+    expect(wrapper.text()).not.toContain('payment.actualPay')
+  })
+
+  it.each([false, true])('preserves only the same checkout after a query update (order round trip=%s)', async changedOrder => {
+    routeState.query.method = 'alipay'
+    const pending = deferred<{ data: PaymentOrder }>()
+    getOrder.mockReturnValueOnce(pending.promise)
+    mountView()
+    await flushPromises()
+    if (changedOrder) useRoute().query.order_id = '43'
+    useRoute().query.order_id = '42'
+    useRoute().query.display = 'compact'
+    pending.resolve({ data: orderFactory() })
+    await flushPromises()
+    await flushPromises()
+    expect(stripeInstance.confirmAlipayPayment).toHaveBeenCalledTimes(changedOrder ? 0 : 1)
+  })
+
+  it('destroys the old payment element when the order changes without unmounting', async () => {
+    const wrapper = mountView()
+    await flushPromises()
+    await flushPromises()
+    expect(wrapper.find('.btn-stripe').exists()).toBe(true)
+    useRoute().query.order_id = '43'
+    await flushPromises()
+    expect(wrapper.find('.btn-stripe').exists()).toBe(false)
+    expect(stripePaymentElement.destroy).toHaveBeenCalledOnce()
+    expect(stripeInstance.confirmPayment).not.toHaveBeenCalled()
+  })
+
+  it('does not poll a replacement order using a late QR for the previous order', async () => {
+    vi.useFakeTimers()
+    routeState.query.method = 'wechat_pay'
+    const pending = deferred<unknown>()
+    stripeInstance.confirmWechatPayPayment.mockReturnValueOnce(pending.promise)
+    const wrapper = mountView()
+    await flushPromises()
+    await flushPromises()
+    useRoute().query.order_id = '43'
+    pending.resolve(wechatQRResult())
+    await flushPromises()
+    await vi.advanceTimersByTimeAsync(3000)
+    expect(wrapper.find('img[alt="WeChat Pay QR"]').exists()).toBe(false)
+    expect(paymentStore.pollOrderStatus).not.toHaveBeenCalled()
+    expect(routerPush).not.toHaveBeenCalled()
+  })
+
+  it('cancels the old success redirect when the order changes without unmounting', async () => {
+    vi.useFakeTimers()
+    stripeInstance.confirmPayment.mockResolvedValueOnce({})
+    const wrapper = mountView()
+    await flushPromises()
+    await flushPromises()
+    await wrapper.get('.btn-stripe').trigger('click')
+    await flushPromises()
+    useRoute().query.order_id = '43'
+    await vi.advanceTimersByTimeAsync(2000)
+    expect(routerPush).not.toHaveBeenCalled()
+    expect(wrapper.text()).not.toContain('payment.result.success')
   })
 
   it('本地恢复快照未记录币种时使用订单接口返回的 Stripe 币种展示金额', async () => {

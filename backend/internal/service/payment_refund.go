@@ -363,6 +363,9 @@ func (s *PaymentService) ExecuteRefund(ctx context.Context, p *RefundPlan) (*Ref
 	if c == 0 {
 		return nil, infraerrors.Conflict("CONFLICT", "order status changed")
 	}
+	// Restore the state actually claimed, including a user refund request
+	// accepted after this plan was prepared.
+	p.Order = current
 	if !p.deductionHeld && p.DeductionType == payment.DeductionTypeBalance && p.BalanceToDeduct > 0 {
 		deducted, err := s.deductAvailableBalance(ctx, p.Order.UserID, p.BalanceToDeduct)
 		if err != nil {
@@ -876,11 +879,13 @@ func refundPlanShouldDeduct(p *RefundPlan) bool {
 // A rollback failure is outstanding only until a later committed compensation
 // or refund success. Never use the existence of an old failure as a permanent
 // exemption from deductions.
+// Order transitions serialize these audits, so IDs establish operation order.
+// Application timestamps can go backwards across instances or clock corrections.
 func (s *PaymentService) heldRefundRetryPlan(ctx context.Context, o *dbent.PaymentOrder) (*RefundPlan, error) {
 	entry, err := s.entClient.PaymentAuditLog.Query().Where(
 		paymentauditlog.OrderIDEQ(strconv.FormatInt(o.ID, 10)),
 		paymentauditlog.ActionIn("REFUND_ROLLBACK_FAILED", "REFUND_ROLLBACK_SUCCEEDED", "REFUND_SUCCESS"),
-	).Order(paymentauditlog.ByCreatedAt(sql.OrderDesc()), paymentauditlog.ByID(sql.OrderDesc())).First(ctx)
+	).Order(paymentauditlog.ByID(sql.OrderDesc())).First(ctx)
 	if dbent.IsNotFound(err) {
 		return nil, nil
 	}
@@ -905,7 +910,7 @@ func (s *PaymentService) heldRefundRetryPlan(ctx context.Context, o *dbent.Payme
 			paymentauditlog.OrderIDEQ(strconv.FormatInt(o.ID, 10)),
 			paymentauditlog.ActionIn("REFUND_PENDING", "REFUND_FAILED", "REFUND_GATEWAY_FAILED", "REFUND_SUCCESS", "REFUND_ROLLBACK_SUCCEEDED"),
 			paymentauditlog.IDLT(entry.ID),
-		).Order(paymentauditlog.ByCreatedAt(sql.OrderDesc()), paymentauditlog.ByID(sql.OrderDesc())).First(ctx)
+		).Order(paymentauditlog.ByID(sql.OrderDesc())).First(ctx)
 		if err != nil && !dbent.IsNotFound(err) {
 			return nil, fmt.Errorf("load legacy held refund deduction: %w", err)
 		}
@@ -993,7 +998,7 @@ type refundRollbackAuditDetail struct {
 func (s *PaymentService) latestRefundPendingDetail(ctx context.Context, oid int64) (refundPendingAuditDetail, error) {
 	logEntry, err := s.entClient.PaymentAuditLog.Query().
 		Where(paymentauditlog.OrderIDEQ(strconv.FormatInt(oid, 10)), paymentauditlog.ActionEQ("REFUND_PENDING")).
-		Order(paymentauditlog.ByCreatedAt(sql.OrderDesc()), paymentauditlog.ByID(sql.OrderDesc())).
+		Order(paymentauditlog.ByID(sql.OrderDesc())).
 		First(ctx)
 	if dbent.IsNotFound(err) {
 		return refundPendingAuditDetail{DeductionRollbackOK: true}, nil
@@ -1212,7 +1217,18 @@ func (s *PaymentService) preserveConfirmedRefund(ctx context.Context, p *RefundP
 func (s *PaymentService) markRefundPending(ctx context.Context, p *RefundPlan, resp *payment.RefundResponse) (_ *RefundResult, err error) {
 	detail := refundHeldAuditDetail(p)
 	detail.RefundID = refundResponseID(resp)
-	return s.saveRefundPending(ctx, p, detail)
+	result, err := s.saveRefundPending(ctx, p, detail)
+	if err == nil {
+		return result, nil
+	}
+	// The gateway may already have accepted this refund. Retry only the local
+	// snapshot in a fresh bounded transaction after a transient write failure;
+	// never release its deduction or submit another gateway refund.
+	recovered, recoveryErr := s.saveRefundPending(ctx, p, detail)
+	if recoveryErr != nil {
+		return nil, errors.Join(err, fmt.Errorf("retry refund pending persistence: %w", recoveryErr))
+	}
+	return recovered, nil
 }
 
 func (s *PaymentService) saveRefundPending(ctx context.Context, p *RefundPlan, pendingDetail refundPendingAuditDetail) (_ *RefundResult, err error) {

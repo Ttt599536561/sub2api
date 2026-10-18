@@ -463,7 +463,7 @@ func TestAlipayRefundRecordsOutRequestNoAsRefundID(t *testing.T) {
 				t.Fatalf("unexpected refund param: %+v", param)
 			}
 			gotOutRequestNo = param.OutRequestNo
-			return &alipay.TradeRefundRsp{TradeNo: "2026101522001", FundChange: tc.fundChange}, nil
+			return &alipay.TradeRefundRsp{Error: alipay.Error{Code: alipay.CodeSuccess}, TradeNo: "2026101522001", FundChange: tc.fundChange}, nil
 		}
 
 		provider := &Alipay{client: &alipay.Client{}}
@@ -569,5 +569,77 @@ func TestAlipayQueryRefundErrorsKeepRefundPending(t *testing.T) {
 
 	if _, err := provider.QueryRefund(context.Background(), payment.RefundQueryRequest{OrderID: "sub2_7", RefundID: "sub2_7-refund-1"}); err == nil {
 		t.Fatal("gateway error must be returned so the refund stays pending")
+	}
+}
+
+// Signed business errors are returned by the SDK in the response with err == nil.
+func TestAlipayRefundRejectsBusinessFailure(t *testing.T) {
+	original := alipayTradeRefund
+	t.Cleanup(func() { alipayTradeRefund = original })
+	for _, tc := range []struct {
+		name       string
+		rspError   alipay.Error
+		fundChange string
+	}{
+		{name: "business rejection", rspError: alipay.Error{Code: "40004", SubCode: "ACQ.REFUND_AMT_NOT_EQUAL_TOTAL", SubMsg: "refund amount rejected"}},
+		{name: "failure wins over fund change", rspError: alipay.Error{Code: "40004", SubCode: "ACQ.REFUND_AMT_NOT_EQUAL_TOTAL"}, fundChange: alipayFundChangeYes},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			alipayTradeRefund = func(context.Context, *alipay.Client, alipay.TradeRefund) (*alipay.TradeRefundRsp, error) {
+				return &alipay.TradeRefundRsp{Error: tc.rspError, FundChange: tc.fundChange}, nil
+			}
+			provider := &Alipay{client: &alipay.Client{}}
+			resp, err := provider.Refund(context.Background(), payment.RefundRequest{OrderID: "sub2_7", Amount: "12.50"})
+			if err == nil || resp != nil {
+				t.Fatalf("Refund() = %+v, %v; want no refund result and business error", resp, err)
+			}
+			var businessError alipay.Error
+			if !errors.As(err, &businessError) || businessError.Code != tc.rspError.Code || businessError.SubCode != tc.rspError.SubCode {
+				t.Fatalf("business error lost: %v", err)
+			}
+		})
+	}
+}
+
+func TestAlipayRefundUnknownOutcomeKeepsRequestNumber(t *testing.T) {
+	original := alipayTradeRefund
+	t.Cleanup(func() { alipayTradeRefund = original })
+	for _, tc := range []struct {
+		name     string
+		response *alipay.TradeRefundRsp
+		err      error
+	}{
+		{name: "system error", response: &alipay.TradeRefundRsp{Error: alipay.Error{Code: "40004", SubCode: "ACQ.SYSTEM_ERROR"}}},
+		{name: "service unavailable", response: &alipay.TradeRefundRsp{Error: alipay.Error{Code: "20000"}}},
+		{name: "missing code", response: &alipay.TradeRefundRsp{}},
+		{name: "unknown business code", response: &alipay.TradeRefundRsp{Error: alipay.Error{Code: "40004", SubCode: "ACQ.FUTURE_UNKNOWN"}}},
+		{name: "request already executed", response: &alipay.TradeRefundRsp{Error: alipay.Error{Code: "40004", SubCode: "ACQ.DISCORDANT_REPEAT_REQUEST"}}},
+		{name: "response lost", err: errors.New("connection reset after request")},
+		{name: "unsigned system error", err: &alipay.Error{Code: "40004", SubCode: "ACQ.SYSTEM_ERROR"}},
+		{name: "empty response"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var requestID string
+			alipayTradeRefund = func(_ context.Context, _ *alipay.Client, req alipay.TradeRefund) (*alipay.TradeRefundRsp, error) {
+				requestID = req.OutRequestNo
+				return tc.response, tc.err
+			}
+			resp, err := (&Alipay{client: &alipay.Client{}}).Refund(context.Background(), payment.RefundRequest{OrderID: "sub2_7", Amount: "12.50"})
+			if err == nil || resp == nil || resp.Status != payment.ProviderStatusPending || resp.RefundID != requestID || requestID == "" {
+				t.Fatalf("Refund() = %+v, %v; want pending with original request %q and diagnostic error", resp, err, requestID)
+			}
+		})
+	}
+}
+
+func TestAlipayRefundUnsignedRejectionIsFinal(t *testing.T) {
+	original := alipayTradeRefund
+	t.Cleanup(func() { alipayTradeRefund = original })
+	alipayTradeRefund = func(context.Context, *alipay.Client, alipay.TradeRefund) (*alipay.TradeRefundRsp, error) {
+		return nil, &alipay.Error{Code: "40004", SubCode: "ACQ.SELLER_BALANCE_NOT_ENOUGH"}
+	}
+	resp, err := (&Alipay{client: &alipay.Client{}}).Refund(context.Background(), payment.RefundRequest{OrderID: "sub2_7", Amount: "12.50"})
+	if resp != nil || err == nil {
+		t.Fatalf("Refund() = %+v, %v; want explicit rejection", resp, err)
 	}
 }

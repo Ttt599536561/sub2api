@@ -307,7 +307,11 @@ func openAIConfiguredCodexModelIDsForGroup(accounts []Account, group *Group, cha
 			if account.Platform != PlatformOpenAI {
 				continue
 			}
-			mappedModel, matched := account.ResolveMappedModel(selectedModel)
+			requestModel := selectedModel
+			if len(channelMappings) > 0 && channelMappings[0] != nil {
+				requestModel = channelMappings[0](selectedModel)
+			}
+			mappedModel, matched := account.ResolveMappedModel(requestModel)
 			if !matched || strings.TrimSpace(mappedModel) == "" {
 				continue
 			}

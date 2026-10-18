@@ -2,6 +2,7 @@ package provider
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/url"
 	"strconv"
@@ -356,10 +357,14 @@ func (a *Alipay) Refund(ctx context.Context, req payment.RefundRequest) (*paymen
 		OutRequestNo: outRequestNo,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("alipay TradeRefund: %w", err)
+		return alipayRefundErrorResponse(outRequestNo, err)
 	}
 	if result == nil {
-		return nil, fmt.Errorf("alipay TradeRefund: empty response")
+		return alipayRefundErrorResponse(outRequestNo, errors.New("empty response"))
+	}
+	// Signed business failures are carried in the response even when the SDK returns no error.
+	if result.IsFailure() {
+		return alipayRefundErrorResponse(outRequestNo, result.Error)
 	}
 
 	refundStatus := payment.ProviderStatusPending
@@ -372,6 +377,32 @@ func (a *Alipay) Refund(ctx context.Context, req payment.RefundRequest) (*paymen
 		RefundID: outRequestNo,
 		Status:   refundStatus,
 	}, nil
+}
+
+// alipayRefundErrorResponse preserves the request identity whenever execution is
+// uncertain. In particular ACQ.SYSTEM_ERROR may already have refunded money:
+// https://aipay.alipay.com/docs/subscribe/api-list/other-basic-interfaces/alipay-trade-refund.html
+// Only documented rejections known not to execute this request release the hold.
+func alipayRefundErrorResponse(requestID string, err error) (*payment.RefundResponse, error) {
+	var businessError alipay.Error
+	var businessErrorPtr *alipay.Error
+	if errors.As(err, &businessErrorPtr) && businessErrorPtr != nil {
+		businessError = *businessErrorPtr
+	} else {
+		_ = errors.As(err, &businessError)
+	}
+	wrapped := fmt.Errorf("alipay TradeRefund: %w", err)
+	if businessError.Code == "40004" {
+		switch businessError.SubCode {
+		case "ACQ.INVALID_PARAMETER", "ACQ.NOT_ALLOW_PARTIAL_REFUND",
+			"ACQ.REFUND_AMT_NOT_EQUAL_TOTAL", "ACQ.REFUND_FEE_ERROR",
+			"ACQ.REASON_TRADE_REFUND_FEE_ERR", "ACQ.SELLER_BALANCE_NOT_ENOUGH",
+			"ACQ.TRADE_NOT_EXIST", "ACQ.TRADE_NOT_ALLOW_REFUND",
+			"ACQ.TRADE_HAS_FINISHED", "ACQ.CURRENCY_NOT_SUPPORT", "ACQ.BUYER_NOT_EXIST":
+			return nil, wrapped
+		}
+	}
+	return &payment.RefundResponse{RefundID: requestID, Status: payment.ProviderStatusPending}, wrapped
 }
 
 // QueryRefund 通过 alipay.trade.fastpay.refund.query 查询退款终态。refund_status 为 REFUND_SUCCESS

@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { enableAutoUnmount, flushPromises, shallowMount } from '@vue/test-utils'
 import AirwallexPaymentView from '../AirwallexPaymentView.vue'
+import { useRoute } from 'vue-router'
 import {
   PAYMENT_RECOVERY_STORAGE_KEY,
   type PaymentRecoverySnapshot,
@@ -18,9 +19,11 @@ vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ user: null, sessionRevi
 
 vi.mock('vue-router', async () => {
   const actual = await vi.importActual<typeof import('vue-router')>('vue-router')
+  const { reactive } = await import('vue')
+  const route = reactive(routeState)
   return {
     ...actual,
-    useRoute: () => routeState,
+    useRoute: () => route,
     useRouter: () => ({ push: routerPush }),
   }
 })
@@ -119,6 +122,36 @@ describe('AirwallexPaymentView', () => {
     expect(successUrl.searchParams.get('order_id')).toBe('101')
     expect(successUrl.searchParams.get('out_trade_no')).toBe('sub2_awx_101')
     expect(successUrl.searchParams.get('resume_token')).toBe('resume-awx')
+  })
+
+  it.each(['order_id', 'out_trade_no', 'resume_token'])('does not launch the previous checkout after %s changes during initialization', async key => {
+    routeState.query = { order_id: '101', out_trade_no: 'sub2_awx_101', resume_token: 'resume-awx' }
+    window.localStorage.setItem(PAYMENT_RECOVERY_STORAGE_KEY, JSON.stringify(airwallexSnapshot()))
+    let finish!: (result: unknown) => void
+    airwallexInit.mockReturnValueOnce(new Promise(resolve => { finish = resolve }))
+    const wrapper = mountView()
+    await flushPromises()
+    expect(airwallexInit).toHaveBeenCalledOnce()
+    useRoute().query[key] = key === 'order_id' ? '102' : 'replacement'
+    finish({ payments: { redirectToCheckout } })
+    await flushPromises()
+    expect(redirectToCheckout).not.toHaveBeenCalled()
+    expect(wrapper.text()).toContain('payment.airwallexMissingParams')
+  })
+
+  it.each([false, true])('preserves only the same checkout after a query update (order round trip=%s)', async changedOrder => {
+    routeState.query = { order_id: '101', resume_token: 'resume-awx' }
+    window.localStorage.setItem(PAYMENT_RECOVERY_STORAGE_KEY, JSON.stringify(airwallexSnapshot()))
+    let finish!: (result: unknown) => void
+    airwallexInit.mockReturnValueOnce(new Promise(resolve => { finish = resolve }))
+    mountView()
+    await flushPromises()
+    if (changedOrder) useRoute().query.order_id = '102'
+    useRoute().query.order_id = '101'
+    useRoute().query.display = 'compact'
+    finish({ payments: { redirectToCheckout } })
+    await flushPromises()
+    expect(redirectToCheckout).toHaveBeenCalledTimes(changedOrder ? 0 : 1)
   })
 
   it('拒绝只从 URL query 读取 Airwallex 支付密钥', async () => {

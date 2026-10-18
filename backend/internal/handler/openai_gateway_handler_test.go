@@ -1931,6 +1931,9 @@ func newOpenAIWSHandlerTestServer(t *testing.T, h *OpenAIGatewayHandler, subject
 }
 
 type openAIResponsesWSUsageLogCase struct {
+	billingCache           service.BillingCache
+	billingConfig          *config.Config
+	useSchedulerSnapshot   bool
 	simpleModeRejectAtRead int64
 	compositeResolver      *service.CompositeRouteResolver
 	accountPlatform        string
@@ -3032,7 +3035,15 @@ func runOpenAIResponsesWebSocketUsageLogCase(t *testing.T, tc openAIResponsesWSU
 		cfg.SimpleModeKeyRateLimitEnabled = true
 		keyRepo = &simpleModeWSRateLimitRepo{rejectAt: tc.simpleModeRejectAtRead}
 	}
-	billingCacheSvc := service.NewBillingCacheService(nil, nil, nil, keyRepo, nil, nil, cfg, nil)
+	billingCfg := cfg
+	if tc.billingConfig != nil {
+		billingCfg = tc.billingConfig
+	}
+	billingCacheSvc := service.NewBillingCacheService(tc.billingCache, nil, nil, keyRepo, nil, nil, billingCfg, nil)
+	var snapshot *service.SchedulerSnapshotService
+	if tc.useSchedulerSnapshot {
+		snapshot = service.NewSchedulerSnapshotService(nil, nil, accountRepo, nil, cfg)
+	}
 	t.Cleanup(billingCacheSvc.Stop)
 	gatewaySvc := service.NewOpenAIGatewayService(
 		accountRepo,
@@ -3043,7 +3054,7 @@ func runOpenAIResponsesWebSocketUsageLogCase(t *testing.T, tc openAIResponsesWSU
 		nil,
 		nil,
 		cfg,
-		nil,
+		snapshot,
 		nil,
 		service.NewBillingService(cfg, nil),
 		nil,

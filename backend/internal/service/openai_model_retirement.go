@@ -98,6 +98,14 @@ func supportsOpenAIRequestModelWithContext(ctx context.Context, account *Account
 	if isRetiredOpenAISubscriptionModel(account, resolveOpenAIRequestModelWithContext(ctx, account, requestedModel, requireCompact)) {
 		return false
 	}
+	if ctx != nil {
+		if routing, ok := ctx.Value(openAIMessagesModelRoutingKey{}).(openAIMessagesModelRouting); ok {
+			requestedModel = routing.model
+			if _, matched := account.ResolveMappedModel(requestedModel); !matched {
+				requestedModel = routing.dispatchModel
+			}
+		}
+	}
 	return account.isModelMappingSupported(requestedModel)
 }
 

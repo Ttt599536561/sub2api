@@ -139,6 +139,9 @@ const showPaymentElement = ref(false)
 let disposed = false
 let invalidated = false
 const viewOwner = getPaymentRecoveryIdentity()
+// Vue Router reuses this component when only the checkout query changes.
+const checkoutRouteIdentity = () => JSON.stringify([route.query.order_id, route.query.method, route.query.resume_token])
+const viewRoute = checkoutRouteIdentity()
 let stripeInstance: Stripe | null = null
 let elementsInstance: StripeElements | null = null
 let paymentElement: StripePaymentElement | null = null
@@ -154,8 +157,8 @@ function releasePaymentResources() {
   stripeInstance = null
 }
 
-function invalidateChangedIdentity() {
-  if (invalidated || isPaymentRecoveryIdentityCurrent(viewOwner)) return
+function invalidateChangedContext() {
+  if (invalidated || (isPaymentRecoveryIdentityCurrent(viewOwner) && checkoutRouteIdentity() === viewRoute)) return
   invalidated = true
   releasePaymentResources()
   order.value = null
@@ -173,15 +176,16 @@ function invalidateChangedIdentity() {
 function isCurrent() {
   if (disposed) return false
   // Also check storage at each async boundary before cross-tab events arrive.
-  invalidateChangedIdentity()
+  invalidateChangedContext()
   return !invalidated
 }
 
 function onAuthStorageChange(event: StorageEvent) {
-  if (!event.key || ['auth_user', 'auth_session_id'].includes(event.key)) invalidateChangedIdentity()
+  if (!event.key || ['auth_user', 'auth_session_id'].includes(event.key)) invalidateChangedContext()
 }
 
-watch([() => authStore.user?.id, () => authStore.sessionRevision], invalidateChangedIdentity, { flush: 'sync' })
+watch([() => authStore.user?.id, () => authStore.sessionRevision], invalidateChangedContext, { flush: 'sync' })
+watch(checkoutRouteIdentity, invalidateChangedContext, { flush: 'sync' })
 
 onMounted(async () => {
   window.addEventListener('storage', onAuthStorageChange)

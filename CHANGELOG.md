@@ -6,6 +6,8 @@
 
 ## 2026-10-18
 
+- **1cfafd30e 全面复审修复（未发布）**：修复支付宝未知退款结果、退款审计顺序/状态/持久化、Messages 实际模型准入、HTTP/WS 预占与冷却、渠道目录别名及支付页面路由归属，共九类问题。新增 75 个叶回归通过；后端 unit 58 包、PostgreSQL 仓储 1,544 叶、前端 3,637 项、类型/lint、生产构建及 Linux 双架构编译通过。源码、回归和记录同提交，稳定主题 `fix: align post-merge model routing and refund recovery`；条件跳过、扩展测试 lint 既有告警与恢复边界见[复审记录](docs/changes/2026-10-18-review-1cfafd30e.md)。
+
 - **发布 0.2.17-r1**：用户指定源码 `1cfafd30e83e52d5980e2be4c7b78a80e797a797` 已推送 main，并在 GitHub 构建发布 `linux/amd64`、`linux/arm64` 镜像。精确同 SHA 的 CI / Security Scan、两个架构版本/启动/运行资源检查及匿名完整运行层校验全部通过（24 层，89,408,884 字节）。工作流控制 `a2ed695af` 仅新增专用工作流与记录，应用源码不变，最终标签不可覆盖。生产未部署；迁移 246、认证快照 v25、退款恢复回退边界及固定 digest 见[发布与升级记录](deploy/CUSTOM_IMAGE_0.2.17-r1.md)。
 
 - **f099e0739 四项审查修复（未发布）**：退款重试保留未归还金额与订阅撤销快照，补偿/审计异常可持久化本地恢复，旧记录无法确认归属时安全拒绝；Messages/Chat/WS准入按实际渠道及传输模式映射，目录保留有效别名；账号筛选器恢复独立无障碍名称。新增106个永久回归场景通过，service/handler整包19,276个通过事件、0失败、5条件跳过，PostgreSQL退款原子恢复、前端类型/lint、Go静态检查和Linux编译通过。稳定主题 `fix: preserve refund recovery and mapped model eligibility`，源码与记录同提交；无迁移/依赖变更，新增审计恢复语义的回退边界见[修复与验证记录](docs/changes/2026-10-18-f099e0739-fixes.md)。
