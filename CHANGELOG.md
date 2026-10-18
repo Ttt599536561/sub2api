@@ -6,6 +6,8 @@
 
 ## 2026-10-18
 
+- **准备发布 0.2.17-r1**：用户指定的完整源码 `1cfafd30e83e52d5980e2be4c7b78a80e797a797` 已推送 GitHub main；新建专用工作流固定 checkout、构建版本、OCI revision 和同 SHA 的 CI/安全门禁，保留双架构原生构建、运行检查与不可覆盖标签。稳定主题 `ci: publish exact 1cfafd30e as custom 0.2.17-r1`。当前尚未发布镜像或部署生产，升级涉及迁移 246 和退款恢复语义，见[发布与升级记录](deploy/CUSTOM_IMAGE_0.2.17-r1.md)。
+
 - **f099e0739 四项审查修复（未发布）**：退款重试保留未归还金额与订阅撤销快照，补偿/审计异常可持久化本地恢复，旧记录无法确认归属时安全拒绝；Messages/Chat/WS准入按实际渠道及传输模式映射，目录保留有效别名；账号筛选器恢复独立无障碍名称。新增106个永久回归场景通过，service/handler整包19,276个通过事件、0失败、5条件跳过，PostgreSQL退款原子恢复、前端类型/lint、Go静态检查和Linux编译通过。稳定主题 `fix: preserve refund recovery and mapped model eligibility`，源码与记录同提交；无迁移/依赖变更，新增审计恢复语义的回退边界见[修复与验证记录](docs/changes/2026-10-18-f099e0739-fixes.md)。
 
 - **合入官方 v0.2.17（未发布）**：以二开 `ba36b5e22` 合入官方固定标签源码 `060d01604`，处理退款服务两处冲突，保留月卡、福利、财务恢复、会话保护和 Ultrafast。上游增量 62 文件；301 份历史 SQL 与 Ent 文件保持不变，源码默认版本修正为 0.2.17。合并和下述复审修复同一提交，稳定主题 `Merge official Sub2API v0.2.17 with custom safeguards`；见[合并与全面复审记录](docs/changes/2026-10-18-upstream-v0.2.17-merge-review.md)。
