@@ -144,8 +144,18 @@ func detectOpenAICyberPolicy(payload []byte) (bool, string, string) {
 }
 
 func markOpenAICyberPolicyEvent(c *gin.Context, payload []byte, upstreamStatus int, usage *OpenAIUsage, observers ...*upstreamResponseModelObserver) bool {
+	return markOpenAICyberPolicyEventWithType(c, payload, "", upstreamStatus, usage, observers...)
+}
+
+// SSE may carry its type only in the event line. Preserve that type when
+// deciding whether a later payload completes the first cyber billing mark.
+func markOpenAICyberPolicyEventWithType(c *gin.Context, payload []byte, eventType string, upstreamStatus int, usage *OpenAIUsage, observers ...*upstreamResponseModelObserver) bool {
+	eventType = effectiveOpenAISSEEventType(payload, eventType)
+	previous := GetOpsCyberPolicy(c)
 	hit, code, message := detectOpenAICyberPolicy(payload)
-	if !hit {
+	// Only genuine cyber evidence can create a mark. Once blocked, a real
+	// response terminal may complete billing even if it omits/replaces the code.
+	if !hit && (previous == nil || !isUpstreamResponseModelTerminalEvent(eventType)) {
 		return false
 	}
 	mark := CyberPolicyMark{
@@ -158,7 +168,6 @@ func markOpenAICyberPolicyEvent(c *gin.Context, payload []byte, upstreamStatus i
 	// consult the gin observer: WS observers are local and an old attempt may
 	// still have its observer stored on the same context.
 	observer := &upstreamResponseModelObserver{}
-	eventType := effectiveOpenAISSEEventType(payload, "")
 	mark.billingTerminal = isUpstreamResponseModelTerminalEvent(eventType)
 	observer.ObserveOpenAI(payload, eventType)
 	mark.Billing.UpstreamResponseModel = observer.Model()
@@ -173,7 +182,7 @@ func markOpenAICyberPolicyEvent(c *gin.Context, payload []byte, upstreamStatus i
 	}
 	mark.UpstreamInTok = mark.Billing.Usage.InputTokens
 	mark.UpstreamOutTok = mark.Billing.Usage.OutputTokens
-	if previous := GetOpsCyberPolicy(c); previous != nil {
+	if previous != nil {
 		if mark.billingTerminal && !previous.billingTerminal {
 			// A bare error may precede response.failed with the actual usage. Keep
 			// the first audit record and its outbound request identity, but replace

@@ -20,6 +20,14 @@
 
 [0.2.15 已发布版本归档](changes/2026-10-11-v0.2.15-r1.md) 保留代码变化、对应提交和历史验证范围。历史报告中的“未发布”“未推送”描述其当时阶段；后续发布状态以对应日期的发布记录为准。
 
+## 2026-10-18 对 4a4349e1f 的追加审查修复（未发布）
+
+在现有 E 盘 Ultrafast 工作树完成三类问题修复：SSE header-only 失败终态补齐计费，透传 compact 的原始上游模型/审计保留，Chat/Messages 流式与缓冲 cyber 错误有界读取终态。首次拒绝不变，后续其他错误或完成事件仅补齐计费事实，不重复输出、换号或双扣。新增 88 个永久回归场景全部通过；service/handler 整包测试共 18,961 个测试通过事件、0 失败、5 条件跳过，Linux/amd64 编译通过，独立复核无新增待修复项。
+
+代码、回归和本轮记录一起提交，稳定主题 `fix: retain cyber terminal usage and upstream billing identity`；[审查与验证记录](changes/2026-10-18-review-4a4349e1f.md)保存根因、失败证据、实际验证及边界。没有新增迁移、依赖或前端变更；原迁移 246 / auth snapshot v25 的要求不变。未推送、发布或部署，已发布仍为 `0.2.16-r1`，主目录既有 WIP 未触碰。
+
+必要日志/摘要在主项目 `.cache/review-4a4349e1f-20261018`。本轮 Linux 临时编译文件已核对 SHA256 后删除；四个 WS 审查临时 overlay/测试文件的删除被自动审批拒绝（`blocked by policy`），保留原位，没有重试或清理其他任务文件。
+
 ## 2026-10-18 Ultrafast 第二轮问题已修复（未发布）
 
 以应用 `e84623e8c`、审查文档 `6341a52fd` 为基线完成 UF-R5～UF-R7 修复，保存在同一功能分支；实现、永久回归与记录一起提交，稳定主题为 `fix: preserve Ultrafast policy across fallbacks and error billing`，不预写未知 SHA。

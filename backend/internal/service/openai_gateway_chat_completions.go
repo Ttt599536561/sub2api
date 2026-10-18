@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"regexp"
 	"strconv"
@@ -696,7 +697,7 @@ func (s *OpenAIGatewayService) handleChatBufferedStreamingResponse(
 	if strings.TrimSpace(finalResponse.Status) == "failed" {
 		payload, _ := json.Marshal(gin.H{"type": "response.failed", "response": finalResponse})
 		// cyber_policy 致命不可重试：不 failover，以 Chat Completions 错误格式回写（F4），
-		// 标记供 handler 事后写风控/邮件/tokens=0 用量行。
+		// 标记供 handler 事后写风控/邮件并按保留的真实用量结算。
 		if hit, _, msg := detectOpenAICyberPolicy(payload); hit {
 			markOpenAICyberPolicyEvent(c, payload, http.StatusOK, &usage, observer)
 			clientMsg := msg
@@ -816,6 +817,26 @@ func (s *OpenAIGatewayService) newOpenAICompatBufferedReadFailoverError(
 	return failoverErr
 }
 
+const openAICompatCyberBillingDrainTimeout = 2 * time.Second
+
+// A bare cyber error can precede response.failed with authoritative usage. Bound
+// that final accounting read even when upstream keeps the connection alive; the
+// timer only closes the body and never accesses request/response state.
+func newOpenAICompatCyberBillingDrain(body io.Closer) (start func(), stop func()) {
+	var timer *time.Timer
+	start = func() {
+		if timer == nil {
+			timer = time.AfterFunc(openAICompatCyberBillingDrainTimeout, func() { _ = body.Close() })
+		}
+	}
+	stop = func() {
+		if timer != nil {
+			timer.Stop()
+		}
+	}
+	return start, stop
+}
+
 // handleChatStreamingResponse reads Responses SSE events from upstream,
 // converts each to Chat Completions SSE chunks, and writes them to the client.
 func (s *OpenAIGatewayService) handleChatStreamingResponse(
@@ -830,6 +851,9 @@ func (s *OpenAIGatewayService) handleChatStreamingResponse(
 ) (*OpenAIForwardResult, error) {
 	requestID := resp.Header.Get("x-request-id")
 	writeStreamHeaders := s.newStreamHeaderWriter(c, resp.Header)
+
+	startCyberBillingDrain, stopCyberBillingDrain := newOpenAICompatCyberBillingDrain(resp.Body)
+	defer stopCyberBillingDrain()
 
 	state := apicompat.NewResponsesEventToChatState()
 	state.Model = originalModel
@@ -926,6 +950,13 @@ func (s *OpenAIGatewayService) handleChatStreamingResponse(
 				usage = copyOpenAIUsageFromResponsesUsage(event.Response.Usage)
 			}
 		}
+		if GetOpsCyberPolicy(c) != nil {
+			if isUpstreamResponseModelTerminalEvent(event.Type) {
+				markOpenAICyberPolicyEvent(c, []byte(payload), http.StatusOK, &usage, observer)
+				return true
+			}
+			return false
+		}
 		if strings.TrimSpace(event.Type) == "response.failed" || strings.TrimSpace(event.Type) == "error" {
 			payloadBytes := []byte(payload)
 			message := extractOpenAISSEErrorMessage(payloadBytes)
@@ -950,6 +981,10 @@ func (s *OpenAIGatewayService) handleChatStreamingResponse(
 					// 无条件置位：成功路径防 finalizeStream 重复 [DONE]；写失败意味着连接已不可写，
 					// finalizeStream 的 [DONE] 同样发不出去，统一抑制。
 					clientDisconnected = true
+				}
+				if strings.TrimSpace(event.Type) == "error" {
+					startCyberBillingDrain()
+					return false
 				}
 				return true
 			}

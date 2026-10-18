@@ -540,7 +540,7 @@ func (s *OpenAIGatewayService) handleStreamingResponseWithReasoning(ctx context.
 				s.parseSSEUsageBytesWithType(dataBytes, eventType, usage)
 				if hit, _, _ := detectOpenAICyberPolicy(dataBytes); hit {
 					cyberHit = true
-					markOpenAICyberPolicyEvent(c, dataBytes, http.StatusOK, usage, observer)
+					markOpenAICyberPolicyEventWithType(c, dataBytes, eventType, http.StatusOK, usage, observer)
 				}
 				outputStarted := openAIStreamClientOutputStarted(c, clientOutputStarted)
 				if !outputStarted && !cyberHit {

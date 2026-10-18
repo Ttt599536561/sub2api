@@ -2022,6 +2022,11 @@ func (s *OpenAIGatewayService) handleStreamingResponsePassthrough(
 			dataBytes := []byte(data)
 			trimmedData := strings.TrimSpace(data)
 			rawEventType := effectiveOpenAISSEEventType(dataBytes, pendingSSEEventType)
+			var upstreamErrorPayload []byte
+			if rawEventType == "error" || rawEventType == "response.failed" {
+				// Keep billing and audit evidence before client model/tool restoration.
+				upstreamErrorPayload = append([]byte(nil), dataBytes...)
+			}
 			observer.ObserveOpenAI(dataBytes, rawEventType)
 			if needModelReplace {
 				line = s.replaceModelInSSELine(line, mappedModel, originalModel)
@@ -2083,7 +2088,7 @@ func (s *OpenAIGatewayService) handleStreamingResponsePassthrough(
 				s.parseSSEUsageBytesWithType(dataBytes, eventType, usage)
 				if hit, _, _ := detectOpenAICyberPolicy(dataBytes); hit {
 					cyberHit = true
-					markOpenAICyberPolicyEvent(c, dataBytes, http.StatusOK, usage, observer)
+					markOpenAICyberPolicyEventWithType(c, upstreamErrorPayload, rawEventType, http.StatusOK, usage, observer)
 				}
 				outputStarted := openAIStreamClientOutputStarted(c, clientOutputStarted)
 				if !outputStarted && !cyberHit {

@@ -514,7 +514,7 @@ func (s *OpenAIGatewayService) ForwardAsAnthropic(
 	}
 
 	// cyber_policy：标记已设、error 已按 Anthropic 格式发给客户端。丢弃 result、返回哨兵，
-	// 使 handler 落入 tokens=0 免费用量行（对齐 /v1/responses），不计费、不 failover。
+	// 由 handler 按保留的模型、档位和真实用量统一结算，不 failover。
 	if GetOpsCyberPolicy(c) != nil {
 		if handleErr == nil {
 			handleErr = errOpenAICyberPolicyForwarded
@@ -768,6 +768,9 @@ func (s *OpenAIGatewayService) readOpenAICompatBufferedTerminal(
 		return nil, usage, acc, errors.New("upstream response body is nil")
 	}
 
+	startCyberBillingDrain, stopCyberBillingDrain := newOpenAICompatCyberBillingDrain(resp.Body)
+	defer stopCyberBillingDrain()
+	var pendingCyberResponse *apicompat.ResponsesResponse
 	scanner := s.newUpstreamSSEScanner(resp.Body)
 
 	streamInterval := time.Duration(0)
@@ -831,86 +834,98 @@ func (s *OpenAIGatewayService) readOpenAICompatBufferedTerminal(
 	}()
 	defer close(done)
 
+	// EOF may flush the final frame without a blank line. Use the same cyber
+	// handling there as in the normal read loop, including first audit evidence.
+	processFrame := func(frame openAICompatSSEFrame) *apicompat.ResponsesResponse {
+		rawPayload := openAICompatPayloadWithEventType(frame.Data, frame.EventType)
+		payload := restoreCodexToolNamesFromContext(c, []byte(rawPayload))
+		var event apicompat.ResponsesStreamEvent
+		if err := json.Unmarshal(payload, &event); err != nil {
+			logger.L().Warn(logPrefix+": failed to parse event", zap.Error(err), zap.String("request_id", requestID))
+			return nil
+		}
+		s.parseSSEUsageBytesWithType(payload, event.Type, &usage)
+		acc.ProcessEvent(&event)
+		if strings.TrimSpace(event.Type) == "error" {
+			if hit, code, message := detectOpenAICyberPolicy([]byte(rawPayload)); hit {
+				markOpenAICyberPolicyEvent(c, []byte(rawPayload), http.StatusOK, &usage)
+				if pendingCyberResponse == nil {
+					pendingCyberResponse = &apicompat.ResponsesResponse{
+						Status: "failed",
+						Error:  &apicompat.ResponsesError{Code: code, Message: message},
+					}
+				}
+				startCyberBillingDrain()
+				return nil
+			}
+			if pendingCyberResponse != nil {
+				return nil
+			}
+		}
+		response := openAICompatTerminalResponse(&event, payload)
+		if !isOpenAICompatResponsesTerminalEvent(event.Type) || response == nil {
+			return nil
+		}
+		if event.Usage != nil {
+			usage = copyOpenAIUsageFromResponsesUsage(event.Usage)
+			if response.Usage == nil {
+				response.Usage = event.Usage
+			}
+		}
+		if response.Usage != nil {
+			usage = copyOpenAIUsageFromResponsesUsage(response.Usage)
+		}
+		if pendingCyberResponse != nil {
+			markOpenAICyberPolicyEvent(c, []byte(rawPayload), http.StatusOK, &usage)
+			// A later terminal supplies billing facts, never turns an already
+			// blocked request into client-visible success or replaces its error.
+			pendingCyberResponse.Model = response.Model
+			pendingCyberResponse.ServiceTier = response.ServiceTier
+			pendingCyberResponse.Usage = response.Usage
+			return pendingCyberResponse
+		}
+		return response
+	}
+
 	var parser openAICompatSSEFrameParser
 	for {
 		select {
 		case ev, ok := <-events:
 			if !ok {
 				if frame, ok := parser.Finish(); ok {
-					payload := openAICompatPayloadWithEventType(frame.Data, frame.EventType)
-					payload = string(restoreCodexToolNamesFromContext(c, []byte(payload)))
-					var event apicompat.ResponsesStreamEvent
-					if err := json.Unmarshal([]byte(payload), &event); err == nil {
-						s.parseSSEUsageBytesWithType([]byte(payload), event.Type, &usage)
-						acc.ProcessEvent(&event)
-						if response := openAICompatTerminalResponse(&event, []byte(payload)); isOpenAICompatResponsesTerminalEvent(event.Type) && response != nil {
-							if event.Usage != nil {
-								usage = copyOpenAIUsageFromResponsesUsage(event.Usage)
-								if response.Usage == nil {
-									response.Usage = event.Usage
-								}
-							}
-							if response.Usage != nil {
-								usage = copyOpenAIUsageFromResponsesUsage(response.Usage)
-							}
-							return response, usage, acc, nil
-						}
+					if response := processFrame(frame); response != nil {
+						return response, usage, acc, nil
 					}
 				}
-				return nil, usage, acc, nil
+				return pendingCyberResponse, usage, acc, nil
 			}
 			resetTimeout()
 			if ev.err != nil {
+				if pendingCyberResponse != nil {
+					return pendingCyberResponse, usage, acc, nil
+				}
 				if !errors.Is(ev.err, context.Canceled) && !errors.Is(ev.err, context.DeadlineExceeded) {
-					logger.L().Warn(logPrefix+": read error",
-						zap.Error(ev.err),
-						zap.String("request_id", requestID),
-					)
+					logger.L().Warn(logPrefix+": read error", zap.Error(ev.err), zap.String("request_id", requestID))
 				}
 				return nil, usage, acc, &openAICompatBufferedReadError{cause: ev.err}
 			}
-
 			if isOpenAICompatDoneSentinelLine(ev.line) {
-				return nil, usage, acc, nil
+				return pendingCyberResponse, usage, acc, nil
 			}
 			frame, ok := parser.AddLine(ev.line)
 			if !ok {
 				continue
 			}
-			payload := openAICompatPayloadWithEventType(frame.Data, frame.EventType)
-			payload = string(restoreCodexToolNamesFromContext(c, []byte(payload)))
-
-			var event apicompat.ResponsesStreamEvent
-			if err := json.Unmarshal([]byte(payload), &event); err != nil {
-				logger.L().Warn(logPrefix+": failed to parse event",
-					zap.Error(err),
-					zap.String("request_id", requestID),
-				)
-				continue
-			}
-			s.parseSSEUsageBytesWithType([]byte(payload), event.Type, &usage)
-
-			acc.ProcessEvent(&event)
-
-			if response := openAICompatTerminalResponse(&event, []byte(payload)); isOpenAICompatResponsesTerminalEvent(event.Type) && response != nil {
-				if event.Usage != nil {
-					usage = copyOpenAIUsageFromResponsesUsage(event.Usage)
-					if response.Usage == nil {
-						response.Usage = event.Usage
-					}
-				}
-				if response.Usage != nil {
-					usage = copyOpenAIUsageFromResponsesUsage(response.Usage)
-				}
+			if response := processFrame(frame); response != nil {
 				return response, usage, acc, nil
 			}
 
 		case <-timeoutCh:
 			_ = resp.Body.Close()
-			logger.L().Warn(logPrefix+": data interval timeout",
-				zap.String("request_id", requestID),
-				zap.Duration("interval", streamInterval),
-			)
+			if pendingCyberResponse != nil {
+				return pendingCyberResponse, usage, acc, nil
+			}
+			logger.L().Warn(logPrefix+": data interval timeout", zap.String("request_id", requestID), zap.Duration("interval", streamInterval))
 			return nil, usage, acc, fmt.Errorf("stream data interval timeout")
 		}
 	}
@@ -932,6 +947,9 @@ func (s *OpenAIGatewayService) handleAnthropicStreamingResponse(
 ) (*OpenAIForwardResult, error) {
 	requestID := resp.Header.Get("x-request-id")
 	writeStreamHeaders := s.newStreamHeaderWriter(c, resp.Header)
+
+	startCyberBillingDrain, stopCyberBillingDrain := newOpenAICompatCyberBillingDrain(resp.Body)
+	defer stopCyberBillingDrain()
 
 	state := apicompat.NewResponsesEventToAnthropicState()
 	state.Model = originalModel
@@ -1031,6 +1049,13 @@ func (s *OpenAIGatewayService) handleAnthropicStreamingResponse(
 			if event.Usage != nil {
 				usage = copyOpenAIUsageFromResponsesUsage(event.Usage)
 			}
+			if GetOpsCyberPolicy(c) != nil {
+				if isUpstreamResponseModelTerminalEvent(eventType) {
+					markOpenAICyberPolicyEvent(c, []byte(payload), http.StatusOK, &usage, observer)
+					return true
+				}
+				return false
+			}
 			// cyber_policy 致命不可重试：标记供 handler 事后记录；以 Anthropic SSE error 事件
 			// 回写让客户端感知并停止重试（F4），丢弃后续转换输出。
 			if eventType == "response.failed" || isBareErrorEvent {
@@ -1047,6 +1072,10 @@ func (s *OpenAIGatewayService) handleAnthropicStreamingResponse(
 							c.Writer.Flush()
 						}
 						clientDisconnected = true
+					}
+					if isBareErrorEvent {
+						startCyberBillingDrain()
+						return false
 					}
 					return true
 				}
@@ -1089,6 +1118,10 @@ func (s *OpenAIGatewayService) handleAnthropicStreamingResponse(
 				streamNonFailoverErr = fmt.Errorf("upstream response failed: %s", errMsg)
 				return true
 			}
+		}
+
+		if GetOpsCyberPolicy(c) != nil {
+			return false
 		}
 
 		// Convert to Anthropic events
