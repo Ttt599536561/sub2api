@@ -1937,6 +1937,8 @@ type openAIResponsesWSUsageLogCase struct {
 	closeReason            string
 	closeStatus            coderws.StatusCode
 	firstPayload           string
+	// cyberTurn optionally emits a cyber-policy failure with usage for this turn.
+	cyberTurn int
 	// midPayload 在首个 turn 完成后发送（如 session.update），上游桩会为它
 	// 回一个 response.completed，客户端按普通事件读取。
 	midPayload                string
@@ -2935,6 +2937,12 @@ func runOpenAIResponsesWebSocketUsageLogCase(t *testing.T, tc openAIResponsesWSU
 				turn,
 				gjson.GetBytes(payload, "model").String(),
 			)
+			if turn == tc.cyberTurn {
+				response = fmt.Sprintf(
+					`{"type":"response.failed","response":{"id":"resp_usage_e2e_%d","model":%q,"status":"failed","error":{"code":"cyber_policy","message":"blocked by upstream policy"},"usage":{"input_tokens":2,"output_tokens":1}}}`,
+					turn, gjson.GetBytes(payload, "model").String(),
+				)
+			}
 			writeCtx, cancelWrite := context.WithTimeout(r.Context(), 3*time.Second)
 			writeErr := conn.Write(writeCtx, coderws.MessageText, []byte(response))
 			cancelWrite()
@@ -3079,7 +3087,16 @@ func runOpenAIResponsesWebSocketUsageLogCase(t *testing.T, tc openAIResponsesWSU
 		}
 		c.Next()
 	})
-	router.GET("/openai/v1/responses", h.ResponsesWebSocket)
+	var handlerDone chan struct{}
+	if tc.cyberTurn > 0 {
+		handlerDone = make(chan struct{})
+		router.GET("/openai/v1/responses", func(c *gin.Context) {
+			defer close(handlerDone)
+			h.ResponsesWebSocket(c)
+		})
+	} else {
+		router.GET("/openai/v1/responses", h.ResponsesWebSocket)
+	}
 	handlerServer := httptest.NewServer(router)
 	defer handlerServer.Close()
 
@@ -3138,7 +3155,12 @@ func runOpenAIResponsesWebSocketUsageLogCase(t *testing.T, tc openAIResponsesWSU
 		_, event, readErr := clientConn.Read(readCtx)
 		cancelRead()
 		require.NoError(t, readErr)
-		require.Equal(t, "response.completed", gjson.GetBytes(event, "type").String())
+		expectedType := "response.completed"
+		if len(clientEvents)+1 == tc.cyberTurn {
+			expectedType = "response.failed"
+			require.Equal(t, "cyber_policy", gjson.GetBytes(event, "response.error.code").String())
+		}
+		require.Equal(t, expectedType, gjson.GetBytes(event, "type").String())
 		clientEvents = append(clientEvents, append([]byte(nil), event...))
 	}
 	readCompleted()
@@ -3208,6 +3230,15 @@ func runOpenAIResponsesWebSocketUsageLogCase(t *testing.T, tc openAIResponsesWSU
 		require.NoError(t, upstreamErr)
 	case <-time.After(3 * time.Second):
 		t.Fatal("等待上游 WebSocket 结束超时")
+	}
+
+	if handlerDone != nil {
+		select {
+		case <-handlerDone:
+		case <-time.After(3 * time.Second):
+			t.Fatal("websocket handler did not exit after the cyber turn")
+		}
+		require.Empty(t, usageRepo.created, "the failed turn must not also produce a normal usage record")
 	}
 
 	return openAIResponsesWSUsageLogResult{

@@ -5,7 +5,7 @@
 - 功能比较范围：`b9c36c6ee..e84623e8c`，包含原功能和上一轮修复。
 - 工作树：`E:\sub2二次开发项目\.worktrees\openai-group-ultrafast-20261017`
 - 本轮性质：只读代码审查与复现；不修改业务代码或永久测试。复现代码通过 Go overlay 从主项目 E 盘 `.cache` 载入。
-- 结论：新增确认 3 项 P2，均未修复；没有确认 P0/P1。此前阶段的“无其他已确认问题”是当时结论，不代表以下问题已关闭。
+- 审查时结论：新增确认 3 项 P2，当时均未修复，没有确认 P0/P1。随后用户授权修复，三项及终态补齐遗漏现已关闭，见[后续修复与验证](2026-10-18-ultrafast-review-fixes.md)。本文保留发现时证据。
 
 ## UF-R5 / P2：Messages 转 Chat Completions 遗漏强制模式和全局 block
 
@@ -64,7 +64,7 @@
 $env:GOTOOLCHAIN = 'local'
 $env:GOTELEMETRYDIR = 'E:\sub2二次开发项目\.cache\go-telemetry'
 $reviewGo = 'E:\sub2二次开发项目\.cache\go-mod\golang.org\toolchain@v0.0.1-go1.27.2.windows-amd64\bin\go.exe'
-# 以下各命令的预期退出码为 1，用于复现尚未修复的问题。
+# 以下命令在审查应用基线 e84623e8c 上预期退出码为 1；后续修复源码采用永久回归验证。
 & $reviewGo test -overlay 'E:\sub2二次开发项目\.cache\ultrafast-review2-20261018\protocol\overlay.json' -tags=unit ./internal/service -run '^TestReviewUltrafastMessagesRawCC$' -count=1 -v
 & $reviewGo test -overlay 'E:\sub2二次开发项目\.cache\ultrafast-review2-20261018\ws-snapshot\overlay.json' -tags=unit ./internal/handler -run '^TestReview2UltrafastWSSnapshotBilling$' -count=1 -v
 & $reviewGo test -overlay 'E:\sub2二次开发项目\.cache\ultrafast-review2-20261018\billing\overlay.json' -tags=unit ./internal/service -run '^TestReview2UltrafastCyberBillingPreservesSentTier$' -count=1 -v
@@ -76,4 +76,4 @@ $reviewGo = 'E:\sub2二次开发项目\.cache\go-mod\golang.org\toolchain@v0.0.1
 
 已排除的线索：WS 跨账号重试使用强制 tier 之前的原始账号身份快照，未把先前自动注入的 Ultra 当成客户端意图；rejected-field 重试的删除白名单不含 service_tier。账号统计已有客户倍率前总价 × 账号倍率的默认语义，而默认上游价重算未携带本功能 8×覆盖，未确认新的成本污染问题。
 
-没有执行全量测试、数据库集成、Docker、真实外部上游或生产验证。本轮不修改业务代码、不新增迁移、不推送或发布镜像；应用源码仍为 `e84623e8c`。上述 3 项保持待修复状态。
+没有执行全量测试、数据库集成、Docker、真实外部上游或生产验证。本轮不修改业务代码、不新增迁移、不推送或发布镜像；应用源码仍为 `e84623e8c`。以上描述审查阶段状态；上述 3 项已按后续修复记录关闭。

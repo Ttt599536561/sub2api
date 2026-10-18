@@ -342,6 +342,7 @@ func (s *OpenAIGatewayService) forwardOpenAIWSV2(
 		return nil, err
 	}
 
+	captureOpenAICyberBillingRequest(c, payloadAsJSONBytes(payload))
 	if err := lease.WriteJSONWithContextTimeout(ctx, payload, s.openAIWSWriteTimeout()); err != nil {
 		lease.MarkBroken()
 		logOpenAIWSModeInfo(
@@ -614,6 +615,10 @@ readLoop:
 			continue
 		}
 		responseModelObserver.ObserveOpenAI(message, eventType)
+		if eventType == "error" || eventType == "response.failed" {
+			parseOpenAIWSResponseUsageFromCompletedEvent(message, usage)
+			markOpenAICyberPolicyEvent(c, message, http.StatusOK, usage, responseModelObserver)
+		}
 		eventCount++
 		if firstEventType == "" {
 			firstEventType = eventType
@@ -665,10 +670,6 @@ readLoop:
 			parseOpenAIWSResponseUsageFromCompletedEvent(message, usage)
 		}
 		imageCounter.AddSSEData(message)
-
-		if eventType == "error" || eventType == "response.failed" {
-			markOpenAICyberPolicyEvent(c, message, http.StatusOK, usage)
-		}
 
 		if eventType == "error" {
 			s.handleOpenAIWSErrorEventTransientFailure(ctx, account, mappedModel, lease.HandshakeHeaders(), message)

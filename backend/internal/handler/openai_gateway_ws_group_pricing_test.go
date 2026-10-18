@@ -10,6 +10,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	coderws "github.com/coder/websocket"
 	"github.com/stretchr/testify/require"
+	"github.com/tidwall/gjson"
 )
 
 // 分组调价对已打开的 WebSocket 连接生效：同一条连接的两个 turn 之间由管理端
@@ -290,4 +291,183 @@ func TestOpenAIWSTurnBillingAPIKeysKeepPreviousTurnUntilItIsRecorded(t *testing.
 	keys.set(4, conn)
 	require.Same(t, conn, keys.forTurn(2, conn), "only the current and previous turn are kept")
 	require.Len(t, keys.keys, 2)
+}
+
+// The forwarding policy is fixed at connection time, while prices are refreshed
+// for each turn. A policy toggle must not retroactively add or remove the 8x
+// billing qualification on an already-open connection.
+func TestOpenAIResponsesWebSocket_UltrafastPolicySnapshotSurvivesGroupRefresh(t *testing.T) {
+	for _, mode := range []string{service.OpenAIWSIngressModePassthrough, service.OpenAIWSIngressModeCtxPool} {
+		t.Run(mode, func(t *testing.T) {
+			for _, tc := range []struct {
+				name               string
+				model              string
+				initialUltrafast   bool
+				clientTier         string
+				wantConnectionTier string
+				wantReconnectTier  string
+				reconnectFactor    float64
+			}{
+				{
+					name: "disable_after_connect", model: "gpt-6-astra", initialUltrafast: true,
+					wantConnectionTier: "ultrafast", reconnectFactor: 1,
+				},
+				{
+					name: "enable_after_connect_with_explicit_tier", model: "gpt-6.1-sol", clientTier: "ultrafast",
+					wantConnectionTier: "ultrafast", wantReconnectTier: "ultrafast", reconnectFactor: 8,
+				},
+				{
+					name: "non_target_model", model: "gpt-5.6-sol", initialUltrafast: true,
+					reconnectFactor: 1,
+				},
+			} {
+				t.Run(tc.name, func(t *testing.T) {
+					repo := newWSGroupPricingAPIKeyRepoStub(3)
+					repo.group.ForceOpenAIUltrafast = tc.initialUltrafast
+
+					keyService := newWSGroupPricingAPIKeyService(repo)
+					payload := `{"type":"response.create","model":"` + tc.model + `","stream":false}`
+					if tc.clientTier != "" {
+						payload = `{"type":"response.create","model":"` + tc.model + `","stream":false,"service_tier":"` + tc.clientTier + `"}`
+					}
+					got := runOpenAIResponsesWebSocketUsageLogCase(t, openAIResponsesWSUsageLogCase{
+						firstPayload: payload, secondPayload: payload, ingressMode: mode,
+						apiKeyService: keyService, apiKeyCredential: wsGroupPricingKey,
+						afterFirstUpstreamRequest: func(*service.ChannelService) error {
+							return repo.adminUpdate(keyService, func(_ *service.APIKey, group *service.Group) {
+								group.ForceOpenAIUltrafast = !tc.initialUltrafast
+								group.RateMultiplier = 0.3
+							})
+						},
+					})
+					require.Len(t, got.logs, 2)
+					require.Len(t, got.upstreamPayloads, 2)
+					for turn, body := range got.upstreamPayloads {
+						require.Equal(t, tc.wantConnectionTier, gjson.GetBytes(body, "service_tier").String(), "turn %d uses the connection policy", turn+1)
+						require.Equal(t, tc.model, gjson.GetBytes(body, "model").String())
+					}
+					// Both turns use the same model, tier and token counts. Only the
+					// group rate may change their charge on an established connection.
+					require.Greater(t, got.logs[0].TotalCost, 0.0)
+					require.InDelta(t, 3, got.logs[0].RateMultiplier, 1e-12)
+					require.InDelta(t, got.logs[0].TotalCost*3, got.logs[0].ActualCost, 1e-12)
+					require.InDelta(t, got.logs[0].TotalCost, got.logs[1].TotalCost, 1e-12,
+						"turn 2 keeps the connection's Ultrafast billing qualification")
+					require.InDelta(t, 0.3, got.logs[1].RateMultiplier, 1e-12)
+					require.InDelta(t, got.logs[0].ActualCost/10, got.logs[1].ActualCost, 1e-12,
+						"turn 2 applies the new group rate to the preserved policy")
+
+					// Reauthenticate through the same service after cache invalidation.
+					// The new connection omits a tier so its policy must come from the updated group.
+					reconnected := runOpenAIResponsesWebSocketUsageLogCase(t, openAIResponsesWSUsageLogCase{
+						firstPayload: `{"type":"response.create","model":"` + tc.model + `","stream":false}`,
+						ingressMode:  mode, apiKeyService: keyService, apiKeyCredential: wsGroupPricingKey,
+					})
+					require.Equal(t, tc.wantReconnectTier, gjson.GetBytes(reconnected.upstreamFirstPayload, "service_tier").String())
+					standard, err := service.NewBillingService(&config.Config{}, nil).CalculateCost(
+						tc.model, service.UsageTokens{InputTokens: 2, OutputTokens: 1}, 1,
+					)
+					require.NoError(t, err)
+					wantReconnectTotal := standard.TotalCost * tc.reconnectFactor
+					require.InDelta(t, wantReconnectTotal, reconnected.log.TotalCost, 1e-12)
+					require.InDelta(t, wantReconnectTotal*0.3, reconnected.log.ActualCost, 1e-12,
+						"a new connection adopts the current policy and group rate")
+				})
+			}
+		})
+	}
+}
+
+func TestRefreshOpenAIWSTurnBillingAPIKey_PreservesUltrafastWithoutMutatingSnapshots(t *testing.T) {
+	for _, tc := range []struct {
+		name             string
+		initialUltrafast bool
+	}{
+		{name: "disable_after_connect", initialUltrafast: true},
+		{name: "enable_after_connect", initialUltrafast: false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			groupID := int64(77)
+			conn := &service.APIKey{
+				ID: 5, Key: "sk-conn", GroupID: &groupID, User: &service.User{ID: 9},
+				Group: &service.Group{
+					ID: groupID, Platform: service.PlatformOpenAI, SubscriptionType: service.SubscriptionTypeStandard,
+					ForceOpenAIUltrafast: tc.initialUltrafast, RateMultiplier: 3,
+				},
+			}
+			inputPrice, outputPrice, searchPrice := 0.001, 0.002, 0.003
+			latest := &service.APIKey{
+				ID: 5, Key: "sk-conn", GroupID: &groupID, User: &service.User{ID: 9, Balance: 123},
+				Group: &service.Group{
+					ID: groupID, Platform: service.PlatformOpenAI, SubscriptionType: service.SubscriptionTypeStandard,
+					ForceOpenAIUltrafast: !tc.initialUltrafast, ForceOpenAIFast: tc.initialUltrafast,
+					FreeOpenAIFast: true, RateMultiplier: 0.3,
+					ProfitControlEnabled: true, ProfitMinMargin: 0.1, ProfitSafetyBuffer: 0.05,
+					WebSearchPricePerCall: &searchPrice, LongContextPricingEnabled: true,
+					ModelPricing: []service.ChannelModelPricing{{
+						Models: []string{"gpt-6-astra"}, BillingMode: service.BillingModeToken,
+						InputPrice: &inputPrice, OutputPrice: &outputPrice,
+					}},
+				},
+			}
+			connBefore, latestBefore := *conn.Group, *latest.Group
+			got := refreshOpenAIWSTurnBillingAPIKey(context.Background(), wsTurnAPIKeyLookupFunc(func(context.Context, string) (*service.APIKey, error) {
+				return latest, nil
+			}), conn)
+
+			require.Equal(t, connBefore, *conn.Group, "refresh must not mutate the connection group")
+			require.Equal(t, latestBefore, *latest.Group, "refresh must not mutate the auth-cache group used by new connections")
+			require.NotSame(t, conn, got)
+			require.NotSame(t, conn.Group, got.Group)
+			require.Equal(t, tc.initialUltrafast, got.Group.ForceOpenAIUltrafast, "billing qualification must match the forwarding policy fixed at connect")
+			require.NotSame(t, latest.Group, got.Group, "the per-turn policy must not alias the shared auth-cache group")
+			require.Same(t, conn.User, got.User, "refresh changes only group billing data")
+			wantGroup := latestBefore
+			wantGroup.ForceOpenAIUltrafast = tc.initialUltrafast
+			require.Equal(t, wantGroup, *got.Group,
+				"only Ultrafast qualification stays fixed; prices, rate, Free Fast and profit settings still refresh")
+		})
+	}
+}
+
+func TestOpenAIResponsesWebSocket_CyberTurnUsesRefreshedUltrafastBillingSnapshot(t *testing.T) {
+	for _, mode := range []string{service.OpenAIWSIngressModePassthrough, service.OpenAIWSIngressModeCtxPool} {
+		t.Run(mode, func(t *testing.T) {
+			repo := newWSGroupPricingAPIKeyRepoStub(3)
+			repo.group.ForceOpenAIUltrafast = true
+			keyService := newWSGroupPricingAPIKeyService(repo)
+			const payload = `{"type":"response.create","model":"gpt-6-astra","stream":false}`
+			got := runOpenAIResponsesWebSocketUsageLogCase(t, openAIResponsesWSUsageLogCase{
+				firstPayload: payload, secondPayload: payload, ingressMode: mode, cyberTurn: 2,
+				apiKeyService: keyService, apiKeyCredential: wsGroupPricingKey,
+				afterFirstUpstreamRequest: func(*service.ChannelService) error {
+					return repo.adminUpdate(keyService, func(_ *service.APIKey, group *service.Group) {
+						group.ForceOpenAIUltrafast = false
+						group.RateMultiplier = 0.3
+					})
+				},
+			})
+
+			require.Len(t, got.logs, 2, "one normal turn and one failed turn each produce exactly one usage log")
+			require.Len(t, got.upstreamPayloads, 2)
+			for _, body := range got.upstreamPayloads {
+				require.Equal(t, "ultrafast", gjson.GetBytes(body, "service_tier").String())
+			}
+			require.Equal(t, service.RequestTypeCyberBlocked, got.logs[1].RequestType)
+			require.Equal(t, 2, got.logs[1].InputTokens)
+			require.Equal(t, 1, got.logs[1].OutputTokens)
+			require.NotNil(t, got.logs[1].ServiceTier)
+			require.Equal(t, "ultrafast", *got.logs[1].ServiceTier, "a failed response without a tier retains the sent Ultrafast tier")
+			require.InDelta(t, 0.3, got.logs[1].RateMultiplier, 1e-12,
+				"cyber error settlement must use the current turn's refreshed group rate")
+			standard, err := service.NewBillingService(&config.Config{}, nil).CalculateCost(
+				"gpt-6-astra", service.UsageTokens{InputTokens: 2, OutputTokens: 1}, 1,
+			)
+			require.NoError(t, err)
+			require.InDelta(t, standard.TotalCost*8, got.logs[1].TotalCost, 1e-12,
+				"the failed turn keeps the established connection's Ultrafast billing qualification")
+			require.InDelta(t, standard.TotalCost*8*0.3, got.logs[1].ActualCost, 1e-12)
+			require.InDelta(t, got.logs[0].ActualCost/10, got.logs[1].ActualCost, 1e-12)
+		})
+	}
 }

@@ -530,6 +530,7 @@ func (s *OpenAIGatewayService) proxyOpenAIWSHTTPBridgeTurn(
 	if actualModel == "" {
 		actualModel = canonicalOpenAIAccountSchedulingModel(account, originalModel)
 	}
+	setOpenAICyberBillingModel(c, actualModel)
 	SetOpsUpstreamModel(c, actualModel)
 
 	proxyURL := ""
@@ -782,7 +783,7 @@ func (s *OpenAIGatewayService) proxyOpenAIWSHTTPBridgeTurn(
 			parseOpenAIWSResponseUsageFromCompletedEvent(upstreamMessage, &usage)
 		}
 		if eventType == "error" || eventType == "response.failed" {
-			markOpenAICyberPolicyEvent(c, upstreamMessage, http.StatusOK, &usage)
+			markOpenAICyberPolicyEvent(c, upstreamMessage, http.StatusOK, &usage, responseModelObserver)
 		}
 		imageCounter.AddSSEData(upstreamMessage)
 

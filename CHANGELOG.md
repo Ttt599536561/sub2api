@@ -6,7 +6,8 @@
 
 ## 2026-10-18
 
-- **Ultrafast 第二轮审查（待修复）**：以 `e84623e8c` 为固定应用基线，新增确认 Messages→Chat Completions 漏强制/拦截、WS 开关策略与计费快照不同步、cyber 错误用量丢 tier 三项 P2；9 个新增复现场景验证失败。仅归档审查和交接，业务代码未修改，详见 [第二轮审查记录](docs/changes/2026-10-18-ultrafast-second-review.md)。
+- **Ultrafast 协议回退与错误计费修复（未发布）**：修复 Messages→CC 漏强制/拦截、WS 策略与计费开关快照不同步，以及 cyber 错误用量丢失模型/tier；完整保留缓存 token、定价时刻和显式计费模型，首次错误后的权威终态可补齐计费事实。新增 68 个永久回归场景通过，后端 58 个测试包最终覆盖通过（18 项条件跳过，服务包旧断言/测试隔离适配后整包复测），Linux 编译通过。源码、测试和记录同提交，稳定主题 `fix: preserve Ultrafast policy across fallbacks and error billing`。详见 [修复与验证记录](docs/changes/2026-10-18-ultrafast-review-fixes.md)；无新迁移、依赖或部署参数变化。
+- **Ultrafast 第二轮审查（历史发现，已后续修复）**：以 `e84623e8c` 为固定应用基线，新增确认 Messages→Chat Completions 漏强制/拦截、WS 开关策略与计费快照不同步、cyber 错误用量丢 tier 三项 P2；9 个新增复现场景验证失败。仅归档审查和交接，业务代码未修改，详见 [第二轮审查记录](docs/changes/2026-10-18-ultrafast-second-review.md)。
 
 - **Ultrafast 中断复审修复（未发布）**：接续对 `fcaf5f054` 功能提交链的审查，修复 8× 结算与余额预占不一致、无分组/无解析器旧计费回归、compact 回退后 tier/策略不重算，以及部分更新不能从 Ultrafast 切回 Fast；最终复核补齐完整账号候选、compact 路由元数据和二级映射。新增 99 个永久回归场景，并补仓储测试夹具及真实数据库往返测试。稳定提交主题：`fix: align ultrafast pricing, retries, and group updates`，源码与记录同一提交；当前验证和 10 月 17 日历史验证分开记录，见 [中断续审记录](docs/changes/2026-10-17-openai-group-ultrafast.md#2026-10-18-中断续审)。没有新增迁移，原功能迁移 246 仍需随版本升级。
 

@@ -51,6 +51,8 @@ type OpenAIRecordUsageInput struct {
 // 用量按上游真实 token 计费，与 WS cyber 及正常请求口径一致（InputTokens/OutputTokens
 // 取自上游 response.failed 报告的 usage，即 mark.UpstreamInTok/OutTok）。
 type CyberPolicyUsageInput struct {
+	Billing      OpenAICyberBillingMetadata
+	PricingAt    time.Time
 	APIKey       *APIKey
 	Account      *Account
 	Subscription *UserSubscription
@@ -82,14 +84,23 @@ func (s *OpenAIGatewayService) RecordCyberPolicyUsageLog(ctx context.Context, in
 	if s == nil || in.APIKey == nil || in.APIKey.User == nil || in.Account == nil || strings.TrimSpace(in.Model) == "" {
 		return
 	}
+	// Copy only the metadata of the actual failed attempt. Legacy callers can
+	// still supply the original token counters without a billing snapshot.
+	usage := in.Billing.Usage
+	usage.InputTokens = in.InputTokens
+	usage.OutputTokens = in.OutputTokens
 	result := &OpenAIForwardResult{
-		RequestID: in.RequestID,
-		Model:     in.Model,
-		Stream:    in.Stream,
-		Usage: OpenAIUsage{
-			InputTokens:  in.InputTokens,
-			OutputTokens: in.OutputTokens,
-		},
+		RequestID:                     in.RequestID,
+		Model:                         in.Model,
+		BillingModel:                  in.Billing.BillingModel,
+		UpstreamModel:                 in.Billing.UpstreamModel,
+		UpstreamResponseModel:         in.Billing.UpstreamResponseModel,
+		UpstreamResponseModelConflict: in.Billing.UpstreamResponseModelConflict,
+		UpstreamResponseServiceTier:   in.Billing.UpstreamResponseServiceTier,
+		ServiceTier:                   optionalTrimmedStringPtr(in.Billing.ServiceTier),
+		ReasoningEffort:               optionalTrimmedStringPtr(in.Billing.ReasoningEffort),
+		Stream:                        in.Stream,
+		Usage:                         usage,
 	}
 	if err := s.RecordUsage(ctx, &OpenAIRecordUsageInput{
 		Result:             result,
@@ -107,6 +118,7 @@ func (s *OpenAIGatewayService) RecordCyberPolicyUsageLog(ctx context.Context, in
 		ChannelUsageFields: in.ChannelUsageFields,
 		CyberBlocked:       true,
 		NativeCompactionV2: in.NativeCompactionV2,
+		PricingAt:          in.PricingAt,
 	}); err != nil {
 		logger.LegacyPrintf("service.openai_gateway", "cyber usage record failed: request_id=%s err=%v", in.RequestID, err)
 	}

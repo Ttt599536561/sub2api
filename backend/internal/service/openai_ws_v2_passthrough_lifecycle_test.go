@@ -285,8 +285,9 @@ func TestPassthroughLifecycle_CyberTerminalEventsMarkBeforeAfterTurn(t *testing.
 			},
 			wantBody:    `"type":"error"`,
 			wantMessage: "blocked by error event",
-			wantInput:   5,
-			wantOutput:  1,
+			// Keep first audit evidence, but use the completed response's usage.
+			wantInput:  9,
+			wantOutput: 2,
 		},
 		{
 			name: "response_failed",
@@ -345,6 +346,8 @@ func TestPassthroughLifecycle_CyberTerminalEventsMarkBeforeAfterTurn(t *testing.
 				require.Equal(t, http.StatusOK, mark.UpstreamStatus)
 				require.Equal(t, tt.wantInput, mark.UpstreamInTok)
 				require.Equal(t, tt.wantOutput, mark.UpstreamOutTok)
+				require.Equal(t, tt.wantInput, mark.Billing.Usage.InputTokens)
+				require.Equal(t, tt.wantOutput, mark.Billing.Usage.OutputTokens)
 			case <-time.After(3 * time.Second):
 				t.Fatal("cyber mark was not visible to AfterTurn")
 			}
