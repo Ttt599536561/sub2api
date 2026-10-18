@@ -21,7 +21,7 @@
 
 ## 2026-10-18 对 1cfafd30e 的全面复审（已修复，未发布）
 
-本轮在现有 v0.2.17 工作树完成九类修复及 75 个新叶回归，稳定提交主题为 `fix: align post-merge model routing and refund recovery`。全仓后端 unit（58 包 / 22,410 叶）、真实 PostgreSQL 仓储（1,544 叶）、前端 424 文件 / 3,637 项、CI 标准 lint 0 issues、类型检查、前端构建及 Linux 双架构编译均通过；条件跳过与额外 unit-tag lint 的旧测试告警单独记载。当前发布镜像源码仍为上表的 `1cfafd30e`；本轮未推送、发布新镜像或部署。问题、验证及持续数据库故障恢复边界见[复审记录](changes/2026-10-18-review-1cfafd30e.md)。主目录原 WIP 和其它工作树保持不变。
+本轮在现有 v0.2.17 工作树完成九类修复及 75 个新叶回归，源码与回归提交为 `19b66b0efa2fff5006d512693524c50ff151a0ae`（`fix: align post-merge model routing and refund recovery`），已本地保存、未推送。全仓后端 unit（58 包 / 22,410 叶）、真实 PostgreSQL 仓储（1,544 叶）、前端 424 文件 / 3,637 项、CI 标准 lint 0 issues、类型检查、前端构建及 Linux 双架构编译均通过；条件跳过与额外 unit-tag lint 的旧测试告警单独记载。当前发布镜像源码仍为上表的 `1cfafd30e`；本轮未推送、发布新镜像或部署。问题、验证及持续数据库故障恢复边界见[复审记录](changes/2026-10-18-review-1cfafd30e.md)。主目录原 WIP 和其它工作树保持不变。
 
 本轮前端构建目录和两份 Linux 二进制的删除被自动审批以 `blocked by policy` 拒绝，未提供具体规则；已原位保留并归档大小、SHA256 和拒绝原因，没有绕过删除。
 
