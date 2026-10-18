@@ -1,5 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { flushPromises, shallowMount } from '@vue/test-utils'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { enableAutoUnmount, flushPromises, shallowMount } from '@vue/test-utils'
 import AirwallexPaymentView from '../AirwallexPaymentView.vue'
 import {
   PAYMENT_RECOVERY_STORAGE_KEY,
@@ -12,6 +12,9 @@ const routeState = vi.hoisted(() => ({
 const routerPush = vi.hoisted(() => vi.fn())
 const airwallexInit = vi.hoisted(() => vi.fn())
 const redirectToCheckout = vi.hoisted(() => vi.fn())
+
+enableAutoUnmount(afterEach)
+vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ user: null, sessionRevision: null }) }))
 
 vi.mock('vue-router', async () => {
   const actual = await vi.importActual<typeof import('vue-router')>('vue-router')

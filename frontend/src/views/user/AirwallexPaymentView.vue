@@ -25,13 +25,16 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref } from 'vue'
+import { onMounted, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
+import { useAuthStore } from '@/stores/auth'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import Icon from '@/components/icons/Icon.vue'
 import {
   PAYMENT_RECOVERY_STORAGE_KEY,
+  getPaymentRecoveryIdentity,
+  isPaymentRecoveryIdentityCurrent,
   readPaymentRecoverySnapshot,
   type PaymentRecoverySnapshot,
 } from '@/components/payment/paymentFlow'
@@ -39,12 +42,36 @@ import {
 const { t, locale } = useI18n()
 const route = useRoute()
 const router = useRouter()
+const authStore = useAuthStore()
 
 const loading = ref(true)
 const errorMessage = ref('')
 let disposed = false
+let invalidated = false
+const viewOwner = getPaymentRecoveryIdentity()
 
-onUnmounted(() => { disposed = true })
+function invalidateChangedIdentity() {
+  if (invalidated || isPaymentRecoveryIdentityCurrent(viewOwner)) return
+  invalidated = true
+  loading.value = false
+  errorMessage.value = t('payment.airwallexMissingParams')
+}
+
+function isCurrent() {
+  if (disposed) return false
+  invalidateChangedIdentity()
+  return !invalidated
+}
+
+function onAuthStorageChange(event: StorageEvent) {
+  if (!event.key || ['auth_user', 'auth_session_id'].includes(event.key)) invalidateChangedIdentity()
+}
+
+watch([() => authStore.user?.id, () => authStore.sessionRevision], invalidateChangedIdentity, { flush: 'sync' })
+onUnmounted(() => {
+  disposed = true
+  window.removeEventListener('storage', onAuthStorageChange)
+})
 
 function queryString(key: string): string {
   const value = route.query[key]
@@ -93,6 +120,7 @@ function restoreAirwallexSnapshot(): PaymentRecoverySnapshot | null {
 }
 
 onMounted(async () => {
+  window.addEventListener('storage', onAuthStorageChange)
   const snapshot = restoreAirwallexSnapshot()
   const checkoutLocale = locale.value.toLowerCase().startsWith('zh') ? 'zh' : 'en'
 
@@ -104,13 +132,13 @@ onMounted(async () => {
 
   try {
     const airwallex = await import('@airwallex/components-sdk')
-    if (disposed) return
+    if (!isCurrent()) return
     const result = await airwallex.init({
       env: snapshot.paymentEnv === 'prod' ? 'prod' : 'demo',
       enabledElements: ['payments'],
       locale: checkoutLocale,
     })
-    if (disposed) return
+    if (!isCurrent()) return
 
     loading.value = false
     const checkoutOptions = {
@@ -129,6 +157,7 @@ onMounted(async () => {
       window.location.assign(redirectResult)
     }
   } catch (err: unknown) {
+    if (!isCurrent()) return
     loading.value = false
     errorMessage.value = err instanceof Error && err.message
       ? err.message

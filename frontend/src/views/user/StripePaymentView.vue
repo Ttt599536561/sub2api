@@ -94,17 +94,23 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, nextTick, onMounted, onUnmounted } from 'vue'
+import { ref, computed, nextTick, onMounted, onUnmounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { usePaymentStore } from '@/stores/payment'
+import { useAuthStore } from '@/stores/auth'
 import { paymentAPI } from '@/api/payment'
 import { extractI18nErrorMessage } from '@/utils/apiError'
 import { isMobileDevice } from '@/utils/device'
 import { formatPaymentAmount, normalizePaymentCurrency } from '@/components/payment/currency'
-import { PAYMENT_RECOVERY_STORAGE_KEY, readPaymentRecoverySnapshot } from '@/components/payment/paymentFlow'
+import {
+  PAYMENT_RECOVERY_STORAGE_KEY,
+  getPaymentRecoveryIdentity,
+  isPaymentRecoveryIdentityCurrent,
+  readPaymentRecoverySnapshot,
+} from '@/components/payment/paymentFlow'
 import type { PaymentOrder } from '@/types/payment'
-import type { Stripe, StripeElements } from '@stripe/stripe-js'
+import type { Stripe, StripeElements, StripePaymentElement } from '@stripe/stripe-js'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import Icon from '@/components/icons/Icon.vue'
 
@@ -113,6 +119,7 @@ const { t } = i18n
 const route = useRoute()
 const router = useRouter()
 const paymentStore = usePaymentStore()
+const authStore = useAuthStore()
 
 // 弹窗模式：指定支付宝或微信方式时跳过 AppLayout
 const isPopup = computed(() => !!route.query.method)
@@ -130,15 +137,63 @@ const redirecting = ref(false)
 const showPaymentElement = ref(false)
 
 let disposed = false
+let invalidated = false
+const viewOwner = getPaymentRecoveryIdentity()
 let stripeInstance: Stripe | null = null
 let elementsInstance: StripeElements | null = null
+let paymentElement: StripePaymentElement | null = null
 let redirectTimer: ReturnType<typeof setTimeout> | null = null
+let pollTimer: ReturnType<typeof setInterval> | null = null
+
+function releasePaymentResources() {
+  if (redirectTimer) { clearTimeout(redirectTimer); redirectTimer = null }
+  if (pollTimer) { clearInterval(pollTimer); pollTimer = null }
+  paymentElement?.destroy()
+  paymentElement = null
+  elementsInstance = null
+  stripeInstance = null
+}
+
+function invalidateChangedIdentity() {
+  if (invalidated || isPaymentRecoveryIdentityCurrent(viewOwner)) return
+  invalidated = true
+  releasePaymentResources()
+  order.value = null
+  wechatQrUrl.value = ''
+  stripeError.value = ''
+  stripeSuccess.value = false
+  stripeReady.value = false
+  stripeSubmitting.value = false
+  redirecting.value = false
+  showPaymentElement.value = false
+  loading.value = false
+  initError.value = t('payment.stripeMissingParams')
+}
+
+function isCurrent() {
+  if (disposed) return false
+  // Also check storage at each async boundary before cross-tab events arrive.
+  invalidateChangedIdentity()
+  return !invalidated
+}
+
+function onAuthStorageChange(event: StorageEvent) {
+  if (!event.key || ['auth_user', 'auth_session_id'].includes(event.key)) invalidateChangedIdentity()
+}
+
+watch([() => authStore.user?.id, () => authStore.sessionRevision], invalidateChangedIdentity, { flush: 'sync' })
 
 onMounted(async () => {
+  window.addEventListener('storage', onAuthStorageChange)
   const orderId = Number(route.query.order_id)
-  const clientSecret = String(route.query.client_secret || '')
   const method = String(route.query.method || '')
   const resumeToken = typeof route.query.resume_token === 'string' ? route.query.resume_token : undefined
+  // client_secret 只从本浏览器下单时写入的恢复快照读取，且快照订单必须与 URL 订单一致：
+  // 不信任 URL 中的 client_secret，避免页面展示的订单与实际收款的 PaymentIntent 被拼接错绑。
+  const restored = typeof window !== 'undefined'
+    ? readPaymentRecoverySnapshot(window.localStorage.getItem(PAYMENT_RECOVERY_STORAGE_KEY), { resumeToken })
+    : null
+  const clientSecret = orderId && restored?.orderId === orderId ? restored.clientSecret : ''
 
   if (!orderId || !clientSecret) {
     loading.value = false
@@ -147,28 +202,23 @@ onMounted(async () => {
   }
 
   try {
-    if (typeof window !== 'undefined') {
-      const restored = readPaymentRecoverySnapshot(
-        window.localStorage.getItem(PAYMENT_RECOVERY_STORAGE_KEY),
-        { resumeToken },
-      )
-      if (restored?.orderId === orderId) {
-        currency.value = normalizePaymentCurrency(restored.currency)
-      }
-    }
+    currency.value = normalizePaymentCurrency(restored?.currency)
     const res = await paymentAPI.getOrder(orderId)
+    if (!isCurrent()) return
     order.value = res.data
     if (res.data.currency) {
       currency.value = normalizePaymentCurrency(res.data.currency)
     }
 
     await paymentStore.fetchConfig()
+    if (!isCurrent()) return
     const publishableKey = paymentStore.config?.stripe_publishable_key
     if (!publishableKey) { initError.value = t('payment.stripeNotConfigured'); return }
 
     const { loadStripe } = await import('@stripe/stripe-js/pure')
+    if (!isCurrent()) return
     const stripe = await loadStripe(publishableKey)
-    if (disposed) return
+    if (!isCurrent()) return
     if (!stripe) { initError.value = t('payment.stripeLoadFailed'); return }
 
     stripeInstance = stripe
@@ -186,9 +236,10 @@ onMounted(async () => {
       mountPaymentElement(stripe, clientSecret)
     }
   } catch (err: unknown) {
+    if (!isCurrent()) return
     initError.value = extractI18nErrorMessage(err, t, 'payment.errors', t('payment.stripeLoadFailed'))
   } finally {
-    loading.value = false
+    if (isCurrent()) loading.value = false
   }
 })
 
@@ -206,9 +257,11 @@ function formatGatewayAmount(value: number): string {
 }
 
 async function confirmAlipay(stripe: Stripe, clientSecret: string, orderId: number) {
+  if (!isCurrent()) return
   redirecting.value = true
   const returnUrl = window.location.origin + '/payment/result?order_id=' + orderId + '&status=success'
   const { error } = await stripe.confirmAlipayPayment(clientSecret, { return_url: returnUrl })
+  if (!isCurrent()) return
   if (error) {
     redirecting.value = false
     stripeError.value = error.message || t('payment.result.failed')
@@ -217,11 +270,13 @@ async function confirmAlipay(stripe: Stripe, clientSecret: string, orderId: numb
 }
 
 async function confirmWechatPay(stripe: Stripe, clientSecret: string) {
+  if (!isCurrent()) return
   const { paymentIntent, error } = await (stripe as Stripe & {
     confirmWechatPayPayment: (cs: string, opts: Record<string, unknown>) => Promise<{ paymentIntent?: { status: string; next_action?: { wechat_pay_display_qr_code?: { image_data_url?: string } } }; error?: { message?: string } }>
   }).confirmWechatPayPayment(clientSecret, {
     payment_method_options: { wechat_pay: { client: isMobileDevice() ? 'mobile_web' : 'web' } },
   })
+  if (!isCurrent()) return
 
   if (error) {
     stripeError.value = error.message || t('payment.result.failed')
@@ -243,23 +298,23 @@ async function confirmWechatPay(stripe: Stripe, clientSecret: string) {
 }
 
 function mountPaymentElement(stripe: Stripe, clientSecret: string) {
-  if (disposed) return
+  if (!isCurrent()) return
   const isDark = document.documentElement.classList.contains('dark')
   const elements = stripe.elements({
     clientSecret,
     appearance: { theme: isDark ? 'night' : 'stripe', variables: { borderRadius: '8px' } },
   })
   elementsInstance = elements
-  const paymentElement = elements.create('payment', {
+  paymentElement = elements.create('payment', {
     layout: 'tabs',
     paymentMethodOrder: ['alipay', 'wechat_pay', 'card', 'link'],
   } as Record<string, unknown>)
   paymentElement.mount('#stripe-payment-element')
-  paymentElement.on('ready', () => { stripeReady.value = true })
+  paymentElement.on('ready', () => { if (isCurrent()) stripeReady.value = true })
 }
 
 async function handleGenericPay() {
-  if (!stripeInstance || !elementsInstance || stripeSubmitting.value) return
+  if (!isCurrent() || !stripeInstance || !elementsInstance || stripeSubmitting.value) return
   stripeSubmitting.value = true
   stripeError.value = ''
   try {
@@ -270,6 +325,7 @@ async function handleGenericPay() {
       },
       redirect: 'if_required',
     })
+    if (!isCurrent()) return
     if (error) {
       stripeError.value = error.message || t('payment.result.failed')
     } else {
@@ -277,20 +333,20 @@ async function handleGenericPay() {
       scheduleClose()
     }
   } catch (err: unknown) {
+    if (!isCurrent()) return
     stripeError.value = extractI18nErrorMessage(err, t, 'payment.errors', t('payment.result.failed'))
   } finally {
-    stripeSubmitting.value = false
+    if (isCurrent()) stripeSubmitting.value = false
   }
 }
 
-let pollTimer: ReturnType<typeof setInterval> | null = null
-
 function startPolling() {
   const orderId = Number(route.query.order_id)
-  if (!orderId || disposed) return
+  if (!orderId || !isCurrent()) return
   pollTimer = setInterval(async () => {
+    if (!isCurrent()) return
     const o = await paymentStore.pollOrderStatus(orderId)
-    if (!o) return
+    if (!isCurrent() || !o) return
     if (o.status === 'COMPLETED' || o.status === 'PAID') {
       if (pollTimer) { clearInterval(pollTimer); pollTimer = null }
       stripeSuccess.value = true
@@ -301,11 +357,12 @@ function startPolling() {
 }
 
 function scheduleClose() {
-  if (disposed) return
+  if (!isCurrent()) return
   if (window.opener) {
-    redirectTimer = setTimeout(() => { window.close() }, 2000)
+    redirectTimer = setTimeout(() => { if (isCurrent()) window.close() }, 2000)
   } else {
     redirectTimer = setTimeout(() => {
+      if (!isCurrent()) return
       router.push({ path: '/payment/result', query: { order_id: String(route.query.order_id || ''), status: 'success' } })
     }, 2000)
   }
@@ -313,7 +370,7 @@ function scheduleClose() {
 
 onUnmounted(() => {
   disposed = true
-  if (redirectTimer) clearTimeout(redirectTimer)
-  if (pollTimer) clearInterval(pollTimer)
+  window.removeEventListener('storage', onAuthStorageChange)
+  releasePaymentResources()
 })
 </script>

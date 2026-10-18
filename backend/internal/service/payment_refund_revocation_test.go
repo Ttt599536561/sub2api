@@ -114,7 +114,25 @@ func TestRefundRevocationRollbackPreservesSubscription(t *testing.T) {
 			_, refundErr := svc.ExecuteRefund(ctx, plan)
 			persisted, err := svc.entClient.UserSubscription.Get(mixins.SkipSoftDelete(ctx), original.ID)
 			require.NoError(t, err)
-			require.Nil(t, persisted.DeletedAt, "failed or pending gateway refund must restore the subscription revoked by its own pre-deduction")
+			if gatewayStatus == payment.ProviderStatusPending {
+				require.NoError(t, refundErr)
+				require.NotNil(t, persisted.DeletedAt, "pending refund must keep its revocation held")
+				svc.welfarePaymentRepo = &refundWelfareRepositoryStub{reverse: func(ctx context.Context, id int64) error {
+					recordRefundWelfareEvent(t, ctx, id)
+					return nil
+				}}
+				result, err := svc.QueryAndFinalizeRefund(ctx, order.ID)
+				require.NoError(t, err)
+				require.True(t, result.Success)
+				persisted, err = svc.entClient.UserSubscription.Get(mixins.SkipSoftDelete(ctx), original.ID)
+				require.NoError(t, err)
+				require.NotNil(t, persisted.DeletedAt, "confirmed refund must retain the held revocation")
+				_, err = svc.QueryAndFinalizeRefund(ctx, order.ID)
+				require.NoError(t, err)
+				assertRefundWelfareEventCount(t, svc.entClient, 1)
+				return
+			}
+			require.Nil(t, persisted.DeletedAt, "failed gateway refund must restore the subscription revoked by its own pre-deduction")
 			require.NoError(t, refundErr)
 			require.True(t, original.ExpiresAt.Equal(persisted.ExpiresAt), "rollback must not add the purchased days to the unchanged expiry")
 			require.Equal(t, original.AutoDailyResetEnabled, persisted.AutoDailyResetEnabled)
@@ -126,21 +144,6 @@ func TestRefundRevocationRollbackPreservesSubscription(t *testing.T) {
 			persisted, err = svc.entClient.UserSubscription.Get(ctx, original.ID)
 			require.NoError(t, err)
 			require.True(t, original.ExpiresAt.Equal(persisted.ExpiresAt))
-			if gatewayStatus == payment.ProviderStatusPending {
-				svc.welfarePaymentRepo = &refundWelfareRepositoryStub{reverse: func(ctx context.Context, id int64) error {
-					recordRefundWelfareEvent(t, ctx, id)
-					return nil
-				}}
-				result, err := svc.QueryAndFinalizeRefund(ctx, order.ID)
-				require.NoError(t, err)
-				require.True(t, result.Success)
-				persisted, err = svc.entClient.UserSubscription.Get(mixins.SkipSoftDelete(ctx), original.ID)
-				require.NoError(t, err)
-				require.NotNil(t, persisted.DeletedAt, "confirmed refund must reclaim the restored subscription")
-				_, err = svc.QueryAndFinalizeRefund(ctx, order.ID)
-				require.NoError(t, err)
-				assertRefundWelfareEventCount(t, svc.entClient, 1)
-			}
 		})
 	}
 }

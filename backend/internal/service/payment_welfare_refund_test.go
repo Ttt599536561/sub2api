@@ -493,7 +493,7 @@ func TestWelfareRefundStaleProviderFailureCannotOverwriteRecoveryOrCompletion(t 
 				require.NoError(t, err)
 			}
 			svc := &PaymentService{entClient: client}
-			result, err := svc.finalizeRefundFailed(ctx, oldOrder, errors.New("stale provider failure"))
+			result, err := svc.finalizeRefundFailed(ctx, svc.refundFinalizePlan(oldOrder), errors.New("stale provider failure"))
 			require.Error(t, err)
 			require.Nil(t, result)
 			require.Equal(t, "CONFLICT", infraerrors.Reason(err))

@@ -30,10 +30,10 @@ func migrationUpgradeHistoryQuery(t *testing.T, fixture fs.FS) string {
 	return "SELECT jsonb_agg(to_jsonb(t) ORDER BY filename)::text FROM schema_migrations t WHERE filename IN (" + strings.Join(names, ",") + ")"
 }
 
-// migrationUpgradeExpectedGroupI18n adds only the newly introduced column to
+// migrationUpgradeExpectedGroupDefaults adds only the newly introduced column to
 // the expected old rows. The actual snapshot remains untouched: every old
 // field is still compared, and every migrated row must contain exactly {}.
-func migrationUpgradeExpectedGroupI18n(t *testing.T, snapshot string) string {
+func migrationUpgradeExpectedGroupDefaults(t *testing.T, snapshot string) string {
 	t.Helper()
 	var groups []map[string]json.RawMessage
 	require.NoError(t, json.Unmarshal([]byte(snapshot), &groups))
@@ -41,6 +41,8 @@ func migrationUpgradeExpectedGroupI18n(t *testing.T, snapshot string) string {
 	for _, group := range groups {
 		require.NotContains(t, group, "i18n", "the pinned source fixture must predate group translations")
 		group["i18n"] = json.RawMessage(`{}`)
+		require.NotContains(t, group, "force_openai_ultrafast", "the pinned source fixture must predate Ultrafast")
+		group["force_openai_ultrafast"] = json.RawMessage(`false`)
 	}
 	expected, err := json.Marshal(groups)
 	require.NoError(t, err)
@@ -108,7 +110,7 @@ func TestSubscriptionDailyResetUpgradeReview3_ExistingUpstreamDataAndMigrationHi
 	for name, query := range queries {
 		before[name] = snapshot(query)
 	}
-	before["groups"] = migrationUpgradeExpectedGroupI18n(t, before["groups"])
+	before["groups"] = migrationUpgradeExpectedGroupDefaults(t, before["groups"])
 
 	require.NoError(t, ApplyMigrations(ctx, db))
 	for name, query := range queries {

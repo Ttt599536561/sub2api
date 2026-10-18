@@ -112,19 +112,30 @@ func TestRefundShorteningCompensationAcrossExpiryPreservesTerm(t *testing.T) {
 			result, err := svc.ExecuteRefund(ctx, plan)
 			require.NoError(t, err)
 			require.False(t, result.Success)
+			if status == payment.ProviderStatusPending {
+				provider.queryStatus = payment.ProviderStatusFailed
+				result, err = svc.QueryAndFinalizeRefund(ctx, order.ID)
+				require.NoError(t, err)
+				require.NotContains(t, result.Warning, "rollback failed")
+			}
 			actual, err := svc.entClient.UserSubscription.Get(ctx, original.ID)
 			require.NoError(t, err)
 			assertRefundCompensationTerm(t, original, actual, original.ExpiresAt)
 			require.GreaterOrEqual(t, repo.lockReads, 2, "both deduction and compensation need a locked current snapshot")
 			beforeRepeat := actual.DailyResetVersion
-			require.True(t, svc.RollbackRefund(ctx, plan, nil))
+			if status == payment.ProviderStatusPending {
+				_, err = svc.QueryAndFinalizeRefund(ctx, order.ID)
+				require.Error(t, err)
+			} else {
+				require.True(t, svc.RollbackRefund(ctx, plan, nil))
+			}
 			actual, err = svc.entClient.UserSubscription.Get(ctx, original.ID)
 			require.NoError(t, err)
 			require.Equal(t, beforeRepeat, actual.DailyResetVersion, "the same completed compensation must be a no-op")
 			if status == payment.ProviderStatusPending {
 				detail, err := svc.latestRefundPendingDetail(ctx, order.ID)
 				require.NoError(t, err)
-				require.True(t, detail.DeductionRollbackOK)
+				require.True(t, detail.DeductionHeld)
 				require.True(t, detail.shouldDeduct())
 			}
 		})
@@ -173,6 +184,12 @@ func TestRefundShorteningCompensationPreservesConcurrentChanges(t *testing.T) {
 				require.Nil(t, early)
 				_, err = svc.ExecuteRefund(ctx, plan)
 				require.NoError(t, err)
+				if status == payment.ProviderStatusPending {
+					provider.queryStatus = payment.ProviderStatusFailed
+					result, err := svc.QueryAndFinalizeRefund(ctx, order.ID)
+					require.NoError(t, err)
+					require.NotContains(t, result.Warning, "rollback failed")
+				}
 				actual, err := svc.entClient.UserSubscription.Get(ctx, original.ID)
 				require.NoError(t, err)
 				assertRefundCompensationTerm(t, concurrent, actual, concurrent.ExpiresAt.AddDate(0, 0, 7))
@@ -196,6 +213,12 @@ func TestRefundShorteningCompensationRefreshFailureRollsBack(t *testing.T) {
 			require.NoError(t, err)
 			require.Nil(t, early)
 			_, _ = svc.ExecuteRefund(ctx, plan)
+			if status == payment.ProviderStatusPending {
+				provider.queryStatus = payment.ProviderStatusFailed
+				result, err := svc.QueryAndFinalizeRefund(ctx, order.ID)
+				require.NoError(t, err)
+				require.Contains(t, result.Warning, "rollback failed")
+			}
 			actual, err := svc.entClient.UserSubscription.Get(ctx, original.ID)
 			require.NoError(t, err)
 			assertRefundCompensationTerm(t, original, actual, original.ExpiresAt.AddDate(0, 0, -7))

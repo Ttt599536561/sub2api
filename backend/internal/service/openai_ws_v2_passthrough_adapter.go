@@ -768,6 +768,9 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 	if accountScoped {
 		firstClientMessage = accountScopedFirst
 	}
+	if err := validateOpenAIWSUpstreamModel(account, gjson.GetBytes(firstClientMessage, "model").String()); err != nil {
+		return err
+	}
 	usageMeta := newOpenAIWSPassthroughUsageMeta(initialRequestModel, firstClientMessage)
 	updatedFirst, blocked, policyErr := s.applyOpenAIFastPolicyToWSResponseCreate(ctx, account, capturedSessionModel, firstClientMessage)
 	if policyErr != nil {
@@ -1078,6 +1081,9 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 			// 绕过路径。这里只看 session.update 事件中的 session.model
 			// 字段，response.create 自己的 model 仍然由其本帧字段决定。
 			if updated := openAIWSPassthroughPolicyModelFromSessionFrame(account, payload); updated != "" {
+				if err := validateOpenAIWSUpstreamModel(account, updated); err != nil {
+					return payload, nil, err
+				}
 				capturedSessionModel = updated
 			}
 			usageMeta.updateSessionRequestModel(payload)
@@ -1095,6 +1101,11 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 			}
 			if isResponseCreate && model != "" && model != strings.TrimSpace(gjson.GetBytes(payload, "model").String()) {
 				payload = s.ReplaceModelInBody(payload, model)
+			}
+			if isResponseCreate {
+				if err := validateOpenAIWSUpstreamModel(account, model); err != nil {
+					return payload, nil, err
+				}
 			}
 			out, blocked, policyErr := s.applyOpenAIFastPolicyToWSResponseCreate(ctx, account, model, payload)
 			// 多轮 passthrough usage：仅在成功（non-block / non-err）

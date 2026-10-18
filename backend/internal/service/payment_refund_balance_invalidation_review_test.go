@@ -83,10 +83,10 @@ func TestReviewRefundBalanceInvalidationAdmission(t *testing.T) {
 			require.NoError(t, err)
 			if pending {
 				require.False(t, result.Success)
-				// The pending gateway outcome restores the pre-deduction.
+				// The pending gateway outcome keeps the pre-deduction held.
 				pendingUser, err := client.User.Get(ctx, user.ID)
 				require.NoError(t, err)
-				require.Equal(t, 100.0, pendingUser.Balance)
+				require.Zero(t, pendingUser.Balance)
 				result, err = payments.QueryAndFinalizeRefund(ctx, order.ID)
 				require.NoError(t, err)
 			}
@@ -211,7 +211,7 @@ func TestReviewRefundBalanceInvalidationFailuresNeverRepeatRefund(t *testing.T) 
 			require.True(t, result.Success)
 			wantSnapshots := []float64{0}
 			if pending {
-				wantSnapshots = []float64{0, 100, 0}
+				wantSnapshots = []float64{0, 0}
 			}
 			require.Equal(t, wantSnapshots, balanceSnapshots)
 			require.Equal(t, wantSnapshots, authSnapshots, "one failed cache must not skip the other cache")

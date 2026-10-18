@@ -190,7 +190,7 @@ func testDeployedCustomUpgrade(t *testing.T, baseline migrationUpgradeBaseline) 
 	for name, query := range queries {
 		before[name] = snapshot(query)
 	}
-	before["groups"] = migrationUpgradeExpectedGroupI18n(t, before["groups"])
+	before["groups"] = migrationUpgradeExpectedGroupDefaults(t, before["groups"])
 
 	require.NoError(t, ApplyMigrations(ctx, db))
 	for name, query := range queries {

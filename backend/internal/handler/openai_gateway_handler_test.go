@@ -1934,6 +1934,7 @@ type openAIResponsesWSUsageLogCase struct {
 	simpleModeRejectAtRead int64
 	compositeResolver      *service.CompositeRouteResolver
 	accountPlatform        string
+	configureAccount       func(*service.Account, *config.Config)
 	closeReason            string
 	closeStatus            coderws.StatusCode
 	firstPayload           string
@@ -1961,6 +1962,8 @@ type openAIResponsesWSUsageLogCase struct {
 	firstFrameCloseExpected bool
 	// secondTurnCloseExpected：第二个 turn 被拒（连接被 1008 关闭）。
 	secondTurnCloseExpected bool
+	// midFrameCloseExpected rejects a session.update before it reaches upstream.
+	midFrameCloseExpected bool
 }
 
 type openAIResponsesWSUsageLogResult struct {
@@ -2994,6 +2997,9 @@ func runOpenAIResponsesWebSocketUsageLogCase(t *testing.T, tc openAIResponsesWSU
 	cfg.Gateway.OpenAIWS.DialTimeoutSeconds = 3
 	cfg.Gateway.OpenAIWS.ReadTimeoutSeconds = 3
 	cfg.Gateway.OpenAIWS.WriteTimeoutSeconds = 3
+	if tc.configureAccount != nil {
+		tc.configureAccount(&account, cfg)
+	}
 
 	accountRepo := &openAIWSUsageHandlerAccountRepoStub{account: account}
 	usageRepo := &openAIWSUsageHandlerUsageLogRepoStub{created: make(chan *service.UsageLog, turnCount)}
@@ -3169,6 +3175,18 @@ func runOpenAIResponsesWebSocketUsageLogCase(t *testing.T, tc openAIResponsesWSU
 		err = clientConn.Write(writeCtx, coderws.MessageText, []byte(tc.midPayload))
 		cancelWrite()
 		require.NoError(t, err)
+		if tc.midFrameCloseExpected {
+			readCtx, cancelRead := context.WithTimeout(context.Background(), 3*time.Second)
+			_, _, readErr := clientConn.Read(readCtx)
+			cancelRead()
+			var closeErr coderws.CloseError
+			require.ErrorAs(t, readErr, &closeErr)
+			require.Equal(t, tc.closeStatus, closeErr.Code)
+			require.Contains(t, closeErr.Reason, tc.closeReason)
+			require.Len(t, upstreamPayloadCh, 1, "rejected session update must not reach upstream")
+			_ = clientConn.CloseNow()
+			return openAIResponsesWSUsageLogResult{}
+		}
 		readCompleted()
 	}
 	if strings.TrimSpace(tc.secondPayload) != "" && (turnCount >= 2) {

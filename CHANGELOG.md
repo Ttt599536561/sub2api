@@ -6,6 +6,9 @@
 
 ## 2026-10-18
 
+- **合入官方 v0.2.17（未发布）**：以二开 `ba36b5e22` 合入官方固定标签源码 `060d01604`，处理退款服务两处冲突，保留月卡、福利、财务恢复、会话保护和 Ultrafast。上游增量 62 文件；301 份历史 SQL 与 Ent 文件保持不变，源码默认版本修正为 0.2.17。合并和下述复审修复同一提交，稳定主题 `Merge official Sub2API v0.2.17 with custom safeguards`；见[合并与全面复审记录](docs/changes/2026-10-18-upstream-v0.2.17-merge-review.md)。
+- **v0.2.17 合并后复审修复（未发布）**：pending 退款保存精确订阅撤销快照并原子恢复；Stripe/Airwallex 私密付款流程绑定登录会话；WS 按最终实际出站模型拦截退役模型；易支付确认拒绝 NaN/Infinity。补齐真实数据库恢复和多轮 WS/支付竞态回归，旧图片/Lite 与历史升级夹具按新模型/列契约适配。后端 unit 58 包 / integration 52 包最终覆盖通过，前端 423 文件 / 3622 项、类型/lint、生产构建与 Linux 双架构编译通过；条件跳过及分包复测见记录。无新迁移、依赖或线上操作，详见同一[阶段记录](docs/changes/2026-10-18-upstream-v0.2.17-merge-review.md)。
+
 - **4a4349e1f 追加审查修复（未发布）**：修复 SSE 头事件类型导致 cyber 终态用量未补齐、透传 compact 模型恢复污染响应模型计费，以及 Chat/Messages 流式与缓冲路径过早结束或丢失 cyber 标记。兼容流保留首次拒绝、最多读取 2 秒以补齐真实用量，后续终态不触发换号或重复输出。新增 88 个回归场景通过，service/handler 整包验证共 18,961 个测试通过事件、0 失败、5 条件跳过，Linux/amd64 编译通过。稳定主题 `fix: retain cyber terminal usage and upstream billing identity`；见[本轮审查与验证](docs/changes/2026-10-18-review-4a4349e1f.md)。无新增迁移、依赖或部署参数。
 
 - **Ultrafast 协议回退与错误计费修复（未发布）**：修复 Messages→CC 漏强制/拦截、WS 策略与计费开关快照不同步，以及 cyber 错误用量丢失模型/tier；完整保留缓存 token、定价时刻和显式计费模型，首次错误后的权威终态可补齐计费事实。新增 68 个永久回归场景通过，后端 58 个测试包最终覆盖通过（18 项条件跳过，服务包旧断言/测试隔离适配后整包复测），Linux 编译通过。源码、测试和记录同提交，稳定主题 `fix: preserve Ultrafast policy across fallbacks and error billing`。详见 [修复与验证记录](docs/changes/2026-10-18-ultrafast-review-fixes.md)；无新迁移、依赖或部署参数变化。
