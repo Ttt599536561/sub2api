@@ -54,16 +54,22 @@ func (s *OpenAIGatewayService) DiagnoseModelAvailabilityForPlatform(
 	}
 
 	diag := ModelAvailabilityDiagnosis{}
+	requiredTransport, _ := ctx.Value(openAIRequestTransportKey{}).(OpenAIUpstreamTransport)
 	for i := range accounts {
+		// A WS-disabled account cannot make a retired WS request retryable.
+		// Ordinary HTTP diagnosis has no transport marker and keeps its pool.
+		if accounts[i].IsOpenAI() && !s.isOpenAIAccountTransportCompatible(&accounts[i], requiredTransport) {
+			continue
+		}
 		diag.HasAccountsInPool = true
-		if isRetiredOpenAISubscriptionModel(&accounts[i], resolveOpenAIAccountUpstreamModelForRequest(&accounts[i], requestedModel, false)) {
+		if isRetiredOpenAISubscriptionModel(&accounts[i], resolveOpenAIRequestModelWithContext(ctx, &accounts[i], requestedModel, false)) {
 			diag.HasRetiredSubscriptionModel = true
 		}
 		// Mirrors the per-candidate filter used during account selection
 		// (openai_account_scheduler.isAccountRequestCompatible): empty
 		// model_mapping accepts everything; otherwise the explicit / wildcard
 		// mapping must match.
-		if accounts[i].IsModelSupported(requestedModel) {
+		if supportsOpenAIRequestModelWithContext(ctx, &accounts[i], requestedModel, false) {
 			diag.HasModelSupport = true
 			return diag
 		}

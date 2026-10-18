@@ -6,6 +6,8 @@
 
 ## 2026-10-18
 
+- **f099e0739 四项审查修复（未发布）**：退款重试保留未归还金额与订阅撤销快照，补偿/审计异常可持久化本地恢复，旧记录无法确认归属时安全拒绝；Messages/Chat/WS准入按实际渠道及传输模式映射，目录保留有效别名；账号筛选器恢复独立无障碍名称。新增106个永久回归场景通过，service/handler整包19,276个通过事件、0失败、5条件跳过，PostgreSQL退款原子恢复、前端类型/lint、Go静态检查和Linux编译通过。稳定主题 `fix: preserve refund recovery and mapped model eligibility`，源码与记录同提交；无迁移/依赖变更，新增审计恢复语义的回退边界见[修复与验证记录](docs/changes/2026-10-18-f099e0739-fixes.md)。
+
 - **合入官方 v0.2.17（未发布）**：以二开 `ba36b5e22` 合入官方固定标签源码 `060d01604`，处理退款服务两处冲突，保留月卡、福利、财务恢复、会话保护和 Ultrafast。上游增量 62 文件；301 份历史 SQL 与 Ent 文件保持不变，源码默认版本修正为 0.2.17。合并和下述复审修复同一提交，稳定主题 `Merge official Sub2API v0.2.17 with custom safeguards`；见[合并与全面复审记录](docs/changes/2026-10-18-upstream-v0.2.17-merge-review.md)。
 - **v0.2.17 合并后复审修复（未发布）**：pending 退款保存精确订阅撤销快照并原子恢复；Stripe/Airwallex 私密付款流程绑定登录会话；WS 按最终实际出站模型拦截退役模型；易支付确认拒绝 NaN/Infinity。补齐真实数据库恢复和多轮 WS/支付竞态回归，旧图片/Lite 与历史升级夹具按新模型/列契约适配。后端 unit 58 包 / integration 52 包最终覆盖通过，前端 423 文件 / 3622 项、类型/lint、生产构建与 Linux 双架构编译通过；条件跳过及分包复测见记录。无新迁移、依赖或线上操作，详见同一[阶段记录](docs/changes/2026-10-18-upstream-v0.2.17-merge-review.md)。
 

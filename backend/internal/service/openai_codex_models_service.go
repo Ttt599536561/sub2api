@@ -135,7 +135,8 @@ func (s *OpenAIGatewayService) BuildGroupConfiguredCodexModelsManifest(
 	if err != nil {
 		return nil, false, fmt.Errorf("load group configured Codex models: %w", err)
 	}
-	configuredModels := openAIConfiguredCodexModelIDsForGroup(visible, group)
+	channelMapping := openAIModelsChannelMapper(ctx, s.channelService, &group.ID)
+	configuredModels := openAIConfiguredCodexModelIDsForGroup(visible, group, channelMapping)
 	if len(configuredModels) == 0 {
 		return nil, false, nil
 	}
@@ -147,6 +148,7 @@ func (s *OpenAIGatewayService) BuildGroupConfiguredCodexModelsManifest(
 		group,
 		nil,
 		true,
+		channelMapping,
 	)
 	if err != nil {
 		return nil, false, fmt.Errorf("initialize group configured Codex models: %w", err)
@@ -193,8 +195,9 @@ func (s *OpenAIGatewayService) MergeGroupConfiguredCodexModels(
 		return fmt.Errorf("load group configured Codex models: %w", err)
 	}
 	var configuredModels []string
+	channelMapping := openAIModelsChannelMapper(ctx, s.channelService, &group.ID)
 	if !group.CodexModelsManifestConfig.Enabled {
-		configuredModels = openAIConfiguredCodexModelIDsForGroup(visible, group)
+		configuredModels = openAIConfiguredCodexModelIDsForGroup(visible, group, channelMapping)
 	}
 	body, changed, err := mergeConfiguredCodexModelsManifest(
 		manifest.Body,
@@ -212,7 +215,7 @@ func (s *OpenAIGatewayService) MergeGroupConfiguredCodexModels(
 		}
 		changed = true
 	}
-	filtered, retired, err := filterRetiredOpenAIPublicModelsBody(body, accounts, true)
+	filtered, retired, err := filterRetiredOpenAIPublicModelsBody(body, accounts, true, channelMapping)
 	if err != nil {
 		return fmt.Errorf("filter retired Codex models: %w", err)
 	}
@@ -284,10 +287,10 @@ func openAIConfiguredCodexModelIDs(accounts []Account) []string {
 	return models
 }
 
-func openAIConfiguredCodexModelIDsForGroup(accounts []Account, group *Group) []string {
+func openAIConfiguredCodexModelIDsForGroup(accounts []Account, group *Group, channelMappings ...func(string) string) []string {
 	models := supplementUnmappedOpenAIModels(accounts, openAIConfiguredCodexModelIDs(accounts))
 	if group == nil || !group.ModelAllowlistEnabled() {
-		return filterRetiredOpenAIModelIDs(accounts, models)
+		return filterRetiredOpenAIModelIDs(accounts, models, channelMappings...)
 	}
 
 	seen := make(map[string]struct{}, len(models)+len(group.ModelAllowlist.Models))
@@ -316,7 +319,7 @@ func openAIConfiguredCodexModelIDsForGroup(accounts []Account, group *Group) []s
 		}
 	}
 	sort.Strings(models)
-	return filterRetiredOpenAIModelIDs(accounts, models)
+	return filterRetiredOpenAIModelIDs(accounts, models, channelMappings...)
 }
 
 const (
@@ -884,6 +887,7 @@ func (s *GatewayService) BuildCodexModelsManifestForGroup(
 		group,
 		compositeRoutes,
 		compositeRoutesAvailable,
+		openAIModelsChannelMapper(ctx, s.channelService, &group.ID),
 	)
 }
 
@@ -894,9 +898,10 @@ func buildCodexModelsManifestForAccounts(
 	group *Group,
 	compositeRoutes []CompositeModelRoute,
 	compositeRoutesAvailable bool,
+	channelMappings ...func(string) string,
 ) ([]byte, error) {
 	if effectivePlatform == PlatformOpenAI {
-		modelIDs = filterRetiredOpenAIModelIDs(accounts, modelIDs)
+		modelIDs = filterRetiredOpenAIModelIDs(accounts, modelIDs, channelMappings...)
 	} else if effectivePlatform == PlatformComposite {
 		filtered := make([]string, 0, len(modelIDs))
 		for _, modelID := range modelIDs {

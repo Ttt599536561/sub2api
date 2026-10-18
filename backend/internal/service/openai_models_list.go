@@ -165,13 +165,26 @@ func standardOpenAIModelsBody(body []byte, fromManifest bool) ([]byte, error) {
 // checking their routing eligibility. Applying account mappings to source IDs
 // would interpret upstream names as aliases and can retain retired targets or
 // discard metadata needed by a valid replacement alias.
-func projectAccountModelsBody(body []byte, account *Account, group *Group, codex bool) ([]byte, error) {
+func projectAccountModelsBody(body []byte, account *Account, group *Group, codex bool, channelMappings ...func(string) string) ([]byte, error) {
 	projected, err := projectAccountModelAliases(body, account, group, codex)
 	if err != nil {
 		return nil, err
 	}
-	filtered, _, err := filterRetiredOpenAIPublicModelsBody(projected, []Account{*account}, codex)
+	filtered, _, err := filterRetiredOpenAIPublicModelsBody(projected, []Account{*account}, codex, channelMappings...)
 	return filtered, err
+}
+
+// openAIModelsChannelMapper keeps public catalog IDs intact while evaluating
+// retirement against the same channel target used by request routing. Channel
+// lookup failures retain ResolveChannelMapping's original-model fallback.
+func openAIModelsChannelMapper(ctx context.Context, channels *ChannelService, groupID *int64) func(string) string {
+	if channels == nil || groupID == nil {
+		return nil
+	}
+	id := *groupID
+	return func(model string) string {
+		return channels.ResolveChannelMapping(ctx, id, model).MappedModel
+	}
 }
 
 // projectAccountModelAliases retains the source entry's metadata, never changes
@@ -273,11 +286,11 @@ func projectAccountModelAliases(body []byte, account *Account, group *Group, cod
 // ApplyPinnedCodexModelsMapping projects all remotely discovered Codex catalogs,
 // including ordinary discovery and pinned scheduler fallback. Locally generated
 // catalogs retain their existing policy and do not pass through this function.
-func ApplyPinnedCodexModelsMapping(response *OpenAIModelsResponse, account *Account, group *Group) error {
+func ApplyPinnedCodexModelsMapping(response *OpenAIModelsResponse, account *Account, group *Group, channelMappings ...func(string) string) error {
 	if group == nil || group.Platform != PlatformOpenAI {
 		return nil
 	}
-	body, err := projectAccountModelsBody(response.Body, account, group, true)
+	body, err := projectAccountModelsBody(response.Body, account, group, true, channelMappings...)
 	if err != nil {
 		return err
 	}
@@ -288,15 +301,28 @@ func ApplyPinnedCodexModelsMapping(response *OpenAIModelsResponse, account *Acco
 	return nil
 }
 
+// ApplyPinnedCodexModelsMapping supplies group channel policy before the
+// account-specific projection can discard an otherwise valid public alias.
+func (s *OpenAIGatewayService) ApplyPinnedCodexModelsMapping(ctx context.Context, response *OpenAIModelsResponse, account *Account, group *Group) error {
+	if s == nil || group == nil {
+		return ApplyPinnedCodexModelsMapping(response, account, group)
+	}
+	return ApplyPinnedCodexModelsMapping(response, account, group, openAIModelsChannelMapper(ctx, s.channelService, &group.ID))
+}
+
 // FetchPinnedOpenAIModelsList includes explicitly enabled scheduler fallback.
 // An authoritative empty catalog is success, including after group filtering.
 func (s *OpenAIGatewayService) FetchPinnedOpenAIModelsList(ctx context.Context, group *Group, maxAccountSwitches int, ifNoneMatch string) (*OpenAIModelsResponse, *Account, error) {
+	var channelMapping func(string) string
+	if s != nil && group != nil {
+		channelMapping = openAIModelsChannelMapper(ctx, s.channelService, &group.ID)
+	}
 	fetch := func(ctx context.Context, account *Account) (*OpenAIModelsResponse, error) {
 		response, err := s.FetchOpenAIModelsList(ctx, account)
 		if err != nil {
 			return nil, err
 		}
-		response.Body, err = projectAccountModelsBody(response.Body, account, group, false)
+		response.Body, err = projectAccountModelsBody(response.Body, account, group, false, channelMapping)
 		return response, err
 	}
 	results, err := s.fetchPinnedOpenAIModels(ctx, group, fetch)

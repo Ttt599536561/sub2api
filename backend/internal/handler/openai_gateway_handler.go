@@ -1220,7 +1220,6 @@ func (h *OpenAIGatewayHandler) Messages(c *gin.Context) {
 		return
 	}
 	bindOpenAIReasoningEffortPolicyForMessagesRequest(c, apiKey, body)
-	routingModel := service.NormalizeOpenAICompatRequestedModel(reqModel)
 	preferredMappedModel := resolveOpenAIMessagesDispatchMappedModel(c, apiKey, reqModel)
 	reqStream := gjson.GetBytes(body, "stream").Bool()
 
@@ -1236,6 +1235,8 @@ func (h *OpenAIGatewayHandler) Messages(c *gin.Context) {
 
 	// 解析渠道级模型映射
 	channelMappingMsg, _ := h.gatewayService.ResolveChannelMappingAndRestrict(c.Request.Context(), apiKey.GroupID, reqModel)
+	routingModel := service.NormalizeOpenAICompatRequestedModel(openAIChannelForwardModel(channelMappingMsg, reqModel))
+	c.Request = c.Request.WithContext(service.WithOpenAINativeModelMapping(c.Request.Context()))
 	mappedBodyForMessages := newOpenAIModelMappedBodyCache(body, h.gatewayService.ReplaceModelInBody)
 
 	// 绑定错误透传服务，允许 service 层在非 failover 错误场景复用规则。
@@ -2804,8 +2805,17 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 	// 并按最新门复核当前账号（准入与计费同源），峰前建连保活不能让后续 turn
 	// 继续按建连时刻的谷价计费。生图意图只影响能力路由与图片计费，不关门。
 	// 建连时刻只用于选号/准入，不作为任何 turn 的计费定价时刻。
+	ctx = h.gatewayService.WithOpenAIWSModelRouting(ctx, firstMessage)
 	wsPricingCtx, _ := h.gatewayService.WithOpenAIRequestPricingContext(ctx, apiKey.GroupID)
 	ctx = wsPricingCtx
+	closeNoAvailableAccount := func() {
+		diagnosis := h.gatewayService.DiagnoseModelAvailabilityForPlatform(ctx, apiKey.GroupID, wsForwardModel, requestPlatform)
+		if diagnosis.HasRetiredSubscriptionModel && !diagnosis.HasModelSupport {
+			closeOpenAIClientWS(wsConn, coderws.StatusPolicyViolation, service.ErrOpenAIRetiredSubscriptionModel.Error())
+			return
+		}
+		closeOpenAIClientWS(wsConn, coderws.StatusTryAgainLater, "no available account")
+	}
 
 	for {
 		if ctx.Err() != nil {
@@ -2834,7 +2844,7 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 			if lastFailoverErr != nil {
 				closeOpenAIWSFailoverExhausted(c, wsConn, lastFailoverErr)
 			} else {
-				closeOpenAIClientWS(wsConn, coderws.StatusTryAgainLater, "no available account")
+				closeNoAvailableAccount()
 			}
 			return
 		}
@@ -2842,7 +2852,7 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 			if lastFailoverErr != nil {
 				closeOpenAIWSFailoverExhausted(c, wsConn, lastFailoverErr)
 			} else {
-				closeOpenAIClientWS(wsConn, coderws.StatusTryAgainLater, "no available account")
+				closeNoAvailableAccount()
 			}
 			return
 		}

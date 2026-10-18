@@ -1462,8 +1462,9 @@ func (s *GatewayService) GetAvailableModels(ctx context.Context, groupID *int64,
 	}
 
 	// If no account has model_mapping, return nil (use default)
+	channelMapping := openAIModelsChannelMapper(ctx, s.channelService, groupID)
 	if !hasAnyMapping && platform == PlatformOpenAI {
-		models := filterRetiredOpenAIModelIDs(accounts, openai.DefaultModelIDs())
+		models := filterRetiredOpenAIModelIDs(accounts, openai.DefaultModelIDs(), channelMapping)
 		if len(models) != len(openai.DefaultModels) {
 			return models
 		}
@@ -1485,7 +1486,7 @@ func (s *GatewayService) GetAvailableModels(ctx context.Context, groupID *int64,
 
 	if platform == PlatformOpenAI {
 		models = supplementUnmappedOpenAIModels(accounts, models)
-		models = filterRetiredOpenAIModelIDs(accounts, models)
+		models = filterRetiredOpenAIModelIDs(accounts, models, channelMapping)
 		// nil means "use defaults" to listing callers; an empty filtered catalog
 		// must remain authoritative instead of resurrecting retired defaults.
 		if len(models) == 0 {

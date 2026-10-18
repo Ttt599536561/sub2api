@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"strings"
@@ -23,7 +24,10 @@ func isRetiredOpenAISubscriptionModel(account *Account, upstreamModel string) bo
 // Only remove entries blocked by retirement. Unknown models and other platforms
 // retain their existing listing policy. An explicitly mapped replacement is
 // allowed, but a public alias targeting retired GPT-5.5 is not.
-func openAIModelRetiredForAccounts(accounts []Account, modelID string) bool {
+func openAIModelRetiredForAccounts(accounts []Account, modelID string, channelMappings ...func(string) string) bool {
+	if len(channelMappings) > 0 && channelMappings[0] != nil {
+		modelID = channelMappings[0](modelID)
+	}
 	retired := false
 	for i := range accounts {
 		account := &accounts[i]
@@ -40,10 +44,10 @@ func openAIModelRetiredForAccounts(accounts []Account, modelID string) bool {
 	return retired
 }
 
-func filterRetiredOpenAIModelIDs(accounts []Account, models []string) []string {
+func filterRetiredOpenAIModelIDs(accounts []Account, models []string, channelMappings ...func(string) string) []string {
 	filtered := make([]string, 0, len(models))
 	for _, model := range models {
-		if !openAIModelRetiredForAccounts(accounts, model) {
+		if !openAIModelRetiredForAccounts(accounts, model, channelMappings...) {
 			filtered = append(filtered, model)
 		}
 	}
@@ -53,7 +57,7 @@ func filterRetiredOpenAIModelIDs(accounts []Account, models []string) []string {
 // Entries must already use client-visible names, not raw upstream IDs. Resolve
 // each public name exactly as routing does, after projection and before the
 // final client ETag is calculated. Preserve unknown fields.
-func filterRetiredOpenAIPublicModelsBody(body []byte, accounts []Account, codex bool) ([]byte, bool, error) {
+func filterRetiredOpenAIPublicModelsBody(body []byte, accounts []Account, codex bool, channelMappings ...func(string) string) ([]byte, bool, error) {
 	field, idField := "data", "id"
 	if codex {
 		field, idField = "models", "slug"
@@ -69,7 +73,7 @@ func filterRetiredOpenAIPublicModelsBody(body []byte, accounts []Account, codex 
 		if json.Unmarshal(raw, &entry) == nil {
 			_ = json.Unmarshal(entry[idField], &id)
 		}
-		if !openAIModelRetiredForAccounts(accounts, id) {
+		if !openAIModelRetiredForAccounts(accounts, id, channelMappings...) {
 			filtered = append(filtered, raw)
 		}
 	}
@@ -87,7 +91,11 @@ func filterRetiredOpenAIPublicModelsBody(body []byte, accounts []Account, codex 
 // Compact-only administrator mappings are evaluated against their actual
 // target, without treating an old client-visible name as a retired target.
 func supportsOpenAIRequestModel(account *Account, requestedModel string, requireCompact bool) bool {
-	if isRetiredOpenAISubscriptionModel(account, resolveOpenAIAccountUpstreamModelForRequest(account, requestedModel, requireCompact)) {
+	return supportsOpenAIRequestModelWithContext(context.Background(), account, requestedModel, requireCompact)
+}
+
+func supportsOpenAIRequestModelWithContext(ctx context.Context, account *Account, requestedModel string, requireCompact bool) bool {
+	if isRetiredOpenAISubscriptionModel(account, resolveOpenAIRequestModelWithContext(ctx, account, requestedModel, requireCompact)) {
 		return false
 	}
 	return account.isModelMappingSupported(requestedModel)

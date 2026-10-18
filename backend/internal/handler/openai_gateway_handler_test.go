@@ -1990,6 +1990,15 @@ func (s *openAIWSUsageHandlerAccountRepoStub) ListSchedulableByGroupIDAndPlatfor
 	return s.ListSchedulableByPlatform(ctx, platform)
 }
 
+func (s *openAIWSUsageHandlerAccountRepoStub) ListModelAvailabilityCandidates(ctx context.Context, _ *int64, platforms []string, _ bool) ([]service.Account, error) {
+	for _, platform := range platforms {
+		if platform == s.account.Platform {
+			return s.ListSchedulableByPlatform(ctx, platform)
+		}
+	}
+	return nil, nil
+}
+
 func (s *openAIWSUsageHandlerAccountRepoStub) GetByID(ctx context.Context, id int64) (*service.Account, error) {
 	if s.account.ID != id {
 		return nil, nil
