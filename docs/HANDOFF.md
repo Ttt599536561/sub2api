@@ -20,6 +20,16 @@
 
 [0.2.15 已发布版本归档](changes/2026-10-11-v0.2.15-r1.md) 保留代码变化、对应提交和历史验证范围。历史报告中的“未发布”“未推送”描述其当时阶段；后续发布状态以对应日期的发布记录为准。
 
+## 2026-10-18 Ultrafast 第二轮审查：3 项待修复
+
+已提交的功能与上一轮修复源码为 `e84623e8c4ad9e2f727db2a3da58d44264773bf3`，仍未推送、发布或部署。本次重新审查完整功能链，以 Go overlay 复现并确认 3 项 P2：
+
+1. UF-R5：Messages 转 raw Chat Completions 未应用分组强制 Ultra，也不执行对应全局 block。
+2. UF-R6：WS 已建连接使用旧策略开关，但后续 turn 计费采用新分组开关，导致 6×/8×口径漂移。
+3. UF-R7：上游 cyber 拒绝且产生真实用量时，错误结算丢失 tier/最终模型，Ultra 按 Standard 少计。
+
+9 个新增复现场景均以预期业务断言失败，业务代码和永久测试未改。问题、源码位置、验证与边界见 [第二轮审查记录](changes/2026-10-18-ultrafast-second-review.md)。这些待办优先于下方历史阶段“无其他已确认问题”的结论；不要把上一轮已修复事项或旧测试通过当成这三项已经关闭。
+
 ## 2026-10-17 OpenAI 分组强制 Ultrafast（未发布）
 
 功能已在 E 盘独立工作树 `E:\sub2二次开发项目\.worktrees\openai-group-ultrafast-20261017` 完成源码实现，分支为 `codex/openai-group-ultrafast-20261017`。新增迁移 `246_group_force_openai_ultrafast.sql`，仅对启用开关的 OpenAI 分组目标模型应用最终 Ultrafast 的 Standard × 8 token 计费；Composite、未启用分组、其他模型及已发布 `0.2.16-r1` 均不包含本功能。代码提交为 `718f9b457`、`c261a20d8`、`26dab2c3b`、`c928288eb`，验证和限制见 [实施与验证记录](changes/2026-10-17-openai-group-ultrafast.md)。本功能尚未推送、构建发布镜像、执行在线迁移或部署生产；主目录既有未提交修改未触碰。
