@@ -58,3 +58,5 @@
 ## 主目录整合
 
 整合前为主目录 10 项跟踪 WIP 保存逐文件备份及 SHA256，只临时 stash 有交叠的 `.gitignore`；快进整合后已恢复。其余 9 项跟踪文件与 4 份单独未跟踪文件哈希全部一致，`.gitignore` 原一条白名单编辑与原差异完全一致；既有 `backend/internal/web/dist/` 没有改动。本轮 67 份源码在主目录逐字节匹配最终验证快照，没有把用户 WIP 纳入功能提交。WIP 恢复 stash 和备份保留，未删除用户原分支或历史工作树。
+
+本轮临时 Linux 二进制与前端构建副本已清理，哈希和验证摘要保留。任务工作树已从 Git 注销，功能分支完整保留；Git 删除因目录非空留下残余，随后原生 PowerShell 删除该已核验残余目录被自动审批以 `blocked by policy` 拒绝，未给具体规则，未绕过或重试。残余目录仍在主项目 `.worktrees/affiliate-subdomain-20261020`，不再作为可用工作树；收据为 `.cache/affiliate-subdomain-20261020/final-artifact-cleanup.json`。

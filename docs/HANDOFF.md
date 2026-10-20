@@ -7,6 +7,8 @@
 用户选择专属子域名入口。源码 `14aec28502a0e26cf97895d8d265f7d978f3ac6f` 已从 `codex/affiliate-subdomain-20261020` 快进整合到主目录 main；验证在 E 盘独立工作树完成。67 份本轮源码哈希与验证快照一致，原 10 项跟踪 WIP、4 份单独未跟踪文件及既有前端构建目录保留。域名映射与 Redis 不透明归因已实现，受保护邮箱/第三方注册按事务保存邀请关系，具体口径、审查与实际验证见[本轮记录](changes/2026-10-20-affiliate-subdomain.md)。当前源码验证已完成：后端 58 包 / 22,547 叶通过（18 项既有条件跳过），PostgreSQL 159 叶、前端 217 项、类型/lint 和 Linux 嵌入式构建通过；尚未推送、发布镜像或部署生产。
 
 上线需同时部署新前后端、迁移 247，并按[启用说明](../deploy/AFFILIATE_SUBDOMAIN.md)配置 DNS、HTTPS、主站地址、Host 转发和推广账户。用户已确认将自行在腾讯服务器操作；完整目标账号与域名仅保存在聊天和本机 output 启用清单，未硬编码到源码。原已发布镜像仍为下方 0.2.17-r2，本轮不改变其源码或 digest。本次 `.gitignore` 恢复 stash `beddb7a8f` 与主项目 `.cache/affiliate-subdomain-20261020/integration-preservation` 备份作为 WIP 恢复证据保留。测试数据库已停止；删除其约 112 MB 数据、4 个辅助文件及目录联接被自动审批以 `blocked by policy` 拒绝，未提供具体规则，已保留且未绕过。
+本轮临时 Linux 二进制与前端构建副本已清理，哈希和验证摘要保留。任务工作树已从 Git 注销，功能分支完整保留；Git 删除因目录非空留下残余，随后原生 PowerShell 删除该已核验残余目录被自动审批以 `blocked by policy` 拒绝，未给具体规则，未绕过或重试。残余目录仍在主项目 `.worktrees/affiliate-subdomain-20261020`，不再作为可用工作树；收据为 `.cache/affiliate-subdomain-20261020/final-artifact-cleanup.json`。
+
 ## 当前代码和发布状态
 
 | 项目 | 截至本次交接的状态 |
