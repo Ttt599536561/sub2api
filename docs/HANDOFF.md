@@ -9,7 +9,7 @@
 上线需同时部署新前后端、迁移 247，并按[启用说明](../deploy/AFFILIATE_SUBDOMAIN.md)配置 DNS、HTTPS、主站地址、Host 转发和推广账户。用户已确认将自行在腾讯服务器操作；完整目标账号与域名仅保存在聊天和本机 output 启用清单，未硬编码到源码。原已发布镜像仍为下方 0.2.17-r2，本轮不改变其源码或 digest。本次 `.gitignore` 恢复 stash `beddb7a8f` 与主项目 `.cache/affiliate-subdomain-20261020/integration-preservation` 备份作为 WIP 恢复证据保留。测试数据库已停止；删除其约 112 MB 数据、4 个辅助文件及目录联接被自动审批以 `blocked by policy` 拒绝，未提供具体规则，已保留且未绕过。
 本轮临时 Linux 二进制与前端构建副本已清理，哈希和验证摘要保留。任务工作树已从 Git 注销，功能分支完整保留；Git 删除因目录非空留下残余，随后原生 PowerShell 删除该已核验残余目录被自动审批以 `blocked by policy` 拒绝，未给具体规则，未绕过或重试。残余目录仍在主项目 `.worktrees/affiliate-subdomain-20261020`，不再作为可用工作树；收据为 `.cache/affiliate-subdomain-20261020/final-artifact-cleanup.json`。
 
-2026-10-21 服务器配置进度：用户已添加推广子域名 A 记录，公共解析检查已返回服务器地址；当时 HTTPS 返回父域/ www 的过期默认站点证书，未覆盖推广子域名。服务器由 SSH 管理，既有 Nginx 代理本机 Docker 8080；下一步确认实际加载的站点配置和证书管理工具，再配置专属 HTTPS、保留 Host 的反向代理，部署新应用并保存推广账号映射。此为用户输出与只读探测的交接，尚未执行服务器变更。
+2026-10-21 服务器配置进度：用户已添加推广子域名 A 记录，公共解析检查已返回服务器地址；当时 HTTPS 返回父域/ www 的过期默认站点证书，未覆盖推广子域名。服务器由 SSH 管理，既有 Nginx 代理本机 Docker 8080。用户后续确认 Debian 12、Nginx 加载 `/etc/nginx/conf.d/*.conf` 与 `/etc/nginx/sites-enabled/*`、主站配置在 `sites-enabled/default`，证书使用 `/usr/bin/certbot` 与 `/etc/letsencrypt/live/`。下一步为推广域名单独申请证书，再配置专属 HTTPS、保留 Host 的反向代理，部署新应用并保存推广账号映射。此为用户输出与只读探测的交接，尚未执行服务器变更。
 
 ## 当前代码和发布状态
 
