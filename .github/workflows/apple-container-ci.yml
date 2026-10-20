@@ -1,0 +1,17 @@
+name: Apple container deployment checks (manual)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  apple-container:
+    runs-on: macos-15-intel
+    steps:
+      - uses: actions/checkout@v6
+      - name: Check Apple container deployment scripts
+        run: |
+          /bin/bash -n deploy/apple-container.sh
+          /bin/bash deploy/tests/apple-container-test.sh

@@ -4,9 +4,13 @@
 
 ## 2026-10-21 专属推广子域名与 r3 发布准备（生产仍为 r2）
 
-用户最新要求改为由 GitHub Actions 构建并发布镜像地址，本轮不升级生产应用。专属推广源码 `14aec28502a0e26cf97895d8d265f7d978f3ac6f` 已推送 GitHub main，正在等待该精确 SHA 的 main / push CI 与 Security Scan。`0.2.17-r3` 标签已查验不存在；专用双架构工作流与[发布记录](../deploy/CUSTOM_IMAGE_0.2.17-r3.md)处于本机未提交的准备阶段，尚未触发镜像发布，不能把候选地址当作已发布镜像。
+用户最新要求只通过 GitHub Actions 发布 Linux 镜像地址，本轮不运行 macOS 任务、不升级生产应用。应用功能基线 `14aec28502a0e26cf97895d8d265f7d978f3ac6f` 已推送：首轮 [CI 39464790379](https://github.com/Ttt599536561/sub2api/actions/runs/39464790379) 的 Linux 任务全部成功，但 macOS shell 任务因托管 runner 容量限制未被分配运行器而取消，整体 CI 未通过；[Security Scan 39464790324](https://github.com/Ttt599536561/sub2api/actions/runs/39464790324) 成功。这是平台排队问题，没有执行失败的 Apple 脚本结果。初版 r3 发布控制已提交为 `521909fbe8daeadf505ba8a32495c332e2ae8f1e`，镜像仍未发布。
 
-功能实现与原本机验证见[实施记录](changes/2026-10-20-affiliate-subdomain.md)。本机主目录原 WIP 保留；发布配置在独立 E 盘工作树 `E:\sub2二次开发项目\.worktrees\publish-affiliate-r3-20261021`、分支 `codex/publish-affiliate-r3-20261021` 准备。发布工作流只构建固定应用 SHA，不包含主目录未提交修改、发布文档提交或本机维护辅助工具。历史单元/集成验证不能代替本轮 Actions 与镜像运行结果。
+当前在发布工作树拆分 CI：自动 shell 任务改用 Ubuntu 24.04，保留 Apple 脚本的 `bash -n` 与四项 Linux / Compose / Caddy 检查；真正依赖 macOS 工具的测试移入[仅手动 Apple 检查](../.github/workflows/apple-container-ci.yml)，不在此次发布门禁中。其他后端、前端、lint、发布辅助及安全检查保持不变，Linux amd64 / arm64 镜像继续保留。此调整尚未提交；需提交并推送新的完整发布快照，等待其 main / push Linux CI 与 Security Scan 均成功，再以独立控制提交更新 r3 `SOURCE_COMMIT`。新 SHA 尚未产生，不预填。当前 r3 工作流仍指向旧功能基线，不能在重固定前触发发布。
+
+本机验证：YAML 解析与 13 段工作流 Bash 语法检查通过，Apple 脚本仅执行 `bash -n`；四项 Linux / Compose / Caddy 脚本检查全部通过，67 份运行时代码哈希与既有验证快照一致。本机没有运行 Apple 容器测试、macOS 任务或 Docker 引擎；新发布快照的完整 GitHub Linux CI 与安全扫描仍需在提交后执行。
+
+功能实现与原本机验证见[实施记录](changes/2026-10-20-affiliate-subdomain.md)。本机主目录原 WIP 保留；发布配置在独立 E 盘工作树 `E:\sub2二次开发项目\.worktrees\publish-affiliate-r3-20261021`、分支 `codex/publish-affiliate-r3-20261021` 准备。发布工作流只构建独立固定的发布快照，不包含主目录未提交修改或本机维护辅助工具；本轮运行时代码仍与功能基线一致，CI 与文档调整不改变应用行为。历史单元/集成验证不能代替本轮 Actions 与镜像运行结果。
 
 服务器身份与连接已确认：主代理通过本次连接指定物理网卡成功 SSH，核验生产容器仍为 `0.2.17-r2`，OCI revision `19b66b0efa2fff5006d512693524c50ff151a0ae`、既有固定 digest 与健康状态均匹配。前期推广 DNS 指向另一入口的问题已由用户修正，两个权威 DNS 返回一致；早期所见过期证书属于原错误入口，不能据此认定实际主站证书过期。
 
@@ -25,12 +29,12 @@
 | 项目仓库 | `https://github.com/Ttt599536561/sub2api`；上游为 `Wei-Shaw/sub2api`。 |
 | 已发布应用源码 / OCI revision | `19b66b0efa2fff5006d512693524c50ff151a0ae`，1cfafd30e 全面复审的九类修复版本。 |
 | 本轮合入官方基线 | `060d0160417782cd962a0c7f460f6cd4565d4916`，官方 v0.2.17。 |
-| 工作流控制提交 | `ccd1a7694e2529cd096f68ea25998e9bf858a354`，仅 CI/文档变化；后续发布记录不改变镜像源码。 |
+| r2 工作流控制提交 | `ccd1a7694e2529cd096f68ea25998e9bf858a354`，仅 CI/文档变化；后续发布记录不改变镜像源码。 |
 | 源码版本文件 | `backend/cmd/server/VERSION` 为 `0.2.17`；r3 发布构建参数计划标识 `0.2.17-r3`，生产仍为 r2。 |
 | 已发布镜像 | `ghcr.io/ttt599536561/sub2api-custom:0.2.17-r2`，支持 `linux/amd64`、`linux/arm64`。 |
 | 固定镜像内容 | `sha256:e0cb7dca1f9fd9d8d1bb16fe4592f2a19bfb6587e22b2e7710c1fe13f3812076`。 |
 | r2 GitHub 验证 | 精确源码 CI / Security Scan、双架构构建与运行检查、匿名完整运行层校验已通过，链接与范围见 r2 发布记录。 |
-| r3 发布状态 | 固定源码 `14aec2850` 已推送，等待本轮 CI / Security Scan；专用工作流未提交、未触发，镜像未发布。 |
+| r3 发布状态 | 初版控制 `521909fbe` 已提交；旧功能基线的 Linux 检查和安全扫描成功，但 macOS 容量导致整体 CI 未通过。正在准备仅自动运行 Linux 的新快照，最终 `SOURCE_COMMIT` 待固定；镜像未发布。 |
 | 本机工作位置 | 主目录 `E:\sub2二次开发项目` 的 `main` 已含未发布的专属推广域名源码 `14aec2850`；原 WIP、历史发布工作树与旧分支保留。 |
 | 生产部署 | 主代理已独立核验运行中的 r2 镜像 digest / revision 与健康状态；Nginx / 证书及备份已准备，应用保持 r2。用户本轮只要求发布镜像，不执行应用升级或迁移 247。 |
 
