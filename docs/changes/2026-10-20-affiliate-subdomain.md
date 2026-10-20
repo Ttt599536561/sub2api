@@ -2,7 +2,7 @@
 
 任务开始于 2026-10-20，最终验证完成于 2026-10-21（Asia/Shanghai）。源码：`14aec28502a0e26cf97895d8d265f7d978f3ac6f`（`feat: add trusted affiliate subdomain registration`），已快进整合到本地主目录 main。
 
-后续状态：本功能已随 [0.2.17-r3](../../deploy/CUSTOM_IMAGE_0.2.17-r3.md) 发布，生产仍为 r2。下文保留实现阶段的原始验证与部署状态，后续发布结果见文末，不把不同阶段的计数混用。
+后续状态：本功能已随 [0.2.17-r3](../../deploy/CUSTOM_IMAGE_0.2.17-r3.md) 发布，生产已运行 r3 并正式启用专属推广入口。下文保留实现阶段的原始验证与部署状态，后续发布结果见文末，不把不同阶段的计数混用。
 
 ## 改动与业务口径
 
@@ -69,4 +69,16 @@
 
 固定 index digest 为 `sha256:52736abda13f53c41a051c2d11a96ca07c8ed5d6c64f3f87731c2a12202e6337`。北京时间 2026-10-21 02:03:43 完成匿名全部 24 个运行层、89,516,749 字节及 index / manifest / config / 架构 / revision / version 校验；attestation 内容未验证。本轮发布快照的 CI 统计、各架构 digest 和完整运行链接见[r3 发布记录](../../deploy/CUSTOM_IMAGE_0.2.17-r3.md)，上方实现阶段测试数字作为历史记录保留。
 
-生产继续运行已核验且健康的 r2，本轮仅发布镜像，没有应用升级、迁移 247 或域名账号绑定；专属入口当前维护 503。既有备份与证书配置保留，原临时清理拒绝记录继续有效。
+发布结束时生产仍为 r2、入口维护 503；后续同日用户升级并明确要求直接启用，结果如下。既有备份、证书及历史清理拒绝记录保留。
+
+## 2026-10-21 线上启用
+
+2026-10-21 02:34（北京时间），用户自行升级 r3 后，按授权完成主站 HTTPS origin、目标账号域名映射及宿主代理信任配置，并撤除专属入口维护页。仅重建 Sub2API 应用，其他容器 ID 不变；Nginx 检查、重载及主站健康检查均通过。
+
+单次 SSH/OS-root 维护工具沿用 SettingRepository 与 AffiliateService，在一个 serializable 事务中保存 frontend_url 和标准域名/必要邀请摘要；其他设置逐项保持不变，intent/completion 审计成功。没有创建管理员令牌或 API key，也未修改密码、验证码配置。工具本机 30 叶单元测试、8 个真实 PostgreSQL 场景及 Linux 静态编译通过；它不属于发布镜像。上传的维护二进制已清理，备份和收据保留，本轮未重新构建镜像。
+
+02:35 实际 HTTPS 验证：两次 303 后到达不带查询参数的主站 `/register`，状态 200；交接响应为 no-store/no-referrer，Cookie 为 host-only、Secure、HttpOnly、SameSite=Lax。归因 locked=true，独立空会话 false，票据重放 400；仅检查本次测试 Cookie 对应 Redis 记录，确认目标邀请人、域名 revision 及约 30 天期限，随后删除该测试记录。未在生产创建测试账号或进行真实充值，因此不宣称真实注册或返利到账已验收。
+
+域名映射 revision 为 1；既有邀请返利参数保持原值。可信代理限定当前 Docker 宿主网关 CIDR，保留原转发头兼容设置。主站交接路径继续禁止缓存和票据查询日志；HTTPS 证书与续期配置沿用已验证结果。回退配置备份及操作收据已保存，域名墓碑/revision 仍不得手工重置。
+
+本机私有证据位于 `output/affiliate-subdomain-20261020/activation-live-20261021.json` 与同目录 `ACTIVATION.md`，辅助工具 manifest/源码/日志在 `activation-maintenance/`。真实域名、账号、连接地址和 SSH 信息未纳入公开记录；公开结论由本节归档，不依赖未跟踪附件作为唯一交接。主目录原 14 项文件哈希与原 binary diff 均保持一致。
