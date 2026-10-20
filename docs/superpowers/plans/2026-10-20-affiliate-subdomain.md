@@ -106,10 +106,12 @@ Files: `frontend/src/views/admin/affiliates/AffiliateDomainDialog.vue` 与测试
 - [x] 汇总运行后端相关包、真实数据库事务/迁移回归、前端专项/类型/lint/构建。输出精简验证摘要。
 - [x] 更新 CHANGELOG、HANDOFF、`docs/changes/2026-10-20-affiliate-subdomain.md` 和通用部署说明；本机含真实域名/邮箱的启用清单放 output。
 - [x] 配置说明覆盖 DNS 指向现有入口、专属 hostname HTTPS 证书、反代保留 Host/票据 query 脱敏、主站 frontend_url、完整邮箱查验用户 ID、后台绑定、实际注册与返佣验收。
-- [ ] `git diff --check`、文档链接/跟踪检查后提交独立功能分支。生产 DNS/证书/账号设置/部署未经实际执行不得宣称生效。
+- [x] `git diff --check`、文档链接/跟踪检查后提交独立功能分支。生产 DNS/证书/账号设置/部署未经实际执行不得宣称生效。
 
 ## 收尾记录
 
 全后端 unit 58 包 / 22,547 叶通过，18 个既有条件跳过；前端扩大回归 217 项、PostgreSQL 159 叶、类型/全量 lint、Linux 嵌入式编译通过。静态分层复核将 Redis 访问抽至 repository，handler 仅依赖 service 接口；源码/行为回归随后重新执行。Windows 会话补充现有 Git sh，未更改备份源码或全局环境。实际记录见 `docs/changes/2026-10-20-affiliate-subdomain.md`。
 
 PG 已停止；其临时数据、4 个辅助文件及目录联接删除被自动审批拒绝（blocked by policy，未给具体规则），原位保留，没有绕过。生产 DNS/证书/反代由用户自行操作，本轮不宣称已上线。
+
+应用源码 `14aec2850` 已提交并快进整合到主目录 main，67 份本轮源码与验证快照一致，原 WIP 完整保留；未推送或发布。

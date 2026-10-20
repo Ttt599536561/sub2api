@@ -1,6 +1,6 @@
 # 专属推广子域名与可靠注册归因
 
-任务开始于 2026-10-20，最终验证完成于 2026-10-21（Asia/Shanghai）。稳定主题：`feat: add trusted affiliate subdomain registration`。
+任务开始于 2026-10-20，最终验证完成于 2026-10-21（Asia/Shanghai）。源码：`14aec28502a0e26cf97895d8d265f7d978f3ac6f`（`feat: add trusted affiliate subdomain registration`），已快进整合到本地主目录 main。
 
 ## 改动与业务口径
 
@@ -54,3 +54,7 @@
 ## 本机清理限制
 
 测试 PostgreSQL 已正常停止，54392 端口无监听。删除本轮 PostgreSQL 数据、4 个临时辅助文件和 ASCII 目录联接的 PowerShell 原生命令在创建进程阶段被自动审批以 `blocked by policy` 拒绝，未提供具体规则；没有换方式或重试删除。保留约 112,246,806 字节的本轮测试数据及上述文件/联接，收据为主项目 `.cache/affiliate-subdomain-20261020/postgres-final-cleanup-blocked.json`。可复用工具 ZIP/runtime 与验证摘要继续保留，未清理其他任务的数据。
+
+## 主目录整合
+
+整合前为主目录 10 项跟踪 WIP 保存逐文件备份及 SHA256，只临时 stash 有交叠的 `.gitignore`；快进整合后已恢复。其余 9 项跟踪文件与 4 份单独未跟踪文件哈希全部一致，`.gitignore` 原一条白名单编辑与原差异完全一致；既有 `backend/internal/web/dist/` 没有改动。本轮 67 份源码在主目录逐字节匹配最终验证快照，没有把用户 WIP 纳入功能提交。WIP 恢复 stash 和备份保留，未删除用户原分支或历史工作树。
