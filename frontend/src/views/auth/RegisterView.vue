@@ -28,6 +28,12 @@
 
       <!-- Registration Form -->
       <form v-else @submit.prevent="handleRegister" class="space-y-5">
+        <div v-if="affiliateAttributionError" role="alert" class="rounded-lg bg-amber-50 p-3 text-sm text-amber-800 dark:bg-amber-900/20 dark:text-amber-300" data-test="affiliate-attribution-error">
+          <p>{{ affiliateAttributionError }}</p>
+          <button type="button" class="mt-2 underline" :disabled="affiliateAttributionLoading" data-test="affiliate-attribution-retry" @click="retryAffiliateAttribution">
+            {{ t('common.tryAgain') }}
+          </button>
+        </div>
         <!-- Email Input -->
         <div>
           <label for="email" class="input-label">
@@ -167,7 +173,7 @@
         </div>
 
         <!-- Affiliate Invitation Code Input (Optional) -->
-        <div v-else-if="affiliateEnabled" data-testid="affiliate-invitation-field">
+        <div v-else-if="affiliateEnabled && !affiliateAttributionLocked" data-testid="affiliate-invitation-field">
           <label for="affiliate_code" class="input-label">
             {{ t('auth.invitationCodeLabel') }}
             <span class="ml-1 text-xs font-normal text-gray-400 dark:text-dark-500">({{ t('common.optional') }})</span>
@@ -394,11 +400,19 @@ import {
   normalizeRegistrationEmailSuffixWhitelist
 } from '@/utils/registrationEmailPolicy'
 import {
-  clearAffiliateReferralCode,
+  clearAllAffiliateReferralCodes,
   loadAffiliateReferralCode,
   resolveAffiliateReferralCode
 } from '@/utils/oauthAffiliate'
 import type { LoginAgreementDocument } from '@/types'
+import { useAffiliateAttribution } from '@/composables/useAffiliateAttribution'
+
+const {
+  locked: affiliateAttributionLocked,
+  error: affiliateAttributionError,
+  loading: affiliateAttributionLoading,
+  refresh: refreshAffiliateAttribution
+} = useAffiliateAttribution()
 
 const { t, locale } = useI18n()
 const LOGIN_AGREEMENT_STORAGE_KEY = 'sub2api_login_agreement_consent'
@@ -539,7 +553,8 @@ const agreementGateActive = computed(
 )
 
 const registrationActionDisabled = computed(
-  () => isLoading.value || !settingsLoaded.value || agreementGateActive.value
+  () => isLoading.value || !settingsLoaded.value || agreementGateActive.value ||
+    affiliateAttributionLoading.value || !!affiliateAttributionError.value
 )
 
 watch(validationToastMessage, (value, previousValue) => {
@@ -549,6 +564,10 @@ watch(validationToastMessage, (value, previousValue) => {
 })
 
 function syncAffiliateReferralCode(): string {
+  if (affiliateAttributionLocked.value) {
+    formData.aff_code = ''
+    return ''
+  }
   const code = resolveAffiliateReferralCode(route.query.aff, route.query.aff_code)
   if (code) {
     formData.aff_code = code
@@ -556,9 +575,15 @@ function syncAffiliateReferralCode(): string {
   return code
 }
 
+async function retryAffiliateAttribution() {
+  await refreshAffiliateAttribution()
+  syncAffiliateReferralCode()
+}
+
 // ==================== Lifecycle ====================
 
 onMounted(async () => {
+  await refreshAffiliateAttribution()
   syncAffiliateReferralCode()
 
   try {
@@ -994,6 +1019,7 @@ function validateForm(): boolean {
 // ==================== Form Handlers ====================
 
 async function handleRegister(): Promise<void> {
+  if (registrationActionDisabled.value) return
   // Clear previous error
   errorMessage.value = ''
 
@@ -1047,7 +1073,7 @@ async function handleRegister(): Promise<void> {
   isLoading.value = true
 
   try {
-    const affCode = formData.aff_code.trim() || loadAffiliateReferralCode()
+    const affCode = affiliateAttributionLocked.value ? '' : formData.aff_code.trim() || loadAffiliateReferralCode()
     if (affCode) {
       formData.aff_code = affCode
     }
@@ -1087,7 +1113,7 @@ async function handleRegister(): Promise<void> {
       invitation_code: formData.invitation_code || undefined,
       ...(affCode ? { aff_code: affCode } : {})
     })
-    clearAffiliateReferralCode()
+    clearAllAffiliateReferralCodes()
 
     // Show success toast
     appStore.showSuccess(t('auth.accountCreatedSuccess', { siteName: siteName.value }))
@@ -1112,7 +1138,7 @@ function buildRegistrationErrorMessage(error: unknown, fallback: string): string
   if (extractApiErrorCode(error) === 'EMAIL_DOMAIN_REGISTRATION_LIMIT') {
     return t('auth.emailDomainRegistrationLimit')
   }
-  return buildAuthErrorMessage(error, { fallback })
+  return extractI18nErrorMessage(error, t, 'auth.errors', buildAuthErrorMessage(error, { fallback }))
 }
 </script>
 

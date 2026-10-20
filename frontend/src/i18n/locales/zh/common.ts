@@ -247,6 +247,10 @@ export default {
     passwordMinLength: '密码至少需要 6 个字符',
     loginFailed: '登录失败，请检查您的凭据后重试。',
     errors: {
+      AFFILIATE_ATTRIBUTION_INVALID: '此推广入口已过期或被撤销，请重新打开有效的专属推广链接后注册。',
+      AFFILIATE_ATTRIBUTION_UNAVAILABLE: '推广归因服务暂时不可用，请重试后再注册。',
+      AFFILIATE_RATE_LIMITED: '推广请求过于频繁，请稍候重试。',
+      AFFILIATE_DISABLED: '邀请返利目前已关闭，请联系网站管理员。',
       USER_NOT_ACTIVE: '账号已被禁用',
     },
     registrationFailed: '注册失败，请重试。',

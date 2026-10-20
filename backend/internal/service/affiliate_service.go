@@ -87,6 +87,8 @@ type AffiliateInvitee struct {
 type AffiliateDetail struct {
 	UserID          int64   `json:"user_id"`
 	AffCode         string  `json:"aff_code"`
+	AffiliateDomain string  `json:"affiliate_domain"`
+	ReferralURL     string  `json:"referral_url"`
 	InviterID       *int64  `json:"inviter_id,omitempty"`
 	AffCount        int     `json:"aff_count"`
 	AffQuota        float64 `json:"aff_quota"`
@@ -138,6 +140,8 @@ type AffiliateAdminEntry struct {
 	AffCodeCustom        bool     `json:"aff_code_custom"`
 	AffRebateRatePercent *float64 `json:"aff_rebate_rate_percent,omitempty"`
 	AffCount             int      `json:"aff_count"`
+	AffiliateDomain      string   `json:"affiliate_domain"`
+	ReferralURL          string   `json:"referral_url"`
 }
 
 type AffiliateRecordFilter struct {
@@ -277,9 +281,19 @@ func (s *AffiliateService) GetAffiliateDetail(ctx context.Context, userID int64)
 	if err != nil {
 		return nil, err
 	}
+	var affiliateDomain, referralURL string
+	if repo, ok := s.repo.(AffiliateDomainRepository); ok {
+		domain, err := repo.GetUserAffiliateDomain(ctx, userID)
+		if err != nil {
+			return nil, err
+		}
+		affiliateDomain, referralURL = affiliateDomainURL(domain)
+	}
 	return &AffiliateDetail{
 		UserID:                     summary.UserID,
 		AffCode:                    summary.AffCode,
+		AffiliateDomain:            affiliateDomain,
+		ReferralURL:                referralURL,
 		InviterID:                  summary.InviterID,
 		AffCount:                   summary.AffCount,
 		AffQuota:                   summary.AffQuota,

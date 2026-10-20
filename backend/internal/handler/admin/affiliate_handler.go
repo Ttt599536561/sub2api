@@ -93,17 +93,21 @@ func (h *AffiliateHandler) UpdateUserSettings(c *gin.Context) {
 	response.Success(c, gin.H{"user_id": userID})
 }
 
-// ClearUserSettings removes ALL of a user's custom affiliate settings — clears
-// the exclusive rebate rate AND regenerates the invite code as a new system
+// ClearUserSettings removes ALL of a user's custom affiliate settings — revokes
+// the promotion domain, clears the rate and regenerates the invite code as a new system
 // random one. Conceptually this "removes the user from the custom list".
 //
-// Both writes happen in this handler; failure of one leaves the other applied,
+// Writes happen in this handler; failure of one leaves the previous ones applied,
 // but the operation is idempotent so the admin can re-run it safely.
 // DELETE /api/v1/admin/affiliates/users/:user_id
 func (h *AffiliateHandler) ClearUserSettings(c *gin.Context) {
 	userID, err := strconv.ParseInt(c.Param("user_id"), 10, 64)
 	if err != nil || userID <= 0 {
 		response.BadRequest(c, "Invalid user_id")
+		return
+	}
+	if _, err := h.affiliateService.SetUserAffiliateDomain(c.Request.Context(), userID, ""); err != nil {
+		response.ErrorFrom(c, err)
 		return
 	}
 	if err := h.affiliateService.AdminSetUserRebateRate(c.Request.Context(), userID, nil); err != nil {
@@ -115,6 +119,34 @@ func (h *AffiliateHandler) ClearUserSettings(c *gin.Context) {
 		return
 	}
 	response.Success(c, gin.H{"user_id": userID})
+}
+
+// SetUserDomain independently updates the promotion hostname. A pointer makes
+// an explicit empty string (clear) distinct from a missing or null field.
+// PUT /api/v1/admin/affiliates/users/:user_id/domain
+func (h *AffiliateHandler) SetUserDomain(c *gin.Context) {
+	userID, err := strconv.ParseInt(c.Param("user_id"), 10, 64)
+	if err != nil || userID <= 0 {
+		response.BadRequest(c, "Invalid user_id")
+		return
+	}
+	var req struct {
+		Domain *string `json:"domain"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil || req.Domain == nil {
+		response.BadRequest(c, "domain must be provided as a string")
+		return
+	}
+	domain, err := h.affiliateService.SetUserAffiliateDomain(c.Request.Context(), userID, *req.Domain)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	hostname, referralURL := "", ""
+	if domain != nil && domain.Enabled && domain.InviterID > 0 {
+		hostname, referralURL = domain.Hostname, "https://"+domain.Hostname+"/"
+	}
+	response.Success(c, gin.H{"affiliate_domain": hostname, "referral_url": referralURL})
 }
 
 // BatchSetRate applies the same rebate rate (or clears it) to multiple users.

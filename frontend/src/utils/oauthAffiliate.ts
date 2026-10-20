@@ -1,6 +1,32 @@
 const OAUTH_AFFILIATE_CODE_KEY = 'oauth_aff_code'
 const AFFILIATE_REFERRAL_CODE_KEY = 'affiliate_referral_code'
 const AFFILIATE_REFERRAL_TTL_MS = 30 * 24 * 60 * 60 * 1000
+const ATTRIBUTION_UI_LOCK_KEY = 'affiliate_attribution_locked'
+let attributionLockedWithoutStorage = false
+
+// This flag only suppresses legacy inputs across OAuth navigations. The server
+// validates its own HttpOnly cookie / pending flow before choosing an inviter.
+export function isAffiliateAttributionLocked(): boolean {
+  try {
+    return attributionLockedWithoutStorage || (typeof window !== 'undefined' && window.sessionStorage.getItem(ATTRIBUTION_UI_LOCK_KEY) === '1')
+  } catch {
+    return attributionLockedWithoutStorage
+  }
+}
+
+export function setAffiliateAttributionLocked(locked: boolean): void {
+  attributionLockedWithoutStorage = locked
+  if (locked) {
+    clearAffiliateReferralCode()
+    clearOAuthAffiliateCode()
+  }
+  try {
+    if (locked) window.sessionStorage.setItem(ATTRIBUTION_UI_LOCK_KEY, '1')
+    else window.sessionStorage.removeItem(ATTRIBUTION_UI_LOCK_KEY)
+  } catch {
+    // The authoritative attribution is retained by the server.
+  }
+}
 
 interface StoredAffiliateReferralCode {
   code: string
@@ -23,6 +49,7 @@ export function pickOAuthAffiliateCode(...values: unknown[]): string {
 }
 
 export function storeAffiliateReferralCode(value?: unknown, now = Date.now()): void {
+  if (isAffiliateAttributionLocked()) return
   if (typeof window === 'undefined') {
     return
   }
@@ -42,6 +69,7 @@ export function storeAffiliateReferralCode(value?: unknown, now = Date.now()): v
 }
 
 export function loadAffiliateReferralCode(now = Date.now()): string {
+  if (isAffiliateAttributionLocked()) return ''
   if (typeof window === 'undefined') {
     return ''
   }
@@ -76,6 +104,7 @@ export function clearAffiliateReferralCode(): void {
 }
 
 export function resolveAffiliateReferralCode(...values: unknown[]): string {
+  if (isAffiliateAttributionLocked()) return ''
   const code = pickOAuthAffiliateCode(...values)
   if (code) {
     storeAffiliateReferralCode(code)
@@ -85,6 +114,7 @@ export function resolveAffiliateReferralCode(...values: unknown[]): string {
 }
 
 export function storeOAuthAffiliateCode(value?: unknown): void {
+  if (isAffiliateAttributionLocked()) return
   if (typeof window === 'undefined') {
     return
   }
@@ -101,6 +131,7 @@ export function storeOAuthAffiliateCode(value?: unknown): void {
 }
 
 export function loadOAuthAffiliateCode(): string {
+  if (isAffiliateAttributionLocked()) return ''
   if (typeof window === 'undefined') {
     return ''
   }
@@ -125,9 +156,11 @@ export function clearOAuthAffiliateCode(): void {
 export function clearAllAffiliateReferralCodes(): void {
   clearOAuthAffiliateCode()
   clearAffiliateReferralCode()
+  setAffiliateAttributionLocked(false)
 }
 
 export function oauthAffiliatePayload(value?: unknown): { aff_code?: string } {
+  if (isAffiliateAttributionLocked()) return {}
   const code = normalizeOAuthAffiliateCode(value)
   return code ? { aff_code: code } : {}
 }

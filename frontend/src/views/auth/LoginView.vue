@@ -160,7 +160,7 @@
           </button>
 
           <EmailOAuthButtons
-            :disabled="authActionDisabled"
+            :disabled="oauthActionDisabled"
             :github-enabled="githubOAuthEnabled"
             :google-enabled="googleOAuthEnabled"
             :show-divider="false"
@@ -169,25 +169,25 @@
 
           <LinuxDoOAuthSection
             v-if="linuxdoOAuthEnabled"
-            :disabled="authActionDisabled"
+            :disabled="oauthActionDisabled"
             :show-divider="false"
             @start="handleOAuthStart"
           />
           <DingTalkOAuthSection
             v-if="dingtalkOAuthEnabled"
-            :disabled="authActionDisabled"
+            :disabled="oauthActionDisabled"
             :show-divider="false"
             @start="handleOAuthStart"
           />
           <WechatOAuthSection
             v-if="wechatOAuthEnabled"
-            :disabled="authActionDisabled"
+            :disabled="oauthActionDisabled"
             :show-divider="false"
             @start="handleOAuthStart"
           />
           <OidcOAuthSection
             v-if="oidcOAuthEnabled"
-            :disabled="authActionDisabled"
+            :disabled="oauthActionDisabled"
             :provider-name="oidcOAuthProviderName"
             :show-divider="false"
             @start="handleOAuthStart"
@@ -251,6 +251,9 @@ import type {
 } from '@/types'
 import { extractI18nErrorMessage } from '@/utils/apiError'
 import { clearAllAffiliateReferralCodes } from '@/utils/oauthAffiliate'
+import { useAffiliateAttribution } from '@/composables/useAffiliateAttribution'
+
+const { loading: affiliateAttributionLoading, refresh: refreshAffiliateAttribution } = useAffiliateAttribution()
 
 const { t } = useI18n()
 const LOGIN_AGREEMENT_STORAGE_KEY = 'sub2api_login_agreement_consent'
@@ -347,6 +350,7 @@ const agreementGateActive = computed(
 const authActionDisabled = computed(
   () => isLoading.value || passkeyLoading.value || !publicSettingsLoaded.value || agreementGateActive.value
 )
+const oauthActionDisabled = computed(() => authActionDisabled.value || affiliateAttributionLoading.value)
 
 const showPasskeyLogin = computed(
   () => passkeyEnabled.value && typeof window.PublicKeyCredential !== 'undefined'
@@ -372,6 +376,7 @@ watch(validationToastMessage, (value, previousValue) => {
 // ==================== Lifecycle ====================
 
 onMounted(async () => {
+  void refreshAffiliateAttribution()
   const expiredFlag = sessionStorage.getItem('auth_expired')
   if (expiredFlag) {
     sessionStorage.removeItem('auth_expired')
@@ -661,7 +666,7 @@ async function handlePasskeyLogin(): Promise<void> {
 }
 
 async function handleOAuthStart(request: OAuthLoginStart): Promise<void> {
-  if (authActionDisabled.value) return
+  if (oauthActionDisabled.value) return
 
   if (!actionCaptchaEnabled.value) {
     window.location.href = buildOAuthLoginStartURL(request)

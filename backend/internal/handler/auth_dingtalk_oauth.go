@@ -168,6 +168,7 @@ func (h *AuthHandler) DingTalkOAuthStart(c *gin.Context) {
 		return
 	}
 
+	h.freezeSignupAffiliate(c, "dingtalk", state)
 	respondOAuthStart(c, authURL)
 }
 
@@ -329,6 +330,8 @@ func (h *AuthHandler) DingTalkOAuthCallback(c *gin.Context) {
 		redirectOAuthError(c, frontendCallback, "csrf", "state mismatch", "")
 		return
 	}
+	h.restoreSignupAffiliate(c, "dingtalk", state)
+
 	redirectTo, _ := readCookieDecoded(c, dingTalkOAuthRedirectCookie)
 	intent, _ := readCookieDecoded(c, dingTalkOAuthIntentCookieName)
 	intent = normalizeOAuthIntent(intent)
@@ -784,21 +787,18 @@ func (h *AuthHandler) CompleteDingTalkOAuthRegistration(c *gin.Context) {
 		response.ErrorFrom(c, err)
 		return
 	}
-	tokenPair, user, err := h.authService.LoginOrRegisterOAuthWithTokenPairAndPromoCode(
+	tokenPair, user, err := h.completeOAuthProviderRegistration(
 		c.Request.Context(),
+		session,
+		decision,
 		email,
 		username,
 		req.InvitationCode,
 		req.AffCode,
-		pendingOAuthPromoCode(session),
 		"dingtalk",
 	)
 	if err != nil {
 		response.ErrorFrom(c, err)
-		return
-	}
-	if err := applyPendingOAuthAdoptionAndConsumeSession(c.Request.Context(), client, h.authService, h.userService, session, decision, user.ID); err != nil {
-		respondPendingOAuthBindingApplyError(c, err)
 		return
 	}
 	// 新用户注册完成后执行身份同步（user_id 现在已知）。
@@ -811,6 +811,7 @@ func (h *AuthHandler) CompleteDingTalkOAuthRegistration(c *gin.Context) {
 		})
 	}
 	h.authService.RecordSuccessfulLogin(c.Request.Context(), user.ID)
+	clearSignupAffiliateCookie(c)
 	clearOAuthPendingSessionCookie(c, secureCookie)
 	clearOAuthPendingBrowserCookie(c, secureCookie)
 

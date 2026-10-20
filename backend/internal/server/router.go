@@ -8,6 +8,7 @@ import (
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/handler"
+	"github.com/Wei-Shaw/sub2api/internal/repository"
 	middleware2 "github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/Wei-Shaw/sub2api/internal/server/routes"
 	"github.com/Wei-Shaw/sub2api/internal/service"
@@ -44,6 +45,9 @@ func SetupRouter(
 	cachedFrameOrigins.Store(&emptyOrigins)
 
 	refreshFrameOrigins := func() {
+		if handlers != nil && handlers.Auth != nil {
+			handlers.Auth.InvalidateAffiliateOrigin()
+		}
 		ctx, cancel := context.WithTimeout(context.Background(), frameSrcRefreshTimeout)
 		defer cancel()
 		origins, err := settingService.GetFrameSrcOrigins(ctx)
@@ -69,6 +73,11 @@ func SetupRouter(
 		return nil
 	}))
 	r.Use(middleware2.ServerTiming(cfg.Server.EnableServerTiming))
+
+	// Promotion hosts must be handled before SPA fallback.
+	if handlers != nil && handlers.Auth != nil {
+		r.Use(handlers.Auth.AffiliatePromotionMiddleware(repository.NewAffiliateAttributionStore(redisClient)))
+	}
 
 	// Serve embedded frontend with settings injection if available
 	if web.HasEmbeddedFrontend() {

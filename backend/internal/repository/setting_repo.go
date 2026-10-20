@@ -47,7 +47,7 @@ func NewSettingRepository(client *ent.Client) service.SettingRepository {
 }
 
 func (r *settingRepository) Get(ctx context.Context, key string) (*service.Setting, error) {
-	m, err := r.client.Setting.Query().Where(setting.KeyEQ(key)).Only(ctx)
+	m, err := clientFromContext(ctx, r.client).Setting.Query().Where(setting.KeyEQ(key)).Only(ctx)
 	if err != nil {
 		if ent.IsNotFound(err) {
 			return nil, service.ErrSettingNotFound
@@ -86,7 +86,7 @@ func (r *settingRepository) GetMultiple(ctx context.Context, keys []string) (map
 	if len(keys) == 0 {
 		return map[string]string{}, nil
 	}
-	settings, err := r.client.Setting.Query().Where(setting.KeyIn(keys...)).All(ctx)
+	settings, err := clientFromContext(ctx, r.client).Setting.Query().Where(setting.KeyIn(keys...)).All(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -116,7 +116,7 @@ func (r *settingRepository) SetMultiple(ctx context.Context, settings map[string
 }
 
 func (r *settingRepository) GetAll(ctx context.Context) (map[string]string, error) {
-	settings, err := r.client.Setting.Query().All(ctx)
+	settings, err := clientFromContext(ctx, r.client).Setting.Query().All(ctx)
 	if err != nil {
 		return nil, err
 	}

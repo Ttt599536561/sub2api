@@ -45,6 +45,7 @@ vi.mock('@/api/auth', async () => {
   return {
     ...actual,
     getPublicSettings: (...args: unknown[]) => getPublicSettingsMock(...args),
+    getAffiliateAttribution: async () => ({ locked: false }),
     startOAuthLogin: (...args: unknown[]) => startOAuthLoginMock(...args),
     isTotp2FARequired: () => false,
     isWeChatWebOAuthEnabled: () => false

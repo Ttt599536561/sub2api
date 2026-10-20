@@ -365,6 +365,12 @@ export async function getPublicSettings(): Promise<PublicSettings> {
   return data
 }
 
+/** Per-browser state; deliberately separate from the shared public settings. */
+export async function getAffiliateAttribution(): Promise<{ locked: boolean }> {
+  const { data } = await apiClient.get<{ locked: boolean }>('/auth/affiliate-attribution')
+  return data
+}
+
 export type WeChatOAuthMode = 'open' | 'mp'
 export type WeChatOAuthUnavailableReason =
   | 'not_configured'

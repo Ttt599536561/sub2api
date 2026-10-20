@@ -191,6 +191,7 @@ onBeforeUnmount(() => {
 
 const inviteLink = computed(() => {
   if (!detail.value) return ''
+  if (detail.value.referral_url) return detail.value.referral_url
   if (typeof window === 'undefined') return `/register?aff=${encodeURIComponent(detail.value.aff_code)}`
   return `${window.location.origin}/register?aff=${encodeURIComponent(detail.value.aff_code)}`
 })

@@ -19,6 +19,7 @@ import (
 
 // AuthHandler handles authentication-related requests
 type AuthHandler struct {
+	affiliatePromotion   *affiliatePromotionHandler
 	cfg                  *config.Config
 	authService          *service.AuthService
 	userService          *service.UserService
@@ -130,6 +131,7 @@ func respondWithTokenPair(c *gin.Context, authService *service.AuthService, user
 			response.InternalError(c, "Failed to generate token")
 			return
 		}
+		clearSignupAffiliateCookie(c)
 		response.Success(c, AuthResponse{
 			AccessToken: token,
 			TokenType:   "Bearer",
@@ -137,6 +139,7 @@ func respondWithTokenPair(c *gin.Context, authService *service.AuthService, user
 		})
 		return
 	}
+	clearSignupAffiliateCookie(c)
 	response.Success(c, AuthResponse{
 		AccessToken:  tokenPair.AccessToken,
 		RefreshToken: tokenPair.RefreshToken,

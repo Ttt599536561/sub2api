@@ -93,6 +93,7 @@ func (h *AuthHandler) emailOAuthStart(c *gin.Context, provider string) {
 		response.ErrorFrom(c, infraerrors.InternalServer("OAUTH_BUILD_URL_FAILED", "failed to build oauth authorization url").WithCause(err))
 		return
 	}
+	h.freezeSignupAffiliate(c, provider, state)
 	respondOAuthStart(c, authURL)
 }
 
@@ -135,6 +136,8 @@ func (h *AuthHandler) emailOAuthCallback(c *gin.Context, provider string) {
 		redirectOAuthError(c, frontendCallback, "invalid_state", "invalid oauth provider", "")
 		return
 	}
+	h.restoreSignupAffiliate(c, provider, state)
+
 	redirectTo, _ := readCookieDecoded(c, emailOAuthRedirectCookie)
 	redirectTo = sanitizeFrontendRedirectPath(redirectTo)
 	if redirectTo == "" {
@@ -370,6 +373,36 @@ func (h *AuthHandler) completeEmailOAuthRegistration(c *gin.Context, provider st
 	affiliateCode := strings.TrimSpace(req.AffCode)
 	if affiliateCode == "" {
 		affiliateCode = pendingSessionStringValue(session.UpstreamIdentityClaims, "aff_code")
+	}
+
+	trustedCtx := pendingSignupAttributionContext(c.Request.Context(), session)
+	c.Request = c.Request.WithContext(trustedCtx)
+	if _, protected := service.SignupAffiliateAttributionFromContext(trustedCtx); protected {
+		decision, err := h.ensurePendingOAuthAdoptionDecision(c, session.ID, oauthAdoptionDecisionRequest{})
+		if err != nil {
+			response.ErrorFrom(c, err)
+			return
+		}
+		tokenPair, user, err := h.completeTrustedOAuthSignup(trustedCtx, session, decision, func(txCtx context.Context) (*service.TokenPair, *service.User, error) {
+			pair, createdUser, err := h.authService.RegisterVerifiedOAuthEmailAccount(txCtx, strings.TrimSpace(session.ResolvedEmail),
+				req.Password, strings.TrimSpace(req.InvitationCode), strings.TrimSpace(session.ProviderType))
+			if err != nil {
+				return nil, nil, err
+			}
+			if err := h.authService.FinalizeOAuthEmailAccount(txCtx, createdUser, strings.TrimSpace(req.InvitationCode), strings.TrimSpace(session.ProviderType), ""); err != nil {
+				return nil, nil, err
+			}
+			return pair, createdUser, nil
+		})
+		if err != nil {
+			response.ErrorFrom(c, err)
+			return
+		}
+		h.authService.ApplyOAuthSignupPromoCode(c.Request.Context(), user.ID, pendingOAuthPromoCode(session))
+		h.authService.RecordSuccessfulLogin(c.Request.Context(), user.ID)
+		clearCookies()
+		writeOAuthTokenPairResponse(c, tokenPair)
+		return
 	}
 
 	tokenPair, user, err := h.authService.RegisterVerifiedOAuthEmailAccount(

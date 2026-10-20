@@ -150,6 +150,7 @@ func (h *AuthHandler) LinuxDoOAuthStart(c *gin.Context) {
 		return
 	}
 
+	h.freezeSignupAffiliate(c, "linuxdo", state)
 	respondOAuthStart(c, authURL)
 }
 
@@ -194,6 +195,8 @@ func (h *AuthHandler) LinuxDoOAuthCallback(c *gin.Context) {
 		redirectOAuthError(c, frontendCallback, "invalid_state", "invalid oauth state", "")
 		return
 	}
+
+	h.restoreSignupAffiliate(c, "linuxdo", state)
 
 	redirectTo, _ := readCookieDecoded(c, linuxDoOAuthRedirectCookie)
 	redirectTo = sanitizeFrontendRedirectPath(redirectTo)
@@ -334,36 +337,43 @@ func (h *AuthHandler) LinuxDoOAuthCallback(c *gin.Context) {
 			redirectOAuthError(c, frontendCallback, "session_error", infraerrors.Reason(err), infraerrors.Message(err))
 			return
 		}
-		tokenPair, user, err := h.authService.LoginOrRegisterOAuthWithTokenPairAndPromoCode(
-			c.Request.Context(),
-			email,
-			username,
-			"",
-			"",
-			readOAuthPromoCode(c),
-			"linuxdo",
-		)
+		create := func(createCtx context.Context) (*service.TokenPair, *service.User, error) {
+			return h.authService.LoginOrRegisterOAuthWithTokenPairAndPromoCode(createCtx, email, username, "", "", readOAuthPromoCode(c), "linuxdo")
+		}
+		_, protected := service.SignupAffiliateAttributionFromContext(c.Request.Context())
+		var tokenPair *service.TokenPair
+		var user *service.User
+		if protected {
+			tokenPair, user, err = h.completeTrustedOAuthSignup(c.Request.Context(), &dbent.PendingAuthSession{
+				Intent: oauthIntentLogin, ProviderType: identityKey.ProviderType, ProviderKey: identityKey.ProviderKey,
+				ProviderSubject: identityKey.ProviderSubject, ResolvedEmail: email, UpstreamIdentityClaims: upstreamClaims,
+			}, nil, create)
+		} else {
+			tokenPair, user, err = create(c.Request.Context())
+		}
 		if err == nil {
-			if err := applyPendingOAuthBinding(
-				c.Request.Context(),
-				h.entClient(),
-				h.authService,
-				h.userService,
-				&dbent.PendingAuthSession{
-					Intent:                 oauthIntentLogin,
-					ProviderType:           identityKey.ProviderType,
-					ProviderKey:            identityKey.ProviderKey,
-					ProviderSubject:        identityKey.ProviderSubject,
-					ResolvedEmail:          email,
-					UpstreamIdentityClaims: upstreamClaims,
-				},
-				nil,
-				&user.ID,
-				true,
-				false,
-			); err != nil {
-				redirectOAuthError(c, frontendCallback, "session_error", "failed to bind oauth identity", "")
-				return
+			if !protected {
+				if err := applyPendingOAuthBinding(
+					c.Request.Context(),
+					h.entClient(),
+					h.authService,
+					h.userService,
+					&dbent.PendingAuthSession{
+						Intent:                 oauthIntentLogin,
+						ProviderType:           identityKey.ProviderType,
+						ProviderKey:            identityKey.ProviderKey,
+						ProviderSubject:        identityKey.ProviderSubject,
+						ResolvedEmail:          email,
+						UpstreamIdentityClaims: upstreamClaims,
+					},
+					nil,
+					&user.ID,
+					true,
+					false,
+				); err != nil {
+					redirectOAuthError(c, frontendCallback, "session_error", "failed to bind oauth identity", "")
+					return
+				}
 			}
 			h.authService.RecordSuccessfulLogin(c.Request.Context(), user.ID)
 			clearOAuthPendingSessionCookie(c, secureCookie)
@@ -587,24 +597,22 @@ func (h *AuthHandler) CompleteLinuxDoOAuthRegistration(c *gin.Context) {
 		response.ErrorFrom(c, err)
 		return
 	}
-	tokenPair, user, err := h.authService.LoginOrRegisterOAuthWithTokenPairAndPromoCode(
+	tokenPair, user, err := h.completeOAuthProviderRegistration(
 		c.Request.Context(),
+		session,
+		decision,
 		email,
 		username,
 		req.InvitationCode,
 		req.AffCode,
-		pendingOAuthPromoCode(session),
 		"linuxdo",
 	)
 	if err != nil {
 		response.ErrorFrom(c, err)
 		return
 	}
-	if err := applyPendingOAuthAdoptionAndConsumeSession(c.Request.Context(), client, h.authService, h.userService, session, decision, user.ID); err != nil {
-		respondPendingOAuthBindingApplyError(c, err)
-		return
-	}
 	h.authService.RecordSuccessfulLogin(c.Request.Context(), user.ID)
+	clearSignupAffiliateCookie(c)
 	clearOAuthPendingSessionCookie(c, secureCookie)
 	clearOAuthPendingBrowserCookie(c, secureCookie)
 
@@ -849,6 +857,9 @@ func redirectOAuthTokenPair(c *gin.Context, frontendCallback string, tokenPair *
 }
 
 func redirectWithFragment(c *gin.Context, frontendCallback string, fragment url.Values) {
+	if fragment.Get("access_token") != "" {
+		clearSignupAffiliateCookie(c)
+	}
 	u, err := url.Parse(frontendCallback)
 	if err != nil {
 		// 兜底：尽力跳转到默认页面，避免卡死在回调页。

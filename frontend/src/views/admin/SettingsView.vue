@@ -7618,13 +7618,14 @@
                       {{ t('admin.settings.features.affiliate.customUsers.description') }}
                     </p>
                   </div>
-                  <button
-                    type="button"
-                    class="btn btn-primary btn-sm"
-                    @click="openAffiliateModal(null)"
-                  >
-                    + {{ t('admin.settings.features.affiliate.customUsers.addButton') }}
-                  </button>
+                  <div class="flex flex-wrap justify-end gap-2">
+                    <button type="button" class="btn btn-secondary btn-sm" @click="openAffiliateDomain(null)">
+                      {{ t('admin.settings.features.affiliate.domain.configure') }}
+                    </button>
+                    <button type="button" class="btn btn-primary btn-sm" @click="openAffiliateModal(null)">
+                      + {{ t('admin.settings.features.affiliate.customUsers.addButton') }}
+                    </button>
+                  </div>
                 </div>
 
                 <div class="mb-3 flex items-center gap-2">
@@ -7659,18 +7660,19 @@
                         <th class="px-3 py-2 text-left text-xs font-medium uppercase text-gray-500">{{ t('admin.settings.features.affiliate.customUsers.col.email') }}</th>
                         <th class="px-3 py-2 text-left text-xs font-medium uppercase text-gray-500">{{ t('admin.settings.features.affiliate.customUsers.col.username') }}</th>
                         <th class="px-3 py-2 text-left text-xs font-medium uppercase text-gray-500">{{ t('admin.settings.features.affiliate.customUsers.col.code') }}</th>
+                        <th class="px-3 py-2 text-left text-xs font-medium uppercase text-gray-500">{{ t('admin.settings.features.affiliate.domain.domain') }}</th>
                         <th class="px-3 py-2 text-left text-xs font-medium uppercase text-gray-500">{{ t('admin.settings.features.affiliate.customUsers.col.rate') }}</th>
                         <th class="px-3 py-2 text-left text-xs font-medium uppercase text-gray-500">{{ t('admin.settings.features.affiliate.customUsers.col.actions') }}</th>
                       </tr>
                     </thead>
                     <tbody class="divide-y divide-gray-200 bg-white dark:divide-dark-700 dark:bg-dark-900">
                       <tr v-if="affiliateState.loading">
-                        <td colspan="6" class="px-3 py-6 text-center text-sm text-gray-500">
+                        <td colspan="7" class="px-3 py-6 text-center text-sm text-gray-500">
                           {{ t('common.loading') }}
                         </td>
                       </tr>
                       <tr v-else-if="affiliateState.entries.length === 0">
-                        <td colspan="6" class="px-3 py-6 text-center text-sm text-gray-500">
+                        <td colspan="7" class="px-3 py-6 text-center text-sm text-gray-500">
                           {{ t('admin.settings.features.affiliate.customUsers.empty') }}
                         </td>
                       </tr>
@@ -7691,6 +7693,15 @@
                             class="ml-1 inline-block rounded bg-primary-100 px-1.5 py-0.5 text-[10px] font-medium text-primary-700 dark:bg-primary-900/30 dark:text-primary-300"
                           >{{ t('admin.settings.features.affiliate.customUsers.customBadge') }}</span>
                         </td>
+                        <td class="max-w-xs break-all px-3 py-2 text-sm">
+                          <template v-if="entry.referral_url">
+                            <span class="font-mono">{{ entry.referral_url }}</span>
+                            <button type="button" class="ml-2 text-primary-600 hover:underline" @click="copyToClipboard(entry.referral_url, 'affiliate.linkCopied')">
+                              {{ t('common.copy') }}
+                            </button>
+                          </template>
+                          <span v-else class="text-gray-400">—</span>
+                        </td>
                         <td class="px-3 py-2 text-sm">
                           <span v-if="entry.aff_rebate_rate_percent != null">{{ entry.aff_rebate_rate_percent }}%</span>
                           <span v-else class="text-gray-400">{{ t('admin.settings.features.affiliate.customUsers.useGlobal') }}</span>
@@ -7699,6 +7710,9 @@
                           <div class="flex items-center gap-2">
                             <button type="button" class="text-primary-600 hover:underline" @click="openAffiliateModal(entry)">
                               {{ t('common.edit') }}
+                            </button>
+                            <button type="button" class="text-primary-600 hover:underline" @click="openAffiliateDomain(entry)">
+                              {{ t('admin.settings.features.affiliate.domain.domain') }}
                             </button>
                             <button
                               type="button"
@@ -7744,6 +7758,13 @@
         </div>
 
         <!-- Affiliate add/edit modal -->
+        <AffiliateDomainDialog
+          v-if="affiliateDomainDialog.show"
+          :show="affiliateDomainDialog.show"
+          :entry="affiliateDomainDialog.entry"
+          @close="affiliateDomainDialog.show = false"
+          @saved="onAffiliateDomainSaved"
+        />
         <div
           v-if="affiliateModal.open"
           class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
@@ -9032,6 +9053,7 @@ import ProxySelector from "@/components/common/ProxySelector.vue";
 import ImageUpload from "@/components/common/ImageUpload.vue";
 import BackupSettings from "@/views/admin/BackupView.vue";
 import EmailTemplateEditor from "@/views/admin/settings/EmailTemplateEditor.vue";
+import AffiliateDomainDialog from "@/views/admin/affiliates/AffiliateDomainDialog.vue";
 import RechargeBonusTierEditor from "@/components/admin/settings/RechargeBonusTierEditor.vue";
 import {
   normalizeRechargeBonusMode,
@@ -12957,6 +12979,20 @@ const affiliateState = reactive<AffiliateState>({
   selected: [],
   searchTimer: null,
 });
+
+const affiliateDomainDialog = reactive<{ show: boolean; entry: AffiliateAdminEntry | null }>({
+  show: false,
+  entry: null,
+});
+function openAffiliateDomain(entry: AffiliateAdminEntry | null) {
+  affiliateDomainDialog.entry = entry;
+  affiliateDomainDialog.show = true;
+}
+async function onAffiliateDomainSaved() {
+  affiliateDomainDialog.show = false;
+  affiliateState.page = 1;
+  await loadAffiliateUsers();
+}
 
 // `rate` is typed as string|number because <input type="number"> makes Vue's
 // v-model auto-cast the bound value to a Number on every keystroke. We keep

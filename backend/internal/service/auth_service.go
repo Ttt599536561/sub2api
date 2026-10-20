@@ -146,6 +146,13 @@ func (s *AuthService) EntClient() *dbent.Client {
 	return s.entClient
 }
 
+func (s *AuthService) AffiliateService() *AffiliateService {
+	if s == nil {
+		return nil
+	}
+	return s.affiliateService
+}
+
 func (s *AuthService) SetTencentCaptchaService(tencentCaptchaService *TencentCaptchaService) {
 	s.tencentCaptchaService = tencentCaptchaService
 }
@@ -254,16 +261,15 @@ func (s *AuthService) RegisterWithVerification(ctx context.Context, email, passw
 			return "", nil, ErrEmailDomainRegistrationLimit
 		case errors.Is(err, ErrInvitationCodeInvalid):
 			return "", nil, ErrInvitationCodeInvalid
+		case errors.Is(err, ErrAffiliateAttributionInvalid), errors.Is(err, ErrAffiliateDisabled):
+			return "", nil, err
 		default:
 			logger.LegacyPrintf("service.auth", "[Auth] Database error creating user: %v", err)
 			return "", nil, ErrServiceUnavailable
 		}
 	}
-	s.postAuthUserBootstrap(ctx, user, "email", true)
-	s.assignSubscriptions(ctx, user.ID, grantPlan.Subscriptions, "auto assigned by signup defaults")
-	// snapshot user × platform quota（fail-open）
-	_ = s.snapshotPlatformQuotaDefaults(ctx, user.ID, &grantPlan)
-	if s.affiliateService != nil {
+	s.bootstrapAttributedSignup(ctx, user, "email", grantPlan, true)
+	if _, protected := SignupAffiliateAttributionFromContext(ctx); !protected && s.affiliateService != nil {
 		if _, err := s.affiliateService.EnsureUserAffiliate(ctx, user.ID); err != nil {
 			logger.LegacyPrintf("service.auth", "[Auth] Failed to initialize affiliate profile for user %d: %v", user.ID, err)
 		}
@@ -291,6 +297,9 @@ func (s *AuthService) RegisterWithVerification(ctx context.Context, email, passw
 	}
 
 	// 生成token
+	if signupTokenDeferred(ctx) {
+		return "", user, nil
+	}
 	token, err := s.GenerateToken(ctx, user)
 	if err != nil {
 		return "", nil, fmt.Errorf("generate token: %w", err)
@@ -620,7 +629,12 @@ func (s *AuthService) LoginOrRegisterOAuth(ctx context.Context, email, username 
 				SignupSource: signupSource,
 			}
 
-			if err := s.userRepo.Create(ctx, newUser); err != nil {
+			createUser := func() error { return s.userRepo.Create(ctx, newUser) }
+			_, protected := SignupAffiliateAttributionFromContext(ctx)
+			if protected {
+				createUser = func() error { return s.createAttributedSignupUser(ctx, newUser, nil, false) }
+			}
+			if err := createUser(); err != nil {
 				if errors.Is(err, ErrEmailExists) {
 					// 并发场景：GetByEmail 与 Create 之间用户被创建。
 					user, err = s.userRepo.GetByEmail(ctx, email)
@@ -630,14 +644,14 @@ func (s *AuthService) LoginOrRegisterOAuth(ctx context.Context, email, username 
 					}
 				} else {
 					logger.LegacyPrintf("service.auth", "[Auth] Database error creating oauth user: %v", err)
+					if protected {
+						return "", nil, err
+					}
 					return "", nil, ErrServiceUnavailable
 				}
 			} else {
 				user = newUser
-				s.postAuthUserBootstrap(ctx, user, signupSource, false)
-				s.assignSubscriptions(ctx, user.ID, grantPlan.Subscriptions, "auto assigned by signup defaults")
-				// snapshot user × platform quota（fail-open）
-				_ = s.snapshotPlatformQuotaDefaults(ctx, user.ID, &grantPlan)
+				s.bootstrapAttributedSignup(ctx, user, signupSource, grantPlan, false)
 			}
 		} else {
 			logger.LegacyPrintf("service.auth", "[Auth] Database error during oauth login: %v", err)
@@ -651,10 +665,10 @@ func (s *AuthService) LoginOrRegisterOAuth(ctx context.Context, email, username 
 
 	// 尽力补全：当用户名为空时，使用第三方返回的用户名回填。
 	if user.Username == "" && username != "" {
-		user.Username = username
-		if err := s.userRepo.Update(ctx, user, UserUpdateFields{Username: true}); err != nil {
-			logger.LegacyPrintf("service.auth", "[Auth] Failed to update username after oauth login: %v", err)
-		}
+		s.completeOAuthUsername(ctx, user, username, "legacy")
+	}
+	if signupTokenDeferred(ctx) {
+		return "", user, nil
 	}
 	token, err := s.GenerateToken(ctx, user)
 	if err != nil {
@@ -769,7 +783,14 @@ func (s *AuthService) loginOrRegisterOAuthWithTokenPair(ctx context.Context, ema
 				SignupSource: signupSource,
 			}
 
-			if s.entClient != nil && invitationRedeemCode != nil {
+			if _, protected := SignupAffiliateAttributionFromContext(ctx); protected {
+				if err := s.createAttributedSignupUser(ctx, newUser, invitationRedeemCode, false); err != nil {
+					return nil, nil, err
+				}
+				user = newUser
+				created = true
+				s.bootstrapAttributedSignup(ctx, user, signupSource, grantPlan, false)
+			} else if s.entClient != nil && invitationRedeemCode != nil {
 				tx, err := s.entClient.Tx(ctx)
 				if err != nil {
 					logger.LegacyPrintf("service.auth", "[Auth] Failed to begin transaction for oauth registration: %v", err)
@@ -843,13 +864,17 @@ func (s *AuthService) loginOrRegisterOAuthWithTokenPair(ctx context.Context, ema
 	}
 
 	if user.Username == "" && username != "" {
-		user.Username = username
-		if err := s.userRepo.Update(ctx, user, UserUpdateFields{Username: true}); err != nil {
-			logger.LegacyPrintf("service.auth", "[Auth] Failed to update username after oauth login: %v", err)
-		}
+		s.completeOAuthUsername(ctx, user, username, signupSource)
 	}
 	if created {
-		user = s.applyOAuthSignupPromoCode(ctx, user, promoCode)
+		if _, protected := SignupAffiliateAttributionFromContext(ctx); protected {
+			s.attributedSignupPromo(ctx, user, promoCode)
+		} else {
+			user = s.applyOAuthSignupPromoCode(ctx, user, promoCode)
+		}
+	}
+	if signupTokenDeferred(ctx) {
+		return nil, user, nil
 	}
 	tokenPair, err := s.GenerateTokenPair(ctx, user, "")
 	if err != nil {
@@ -1285,6 +1310,9 @@ func (s *AuthService) createUserWithRegistrationEmailGuard(ctx context.Context, 
 // 无邀请码时保持原单次创建路径（不开事务）；entClient 缺失的异常配置下退化为顺序执行，
 // 并发正确性仍由 Use 的条件更新兜底（可能产生孤儿用户，但不会放行第二个注册）。
 func (s *AuthService) createUserAndClaimInvitation(ctx context.Context, user *User, invitation *RedeemCode) error {
+	if _, protected := SignupAffiliateAttributionFromContext(ctx); protected {
+		return s.createAttributedSignupUser(ctx, user, invitation, true)
+	}
 	commitUser := func(execCtx context.Context) error {
 		if err := s.createUserWithRegistrationEmailGuard(execCtx, user); err != nil {
 			return err
@@ -1309,6 +1337,9 @@ func (s *AuthService) createUserAndClaimInvitation(ctx context.Context, user *Us
 		return commitUser(ctx)
 	}
 	if s.entClient == nil {
+		return commitUser(ctx)
+	}
+	if dbent.TxFromContext(ctx) != nil {
 		return commitUser(ctx)
 	}
 

@@ -2918,7 +2918,7 @@ func (r *oauthPendingFlowRedeemCodeRepo) GetByID(context.Context, int64) (*servi
 }
 
 func (r *oauthPendingFlowRedeemCodeRepo) GetByCode(ctx context.Context, code string) (*service.RedeemCode, error) {
-	entity, err := r.client.RedeemCode.Query().Where(redeemcode.CodeEQ(code)).Only(ctx)
+	entity, err := oauthPendingFlowDB(ctx, r.client).RedeemCode.Query().Where(redeemcode.CodeEQ(code)).Only(ctx)
 	if err != nil {
 		if dbent.IsNotFound(err) {
 			return nil, service.ErrRedeemCodeNotFound
@@ -2948,7 +2948,7 @@ func (r *oauthPendingFlowRedeemCodeRepo) Update(ctx context.Context, code *servi
 	if code == nil {
 		return nil
 	}
-	update := r.client.RedeemCode.UpdateOneID(code.ID).
+	update := oauthPendingFlowDB(ctx, r.client).RedeemCode.UpdateOneID(code.ID).
 		SetCode(code.Code).
 		SetType(code.Type).
 		SetValue(code.Value).
@@ -2983,7 +2983,7 @@ func (r *oauthPendingFlowRedeemCodeRepo) Delete(context.Context, int64) error {
 }
 
 func (r *oauthPendingFlowRedeemCodeRepo) Use(ctx context.Context, id, userID int64) error {
-	affected, err := r.client.RedeemCode.Update().
+	affected, err := oauthPendingFlowDB(ctx, r.client).RedeemCode.Update().
 		Where(redeemcode.IDEQ(id), redeemcode.StatusEQ(service.StatusUnused)).
 		SetStatus(service.StatusUsed).
 		SetUsedBy(userID).
@@ -3096,6 +3096,13 @@ type oauthPendingFlowUserRepo struct {
 	options oauthPendingFlowUserRepoOptions
 }
 
+func oauthPendingFlowDB(ctx context.Context, client *dbent.Client) *dbent.Client {
+	if tx := dbent.TxFromContext(ctx); tx != nil {
+		return tx.Client()
+	}
+	return client
+}
+
 var _ service.RegistrationEmailDomainRepository = (*oauthPendingFlowUserRepo)(nil)
 
 type oauthPendingFlowUserRepoOptions struct {
@@ -3103,7 +3110,7 @@ type oauthPendingFlowUserRepoOptions struct {
 }
 
 func (r *oauthPendingFlowUserRepo) Create(ctx context.Context, user *service.User) error {
-	entity, err := r.client.User.Create().
+	entity, err := oauthPendingFlowDB(ctx, r.client).User.Create().
 		SetEmail(user.Email).
 		SetUsername(user.Username).
 		SetNotes(user.Notes).
@@ -3145,7 +3152,7 @@ func (r *oauthPendingFlowUserRepo) CountUsersByEmailDomain(ctx context.Context, 
 	if domain == "" {
 		return 0, nil
 	}
-	emails, err := r.client.User.Query().Select(dbuser.FieldEmail).Strings(ctx)
+	emails, err := oauthPendingFlowDB(ctx, r.client).User.Query().Select(dbuser.FieldEmail).Strings(ctx)
 	if err != nil {
 		return 0, err
 	}
@@ -3170,7 +3177,7 @@ func (r *oauthPendingFlowUserRepo) CreateWithEmailAliasGuardAndDomainLimit(ctx c
 }
 
 func (r *oauthPendingFlowUserRepo) GetByID(ctx context.Context, id int64) (*service.User, error) {
-	entity, err := r.client.User.Get(ctx, id)
+	entity, err := oauthPendingFlowDB(ctx, r.client).User.Get(ctx, id)
 	if err != nil {
 		if dbent.IsNotFound(err) {
 			return nil, service.ErrUserNotFound
@@ -3181,7 +3188,7 @@ func (r *oauthPendingFlowUserRepo) GetByID(ctx context.Context, id int64) (*serv
 }
 
 func (r *oauthPendingFlowUserRepo) GetByEmail(ctx context.Context, email string) (*service.User, error) {
-	entity, err := r.client.User.Query().Where(dbuser.EmailEQ(email)).Only(ctx)
+	entity, err := oauthPendingFlowDB(ctx, r.client).User.Query().Where(dbuser.EmailEQ(email)).Only(ctx)
 	if err != nil {
 		if dbent.IsNotFound(err) {
 			return nil, service.ErrUserNotFound
@@ -3196,7 +3203,7 @@ func (r *oauthPendingFlowUserRepo) GetFirstAdmin(context.Context) (*service.User
 }
 
 func (r *oauthPendingFlowUserRepo) Update(ctx context.Context, user *service.User, fields service.UserUpdateFields) error {
-	entity, err := r.client.User.UpdateOneID(user.ID).
+	entity, err := oauthPendingFlowDB(ctx, r.client).User.UpdateOneID(user.ID).
 		SetEmail(user.Email).
 		SetUsername(user.Username).
 		SetNotes(user.Notes).
@@ -3221,12 +3228,12 @@ func (r *oauthPendingFlowUserRepo) Update(ctx context.Context, user *service.Use
 }
 
 func (r *oauthPendingFlowUserRepo) UpdateUserLastActiveAt(ctx context.Context, userID int64, activeAt time.Time) error {
-	return r.client.User.UpdateOneID(userID).SetLastActiveAt(activeAt).Exec(ctx)
+	return oauthPendingFlowDB(ctx, r.client).User.UpdateOneID(userID).SetLastActiveAt(activeAt).Exec(ctx)
 }
 
 func (r *oauthPendingFlowUserRepo) Delete(ctx context.Context, id int64) error {
 	if r.options.rejectDeleteWhileAuthIdentityExists {
-		count, err := r.client.AuthIdentity.Query().Where(authidentity.UserIDEQ(id)).Count(ctx)
+		count, err := oauthPendingFlowDB(ctx, r.client).AuthIdentity.Query().Where(authidentity.UserIDEQ(id)).Count(ctx)
 		if err != nil {
 			return err
 		}
@@ -3234,7 +3241,7 @@ func (r *oauthPendingFlowUserRepo) Delete(ctx context.Context, id int64) error {
 			return errors.New("cannot delete user while auth identities still exist")
 		}
 	}
-	return r.client.User.DeleteOneID(id).Exec(ctx)
+	return oauthPendingFlowDB(ctx, r.client).User.DeleteOneID(id).Exec(ctx)
 }
 
 func (r *oauthPendingFlowUserRepo) GetUserAvatar(ctx context.Context, userID int64) (*service.UserAvatar, error) {
@@ -3380,13 +3387,13 @@ func (r *oauthPendingFlowUserRepo) GetLatestUsedAtByUserID(context.Context, int6
 }
 
 func (r *oauthPendingFlowUserRepo) ExistsByEmail(ctx context.Context, email string) (bool, error) {
-	count, err := r.client.User.Query().Where(dbuser.EmailEQ(email)).Count(ctx)
+	count, err := oauthPendingFlowDB(ctx, r.client).User.Query().Where(dbuser.EmailEQ(email)).Count(ctx)
 	return count > 0, err
 }
 
 func (r *oauthPendingFlowUserRepo) ExistsByEmailAlias(ctx context.Context, email string) (bool, error) {
 	identity := service.NormalizeEmailForAliasDedup(email)
-	emails, err := r.client.User.Query().Select(dbuser.FieldEmail).Strings(ctx)
+	emails, err := oauthPendingFlowDB(ctx, r.client).User.Query().Select(dbuser.FieldEmail).Strings(ctx)
 	if err != nil {
 		return false, err
 	}
@@ -3411,7 +3418,7 @@ func (r *oauthPendingFlowUserRepo) RemoveGroupFromUserAllowedGroups(context.Cont
 }
 
 func (r *oauthPendingFlowUserRepo) ListUserAuthIdentities(ctx context.Context, userID int64) ([]service.UserAuthIdentityRecord, error) {
-	identities, err := r.client.AuthIdentity.Query().
+	identities, err := oauthPendingFlowDB(ctx, r.client).AuthIdentity.Query().
 		Where(authidentity.UserIDEQ(userID)).
 		All(ctx)
 	if err != nil {
@@ -3442,7 +3449,7 @@ func (r *oauthPendingFlowUserRepo) UnbindUserAuthProvider(context.Context, int64
 }
 
 func (r *oauthPendingFlowUserRepo) UpdateTotpSecret(ctx context.Context, userID int64, encryptedSecret *string) error {
-	update := r.client.User.UpdateOneID(userID)
+	update := oauthPendingFlowDB(ctx, r.client).User.UpdateOneID(userID)
 	if encryptedSecret == nil {
 		update = update.ClearTotpSecretEncrypted()
 	} else {
@@ -3452,14 +3459,14 @@ func (r *oauthPendingFlowUserRepo) UpdateTotpSecret(ctx context.Context, userID 
 }
 
 func (r *oauthPendingFlowUserRepo) EnableTotp(ctx context.Context, userID int64) error {
-	return r.client.User.UpdateOneID(userID).
+	return oauthPendingFlowDB(ctx, r.client).User.UpdateOneID(userID).
 		SetTotpEnabled(true).
 		SetTotpEnabledAt(time.Now().UTC()).
 		Exec(ctx)
 }
 
 func (r *oauthPendingFlowUserRepo) DisableTotp(ctx context.Context, userID int64) error {
-	return r.client.User.UpdateOneID(userID).
+	return oauthPendingFlowDB(ctx, r.client).User.UpdateOneID(userID).
 		SetTotpEnabled(false).
 		ClearTotpSecretEncrypted().
 		ClearTotpEnabledAt().

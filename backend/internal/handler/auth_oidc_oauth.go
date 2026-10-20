@@ -193,6 +193,7 @@ func (h *AuthHandler) OIDCOAuthStart(c *gin.Context) {
 		return
 	}
 
+	h.freezeSignupAffiliate(c, "oidc", state)
 	respondOAuthStart(c, authURL)
 }
 
@@ -238,6 +239,8 @@ func (h *AuthHandler) OIDCOAuthCallback(c *gin.Context) {
 		redirectOAuthError(c, frontendCallback, "invalid_state", "invalid oauth state", "")
 		return
 	}
+
+	h.restoreSignupAffiliate(c, "oidc", state)
 
 	redirectTo, _ := readCookieDecoded(c, oidcOAuthRedirectCookie)
 	redirectTo = sanitizeFrontendRedirectPath(redirectTo)
@@ -690,24 +693,22 @@ func (h *AuthHandler) CompleteOIDCOAuthRegistration(c *gin.Context) {
 		response.ErrorFrom(c, err)
 		return
 	}
-	tokenPair, user, err := h.authService.LoginOrRegisterOAuthWithTokenPairAndPromoCode(
+	tokenPair, user, err := h.completeOAuthProviderRegistration(
 		c.Request.Context(),
+		session,
+		decision,
 		email,
 		username,
 		req.InvitationCode,
 		req.AffCode,
-		pendingOAuthPromoCode(session),
 		"oidc",
 	)
 	if err != nil {
 		response.ErrorFrom(c, err)
 		return
 	}
-	if err := applyPendingOAuthAdoptionAndConsumeSession(c.Request.Context(), client, h.authService, h.userService, session, decision, user.ID); err != nil {
-		respondPendingOAuthBindingApplyError(c, err)
-		return
-	}
 	h.authService.RecordSuccessfulLogin(c.Request.Context(), user.ID)
+	clearSignupAffiliateCookie(c)
 	clearOAuthPendingSessionCookie(c, secureCookie)
 	clearOAuthPendingBrowserCookie(c, secureCookie)
 

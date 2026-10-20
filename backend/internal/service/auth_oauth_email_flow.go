@@ -163,21 +163,38 @@ func (s *AuthService) RegisterOAuthEmailAccount(
 		SignupSource: signupSource,
 	}
 
-	if err := s.createUserWithRegistrationEmailGuard(ctx, user); err != nil {
+	createUser := func() error { return s.createUserWithRegistrationEmailGuard(ctx, user) }
+	if _, protected := SignupAffiliateAttributionFromContext(ctx); protected {
+		createUser = func() error {
+			invitation, err := s.validateOAuthRegistrationInvitation(ctx, invitationCode)
+			if err != nil {
+				return err
+			}
+			return s.createAttributedSignupUser(ctx, user, invitation, true)
+		}
+	}
+	if err := createUser(); err != nil {
 		switch {
 		case errors.Is(err, ErrEmailExists):
 			return nil, nil, ErrEmailExists
 		case errors.Is(err, ErrEmailDomainRegistrationLimit):
 			return nil, nil, ErrEmailDomainRegistrationLimit
+		case errors.Is(err, ErrAffiliateAttributionInvalid), errors.Is(err, ErrAffiliateDisabled):
+			return nil, nil, err
 		default:
 			slog.Error("oauth email register: userRepo.Create failed", "email", email, "signup_source", signupSource, "error", err.Error())
 			return nil, nil, ErrServiceUnavailable
 		}
 	}
 
+	if signupTokenDeferred(ctx) {
+		return nil, user, nil
+	}
 	tokenPair, err := s.GenerateTokenPair(ctx, user, "")
 	if err != nil {
-		_ = s.RollbackOAuthEmailAccountCreation(ctx, user.ID, "")
+		if _, protected := SignupAffiliateAttributionFromContext(ctx); !protected {
+			_ = s.RollbackOAuthEmailAccountCreation(ctx, user.ID, "")
+		}
 		return nil, nil, fmt.Errorf("generate token pair: %w", err)
 	}
 	return tokenPair, user, nil
@@ -250,20 +267,39 @@ func (s *AuthService) RegisterVerifiedOAuthEmailAccount(
 		SignupSource: signupSource,
 	}
 
-	if err := s.createUserWithRegistrationEmailGuard(ctx, user); err != nil {
+	createUser := func() error { return s.createUserWithRegistrationEmailGuard(ctx, user) }
+	if _, protected := SignupAffiliateAttributionFromContext(ctx); protected {
+		createUser = func() error {
+			invitation, err := s.validateOAuthRegistrationInvitation(ctx, invitationCode)
+			if err != nil {
+				return err
+			}
+			return s.createAttributedSignupUser(ctx, user, invitation, true)
+		}
+	}
+	if err := createUser(); err != nil {
 		switch {
 		case errors.Is(err, ErrEmailExists):
 			return nil, nil, ErrEmailExists
 		case errors.Is(err, ErrEmailDomainRegistrationLimit):
 			return nil, nil, ErrEmailDomainRegistrationLimit
+		case errors.Is(err, ErrAffiliateAttributionInvalid), errors.Is(err, ErrAffiliateDisabled):
+			return nil, nil, err
 		default:
 			return nil, nil, ErrServiceUnavailable
 		}
 	}
 
+	if signupTokenDeferred(ctx) {
+		return nil, user, nil
+	}
 	tokenPair, err := s.GenerateTokenPair(ctx, user, "")
 	if err != nil {
-		_ = s.RollbackOAuthEmailAccountCreation(ctx, user.ID, "")
+		// Protected creation has already committed its referral and admission
+		// code. Keep that consistent account available for a subsequent login.
+		if _, protected := SignupAffiliateAttributionFromContext(ctx); !protected {
+			_ = s.RollbackOAuthEmailAccountCreation(ctx, user.ID, "")
+		}
 		return nil, nil, fmt.Errorf("generate token pair: %w", err)
 	}
 	return tokenPair, user, nil
@@ -283,6 +319,17 @@ func (s *AuthService) FinalizeOAuthEmailAccount(
 	}
 
 	signupSource = normalizeOAuthSignupSource(signupSource)
+	if _, protected := SignupAffiliateAttributionFromContext(ctx); protected {
+		// The protected creation already atomically claimed the admission code
+		// and bound the inviter. Never consume either again during completion.
+		afterSignupCommit(ctx, func(afterCtx context.Context) {
+			s.updateOAuthSignupSource(afterCtx, user.ID, signupSource)
+			grantPlan := s.resolveSignupGrantPlan(afterCtx, signupSource)
+			s.assignSubscriptions(afterCtx, user.ID, grantPlan.Subscriptions, "auto assigned by signup defaults")
+			_ = s.snapshotPlatformQuotaDefaults(afterCtx, user.ID, &grantPlan)
+		})
+		return nil
+	}
 	invitationRedeemCode, err := s.validateOAuthRegistrationInvitation(ctx, invitationCode)
 	if err != nil {
 		return err

@@ -247,6 +247,10 @@ export default {
     passwordMinLength: 'Password must be at least 6 characters',
     loginFailed: 'Login failed. Please check your credentials and try again.',
     errors: {
+      AFFILIATE_ATTRIBUTION_INVALID: 'This referral entry has expired or been revoked. Open a valid dedicated referral link again before registering.',
+      AFFILIATE_ATTRIBUTION_UNAVAILABLE: 'Referral attribution is temporarily unavailable. Please retry before registering.',
+      AFFILIATE_RATE_LIMITED: 'Too many referral requests. Please wait a moment and retry.',
+      AFFILIATE_DISABLED: 'Referral promotion is currently disabled. Please contact the site administrator.',
       USER_NOT_ACTIVE: 'Account has been disabled.',
     },
     registrationFailed: 'Registration failed. Please try again.',

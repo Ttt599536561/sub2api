@@ -4,6 +4,7 @@ import RegisterView from '@/views/auth/RegisterView.vue'
 
 const {
   getPublicSettingsMock,
+  getAffiliateAttributionMock,
   registerMock,
   showErrorMock,
   pushMock,
@@ -11,6 +12,7 @@ const {
   appStoreMock
 } = vi.hoisted(() => ({
   getPublicSettingsMock: vi.fn(),
+  getAffiliateAttributionMock: vi.fn(),
   registerMock: vi.fn(),
   showErrorMock: vi.fn(),
   pushMock: vi.fn(),
@@ -69,7 +71,8 @@ vi.mock('@/api/auth', async () => {
   const actual = await vi.importActual<typeof import('@/api/auth')>('@/api/auth')
   return {
     ...actual,
-    getPublicSettings: (...args: unknown[]) => getPublicSettingsMock(...args)
+    getPublicSettings: (...args: unknown[]) => getPublicSettingsMock(...args),
+    getAffiliateAttribution: (...args: unknown[]) => getAffiliateAttributionMock(...args)
   }
 })
 
@@ -98,6 +101,10 @@ function mountRegister() {
 describe('RegisterView', () => {
   beforeEach(() => {
     getPublicSettingsMock.mockReset()
+    getAffiliateAttributionMock.mockReset()
+    getAffiliateAttributionMock.mockResolvedValue({ locked: false })
+    localStorage.removeItem('affiliate_referral_code')
+    sessionStorage.removeItem('affiliate_attribution_locked')
     registerMock.mockReset()
     showErrorMock.mockReset()
     pushMock.mockReset()
@@ -221,6 +228,55 @@ describe('RegisterView', () => {
       invitationField.element.compareDocumentPosition(turnstile.element) &
         Node.DOCUMENT_POSITION_FOLLOWING
     ).toBeTruthy()
+  })
+
+  it('hides the affiliate field and omits cached attribution from protected registration', async () => {
+    getAffiliateAttributionMock.mockResolvedValue({ locked: true })
+    getPublicSettingsMock.mockResolvedValue({ ...publicSettings, turnstile_enabled: false })
+    localStorage.setItem('affiliate_referral_code', JSON.stringify({ code: 'OLD', expiresAt: Date.now() + 60000 }))
+    const wrapper = mountRegister()
+    await flushPromises()
+    expect(wrapper.find('#affiliate_code').exists()).toBe(false)
+    await wrapper.get('#email').setValue('user@example.com')
+    await wrapper.get('#password').setValue('secret-123')
+    await wrapper.get('#confirmPassword').setValue('secret-123')
+    await wrapper.get('form').trigger('submit.prevent')
+    await flushPromises()
+    expect(registerMock).toHaveBeenCalledOnce()
+    expect(registerMock.mock.calls[0][0]).not.toHaveProperty('aff_code')
+  })
+
+  it('keeps registration admission codes visible when protected attribution is active', async () => {
+    getAffiliateAttributionMock.mockResolvedValue({ locked: true })
+    getPublicSettingsMock.mockResolvedValue({ ...publicSettings, invitation_code_enabled: true })
+    const wrapper = mountRegister()
+    await flushPromises()
+    expect(wrapper.find('#invitation_code').exists()).toBe(true)
+    expect(wrapper.find('#affiliate_code').exists()).toBe(false)
+  })
+
+  it('requires a successful attribution retry before creating an account after a status failure', async () => {
+    getAffiliateAttributionMock.mockRejectedValueOnce({ code: 'AFFILIATE_ATTRIBUTION_UNAVAILABLE' })
+    getPublicSettingsMock.mockResolvedValue({ ...publicSettings, turnstile_enabled: false })
+    const wrapper = mountRegister()
+    await flushPromises()
+    expect(wrapper.find('[data-test="affiliate-attribution-error"]').exists()).toBe(true)
+    expect(wrapper.get('#email').attributes('disabled')).toBeDefined()
+    await wrapper.get('form').trigger('submit.prevent')
+    await flushPromises()
+    expect(registerMock).not.toHaveBeenCalled()
+    getAffiliateAttributionMock.mockResolvedValue({ locked: false })
+    await wrapper.get('[data-test="affiliate-attribution-retry"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('[data-test="affiliate-attribution-error"]').exists()).toBe(false)
+    expect(wrapper.get('button[type="submit"]').attributes('disabled')).toBeUndefined()
+    await wrapper.get('#email').setValue('user@example.com')
+    await wrapper.get('#password').setValue('secret-123')
+    await wrapper.get('#confirmPassword').setValue('secret-123')
+    await wrapper.get('form').trigger('submit.prevent')
+    await flushPromises()
+    expect(showErrorMock).not.toHaveBeenCalled()
+    expect(registerMock).toHaveBeenCalledOnce()
   })
 
   it('uses the mandatory invitation field without duplicating the affiliate field', async () => {

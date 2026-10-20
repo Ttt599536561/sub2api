@@ -113,4 +113,21 @@ describe('AffiliateView', () => {
       'affiliate.linkCopied',
     )
   })
+
+  it('displays and copies the dedicated link returned by the server', async () => {
+    getAffiliateDetail.mockResolvedValueOnce({
+      user_id: 1, aff_code: affiliateCode, aff_count: 0, aff_quota: 0,
+      aff_frozen_quota: 0, aff_history_quota: 0, effective_rebate_rate_percent: 10,
+      invitees: [], affiliate_domain: 'partner.app.example.com',
+      referral_url: 'https://partner.app.example.com/'
+    })
+    const wrapper = mount(AffiliateView, {
+      global: { stubs: { AppLayout: { template: '<main><slot /></main>' }, Icon: true } }
+    })
+    await flushPromises()
+    expect(wrapper.text()).toContain('https://partner.app.example.com/')
+    const button = wrapper.findAll('button').find((item) => item.text() === 'affiliate.copyLink')!
+    await button.trigger('click')
+    expect(copyToClipboard).toHaveBeenCalledWith('https://partner.app.example.com/', 'affiliate.linkCopied')
+  })
 })

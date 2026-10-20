@@ -103,6 +103,19 @@ func (s *AuthService) loginOrRegisterVerifiedEmailOAuth(
 		user, err = s.userRepo.GetByEmail(ctx, email)
 		if err != nil {
 			if errors.Is(err, ErrUserNotFound) {
+				if _, protected := SignupAffiliateAttributionFromContext(ctx); protected && dbent.TxFromContext(ctx) == nil {
+					var committedUser *User
+					err := s.RunSignupTransaction(ctx, func(txCtx context.Context) error {
+						_, createdUser, createErr := s.loginOrRegisterVerifiedEmailOAuth(txCtx, input, invitationCode, affiliateCode, promoCode)
+						committedUser = createdUser
+						return createErr
+					})
+					if err != nil {
+						return nil, nil, err
+					}
+					pair, err := s.GenerateTokenPair(ctx, committedUser, "")
+					return pair, committedUser, err
+				}
 				user, err = s.createEmailOAuthUser(ctx, email, input.Username, providerType, invitationCode, affiliateCode)
 				if err != nil {
 					return nil, nil, err
@@ -133,20 +146,22 @@ func (s *AuthService) loginOrRegisterVerifiedEmailOAuth(
 	}
 
 	if user.Username == "" && strings.TrimSpace(input.Username) != "" {
-		user.Username = strings.TrimSpace(input.Username)
-		if err := s.userRepo.Update(ctx, user, UserUpdateFields{Username: true}); err != nil {
-			logger.LegacyPrintf("service.auth", "[Auth] Failed to update username after %s oauth login: %v", providerType, err)
-		}
+		s.completeOAuthUsername(ctx, user, strings.TrimSpace(input.Username), providerType)
 	}
-	if !created {
-		if err := s.ApplyProviderDefaultSettingsOnFirstBind(ctx, user.ID, providerType); err != nil {
-			logger.LegacyPrintf("service.auth", "[Auth] Failed to apply %s first bind defaults: %v", providerType, err)
+	afterSignupCommit(ctx, func(afterCtx context.Context) {
+		if !created {
+			if err := s.ApplyProviderDefaultSettingsOnFirstBind(afterCtx, user.ID, providerType); err != nil {
+				logger.LegacyPrintf("service.auth", "[Auth] Failed to apply %s first bind defaults: %v", providerType, err)
+			}
+		} else if updated := s.applyOAuthSignupPromoCode(afterCtx, user, promoCode); updated != nil {
+			*user = *updated
 		}
-	} else {
-		user = s.applyOAuthSignupPromoCode(ctx, user, promoCode)
-	}
-	s.RecordSuccessfulLogin(ctx, user.ID)
+		s.RecordSuccessfulLogin(afterCtx, user.ID)
+	})
 
+	if signupTokenDeferred(ctx) {
+		return nil, user, nil
+	}
 	tokenPair, err := s.GenerateTokenPair(ctx, user, "")
 	if err != nil {
 		return nil, nil, fmt.Errorf("generate token pair: %w", err)
@@ -190,6 +205,13 @@ func (s *AuthService) createEmailOAuthUser(ctx context.Context, email, username,
 		Status:       StatusActive,
 		SignupSource: providerType,
 	}
+	if _, protected := SignupAffiliateAttributionFromContext(ctx); protected {
+		if err := s.createAttributedSignupUser(ctx, user, invitationRedeemCode, false); err != nil {
+			return nil, err
+		}
+		s.bootstrapAttributedSignup(ctx, user, providerType, grantPlan, false)
+		return user, nil
+	}
 	if err := s.userRepo.Create(ctx, user); err != nil {
 		if errors.Is(err, ErrEmailExists) {
 			existing, loadErr := s.userRepo.GetByEmail(ctx, email)
@@ -215,7 +237,7 @@ func (s *AuthService) createEmailOAuthUser(ctx context.Context, email, username,
 }
 
 func (s *AuthService) findEmailOAuthIdentityOwner(ctx context.Context, providerType, providerKey, providerSubject string) (*User, error) {
-	identity, err := s.entClient.AuthIdentity.Query().
+	identity, err := s.signupEntClient(ctx).AuthIdentity.Query().
 		Where(
 			authidentity.ProviderTypeEQ(providerType),
 			authidentity.ProviderKeyEQ(providerKey),
@@ -259,7 +281,7 @@ func (s *AuthService) ensureEmailOAuthIdentity(ctx context.Context, userID int64
 	providerType := normalizeOAuthSignupSource(input.ProviderType)
 	providerKey := strings.TrimSpace(input.ProviderKey)
 	providerSubject := strings.TrimSpace(input.ProviderSubject)
-	identity, err := s.entClient.AuthIdentity.Query().
+	identity, err := s.signupEntClient(ctx).AuthIdentity.Query().
 		Where(
 			authidentity.ProviderTypeEQ(providerType),
 			authidentity.ProviderKeyEQ(providerKey),
@@ -273,12 +295,12 @@ func (s *AuthService) ensureEmailOAuthIdentity(ctx context.Context, userID int64
 		if identity.UserID != userID {
 			return infraerrors.Conflict("AUTH_IDENTITY_OWNERSHIP_CONFLICT", "auth identity already belongs to another user")
 		}
-		_, err = s.entClient.AuthIdentity.UpdateOneID(identity.ID).
+		_, err = s.signupEntClient(ctx).AuthIdentity.UpdateOneID(identity.ID).
 			SetMetadata(metadata).
 			Save(ctx)
 		return err
 	}
-	_, err = s.entClient.AuthIdentity.Create().
+	_, err = s.signupEntClient(ctx).AuthIdentity.Create().
 		SetUserID(userID).
 		SetProviderType(providerType).
 		SetProviderKey(providerKey).

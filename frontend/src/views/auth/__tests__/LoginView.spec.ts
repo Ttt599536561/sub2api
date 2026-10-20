@@ -2,8 +2,9 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import LoginView from '@/views/auth/LoginView.vue'
 
-const { getPublicSettingsMock, pushMock } = vi.hoisted(() => ({
+const { getPublicSettingsMock, getAffiliateAttributionMock, pushMock } = vi.hoisted(() => ({
   getPublicSettingsMock: vi.fn(),
+  getAffiliateAttributionMock: vi.fn(),
   pushMock: vi.fn()
 }))
 
@@ -64,6 +65,7 @@ vi.mock('@/stores', () => ({
 vi.mock('@/api/auth', () => ({
   buildOAuthLoginStartURL: vi.fn(),
   getPublicSettings: (...args: unknown[]) => getPublicSettingsMock(...args),
+  getAffiliateAttribution: (...args: unknown[]) => getAffiliateAttributionMock(...args),
   isTotp2FARequired: vi.fn(() => false),
   isWeChatWebOAuthEnabled: vi.fn(() => false),
   startOAuthLogin: vi.fn()
@@ -93,6 +95,8 @@ function mountLogin() {
 describe('LoginView registration entry', () => {
   beforeEach(() => {
     getPublicSettingsMock.mockReset()
+    getAffiliateAttributionMock.mockReset()
+    getAffiliateAttributionMock.mockResolvedValue({ locked: false })
     pushMock.mockReset()
     getPublicSettingsMock.mockResolvedValue(publicSettings)
   })
@@ -102,6 +106,15 @@ describe('LoginView registration entry', () => {
     await flushPromises()
 
     expect(wrapper.text()).toContain('auth.signUp')
+  })
+
+  it('keeps ordinary login available while the independent attribution request is pending', async () => {
+    getAffiliateAttributionMock.mockReturnValue(new Promise(() => {}))
+    const wrapper = mountLogin()
+    await flushPromises()
+    expect(wrapper.get('button[type="submit"]').attributes('disabled')).toBeUndefined()
+    expect(getPublicSettingsMock).toHaveBeenCalledOnce()
+    wrapper.unmount()
   })
 
   it('hides the registration entry when registration is disabled', async () => {

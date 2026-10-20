@@ -15,6 +15,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/authidentity"
 	"github.com/Wei-Shaw/sub2api/ent/authidentitychannel"
 	"github.com/Wei-Shaw/sub2api/ent/identityadoptiondecision"
+	"github.com/Wei-Shaw/sub2api/ent/pendingauthsession"
 	"github.com/Wei-Shaw/sub2api/ent/predicate"
 	dbuser "github.com/Wei-Shaw/sub2api/ent/user"
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
@@ -243,6 +244,10 @@ func (h *AuthHandler) createOAuthPendingSession(c *gin.Context, payload oauthPen
 	if promoCode := readOAuthPromoCode(c); promoCode != "" {
 		localFlowState[oauthPromoCodeStateKey] = promoCode
 	}
+	// Record null as well: a flow that started without a protected source must
+	// not adopt a different browser cookie while waiting for completion.
+	attr, _ := service.SignupAffiliateAttributionFromContext(c.Request.Context())
+	localFlowState[signupAffiliatePendingStateKey] = attr
 
 	session, err := svc.CreatePendingSession(c.Request.Context(), service.CreatePendingAuthSessionInput{
 		Intent:                 strings.TrimSpace(payload.Intent),
@@ -1301,12 +1306,22 @@ func consumePendingOAuthBrowserSessionTx(
 		return service.ErrPendingAuthBrowserMismatch
 	}
 
-	if _, err := tx.Client().PendingAuthSession.UpdateOneID(storedSession.ID).
+	affected, err := tx.Client().PendingAuthSession.Update().
+		Where(
+			pendingauthsession.IDEQ(storedSession.ID),
+			pendingauthsession.ConsumedAtIsNil(),
+			pendingauthsession.ExpiresAtGTE(now),
+			pendingauthsession.BrowserSessionKeyEQ(storedSession.BrowserSessionKey),
+		).
 		SetConsumedAt(now).
 		SetCompletionCodeHash("").
 		ClearCompletionCodeExpiresAt().
-		Save(ctx); err != nil {
+		Save(ctx)
+	if err != nil {
 		return err
+	}
+	if affected != 1 {
+		return service.ErrPendingAuthSessionConsumed
 	}
 
 	return nil
@@ -1612,6 +1627,7 @@ func (h *AuthHandler) transitionPendingOAuthAccountToChoiceState(
 }
 
 func writeOAuthTokenPairResponse(c *gin.Context, tokenPair *service.TokenPair) {
+	clearSignupAffiliateCookie(c)
 	c.JSON(http.StatusOK, gin.H{
 		"access_token":  tokenPair.AccessToken,
 		"refresh_token": tokenPair.RefreshToken,
@@ -1763,6 +1779,37 @@ func (h *AuthHandler) createPendingOAuthAccount(c *gin.Context, provider string)
 	proof := captchaProof(req.TurnstileToken, req.TencentCaptchaTicket, req.TencentCaptchaRandstr)
 	if err := h.authService.VerifyCaptcha(c.Request.Context(), proof, ip.GetClientIP(c)); err != nil {
 		response.ErrorFrom(c, err)
+		return
+	}
+
+	trustedCtx := pendingSignupAttributionContext(c.Request.Context(), session)
+	c.Request = c.Request.WithContext(trustedCtx)
+	if _, protected := service.SignupAffiliateAttributionFromContext(trustedCtx); protected {
+		decision, err := h.ensurePendingOAuthAdoptionDecision(c, session.ID, req.adoptionDecision())
+		if err != nil {
+			response.ErrorFrom(c, err)
+			return
+		}
+		tokenPair, user, err := h.completeTrustedOAuthSignup(trustedCtx, session, decision, func(txCtx context.Context) (*service.TokenPair, *service.User, error) {
+			pair, createdUser, err := h.authService.RegisterOAuthEmailAccount(txCtx, email, req.Password,
+				strings.TrimSpace(req.VerifyCode), strings.TrimSpace(req.InvitationCode), strings.TrimSpace(session.ProviderType))
+			if err != nil {
+				return nil, nil, err
+			}
+			if err := h.authService.FinalizeOAuthEmailAccount(txCtx, createdUser, strings.TrimSpace(req.InvitationCode), strings.TrimSpace(session.ProviderType), ""); err != nil {
+				return nil, nil, err
+			}
+			return pair, createdUser, nil
+		})
+		if err != nil {
+			response.ErrorFrom(c, err)
+			return
+		}
+		h.authService.ApplyOAuthSignupPromoCode(c.Request.Context(), user.ID, pendingOAuthPromoCode(session))
+		h.authService.RecordSuccessfulLogin(c.Request.Context(), user.ID)
+		h.maybeSyncDingTalkAfterRegistration(c.Request.Context(), session, user.ID)
+		clearCookies()
+		writeOAuthTokenPairResponse(c, tokenPair)
 		return
 	}
 
@@ -2061,6 +2108,7 @@ func (h *AuthHandler) ExchangePendingOAuthCompletion(c *gin.Context) {
 		payload["token_type"] = "Bearer"
 	}
 
+	clearSignupAffiliateCookie(c)
 	clearCookies()
 	response.Success(c, payload)
 }

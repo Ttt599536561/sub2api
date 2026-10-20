@@ -2,6 +2,7 @@ import { defineComponent, h } from 'vue'
 import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import EmailVerifyView from '@/views/auth/EmailVerifyView.vue'
+import { setAffiliateAttributionLocked } from '@/utils/oauthAffiliate'
 
 const {
   pushMock,
@@ -124,6 +125,7 @@ describe('EmailVerifyView', () => {
     authStoreState.pendingAuthSession = null
     sessionStorage.clear()
     localStorage.clear()
+    setAffiliateAttributionLocked(false)
 
     getPublicSettingsMock.mockResolvedValue({
       turnstile_enabled: false,
@@ -134,6 +136,26 @@ describe('EmailVerifyView', () => {
     sendVerifyCodeMock.mockResolvedValue({ countdown: 60 })
     sendPendingOAuthVerifyCodeMock.mockResolvedValue({ countdown: 60 })
     setTokenMock.mockResolvedValue({})
+  })
+
+  it('omits a stale register_data affiliate code after protected attribution was captured', async () => {
+    sessionStorage.setItem('register_data', JSON.stringify({
+      email: 'user@example.com', password: 'secret-123', aff_code: 'STALE'
+    }))
+    setAffiliateAttributionLocked(true)
+    registerMock.mockResolvedValue({})
+    const wrapper = mount(EmailVerifyView, {
+      global: { stubs: {
+        AuthLayout: { template: '<div><slot /><slot name="footer" /></div>' },
+        Icon: true, TurnstileWidget: true, transition: false
+      } }
+    })
+    await flushPromises()
+    await wrapper.get('#code').setValue('123456')
+    await wrapper.get('form').trigger('submit.prevent')
+    await flushPromises()
+    expect(registerMock).toHaveBeenCalledOnce()
+    expect(registerMock.mock.calls[0][0]).not.toHaveProperty('aff_code')
   })
 
   it('acquires a fresh Tencent proof for each resend action', async () => {

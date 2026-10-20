@@ -1307,7 +1307,7 @@ func nullableInt64Arg(v *int64) any {
 	return *v
 }
 
-// ListUsersWithCustomSettings 列出有专属配置（自定义码或专属比例）的用户。
+// ListUsersWithCustomSettings 列出有专属配置（自定义码、专属比例或推广域名）的用户。
 //
 // 单一查询同时处理"无搜索"与"按邮箱/用户名模糊搜索"：
 // 空 search 时拼接出的 LIKE 模式为 "%%"，匹配所有行；非空时按 ILIKE 子串匹配。
@@ -1327,7 +1327,9 @@ func (r *affiliateRepository) ListUsersWithCustomSettings(ctx context.Context, f
 	const baseFrom = `
 FROM user_affiliates ua
 JOIN users u ON u.id = ua.user_id
-WHERE (ua.aff_code_custom = true OR ua.aff_rebate_rate_percent IS NOT NULL)
+LEFT JOIN affiliate_promotion_hosts aph ON aph.inviter_id = ua.user_id AND aph.enabled = true
+WHERE (ua.aff_code_custom = true OR ua.aff_rebate_rate_percent IS NOT NULL OR aph.hostname IS NOT NULL)
+  AND u.deleted_at IS NULL
   AND (u.email ILIKE $1 OR u.username ILIKE $1)`
 
 	client := clientFromContext(ctx, r.client)
@@ -1344,7 +1346,8 @@ SELECT ua.user_id,
        ua.aff_code,
        ua.aff_code_custom,
        ua.aff_rebate_rate_percent,
-       ua.aff_count` + baseFrom + `
+       ua.aff_count,
+       COALESCE(aph.hostname, '')` + baseFrom + `
 ORDER BY ua.updated_at DESC
 LIMIT $2 OFFSET $3`
 
@@ -1359,12 +1362,15 @@ LIMIT $2 OFFSET $3`
 		var e service.AffiliateAdminEntry
 		var rebate sql.NullFloat64
 		if err := rows.Scan(&e.UserID, &e.Email, &e.Username, &e.AffCode,
-			&e.AffCodeCustom, &rebate, &e.AffCount); err != nil {
+			&e.AffCodeCustom, &rebate, &e.AffCount, &e.AffiliateDomain); err != nil {
 			return nil, 0, err
 		}
 		if rebate.Valid {
 			v := rebate.Float64
 			e.AffRebateRatePercent = &v
+		}
+		if e.AffiliateDomain != "" {
+			e.ReferralURL = "https://" + e.AffiliateDomain + "/"
 		}
 		entries = append(entries, e)
 	}

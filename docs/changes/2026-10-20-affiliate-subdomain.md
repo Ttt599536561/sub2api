@@ -1,0 +1,56 @@
+# 专属推广子域名与可靠注册归因
+
+任务开始于 2026-10-20，最终验证完成于 2026-10-21（Asia/Shanghai）。稳定主题：`feat: add trusted affiliate subdomain registration`。
+
+## 改动与业务口径
+
+为既有推广用户配置一个主站下的专属子域名。浏览器进入推广域名后由后端解析用户归属，通过一次性不透明票据进入主站，再跳转干净注册页；链接、注册页和公开状态接口不展示推广邀请码。管理员可独立配置、修改、清除域名；邀请页优先展示专属链接。
+
+已有有效的服务端专属来源不被后来的邀请码/推广入口覆盖，也不刷新原 30 天期限。OAuth 开始时固定来源，并在 pending 中保存有效来源、明确无来源（JSON null）或无效锁定状态；请求体、后来的 cookie 和 URL 参数不能覆盖流程快照。历史 pending 缺字段保留兼容回退。
+
+普通邮箱及全部第三方新建分支将用户、准入邀请码、邀请关系、第三方身份与 pending 消费（适用时）放在同一事务。失败回滚不留账号或邀请计数；提交后签发登录结果，发 token 失败不删除已正确绑定的账户。已有账号登录/绑定不新绑邀请人，注册准入邀请码继续按原规则验证。充值返利比例、期限、冻结和上限沿用原有功能。
+
+## 实现与复核
+
+- 新增迁移 `247_affiliate_promotion_hosts.sql`：版本化域名映射、启用用户唯一约束、软/硬删除用户时停用及版本递增。停用 hostname 作为墓碑保留，旧归因不因域名复用而重新生效。
+- Redis 访问通过 service 存储接口与 repository 适配器隔离，HTTP handler 不直接依赖 Redis；GETDEL、SetNX 和计数首次 TTL 由仓储测试覆盖。Redis 交接票据两分钟，主站不透明归因最多 30 天；host-only `__Host-` Cookie 使用 Secure、HttpOnly、SameSite=Lax、Path=/。主站严格 HTTPS origin、不接受显式端口。
+- 精确 Request.Host 归属，不采用任意转发 Host；标准化合法尾点写法，已知主机异常端口拒绝，原始非 ASCII Host 在去空白前拒绝。入口在 SPA fallback 之前处理，推广域名不成为普通应用/API 站点。
+- 读取已有来源的 Redis/数据库暂时故障不会被当成“没有来源”，不能换绑。失效来源只在新的有效入口下显式恢复；请求限流、一次性消费、无缓存及日志防泄漏一并处理。
+- 主站地址查询使用短期缓存，当前实例的设置更新立即失效；防止给每次主站请求增加设置数据库查询。跨实例主站地址缓存最长 30 秒；映射与归因绑定仍查询并锁定权威记录。
+- 注册事务相关 Setting/User/Redeem 读取复用当前 Ent 事务，避免连接池满时等待第二连接；OAuth 用户名补全在成功提交后执行，保留已采纳的昵称。
+- 前端域名编辑独立于邀请码/比例，异步搜索/保存受会话、权限和弹窗生命周期保护。归因状态独立读取，不进入共享 public settings 缓存；状态失败可重试，普通登录不等待归因查询。
+
+独立审查确认并修复了存储故障换绑、Host 写法/失效配置绕过、明确空来源被后来 cookie 覆盖、token 失败删除补偿、事务内另租连接及用户名提前独立提交问题。每类均补充回归，复现记录与最终输出分别保存。
+
+## 最终验证
+
+以下均为本轮当前源码验证，不沿用旧发布数字：
+
+| 范围 | 实际结果 |
+| --- | --- |
+| 全后端 unit | `go test -tags=unit -count=1 -p 1 -json ./...`，58 个有测试包通过，22,547 个叶测试通过，18 个既有条件/占位测试跳过，0 失败。 |
+| PostgreSQL 16.15 | 新隔离数据库中运行全部 Affiliate、SettingRepo、UserRepo、RedeemCodeRepo 相关 integration；159 叶通过，0 失败/跳过。含真实注册 A/B 归属、撤销、外部事务回滚、并发停用及单连接矩阵；前后 43 份 backend 源文件哈希一致。 |
+| Redis 适配器 | 全 unit 中覆盖 miniredis 的并发一次性消费、原子计数、TTL、不存在/故障/nil client；未宣称使用真实 Redis 服务。 |
+| 前端 | 25 文件 / 217 项扩大回归全部通过；类型检查、全量 ESLint、生产构建通过。复核 24 份前端源码哈希与类型/构建证据一致。 |
+| Go 静态检查 | CI 同版 golangci-lint 2.14.0，`run --timeout=30m ./...`，0 issues。 |
+| Linux 构建 | `GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -p 2 -trimpath -tags embed -ldflags="-s -w" ./cmd/server` 成功；295 份嵌入前端资源逐一比对一致，ELF64 x86-64，129,200,288 字节，SHA256 `e2929210325b5dd3efa44b54ae5c700addaa66dae5d53a4247474f9af4c3ab0e`。仅编译，不表示 Linux/容器运行或线上验收。 |
+
+全 unit 初轮的三个旧 PgDumper 测试因 Windows 会话 PATH 缺 `sh` 失败；仅为第二轮会话加入现有 Git 的 bin 目录后，全仓重跑退出 0，未改备份业务或全局环境。18 项跳过包括外部 TLS/真实 API、可选数据库/Redis/插件集成及既有占位条件。本轮独立 PostgreSQL 专项不受这些跳过替代。
+
+初轮静态检查发现 handler 直依赖 Redis、一个测试 rows.Close 未显式处理及字符判断写法问题；已按项目分层抽出存储接口/仓储适配器并修正，最终全 unit 与静态检查均重新执行。Browserslist 提示本机 caniuse 数据较旧，本轮没有借此变更依赖。
+
+必要证据位于主项目 `.cache/affiliate-subdomain-20261020`：`final-verification-summary.json`、`final-backend-unit-green.jsonl`、`root-frontend-regression.json`、`domain-final-snapshot-summary.json`、`lint-final.log` 与 `linux-build.log`。67 份本轮 Go/SQL/TS/Vue 文件在最终验证后再次核对哈希，未变化。
+
+## 部署与恢复
+
+详细步骤见 [专属推广子域名启用说明](../../deploy/AFFILIATE_SUBDOMAIN.md)，设计与实施任务见 [设计](../superpowers/specs/2026-10-20-affiliate-subdomain-design.md) 和 [计划](../superpowers/plans/2026-10-20-affiliate-subdomain.md)。真实域名/邮箱仅在用户聊天与本机 output 启用清单中保存，不硬编码或纳入仓库文档。
+
+前后端应一起升级并应用迁移 247。DNS、HTTPS、保留主站/推广主机 Host、主站配置和实际账号查验均需在服务器验收。本轮尚未推送、发布镜像或部署生产，原已发布 0.2.17-r2 的来源保持不变。
+
+域名墓碑及 revision 不得手工删除/重置。软删除推广账号会永久停用其当前域名；恢复账号后须管理员重新配置，旧访问仍失效。数据库恢复须同时处理在途归因缓存/pending，不能让恢复的旧版本号重新接受已撤销归因。回退到不支持此功能的旧应用需先停止入口并处理仍在进行的注册；已完成邀请关系留在原有表中。
+
+本机验证使用 E 盘独立工作树，共用主项目依赖缓存。PostgreSQL 测试实例与数据均在主项目 .cache；仅以 E 盘 ASCII 目录联接解决 Windows 工具对中文路径的兼容，不安装系统服务。Docker 和生产数据库未参与本轮验证。
+
+## 本机清理限制
+
+测试 PostgreSQL 已正常停止，54392 端口无监听。删除本轮 PostgreSQL 数据、4 个临时辅助文件和 ASCII 目录联接的 PowerShell 原生命令在创建进程阶段被自动审批以 `blocked by policy` 拒绝，未提供具体规则；没有换方式或重试删除。保留约 112,246,806 字节的本轮测试数据及上述文件/联接，收据为主项目 `.cache/affiliate-subdomain-20261020/postgres-final-cleanup-blocked.json`。可复用工具 ZIP/runtime 与验证摘要继续保留，未清理其他任务的数据。

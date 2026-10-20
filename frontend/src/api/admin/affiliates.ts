@@ -4,7 +4,7 @@
  * exclusive invite codes (overrides aff_code) and exclusive rebate rates.
  */
 
-import { apiClient } from '../client'
+import { apiClient, ownedAuthRequestConfig } from '../client'
 import type { PaginatedResponse } from '@/types'
 
 export interface AffiliateAdminEntry {
@@ -15,6 +15,8 @@ export interface AffiliateAdminEntry {
   aff_code_custom: boolean
   aff_rebate_rate_percent?: number | null
   aff_count: number
+  affiliate_domain?: string
+  referral_url?: string
 }
 
 export interface ListAffiliateUsersParams {
@@ -126,6 +128,23 @@ export interface UpdateAffiliateUserRequest {
   clear_rebate_rate?: boolean
 }
 
+export interface AffiliateDomainResult {
+  affiliate_domain: string
+  referral_url: string
+}
+
+export async function updateUserDomain(
+  userId: number,
+  payload: { domain: string },
+): Promise<AffiliateDomainResult> {
+  const { data } = await apiClient.put<AffiliateDomainResult>(
+    `/admin/affiliates/users/${userId}/domain`,
+    payload,
+    ownedAuthRequestConfig(),
+  )
+  return data
+}
+
 export interface BatchSetRateRequest {
   user_ids: number[]
   aff_rebate_rate_percent?: number | null
@@ -158,7 +177,7 @@ export async function listUsers(
 export async function lookupUsers(q: string): Promise<SimpleUser[]> {
   const { data } = await apiClient.get<SimpleUser[]>(
     '/admin/affiliates/users/lookup',
-    { params: { q } },
+    { ...ownedAuthRequestConfig(), params: { q } },
   )
   return data
 }
@@ -270,6 +289,7 @@ export const affiliatesAPI = {
   listUsers,
   lookupUsers,
   updateUserSettings,
+  updateUserDomain,
   clearUserSettings,
   batchSetRate,
   listInviteRecords,

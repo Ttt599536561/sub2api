@@ -195,13 +195,14 @@ import {
   sendVerifyCode,
 } from '@/api/auth'
 import { buildAuthErrorMessage } from '@/utils/authError'
-import { extractApiErrorCode } from '@/utils/apiError'
+import { extractApiErrorCode, extractI18nErrorMessage } from '@/utils/apiError'
 import {
   formatRegistrationEmailSuffixWhitelistForMessage,
   isRegistrationEmailSuffixAllowed,
   normalizeRegistrationEmailSuffixWhitelist
 } from '@/utils/registrationEmailPolicy'
 import {
+  isAffiliateAttributionLocked,
   clearAllAffiliateReferralCodes,
   loadAffiliateReferralCode,
   oauthAffiliatePayload
@@ -338,7 +339,7 @@ onMounted(async () => {
       initialTencentCaptchaRandstr.value = registerData.tencent_captcha_randstr || ''
       promoCode.value = registerData.promo_code || ''
       invitationCode.value = registerData.invitation_code || ''
-      affCode.value = registerData.aff_code || loadAffiliateReferralCode()
+      affCode.value = isAffiliateAttributionLocked() ? '' : registerData.aff_code || loadAffiliateReferralCode()
       pendingAuthToken.value = registerData.pending_auth_token || activePendingSession?.token || ''
       pendingAuthTokenField.value = registerData.pending_auth_token_field || activePendingSession?.token_field || 'pending_auth_token'
       pendingProvider.value = registerData.pending_provider || activePendingSession?.provider || ''
@@ -786,7 +787,7 @@ function buildRegistrationErrorMessage(error: unknown, fallback: string): string
   if (extractApiErrorCode(error) === 'EMAIL_DOMAIN_REGISTRATION_LIMIT') {
     return t('auth.emailDomainRegistrationLimit')
   }
-  return buildAuthErrorMessage(error, { fallback })
+  return extractI18nErrorMessage(error, t, 'auth.errors', buildAuthErrorMessage(error, { fallback }))
 }
 </script>
 

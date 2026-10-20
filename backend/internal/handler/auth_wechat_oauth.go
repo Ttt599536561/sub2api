@@ -148,6 +148,7 @@ func (h *AuthHandler) WeChatOAuthStart(c *gin.Context) {
 		return
 	}
 
+	h.freezeSignupAffiliate(c, "wechat", state)
 	respondOAuthStart(c, authURL)
 }
 
@@ -183,6 +184,8 @@ func (h *AuthHandler) WeChatOAuthCallback(c *gin.Context) {
 		redirectOAuthError(c, frontendCallback, "invalid_state", "invalid oauth state", "")
 		return
 	}
+
+	h.restoreSignupAffiliate(c, "wechat", state)
 
 	redirectTo, _ := readCookieDecoded(c, wechatOAuthRedirectCookieName)
 	redirectTo = sanitizeFrontendRedirectPath(redirectTo)
@@ -553,6 +556,29 @@ func (h *AuthHandler) CompleteWeChatOAuthRegistration(c *gin.Context) {
 		return
 	}
 
+	trustedCtx := pendingSignupAttributionContext(c.Request.Context(), session)
+	c.Request = c.Request.WithContext(trustedCtx)
+	if _, protected := service.SignupAffiliateAttributionFromContext(trustedCtx); protected {
+		decision, err := h.ensurePendingOAuthAdoptionDecision(c, session.ID, oauthAdoptionDecisionRequest{
+			AdoptDisplayName: req.AdoptDisplayName,
+			AdoptAvatar:      req.AdoptAvatar,
+		})
+		if err != nil {
+			response.ErrorFrom(c, err)
+			return
+		}
+		tokenPair, user, err := h.completeOAuthProviderRegistration(trustedCtx, session, decision, email, username, req.InvitationCode, req.AffCode, "wechat")
+		if err != nil {
+			response.ErrorFrom(c, err)
+			return
+		}
+		h.authService.RecordSuccessfulLogin(c.Request.Context(), user.ID)
+		clearOAuthPendingSessionCookie(c, secureCookie)
+		clearOAuthPendingBrowserCookie(c, secureCookie)
+		writeOAuthTokenPairResponse(c, tokenPair)
+		return
+	}
+
 	tokenPair, user, err := h.authService.LoginOrRegisterOAuthWithTokenPairAndPromoCode(
 		c.Request.Context(),
 		email,
@@ -588,6 +614,7 @@ func (h *AuthHandler) CompleteWeChatOAuthRegistration(c *gin.Context) {
 	clearOAuthPendingSessionCookie(c, secureCookie)
 	clearOAuthPendingBrowserCookie(c, secureCookie)
 
+	clearSignupAffiliateCookie(c)
 	c.JSON(http.StatusOK, gin.H{
 		"access_token":  tokenPair.AccessToken,
 		"refresh_token": tokenPair.RefreshToken,

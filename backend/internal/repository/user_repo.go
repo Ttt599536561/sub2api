@@ -177,7 +177,7 @@ func (r *userRepository) create(ctx context.Context, userIn *service.User, guard
 }
 
 func (r *userRepository) GetByID(ctx context.Context, id int64) (*service.User, error) {
-	m, err := r.client.User.Query().Where(dbuser.IDEQ(id)).Only(ctx)
+	m, err := clientFromContext(ctx, r.client).User.Query().Where(dbuser.IDEQ(id)).Only(ctx)
 	if err != nil {
 		return nil, translatePersistenceError(err, service.ErrUserNotFound, nil)
 	}
@@ -195,7 +195,7 @@ func (r *userRepository) GetByID(ctx context.Context, id int64) (*service.User, 
 
 func (r *userRepository) GetByIDIncludeDeleted(ctx context.Context, id int64) (*service.User, error) {
 	ctx = mixins.SkipSoftDelete(ctx)
-	m, err := r.client.User.Query().Where(dbuser.IDEQ(id)).Only(ctx)
+	m, err := clientFromContext(ctx, r.client).User.Query().Where(dbuser.IDEQ(id)).Only(ctx)
 	if err != nil {
 		return nil, translatePersistenceError(err, service.ErrUserNotFound, nil)
 	}
@@ -211,7 +211,7 @@ func (r *userRepository) GetByIDIncludeDeleted(ctx context.Context, id int64) (*
 }
 
 func (r *userRepository) GetByEmail(ctx context.Context, email string) (*service.User, error) {
-	matches, err := r.client.User.Query().
+	matches, err := clientFromContext(ctx, r.client).User.Query().
 		Where(userEmailLookupPredicate(email)).
 		Order(dbent.Asc(dbuser.FieldID)).
 		All(ctx)
@@ -1135,7 +1135,7 @@ func (r *userRepository) BatchUpdateLimits(ctx context.Context, userIDs []int64,
 }
 
 func (r *userRepository) ExistsByEmail(ctx context.Context, email string) (bool, error) {
-	return r.client.User.Query().Where(userEmailLookupPredicate(email)).Exist(ctx)
+	return clientFromContext(ctx, r.client).User.Query().Where(userEmailLookupPredicate(email)).Exist(ctx)
 }
 
 // emailAliasCandidateLimit 限制一次别名查重最多取回的候选行数。探针都以去点后的
@@ -1449,7 +1449,7 @@ func (r *userRepository) loadAllowedGroups(ctx context.Context, userIDs []int64)
 		return out, nil
 	}
 
-	rows, err := r.client.UserAllowedGroup.Query().
+	rows, err := clientFromContext(ctx, r.client).UserAllowedGroup.Query().
 		Where(userallowedgroup.UserIDIn(userIDs...)).
 		All(ctx)
 	if err != nil {

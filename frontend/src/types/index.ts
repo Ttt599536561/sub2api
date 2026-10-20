@@ -156,6 +156,8 @@ export interface AffiliateInvitee {
 export interface UserAffiliateDetail {
   user_id: number
   aff_code: string
+  affiliate_domain?: string
+  referral_url?: string
   inviter_id?: number | null
   aff_count: number
   aff_quota: number
