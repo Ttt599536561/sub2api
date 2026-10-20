@@ -6,9 +6,9 @@
 
 ## 2026-10-21
 
-- **自动 CI 限定 Linux，Apple 检查改为手动**：按用户本次只发布 Linux 镜像的要求，将自动部署脚本检查移到 Ubuntu 24.04，保留 Apple 脚本语法检查及四项 Compose / 运行资源 / Caddy 检查；依赖 macOS 工具的 Apple 容器测试移到仅 `workflow_dispatch` 的独立工作流，本次不运行、不作为发布门禁。首轮固定源码的 Linux 检查与安全扫描已成功，macOS 任务因托管 runner 容量排队而未执行；调整后仍须对新的完整发布快照运行全部 Linux CI 与安全扫描，再固定 r3 的 `SOURCE_COMMIT`。保留 `linux/amd64` 和 `linux/arm64` 两种镜像，运行时代码不变。
+- **自动 CI 限定 Linux，Apple 检查改为手动**：按用户本次只发布 Linux 镜像的要求，将自动部署脚本检查移到 Ubuntu 24.04，保留 Apple 脚本语法检查及四项 Compose / 运行资源 / Caddy 检查；依赖 macOS 工具的 Apple 容器测试移到仅 `workflow_dispatch` 的独立工作流，本次不运行、不作为发布门禁。首轮固定源码的 Linux 检查与安全扫描已成功，macOS 任务因托管 runner 容量排队而未执行；此调整已提交并推送为 `c1b2134d091c8f0dabe9715788043c2f05ce8bb8`，r3 发布改以该完整快照为 `SOURCE_COMMIT`；新快照的全部 Linux CI 与安全扫描正在运行，尚未作通过结论。保留 `linux/amd64` 和 `linux/arm64` 两种镜像，运行时代码不变。
 
-- **准备发布 0.2.17-r3（未发布，不升级生产）**：按用户新要求增加专用 GitHub Actions 工作流，应用功能基线为 `14aec28502a0e26cf97895d8d265f7d978f3ac6f`，最终发布快照将在 Linux CI 范围调整提交后固定；延续精确源码 main / push CI 与安全扫描门禁、原生 amd64 / arm64 构建运行检查及最终标签不可覆盖约束。源码已推送，发布结果与实际 digest 待完成后记录；生产保持已核验的 r2，迁移 247 与账号域名映射尚未执行。范围、升级边界和当前验证状态见[r3 发布准备记录](deploy/CUSTOM_IMAGE_0.2.17-r3.md)。
+- **准备发布 0.2.17-r3（未发布，不升级生产）**：按用户新要求增加专用 GitHub Actions 工作流，应用功能基线为 `14aec28502a0e26cf97895d8d265f7d978f3ac6f`，最终发布快照 / OCI revision 固定为 `c1b2134d091c8f0dabe9715788043c2f05ce8bb8`，包含已提交的 Linux CI 范围调整，运行时代码与功能基线一致；延续精确源码 main / push CI 与安全扫描门禁、原生 amd64 / arm64 构建运行检查及最终标签不可覆盖约束。发布快照已推送，新 CI / 安全扫描运行中；本次固定源码的控制改动尚未提交，发布结果与实际 digest 待完成后记录；生产保持已核验的 r2，迁移 247 与账号域名映射尚未执行。范围、升级边界和当前验证状态见[r3 发布准备记录](deploy/CUSTOM_IMAGE_0.2.17-r3.md)。
 
 - **专属推广子域名（未发布）**：新增管理员域名配置与主站可信注册归因，分享链接无需暴露邀请码；邮箱/OAuth 新账号与邀请绑定、身份和 pending 同事务，已有账号不改绑。保留首次有效来源，覆盖故障换绑、域名撤销、邀请码覆盖及数据库连接池边界。新增迁移 247；源码 `14aec2850`（`feat: add trusted affiliate subdomain registration`）已整合到本地主目录 main，原 WIP 保留。本轮验证、独立复核及 DNS/证书/回退注意事项见[实施记录](docs/changes/2026-10-20-affiliate-subdomain.md)。本机源码更新，不代表镜像已发布或生产已启用。
 ## 2026-10-18

@@ -1,6 +1,6 @@
 # Sub2API 二开 0.2.17-r3 发布与升级记录
 
-日期：2026-10-21（Asia/Shanghai）。用户要求通过 GitHub Actions 构建并发布镜像地址，本轮不升级生产应用。应用功能基线已推送 GitHub main；用户明确本次只运行 Linux 检查，正在调整自动 CI 范围并准备新的固定发布快照，r3 镜像尚未发布。上一版见 [0.2.17-r2](CUSTOM_IMAGE_0.2.17-r2.md)。
+日期：2026-10-21（Asia/Shanghai）。用户要求通过 GitHub Actions 构建并发布镜像地址，本轮不升级生产应用。用户明确本次只运行 Linux 检查；CI 范围调整与固定发布快照已提交并推送 GitHub main，新快照的 CI / 安全扫描正在运行，r3 镜像尚未发布。上一版见 [0.2.17-r2](CUSTOM_IMAGE_0.2.17-r2.md)。
 
 ## 发布身份与状态
 
@@ -8,12 +8,12 @@
 | --- | --- |
 | 候选镜像地址 | `ghcr.io/ttt599536561/sub2api-custom:0.2.17-r3`（计划发布，尚未生成最终镜像） |
 | 应用功能基线 | `14aec28502a0e26cf97895d8d265f7d978f3ac6f`，专属推广子域名功能源码 |
-| 最终镜像源码 / OCI revision | 待本次 Linux CI 调整提交后固定新的完整发布快照；当前不预填 SHA |
+| 最终镜像源码 / OCI revision | `c1b2134d091c8f0dabe9715788043c2f05ce8bb8`，包含 Linux CI 范围调整的完整发布快照，已推送 main |
 | 功能实施与验证 | [专属推广子域名记录](../docs/changes/2026-10-20-affiliate-subdomain.md) |
 | 专用工作流 | [publish-custom-v0217-r3.yml](../.github/workflows/publish-custom-v0217-r3.yml) |
-| 初版工作流控制提交 | `521909fbe8daeadf505ba8a32495c332e2ae8f1e`；后续固定新发布快照的控制提交尚未产生 |
+| 初版工作流控制提交 | `521909fbe8daeadf505ba8a32495c332e2ae8f1e`；本次固定新发布快照的控制改动尚未提交，后续记录实际 SHA |
 | 首轮功能基线检查 | [CI 39464790379](https://github.com/Ttt599536561/sub2api/actions/runs/39464790379) 的 Linux 检查成功，macOS 任务因托管 runner 容量排队而未执行，整体 CI 未通过；[Security Scan 39464790324](https://github.com/Ttt599536561/sub2api/actions/runs/39464790324) 成功 |
-| 新发布快照检查 | CI 范围调整尚未提交；提交后需重新取得该完整 SHA 的 main / push Linux CI 与 Security Scan 成功记录 |
+| 新发布快照检查 | [CI 39468514593](https://github.com/Ttt599536561/sub2api/actions/runs/39468514593) 与 [Security Scan 39468514358](https://github.com/Ttt599536561/sub2api/actions/runs/39468514358) 均正在运行，尚未记录通过结论 |
 | 构建发布 | 尚未触发专用发布工作流 |
 | 多架构 index digest | 尚未生成；发布成功后记录实际值，不预填或沿用旧 digest |
 | 目标架构 | `linux/amd64`、`linux/arm64`，分别由原生 runner 构建和运行检查 |
@@ -25,9 +25,9 @@
 
 自动部署脚本检查运行在 Ubuntu 24.04，包含 `bash -n deploy/apple-container.sh` 及原有四项 Compose / 运行资源 / Caddy 检查。依赖 `plutil`、BSD `stat` 的 Apple 容器运行测试移至 [apple-container-ci.yml](../.github/workflows/apple-container-ci.yml)，只有 `workflow_dispatch` 手动入口，没有 push / pull_request 触发，本次不执行，也不属于发布门禁。其余后端、前端、lint、发布辅助和安全检查保持不变。
 
-本次仍发布 `linux/amd64` 与 `linux/arm64`；Apple / macOS 任务与 Linux arm64 镜像是不同范围。新发布快照提交并通过完整 Linux CI / 安全扫描后，再更新专用工作流的 `SOURCE_COMMIT`。当前工作流尚未重固定，不触发发布；运行时代码与已验证功能基线保持一致。
+本次仍发布 `linux/amd64` 与 `linux/arm64`；Apple / macOS 任务与 Linux arm64 镜像是不同范围。新发布快照 `c1b2134d091c8f0dabe9715788043c2f05ce8bb8` 已提交并推送，专用工作流的本机控制改动已将 `SOURCE_COMMIT` 固定为该值，尚待提交控制改动。必须等待该精确 SHA 的完整 Linux CI / 安全扫描成功后才触发发布；运行时代码与已验证功能基线保持一致。
 
-本机验证：YAML 解析与 13 段工作流 Bash 语法检查通过，Apple 脚本仅执行 `bash -n`；四项 Linux / Compose / Caddy 脚本检查全部通过，67 份运行时代码哈希与既有验证快照一致。本机没有运行 Apple 容器测试、macOS 任务或 Docker 引擎；新发布快照的完整 GitHub Linux CI 与安全扫描仍需在提交后执行。
+本机验证：YAML 解析与 13 段工作流 Bash 语法检查通过，Apple 脚本仅执行 `bash -n`；四项 Linux / Compose / Caddy 脚本检查全部通过，67 份运行时代码哈希与既有验证快照一致。本机没有运行 Apple 容器测试、macOS 任务或 Docker 引擎；新发布快照的完整 GitHub Linux CI 与安全扫描已启动，尚待最终结果。
 
 ## 变化与升级边界
 

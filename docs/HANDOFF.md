@@ -4,11 +4,13 @@
 
 ## 2026-10-21 专属推广子域名与 r3 发布准备（生产仍为 r2）
 
-用户最新要求只通过 GitHub Actions 发布 Linux 镜像地址，本轮不运行 macOS 任务、不升级生产应用。应用功能基线 `14aec28502a0e26cf97895d8d265f7d978f3ac6f` 已推送：首轮 [CI 39464790379](https://github.com/Ttt599536561/sub2api/actions/runs/39464790379) 的 Linux 任务全部成功，但 macOS shell 任务因托管 runner 容量限制未被分配运行器而取消，整体 CI 未通过；[Security Scan 39464790324](https://github.com/Ttt599536561/sub2api/actions/runs/39464790324) 成功。这是平台排队问题，没有执行失败的 Apple 脚本结果。初版 r3 发布控制已提交为 `521909fbe8daeadf505ba8a32495c332e2ae8f1e`，镜像仍未发布。
+用户最新要求只通过 GitHub Actions 发布 Linux 镜像地址，本轮不运行 macOS 任务、不升级生产应用。功能实现提交为 `14aec28502a0e26cf97895d8d265f7d978f3ac6f`；最终发布快照 / OCI revision 已固定为 `c1b2134d091c8f0dabe9715788043c2f05ce8bb8`，该快照包含 Linux CI 范围调整且已提交、推送 GitHub main，运行时代码与功能基线一致。初版 r3 发布控制为 `521909fbe8daeadf505ba8a32495c332e2ae8f1e`；本次将 `SOURCE_COMMIT` 固定到新快照的控制改动尚未提交，后续记录实际控制 SHA，不预填。镜像仍未发布。
 
-当前在发布工作树拆分 CI：自动 shell 任务改用 Ubuntu 24.04，保留 Apple 脚本的 `bash -n` 与四项 Linux / Compose / Caddy 检查；真正依赖 macOS 工具的测试移入[仅手动 Apple 检查](../.github/workflows/apple-container-ci.yml)，不在此次发布门禁中。其他后端、前端、lint、发布辅助及安全检查保持不变，Linux amd64 / arm64 镜像继续保留。此调整尚未提交；需提交并推送新的完整发布快照，等待其 main / push Linux CI 与 Security Scan 均成功，再以独立控制提交更新 r3 `SOURCE_COMMIT`。新 SHA 尚未产生，不预填。当前 r3 工作流仍指向旧功能基线，不能在重固定前触发发布。
+自动 shell 任务现已改用 Ubuntu 24.04，保留 Apple 脚本的 `bash -n` 与四项 Linux / Compose / Caddy 检查；真正依赖 macOS 工具的测试移入[仅手动 Apple 检查](../.github/workflows/apple-container-ci.yml)，不在此次发布门禁中。其他后端、前端、lint、发布辅助及安全检查保持不变，Linux amd64 / arm64 镜像继续保留。新快照的 [CI 39468514593](https://github.com/Ttt599536561/sub2api/actions/runs/39468514593) 与 [Security Scan 39468514358](https://github.com/Ttt599536561/sub2api/actions/runs/39468514358) 均已启动、正在运行；只有该精确 SHA 的 main / push 检查均成功后才允许发布，当前没有通过或已发布结论。
 
-本机验证：YAML 解析与 13 段工作流 Bash 语法检查通过，Apple 脚本仅执行 `bash -n`；四项 Linux / Compose / Caddy 脚本检查全部通过，67 份运行时代码哈希与既有验证快照一致。本机没有运行 Apple 容器测试、macOS 任务或 Docker 引擎；新发布快照的完整 GitHub Linux CI 与安全扫描仍需在提交后执行。
+历史首轮功能基线的 [CI 39464790379](https://github.com/Ttt599536561/sub2api/actions/runs/39464790379) 中 Linux 任务全部成功，但 macOS shell 任务因托管 runner 容量限制未被分配运行器而取消，整体 CI 未通过；[Security Scan 39464790324](https://github.com/Ttt599536561/sub2api/actions/runs/39464790324) 成功。这些是旧快照结果，没有执行失败的 Apple 脚本结果，也不能替代上述新快照的完整门禁。
+
+本机验证：YAML 解析与 13 段工作流 Bash 语法检查通过，Apple 脚本仅执行 `bash -n`；四项 Linux / Compose / Caddy 脚本检查全部通过，67 份运行时代码哈希与既有验证快照一致。本机没有运行 Apple 容器测试、macOS 任务或 Docker 引擎；新发布快照已推送，完整 GitHub Linux CI 与安全扫描正在运行，尚待最终结果。
 
 功能实现与原本机验证见[实施记录](changes/2026-10-20-affiliate-subdomain.md)。本机主目录原 WIP 保留；发布配置在独立 E 盘工作树 `E:\sub2二次开发项目\.worktrees\publish-affiliate-r3-20261021`、分支 `codex/publish-affiliate-r3-20261021` 准备。发布工作流只构建独立固定的发布快照，不包含主目录未提交修改或本机维护辅助工具；本轮运行时代码仍与功能基线一致，CI 与文档调整不改变应用行为。历史单元/集成验证不能代替本轮 Actions 与镜像运行结果。
 
@@ -34,7 +36,7 @@
 | 已发布镜像 | `ghcr.io/ttt599536561/sub2api-custom:0.2.17-r2`，支持 `linux/amd64`、`linux/arm64`。 |
 | 固定镜像内容 | `sha256:e0cb7dca1f9fd9d8d1bb16fe4592f2a19bfb6587e22b2e7710c1fe13f3812076`。 |
 | r2 GitHub 验证 | 精确源码 CI / Security Scan、双架构构建与运行检查、匿名完整运行层校验已通过，链接与范围见 r2 发布记录。 |
-| r3 发布状态 | 初版控制 `521909fbe` 已提交；旧功能基线的 Linux 检查和安全扫描成功，但 macOS 容量导致整体 CI 未通过。正在准备仅自动运行 Linux 的新快照，最终 `SOURCE_COMMIT` 待固定；镜像未发布。 |
+| r3 发布状态 | 功能实现 `14aec2850`，发布快照 / OCI revision `c1b2134d0` 已提交并推送，新 CI / 安全扫描运行中；本次固定快照的控制改动尚未提交，镜像未发布。 |
 | 本机工作位置 | 主目录 `E:\sub2二次开发项目` 的 `main` 已含未发布的专属推广域名源码 `14aec2850`；原 WIP、历史发布工作树与旧分支保留。 |
 | 生产部署 | 主代理已独立核验运行中的 r2 镜像 digest / revision 与健康状态；Nginx / 证书及备份已准备，应用保持 r2。用户本轮只要求发布镜像，不执行应用升级或迁移 247。 |
 
