@@ -1,6 +1,33 @@
 /** Channel Monitor V2 (user + admin passive monitor UI) */
 export default {
   channelMonitorV2: {
+    cards: {
+      availabilityHint: '1 minus the counted error rate; follows server ignored-error settings, not the raw request success rate',
+      "viewLabel": "Display mode",
+      "cardsView": "Cards",
+      "detailView": "Details",
+      "healthHint": "Health follows server settings · Insufficient samples appear gray",
+      "ratesFailed": "Rates could not be loaded and are hidden. Refresh to retry.",
+      "providerCount": "{count} channels",
+      "cacheRate": "Cache rate",
+      "availability": "Availability",
+      "ttft": "First token",
+      "recentBuckets": "Recent {count} intervals",
+      "refreshIn": "Refresh in {seconds}s",
+      "rateMultiplier": "User rate {rate}×",
+      "rateHint": "Base group rate or your custom rate; excludes peak-period and other billing adjustments",
+      "groupFallback": "Group {id}",
+      "platformFallback": "Other",
+      "empty": "No channels to display",
+      "ttftUnavailable": "No first-token samples",
+      "status": {
+        "healthy": "Healthy",
+        "warning": "Needs attention",
+        "critical": "Unhealthy",
+        "unknown": "Insufficient samples",
+        "noData": "No data"
+      }
+    },
     title: 'Channel Monitor',
     updating: 'Updating data',
     updatedTo: 'Updated to {time}',

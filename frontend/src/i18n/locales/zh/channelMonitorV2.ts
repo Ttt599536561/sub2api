@@ -1,6 +1,33 @@
 /** Channel Monitor V2 (user + admin passive monitor UI) */
 export default {
   channelMonitorV2: {
+    cards: {
+      availabilityHint: '1 − 计入监控的错误率；遵循后台忽略错误配置，不等同于实际请求成功率',
+      "viewLabel": "展示方式",
+      "cardsView": "卡片",
+      "detailView": "详细",
+      "healthHint": "状态遵循后台健康配置 · 样本不足显示灰色",
+      "ratesFailed": "倍率暂时无法加载，已隐藏倍率。请手动刷新重试。",
+      "providerCount": "{count} 个渠道",
+      "cacheRate": "缓存率",
+      "availability": "可用率",
+      "ttft": "首 Token",
+      "recentBuckets": "近 {count} 个时间段",
+      "refreshIn": "{seconds} 秒后刷新",
+      "rateMultiplier": "用户倍率 {rate}×",
+      "rateHint": "分组基础倍率或用户专属倍率；不含高峰等额外计费调整",
+      "groupFallback": "分组 {id}",
+      "platformFallback": "未分类",
+      "empty": "暂无可展示的渠道",
+      "ttftUnavailable": "暂无首 Token 样本",
+      "status": {
+        "healthy": "健康",
+        "warning": "需关注",
+        "critical": "异常",
+        "unknown": "样本不足",
+        "noData": "无数据"
+      }
+    },
     title: '渠道监控',
     updating: '正在更新数据',
     updatedTo: '更新至 {time}',

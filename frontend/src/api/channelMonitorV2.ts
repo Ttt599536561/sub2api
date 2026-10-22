@@ -41,6 +41,8 @@ export interface MonitorMetric {
   rpm: number
   tpm: number
   error_rate: number
+  /** True success ratio; error_rate can exclude configured ignored errors. */
+  success_rate?: number
   cache_rate: number
   cache_rate_numerator: number
   cache_rate_denominator: number

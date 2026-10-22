@@ -43,15 +43,25 @@
               </span>
             </div>
           </div>
+          <div class="flex flex-wrap items-center gap-3">
+            <div class="tabs inline-flex" role="group" :aria-label="t('channelMonitorV2.cards.viewLabel')">
+              <button type="button" class="tab !px-3 !py-1.5 text-xs" data-testid="monitor-view-cards"
+                :class="displayView === 'cards' ? 'tab-active' : ''" :aria-pressed="displayView === 'cards'"
+                @click="setDisplayView('cards')">{{ t('channelMonitorV2.cards.cardsView') }}</button>
+              <button type="button" class="tab !px-3 !py-1.5 text-xs" data-testid="monitor-view-detail"
+                :class="displayView === 'detail' ? 'tab-active' : ''" :aria-pressed="displayView === 'detail'"
+                @click="setDisplayView('detail')">{{ t('channelMonitorV2.cards.detailView') }}</button>
+            </div>
           <button
             class="btn btn-secondary btn-icon flex h-8 w-8 items-center justify-center rounded-lg bg-gray-100 text-gray-500 hover:bg-gray-200 dark:bg-dark-700 dark:text-gray-400 dark:hover:bg-dark-600"
             type="button"
             :title="t('common.refresh')"
             :disabled="loading"
-            @click="reload(false)"
+            @click="reload(false, true)"
           >
             <Icon name="refresh" size="sm" :class="loading ? 'animate-spin' : ''" />
           </button>
+          </div>
         </header>
 
         <!-- First-upgrade silent backfill: show until 30d product window is covered -->
@@ -110,6 +120,7 @@
 
           <span class="mx-0.5 hidden h-5 w-px shrink-0 bg-gray-200 dark:bg-dark-700 sm:block" aria-hidden="true"></span>
 
+          <template v-if="displayView === 'detail'">
           <FilterMultiSelect
             v-model="filter.platforms"
             compact
@@ -190,9 +201,23 @@
               {{ option.label }}
             </button>
           </div>
+          </template>
+          <span v-else class="min-w-0 whitespace-normal text-xs text-gray-500 dark:text-gray-400">
+            {{ t('channelMonitorV2.cards.healthHint') }}
+          </span>
         </div>
       </section>
 
+      <div v-if="displayView === 'cards'" data-testid="monitor-cards-view" class="space-y-4">
+        <p v-if="ratesFailed" data-testid="monitor-rates-error" role="status" class="text-sm text-amber-600 dark:text-amber-400">
+          {{ t('channelMonitorV2.cards.ratesFailed') }}
+        </p>
+        <div v-if="loading && !matrix" class="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4" aria-busy="true">
+          <div v-for="i in 4" :key="i" class="h-64 animate-pulse rounded-2xl bg-gray-100 dark:bg-dark-800" />
+        </div>
+        <MonitorCards v-else :sections="cardSections" :countdown-seconds="countdown" />
+      </div>
+      <template v-else>
       <!-- Overview KPI: success · TTFT · tokens/s(optional) · cache · (+ RPM when throughput visible) -->
       <section
         v-if="snapshot"
@@ -453,13 +478,14 @@
           </div>
         </div>
       </section>
+      </template>
     </div>
   </AppLayout>
 </template>
 
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import Icon from '@/components/icons/Icon.vue'
@@ -471,6 +497,11 @@ import MonitorRankBadge from '@/features/channel-monitor-v2/MonitorRankBadge.vue
 import MonitorTrendChart from '@/features/channel-monitor-v2/MonitorTrendChart.vue'
 import RelayPulseMatrix from '@/features/channel-monitor-v2/RelayPulseMatrix.vue'
 import { useAuthStore } from '@/stores/auth'
+import { getAuthSessionID } from '@/api/authSession'
+import { userGroupsAPI } from '@/api/groups'
+import type { Group } from '@/types'
+import MonitorCards from '@/features/channel-monitor-v2/cards/MonitorCards.vue'
+import { buildCards, groupByProvider } from '@/features/channel-monitor-v2/cards/monitorCards'
 import { useAppStore } from '@/stores/app'
 import { extractApiErrorMessage } from '@/utils/apiError'
 import { isChannelMonitorThroughputHidden, isChannelMonitorUserRankingHidden } from '@/utils/featureFlags'
@@ -504,6 +535,7 @@ import {
 type Tab = 'models' | 'errors' | 'users'
 type HealthMode = 'overall' | 'success' | 'ttft' | 'cache'
 type TrendView = 'pulse' | 'line'
+type DisplayView = 'cards' | 'detail'
 
 const route = useRoute()
 const router = useRouter()
@@ -555,6 +587,12 @@ const activeTab = ref<Tab>(parseTab(route.query.tab, showUserRanking.value))
 const matrixGroupBy = ref<MonitorMatrixGroupBy>(parseMatrixGroupBy(route.query.group_by))
 const healthMode = ref<HealthMode>(parseHealthMode(route.query.health_mode))
 const trendView = ref<TrendView>(parseTrendView(route.query.trend_view))
+const displayView = ref<DisplayView>(route.query.view === 'detail' ? 'detail' : 'cards')
+const groups = ref<Group[]>([])
+const userRates = ref<Record<number, number>>({})
+const ratesAvailable = ref(false)
+const ratesFailed = ref(false)
+const countdown = ref(0)
 const dimensions = ref<MonitorDimensions>({ platforms: [], groups: [], models: [] })
 const snapshot = ref<MonitorSnapshot | null>(null)
 const matrix = ref<MonitorMatrixResponse | null>(null)
@@ -568,6 +606,82 @@ const expandedErrors = ref(new Set<string>())
 let controller: AbortController | null = null
 let sequence = 0
 let autoRefreshTimer: number | null = null
+let tabController: AbortController | null = null
+let tabSequence = 0
+let disposed = false
+let sessionBlocked = false
+let lastSessionID = getAuthSessionID()
+const cardSections = computed(() => groupByProvider(buildCards({
+  range: filter.value.range,
+  coverage: matrix.value?.coverage,
+  rows: matrix.value?.items ?? [],
+  dimensionGroups: dimensions.value.groups,
+  groups: groups.value,
+  userRates: userRates.value,
+  ratesAvailable: ratesAvailable.value,
+})))
+function storedIdentity(): { id?: number; role?: string } {
+  try {
+    const user = JSON.parse(localStorage.getItem('auth_user') || 'null')
+    return { id: user?.id, role: user?.role }
+  } catch { return {} }
+}
+function identityAligned() {
+  const stored = storedIdentity()
+  return getAuthSessionID() === lastSessionID && authStore.sessionRevision === lastSessionID &&
+    stored.id === authStore.user?.id && stored.role === authStore.user?.role
+}
+function allowRequest() {
+  if (disposed || sessionBlocked || !authStore.isAuthenticated) return false
+  if (identityAligned()) return true
+  sessionBlocked = true
+  clearSessionData()
+  return false
+}
+function captureRequest(id = sequence) {
+  return { id, stored: storedIdentity(), session: getAuthSessionID(), revision: authStore.sessionRevision,
+    userId: authStore.user?.id, admin: isAdmin.value }
+}
+type RequestOwner = ReturnType<typeof captureRequest>
+function isCurrent(owner: RequestOwner) {
+  const stored = storedIdentity()
+  return identityAligned() && owner.stored.id === stored.id && owner.stored.role === stored.role && !disposed && !sessionBlocked && authStore.isAuthenticated && owner.id === sequence &&
+    owner.session === getAuthSessionID() && owner.revision === authStore.sessionRevision &&
+    owner.userId === authStore.user?.id && owner.admin === isAdmin.value
+}
+function isCanceled(error: unknown) {
+  const e = error as { name?: string; code?: string }
+  return e?.name === 'AbortError' || e?.name === 'CanceledError' || e?.code === 'ERR_CANCELED' || e?.code === 'AUTH_SESSION_CHANGED'
+}
+function clearSessionData() {
+  sequence++
+  tabSequence++
+  controller?.abort()
+  tabController?.abort()
+  snapshot.value = null
+  matrix.value = null
+  dimensions.value = { platforms: [], groups: [], models: [] }
+  groups.value = []
+  userRates.value = {}
+  ratesAvailable.value = false
+  ratesFailed.value = false
+  modelRows.value = []
+  errorRows.value = []
+  userRows.value = []
+  expandedErrors.value = new Set()
+  loading.value = false
+  refreshing.value = false
+  tabLoading.value = false
+  countdown.value = 0
+}
+function onAuthStorage(event: StorageEvent) {
+  if (event.key && !['auth_session_id', 'auth_user'].includes(event.key)) return
+  const stored = storedIdentity()
+  if (getAuthSessionID() !== lastSessionID || stored.id !== authStore.user?.id || stored.role !== authStore.user?.role) {
+    sessionBlocked = true
+    clearSessionData()
+  }
+}
 
 const hasDimensionFilter = computed(
   () => filter.value.platforms.length + filter.value.groupIds.length + filter.value.models.length > 0
@@ -692,6 +806,8 @@ function parseTrendView(value: unknown): TrendView {
 function syncQuery() {
   void router.replace({
     query: {
+      ...route.query,
+      view: displayView.value,
       range: filter.value.range,
       platform: filter.value.platforms.join(',') || undefined,
       group: filter.value.groupIds.join(',') || undefined,
@@ -703,125 +819,124 @@ function syncQuery() {
     },
   })
 }
-/** Dimensions catalog: range only — never re-filtered by platform/group/model selection. */
-async function loadDimensions(signal?: AbortSignal, id = sequence) {
-  const rangeOnly: MonitorFilter = {
-    range: filter.value.range,
-    platforms: [],
-    groupIds: [],
-    models: [],
-  }
-  const next = await api.getDimensions(rangeOnly, isAdmin.value, signal)
-  if (id !== sequence) return
-  dimensions.value = next
+/** Card scope is all visible groups; detail filters remain available when switching back. */
+function metricsFilter(): MonitorFilter {
+  return displayView.value === 'cards'
+    ? { range: filter.value.range, platforms: [], groupIds: [], models: [] }
+    : { ...filter.value, platforms: [...filter.value.platforms], groupIds: [...filter.value.groupIds], models: [...filter.value.models] }
 }
-
-async function loadMetrics(signal?: AbortSignal, id = sequence) {
-  const [nextSnapshot, nextMatrix] = await Promise.all([
-    api.getSnapshot(filter.value, isAdmin.value, signal),
-    api.getMatrix(filter.value, matrixGroupBy.value, isAdmin.value, signal),
-  ])
-  if (id !== sequence) return
-  snapshot.value = nextSnapshot
-  matrix.value = nextMatrix
-  scheduleAutoRefresh()
-  await loadTab(signal, id)
-}
-
-async function reload(silent = true) {
-  controller?.abort()
-  const request = new AbortController()
-  controller = request
-  const id = ++sequence
-  refreshing.value = true
-  if (!silent) loading.value = true
+async function loadRates(signal: AbortSignal, owner: RequestOwner) {
+  ratesAvailable.value = false
+  ratesFailed.value = false
   try {
-    // Catalog + metrics in parallel; catalog ignores dimension filters so options never shrink.
-    await Promise.all([
-      loadDimensions(request.signal, id),
-      loadMetrics(request.signal, id),
+    const [nextGroups, nextRates] = await Promise.all([
+      userGroupsAPI.getAvailable(signal), userGroupsAPI.getUserGroupRates(signal),
     ])
+    if (!isCurrent(owner) || signal.aborted) return
+    groups.value = nextGroups
+    userRates.value = nextRates
+    ratesAvailable.value = true
   } catch (error) {
-    if ((error as { name?: string }).name !== 'CanceledError') {
-      appStore.showError(extractApiErrorMessage(error, t('channelMonitorV2.loadFailed')))
-    }
-  } finally {
-    if (id === sequence) {
-      loading.value = false
-      tabLoading.value = false
-      refreshing.value = false
-    }
+    if (!isCurrent(owner) || signal.aborted || isCanceled(error)) return
+    groups.value = []
+    userRates.value = {}
+    ratesFailed.value = true
   }
 }
-
-/** When only range changes, still refresh dimensions; dimension filters only re-load metrics. */
-async function reloadMetricsOnly(silent = true) {
+async function reload(silent = true, withRates = false) {
+  if (!allowRequest()) return
   controller?.abort()
+  tabController?.abort()
+  tabSequence++
+  tabLoading.value = false
   const request = new AbortController()
   controller = request
-  const id = ++sequence
+  const owner = captureRequest(++sequence)
+  const current = metricsFilter()
+  const grouping = displayView.value === 'cards' ? 'platform_group' : matrixGroupBy.value
   refreshing.value = true
   if (!silent) loading.value = true
+  const rateRequest = withRates || !ratesAvailable.value ? loadRates(request.signal, owner) : Promise.resolve()
   try {
-    await loadMetrics(request.signal, id)
+    const [nextSnapshot, nextMatrix, nextDimensions] = await Promise.all([
+      api.getSnapshot(current, owner.admin, request.signal),
+      api.getMatrix(current, grouping, owner.admin, request.signal),
+      api.getDimensions({ range: current.range, platforms: [], groupIds: [], models: [] }, owner.admin, request.signal),
+    ])
+    if (!isCurrent(owner) || request.signal.aborted) return
+    snapshot.value = nextSnapshot
+    matrix.value = nextMatrix
+    dimensions.value = nextDimensions
+    scheduleAutoRefresh()
+    if (displayView.value === 'detail') void loadTab()
   } catch (error) {
-    if ((error as { name?: string }).name !== 'CanceledError') {
+    if (isCurrent(owner) && !request.signal.aborted && !isCanceled(error)) {
       appStore.showError(extractApiErrorMessage(error, t('channelMonitorV2.loadFailed')))
     }
   } finally {
-    if (id === sequence) {
+    // Rate failures never prevent monitoring; all writes share the same owner.
+    await rateRequest
+    if (isCurrent(owner)) {
       loading.value = false
-      tabLoading.value = false
       refreshing.value = false
+      scheduleAutoRefresh()
     }
   }
 }
-async function loadTab(signal?: AbortSignal, id = sequence) {
+async function loadTab() {
+  if (displayView.value !== 'detail' || !allowRequest()) return
+  tabController?.abort()
+  const request = new AbortController()
+  tabController = request
+  const id = ++tabSequence
+  const owner = captureRequest()
+  const tab = activeTab.value
+  const current = metricsFilter()
+  modelRows.value = []
+  errorRows.value = []
+  userRows.value = []
   tabLoading.value = true
   try {
-    if (activeTab.value === 'models') {
-      modelRows.value = (await api.getModels(filter.value, isAdmin.value, signal)).items || []
-    } else if (activeTab.value === 'errors') {
-      errorRows.value = (await api.getErrors(filter.value, isAdmin.value, signal)).items || []
-    } else if (showUserRanking.value) {
-      userRows.value = (await api.getUsers(filter.value, isAdmin.value, signal)).items || []
-    } else {
-      userRows.value = []
-    }
+    const next = tab === 'models' ? await api.getModels(current, owner.admin, request.signal)
+      : tab === 'errors' ? await api.getErrors(current, owner.admin, request.signal)
+        : showUserRanking.value ? await api.getUsers(current, owner.admin, request.signal) : { items: [] }
+    if (!isCurrent(owner) || id !== tabSequence || request.signal.aborted || displayView.value !== 'detail' || tab !== activeTab.value) return
+    if (tab === 'models') modelRows.value = next.items as MonitorModelRow[]
+    else if (tab === 'errors') errorRows.value = next.items as MonitorErrorRow[]
+    else userRows.value = next.items as MonitorUserRow[]
   } catch (error) {
-    const e = error as { name?: string; code?: string }
-    if (e?.name === 'AbortError' || e?.name === 'CanceledError' || e?.code === 'ERR_CANCELED') return
-    appStore.showError(extractApiErrorMessage(error, t('channelMonitorV2.detailLoadFailed')))
+    if (isCurrent(owner) && id === tabSequence && !request.signal.aborted && !isCanceled(error)) {
+      appStore.showError(extractApiErrorMessage(error, t('channelMonitorV2.detailLoadFailed')))
+    }
   } finally {
-    if (id === sequence) tabLoading.value = false
+    if (isCurrent(owner) && id === tabSequence) tabLoading.value = false
   }
 }
-function setRange(value: MonitorRange) {
-  filter.value.range = value
+function setDisplayView(view: DisplayView) {
+  if (displayView.value === view) return
+  displayView.value = view
+  snapshot.value = null
+  matrix.value = null
+  modelRows.value = []
+  errorRows.value = []
+  userRows.value = []
+  syncQuery()
+  void reload(false)
 }
+function setRange(value: MonitorRange) { filter.value.range = value }
 function clearDimensions() {
-  // Replace arrays so deep watch always fires and metrics reload full window.
-  filter.value = {
-    ...filter.value,
-    platforms: [],
-    groupIds: [],
-    models: [],
-  }
+  filter.value = { ...filter.value, platforms: [], groupIds: [], models: [] }
 }
 function scheduleAutoRefresh() {
-  if (autoRefreshTimer) {
-    window.clearInterval(autoRefreshTimer)
-    autoRefreshTimer = null
-  }
-  // Poll faster while first-upgrade bootstrap is filling 90m→30d so the progress bar moves.
-  const seconds = bootstrapActive.value
-    ? 10
-    : snapshot.value?.config?.refresh_interval_seconds || 300
+  countdown.value = Math.max(bootstrapActive.value ? 10 : 60,
+    bootstrapActive.value ? 10 : snapshot.value?.config?.refresh_interval_seconds || 300)
+  if (autoRefreshTimer) return
   autoRefreshTimer = window.setInterval(() => {
-    if (!loading.value && !refreshing.value) {
-      void reload(true)
-    }
-  }, Math.max(bootstrapActive.value ? 10 : 60, seconds) * 1000)
+    if (disposed || sessionBlocked || !authStore.isAuthenticated || document.hidden || loading.value || refreshing.value) return
+    if (!allowRequest()) return
+    if (countdown.value <= 1) void reload(true)
+    else countdown.value--
+  }, 1000)
 }
 function drillModel(row: MonitorModelRow) {
   filter.value.platforms = [row.platform]
@@ -905,13 +1020,13 @@ watch(
     const rangeChanged = filter.value.range !== lastRange
     lastRange = filter.value.range
     if (rangeChanged) void reload(true)
-    else void reloadMetricsOnly(true)
+    else if (displayView.value === 'detail') void reload(true)
   },
   { deep: true }
 )
 watch(matrixGroupBy, () => {
   syncQuery()
-  void reloadMetricsOnly(true)
+  if (displayView.value === 'detail') void reload(true)
 })
 watch(healthMode, syncQuery)
 watch(trendView, syncQuery)
@@ -924,9 +1039,31 @@ watch(showUserRanking, (allowed) => {
     activeTab.value = 'models'
   }
 })
-onMounted(() => void reload(false))
+watch(locale, () => { groups.value = []; void reload(true, true) })
+watch([() => authStore.sessionRevision, () => authStore.user?.id, () => authStore.user?.role, () => authStore.isAdmin, () => authStore.isAuthenticated], () => {
+  clearSessionData()
+  sessionBlocked = true
+  const revision = sequence
+  // Auth store persists auth_user after its synchronous reactive update.
+  void nextTick().then(() => {
+    if (disposed || revision !== sequence) return
+    lastSessionID = getAuthSessionID()
+    sessionBlocked = false
+    if (authStore.isAuthenticated) void reload(false, true)
+  })
+}, { flush: 'sync' })
+watch(() => route.query.view, (view) => {
+  const target = view === 'detail' ? 'detail' : 'cards'
+  if (target !== displayView.value) setDisplayView(target)
+})
+onMounted(() => {
+  window.addEventListener('storage', onAuthStorage)
+  void reload(false, true)
+})
 onBeforeUnmount(() => {
-  controller?.abort()
+  disposed = true
+  clearSessionData()
+  window.removeEventListener('storage', onAuthStorage)
   if (autoRefreshTimer) window.clearInterval(autoRefreshTimer)
 })
 </script>
