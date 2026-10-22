@@ -6,6 +6,8 @@
 
 ## 2026-10-23
 
+- **r4发布准备**：新增固定安全修复源码的双原生架构发布工作流，强制精确SHA的CI/安全门禁、标签不可覆盖、运行资源与实际Go1.27.3二进制核验；[准备记录](deploy/CUSTOM_IMAGE_0.2.17-r4.md)。尚未部署生产，镜像发布结果另行补录。
+
 - **r4发布前安全补丁（用户授权，待发布）**：Go统一1.27.3、follow-redirects精准升至1.16.1，其他依赖与业务代码不变，不新增豁免。验证及发布边界见[安全修复记录](docs/changes/2026-10-23-r4-security-patches.md)；新SHA完整CI通过后才能发布，生产未部署。稳定主题：`fix: update Go and redirect dependency security patches`。
 
 
