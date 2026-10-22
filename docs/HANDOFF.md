@@ -2,6 +2,10 @@
 
 更新日期：2026-10-23（Asia/Shanghai）。本页记录已发布应用代码、需要保留的二开能力和本机尚未提交的工作；历史更新从 [更新日志](../CHANGELOG.md) 查起，最新已发布源码为 `c1b2134d0` / `0.2.17-r3`，发布与升级方式见 [r3 发布记录](../deploy/CUSTOM_IMAGE_0.2.17-r3.md)；生产已运行 r3，专属推广入口已正式启用。
 
+## 2026-10-23 r4发布前安全修复（待新SHA检查）
+
+用户要求CI通过后发布r4双架构镜像，不部署生产。原卡片SHA的Security Scan报告Go1.27.2标准库和follow-redirects1.16.0漏洞，用户已明确授权最小修复后使用新SHA。独立工作树中统一Go1.27.3并仅将follow-redirects升级1.16.1，不添加扫描豁免；详细来源与当前验证见[安全修复记录](changes/2026-10-23-r4-security-patches.md)。主目录原WIP、既有预览和数据库容器不动；发布流程需重新固定修复后的源码SHA，等待该SHA完整CI及安全扫描成功。当前已发布与生产仍为r3。
+
 ## 2026-10-23 V2 渠道卡片用户验收通过、已提交并推送 main（未发布）
 
 用户已在本机检查卡片样式和功能并确认无问题，明确授权将改动整合回主项目、保留原有未提交修改，检查通过后提交并推送。实现来源 `E:\sub2二次开发项目\.worktrees\monitor-cards-20261023`，基线 `96786987bd762ae48bbe72cf44d9ad629a2e8ac6`；本次在主目录 main 整合，提交仅包含卡片功能、测试和对应文档。功能提交 `6f90164d5b55584f8266764d2d26f5c6a9bd1a9d`（`feat: add channel monitor cards with server health and detail view`）已推送 `origin/main` 并核对远端SHA，提交身份与本轮验证见[实施与整合记录](changes/2026-10-23-monitor-cards.md)。没有镜像发布或生产部署，已发布/生产仍为 0.2.17-r3。
