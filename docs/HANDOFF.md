@@ -1,14 +1,18 @@
 # Sub2API 二次开发交接
 
-更新日期：2026-10-23（Asia/Shanghai）。本页记录已发布应用代码、需要保留的二开能力和本机尚未提交的工作；历史更新从 [更新日志](../CHANGELOG.md) 查起，最新已发布源码为 `c1b2134d0` / `0.2.17-r3`，发布与升级方式见 [r3 发布记录](../deploy/CUSTOM_IMAGE_0.2.17-r3.md)；生产已运行 r3，专属推广入口已正式启用。
+更新日期：2026-10-23（Asia/Shanghai）。本页记录已发布应用代码、需要保留的二开能力和本机尚未提交的工作；历史更新从 [更新日志](../CHANGELOG.md) 查起，最新已发布源码为 `76ff7c88a` / `0.2.17-r4`，发布与升级方式见 [r4 发布记录](../deploy/CUSTOM_IMAGE_0.2.17-r4.md)；本轮未部署生产，生产仍运行 r3，专属推广入口已正式启用。
 
-## 2026-10-23 r4发布前安全修复（待新SHA检查）
+## 2026-10-23 r4镜像发布完成（生产未部署）
 
-用户要求CI通过后发布r4双架构镜像，不部署生产。原卡片SHA的Security Scan报告Go1.27.2标准库和follow-redirects1.16.0漏洞，用户已明确授权最小修复后使用新SHA。独立工作树中统一Go1.27.3并仅将follow-redirects升级1.16.1，不添加扫描豁免；详细来源与当前验证见[安全修复记录](changes/2026-10-23-r4-security-patches.md)。主目录原WIP、既有预览和数据库容器不动；发布流程需重新固定修复后的源码SHA，等待该SHA完整CI及安全扫描成功。当前已发布与生产仍为r3。
+用户授权在CI通过后发布amd64/arm64镜像，不部署生产。原卡片源码的安全扫描失败后，用户明确允许Go1.27.3与follow-redirects1.16.1最小修复；发布源码固定为`76ff7c88a0e792b39936346db9c9707930eba0ef`，控制提交`867f638f491c97938a84df657c969bc2144f2e07`。新源码CI39831429931与Security Scan39831429976均success，发布运行39833407670 attempt1的gate、两架构、publish全部success。
 
-## 2026-10-23 V2 渠道卡片用户验收通过、已提交并推送 main（未发布）
+已发布`ghcr.io/ttt599536561/sub2api-custom:0.2.17-r4`，固定index `sha256:fb4c5f40831a5ce4cb6491d1206256f8f5ef9a2bd13cbf126a292ab45eb21875`，支持linux/amd64和linux/arm64，两架构实际二进制Go1.27.3和运行资源均检查成功。北京时间2026-10-23 02:49:37完成匿名24运行层、89,525,611字节及manifest/config/两架构产物绑定核验，未验证attestation或签名。升级步骤、完整来源、摘要和证据边界见[r4发布记录](../deploy/CUSTOM_IMAGE_0.2.17-r4.md)。生产仍是r3，未连接或操作生产；r3→r4无新增迁移和必需环境变量。
 
-用户已在本机检查卡片样式和功能并确认无问题，明确授权将改动整合回主项目、保留原有未提交修改，检查通过后提交并推送。实现来源 `E:\sub2二次开发项目\.worktrees\monitor-cards-20261023`，基线 `96786987bd762ae48bbe72cf44d9ad629a2e8ac6`；本次在主目录 main 整合，提交仅包含卡片功能、测试和对应文档。功能提交 `6f90164d5b55584f8266764d2d26f5c6a9bd1a9d`（`feat: add channel monitor cards with server health and detail view`）已推送 `origin/main` 并核对远端SHA，提交身份与本轮验证见[实施与整合记录](changes/2026-10-23-monitor-cards.md)。没有镜像发布或生产部署，已发布/生产仍为 0.2.17-r3。
+本机补丁工作树`E:\sub2二次开发项目\.worktrees\publish-monitor-r4-20261023`，共享缓存与检查位于`.cache/publish-monitor-r4-20261023`，发布证据在`output/publish-v0.2.17-r4`。主目录10份tracked WIP的SHA保持原样，既有untracked和本地预览保留；没有本机Docker构建/拉取，也没有修改全局Git或工具链配置。当前执行工具链以go.mod的Go1.27.3为准；未改动有用户WIP的DEV_GUIDE。卡片源码与本轮安全修复分别见[卡片记录](changes/2026-10-23-monitor-cards.md)、[安全修复记录](changes/2026-10-23-r4-security-patches.md)。
+
+## 2026-10-23 V2 渠道卡片用户验收通过、已随r4发布（生产未升级）
+
+用户已在本机检查卡片样式和功能并确认无问题，明确授权将改动整合回主项目、保留原有未提交修改，检查通过后提交并推送。实现来源 `E:\sub2二次开发项目\.worktrees\monitor-cards-20261023`，基线 `96786987bd762ae48bbe72cf44d9ad629a2e8ac6`；本次在主目录 main 整合，提交仅包含卡片功能、测试和对应文档。功能提交 `6f90164d5b55584f8266764d2d26f5c6a9bd1a9d`（`feat: add channel monitor cards with server health and detail view`）已推送 `origin/main` 并核对远端SHA，提交身份与本轮验证见[实施与整合记录](changes/2026-10-23-monitor-cards.md)。卡片已随0.2.17-r4镜像发布，本轮没有生产部署，生产仍为0.2.17-r3。
 
 主目录既有十份 tracked WIP 和原有 untracked 文件均保留；`.gitignore` 与本次唯一重叠，工作区保留原来的 Codex 文档允许规则，提交仅加入卡片计划的允许规则。其他九份 tracked WIP 不修改、不纳入提交，后端 Codex/网关、CC Switch 和本机环境脚本工作继续保持未提交。
 
@@ -46,17 +50,18 @@
 
 | 项目 | 截至本次交接的状态 |
 | --- | --- |
-| 项目仓库 | `https://github.com/Ttt599536561/sub2api`；上游为 `Wei-Shaw/sub2api`。 |
-| 最新已发布源码 / OCI revision | `c1b2134d091c8f0dabe9715788043c2f05ce8bb8`，0.2.17-r3 发布快照。 |
-| 功能实现提交 | `14aec28502a0e26cf97895d8d265f7d978f3ac6f`，专属推广子域名；与发布快照分开记录。 |
-| 官方基线 | `060d0160417782cd962a0c7f460f6cd4565d4916`，官方 v0.2.17。 |
-| 发布控制提交 | `4950ee5b6258aa5137f9b1c9fd10ead6702e1442`，仅固定来源及记录，不改变运行时代码。 |
-| 源码版本文件 | `backend/cmd/server/VERSION` 为 `0.2.17`；已发布镜像构建版本为 `0.2.17-r3`。 |
-| 最新已发布镜像 | `ghcr.io/ttt599536561/sub2api-custom:0.2.17-r3`，Linux amd64 / arm64。 |
-| 固定镜像内容 | `sha256:52736abda13f53c41a051c2d11a96ca07c8ed5d6c64f3f87731c2a12202e6337`。 |
-| 本轮 GitHub 验证 | 精确源码 CI / 安全扫描、两个原生架构构建与运行检查、最终索引发布均成功；匿名全部运行层验证通过。 |
-| 本机工作状态 | 主目录原 WIP 保留；r3 发行记录在 E 盘独立发布工作树整理，发布来源为上述固定快照。 |
-| 生产部署 | 已运行 0.2.17-r3，迁移 247 已应用，主站地址与域名归属已保存，专属入口已开放且实际交接/归因检查通过；真实注册与充值未代测。 |
+| 项目仓库 | `https://github.com/Ttt599536561/sub2api`；上游为`Wei-Shaw/sub2api`。 |
+| 最新已发布源码 / OCI revision | `76ff7c88a0e792b39936346db9c9707930eba0ef`，0.2.17-r4固定发布源码。 |
+| 本轮卡片功能提交 | `6f90164d5b55584f8266764d2d26f5c6a9bd1a9d`，卡片/详细切换与后台健康状态。 |
+| 发布前安全补丁 | `76ff7c88a0e792b39936346db9c9707930eba0ef`，Go1.27.3与follow-redirects1.16.1。 |
+| 官方基线 | `060d0160417782cd962a0c7f460f6cd4565d4916`，官方v0.2.17。 |
+| 发布控制提交 | `867f638f491c97938a84df657c969bc2144f2e07`，固定源码与双原生架构发布流程。 |
+| 源码版本文件 | backend/cmd/server/VERSION为0.2.17；已发布镜像构建版本为0.2.17-r4。 |
+| 最新已发布镜像 | `ghcr.io/ttt599536561/sub2api-custom:0.2.17-r4`，Linux amd64/arm64。 |
+| 固定镜像内容 | `sha256:fb4c5f40831a5ce4cb6491d1206256f8f5ef9a2bd13cbf126a292ab45eb21875`。 |
+| 本轮GitHub验证 | 精确源码CI39831429931、安全扫描39831429976、发布39833407670均成功；双架构实际Go1.27.3及运行检查、匿名全部24运行层校验通过。 |
+| 本机工作状态 | 原10份tracked WIP和既有untracked保留；r4在独立E盘publish-monitor-r4-20261023工作树完成，发布来源不包含这些WIP。 |
+| 生产部署 | 本轮未部署，生产保持0.2.17-r3，迁移247及专属推广入口保留；r4升级由用户另行执行。 |
 
 [0.2.15 已发布版本归档](changes/2026-10-11-v0.2.15-r1.md) 保留代码变化、对应提交和历史验证范围。历史报告中的“未发布”“未推送”描述其当时阶段；后续发布状态以对应日期的发布记录为准。
 
