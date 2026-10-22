@@ -2,9 +2,9 @@
 
 更新日期：2026-10-23（Asia/Shanghai）。本页记录已发布应用代码、需要保留的二开能力和本机尚未提交的工作；历史更新从 [更新日志](../CHANGELOG.md) 查起，最新已发布源码为 `c1b2134d0` / `0.2.17-r3`，发布与升级方式见 [r3 发布记录](../deploy/CUSTOM_IMAGE_0.2.17-r3.md)；生产已运行 r3，专属推广入口已正式启用。
 
-## 2026-10-23 V2 渠道卡片用户验收通过、整合 main（未发布）
+## 2026-10-23 V2 渠道卡片用户验收通过、已提交并推送 main（未发布）
 
-用户已在本机检查卡片样式和功能并确认无问题，明确授权将改动整合回主项目、保留原有未提交修改，检查通过后提交并推送。实现来源 `E:\sub2二次开发项目\.worktrees\monitor-cards-20261023`，基线 `96786987bd762ae48bbe72cf44d9ad629a2e8ac6`；本次在主目录 main 整合，提交仅包含卡片功能、测试和对应文档。稳定提交主题为 `feat: add channel monitor cards with server health and detail view`，提交身份与本轮验证见[实施与整合记录](changes/2026-10-23-monitor-cards.md)。没有镜像发布或生产部署，已发布/生产仍为 0.2.17-r3。
+用户已在本机检查卡片样式和功能并确认无问题，明确授权将改动整合回主项目、保留原有未提交修改，检查通过后提交并推送。实现来源 `E:\sub2二次开发项目\.worktrees\monitor-cards-20261023`，基线 `96786987bd762ae48bbe72cf44d9ad629a2e8ac6`；本次在主目录 main 整合，提交仅包含卡片功能、测试和对应文档。功能提交 `6f90164d5b55584f8266764d2d26f5c6a9bd1a9d`（`feat: add channel monitor cards with server health and detail view`）已推送 `origin/main` 并核对远端SHA，提交身份与本轮验证见[实施与整合记录](changes/2026-10-23-monitor-cards.md)。没有镜像发布或生产部署，已发布/生产仍为 0.2.17-r3。
 
 主目录既有十份 tracked WIP 和原有 untracked 文件均保留；`.gitignore` 与本次唯一重叠，工作区保留原来的 Codex 文档允许规则，提交仅加入卡片计划的允许规则。其他九份 tracked WIP 不修改、不纳入提交，后端 Codex/网关、CC Switch 和本机环境脚本工作继续保持未提交。
 

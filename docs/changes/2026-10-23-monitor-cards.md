@@ -64,3 +64,9 @@
 独立暂存审计确认：准确20份批准文件，其中15份前端源/测试与验收哈希相同；9份原tracked WIP和5份既有untracked文件哈希不变；.gitignore功能规则和原修改分离；新增6处本地文档链接有效且目标已纳入Git。git diff --cached --check通过。
 
 干净功能来源工作树的最终全量前端检查为433文件3718项全部通过；其15份前端源/测试与实际暂存blob匹配。主目录额外7项来自保留的CC Switch WIP，没有进入本次提交。两组结果分别保留为clean-frontend-tests.log与main-frontend-tests.log，不能把主目录WIP计数当作提交源码计数。
+
+### 已提交与远端核验
+
+应用源码提交为 [`6f90164d5`](https://github.com/Ttt599536561/sub2api/commit/6f90164d5b55584f8266764d2d26f5c6a9bd1a9d)，完整SHA `6f90164d5b55584f8266764d2d26f5c6a9bd1a9d`。已经从主目录main正常推送到origin/main，git ls-remote确认远端同SHA；未使用force push。随后补录本文档及日志/交接中的既有源码SHA，不改变应用代码。
+
+Git当前没有持久作者配置，本轮两次提交仅在命令范围沿用该仓库最近提交的 `Codex <codex@local.invalid>` 身份，未修改全局或仓库配置。原用户WIP仍在主目录工作区；旧预览工作树和本地服务保留，既有备份、未跟踪用户文件不清理。没有发布镜像或操作生产，GitHub自动CI结果与本地测试结果分别判断。
