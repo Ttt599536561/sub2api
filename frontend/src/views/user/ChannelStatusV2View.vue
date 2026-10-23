@@ -825,22 +825,15 @@ function metricsFilter(): MonitorFilter {
     ? { range: filter.value.range, platforms: [], groupIds: [], models: [] }
     : { ...filter.value, platforms: [...filter.value.platforms], groupIds: [...filter.value.groupIds], models: [...filter.value.models] }
 }
-async function loadRates(signal: AbortSignal, owner: RequestOwner) {
-  ratesAvailable.value = false
-  ratesFailed.value = false
+async function loadRates(signal: AbortSignal) {
   try {
     const [nextGroups, nextRates] = await Promise.all([
       userGroupsAPI.getAvailable(signal), userGroupsAPI.getUserGroupRates(signal),
     ])
-    if (!isCurrent(owner) || signal.aborted) return
-    groups.value = nextGroups
-    userRates.value = nextRates
-    ratesAvailable.value = true
+    return { groups: nextGroups, userRates: nextRates, available: true, failed: false }
   } catch (error) {
-    if (!isCurrent(owner) || signal.aborted || isCanceled(error)) return
-    groups.value = []
-    userRates.value = {}
-    ratesFailed.value = true
+    if (signal.aborted || isCanceled(error)) throw error
+    return { groups: [], userRates: {}, available: false, failed: true }
   }
 }
 async function reload(silent = true, withRates = false) {
@@ -856,14 +849,21 @@ async function reload(silent = true, withRates = false) {
   const grouping = displayView.value === 'cards' ? 'platform_group' : matrixGroupBy.value
   refreshing.value = true
   if (!silent) loading.value = true
-  const rateRequest = withRates || !ratesAvailable.value ? loadRates(request.signal, owner) : Promise.resolve()
   try {
-    const [nextSnapshot, nextMatrix, nextDimensions] = await Promise.all([
+    const [nextSnapshot, nextMatrix, nextDimensions, nextRates] = await Promise.all([
       api.getSnapshot(current, owner.admin, request.signal),
       api.getMatrix(current, grouping, owner.admin, request.signal),
       api.getDimensions({ range: current.range, platforms: [], groupIds: [], models: [] }, owner.admin, request.signal),
+      withRates || !ratesAvailable.value ? loadRates(request.signal) : Promise.resolve(null),
     ])
     if (!isCurrent(owner) || request.signal.aborted) return
+    // Publish one complete batch so pending rates cannot change card order or colors.
+    if (nextRates) {
+      groups.value = nextRates.groups
+      userRates.value = nextRates.userRates
+      ratesAvailable.value = nextRates.available
+      ratesFailed.value = nextRates.failed
+    }
     snapshot.value = nextSnapshot
     matrix.value = nextMatrix
     dimensions.value = nextDimensions
@@ -873,9 +873,9 @@ async function reload(silent = true, withRates = false) {
     if (isCurrent(owner) && !request.signal.aborted && !isCanceled(error)) {
       appStore.showError(extractApiErrorMessage(error, t('channelMonitorV2.loadFailed')))
     }
+    // A failed monitoring request must not wait for unrelated requests to finish.
+    request.abort()
   } finally {
-    // Rate failures never prevent monitoring; all writes share the same owner.
-    await rateRequest
     if (isCurrent(owner)) {
       loading.value = false
       refreshing.value = false
@@ -1039,7 +1039,7 @@ watch(showUserRanking, (allowed) => {
     activeTab.value = 'models'
   }
 })
-watch(locale, () => { groups.value = []; void reload(true, true) })
+watch(locale, () => { void reload(true, true) })
 watch([() => authStore.sessionRevision, () => authStore.user?.id, () => authStore.user?.role, () => authStore.isAdmin, () => authStore.isAuthenticated], () => {
   clearSessionData()
   sessionBlocked = true

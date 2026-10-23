@@ -20,12 +20,13 @@ vi.mock('@/api/channelMonitorV2', () => ({
 }))
 vi.mock('@/api/groups', () => ({ userGroupsAPI: { getAvailable: mocks.groups, getUserGroupRates: mocks.rates } }))
 import ChannelStatusV2View from '../ChannelStatusV2View.vue'
+import type { ProviderSection } from '@/features/channel-monitor-v2/cards/monitorCards'
 
 const health = { overall: 'warning', error_rate: 'healthy', ttft: 'warning', cache: 'healthy', minimum_sample: 50 }
 const metric = { request_count: 0, success_rate: 1, error_rate: 0, cache_rate: 0.8, ttft: { p50_ms: 5000 }, tpm: 0, rpm: 0 }
 const coverage = { requested_start: '2026-10-23T00:00:00Z', requested_end: '2026-10-23T01:30:00Z', data_through: '2026-10-23T01:30:00Z', bucket_seconds: 300, coverage_complete: true }
 const row = { platform: 'openai', group_id: 1, group_name: 'Group A', metrics: metric, health, buckets: [{ bucket_start: '2026-10-23T01:25:00Z', metrics: metric, health }] }
-function deferred<T>() { let resolve!: (value: T) => void; const promise = new Promise<T>(r => { resolve = r }); return { promise, resolve } }
+function deferred<T>() { let resolve!: (value: T) => void; let reject!: (reason: unknown) => void; const promise = new Promise<T>((r, e) => { resolve = r; reject = e }); return { promise, resolve, reject } }
 const wrappers: ReturnType<typeof shallowMount>[] = []
 function mountView() {
   const wrapper = shallowMount(ChannelStatusV2View, { global: { stubs: {
@@ -193,5 +194,102 @@ describe('V2 cards and detail integration', () => {
     await flushPromises()
     expect(mocks.matrix).toHaveBeenLastCalledWith(expect.any(Object), 'platform_group', true, expect.any(AbortSignal))
     expect(wrapper.text()).toContain('本地化分组')
+  })
+})
+
+
+function displayedCards(wrapper: ReturnType<typeof mountView>) {
+  return (JSON.parse(wrapper.get('[data-testid="cards-props"]').text()) as ProviderSection[]).flatMap(section => section.cards)
+}
+function useSortedFixture() {
+  const initialRows = [row, { ...row, group_id: 2, group_name: 'Alpha' }]
+  const initialGroups = [{ id: 1, name: 'Zulu', platform: 'openai', rate_multiplier: 1 }, { id: 2, name: 'Alpha', platform: 'openai', rate_multiplier: 1 }]
+  const initialDimensions = { platforms: [], models: [], groups: initialGroups }
+  mocks.matrix.mockResolvedValue({ coverage, items: initialRows, group_by: 'platform_group' })
+  mocks.dimensions.mockResolvedValue(initialDimensions)
+  mocks.groups.mockResolvedValue(initialGroups)
+  mocks.rates.mockResolvedValue({ 1: 0, 2: 1 })
+  const updatedHealth = { ...health, overall: 'critical', error_rate: 'critical' }
+  const updatedMetric = { ...metric, error_rate: 0.5, success_rate: 0.5 }
+  const updatedRows = initialRows.map(item => ({ ...item, metrics: updatedMetric, health: updatedHealth,
+    buckets: item.buckets.map(bucket => ({ ...bucket, metrics: updatedMetric, health: updatedHealth })) }))
+  return { initialRows, initialGroups, initialDimensions, updatedRows, updatedMetric, updatedHealth }
+}
+
+describe('atomic monitor card refresh', () => {
+  it('keeps the last complete cards and rate ordering while manual refresh is pending', async () => {
+    useSortedFixture()
+    const wrapper = mountView(); await flushPromises()
+    const before = displayedCards(wrapper)
+    expect(before.map(card => card.name)).toEqual(['Zulu', 'Alpha'])
+    const rates = deferred<Record<number, number>>()
+    mocks.rates.mockReturnValueOnce(rates.promise)
+    await wrapper.get('button[title="common.refresh"]').trigger('click'); await flushPromises()
+    expect(displayedCards(wrapper)).toEqual(before)
+    expect(wrapper.findAll('.animate-pulse')).toHaveLength(0)
+    rates.resolve({ 1: 0, 2: 1 }); await flushPromises()
+    expect(displayedCards(wrapper)).toEqual(before)
+  })
+
+  it.each(['rates', 'metrics'] as const)('publishes only the complete batch when %s finish first', async (first) => {
+    const fixture = useSortedFixture()
+    const wrapper = mountView(); await flushPromises()
+    const before = displayedCards(wrapper)
+    const rates = deferred<Record<number, number>>()
+    const matrix = deferred<{ coverage: typeof coverage; items: typeof fixture.updatedRows; group_by: string }>()
+    mocks.rates.mockReturnValueOnce(rates.promise)
+    mocks.groups.mockResolvedValueOnce(fixture.initialGroups.map(group => ({ ...group, name: group.name + ' updated' })))
+    mocks.matrix.mockReturnValueOnce(matrix.promise)
+    mocks.snapshot.mockResolvedValueOnce({ coverage, health: fixture.updatedHealth, metrics: fixture.updatedMetric, config: { refresh_interval_seconds: 60 }, trend: [] })
+    await wrapper.get('button[title="common.refresh"]').trigger('click')
+    if (first === 'rates') rates.resolve({ 1: 2, 2: 0 })
+    else matrix.resolve({ coverage, items: fixture.updatedRows, group_by: 'platform_group' })
+    await flushPromises()
+    expect(displayedCards(wrapper)).toEqual(before)
+    if (first === 'rates') matrix.resolve({ coverage, items: fixture.updatedRows, group_by: 'platform_group' })
+    else rates.resolve({ 1: 2, 2: 0 })
+    await flushPromises()
+    const after = displayedCards(wrapper)
+    expect(after.map(card => card.name)).toEqual(['Alpha updated', 'Zulu updated'])
+    expect(after.map(card => card.rateMultiplier)).toEqual([0, 2])
+    expect(after.every(card => card.health === 'critical' && card.bars.at(-1)?.health === 'critical')).toBe(true)
+  })
+
+  it('retains the last full batch on a monitor failure and cancels pending rates', async () => {
+    useSortedFixture()
+    const wrapper = mountView(); await flushPromises()
+    const before = displayedCards(wrapper)
+    const rates = deferred<Record<number, number>>()
+    const snapshot = deferred<unknown>()
+    mocks.rates.mockReturnValueOnce(rates.promise)
+    mocks.groups.mockResolvedValueOnce([{ id: 1, name: 'Discarded name', rate_multiplier: 7 }])
+    mocks.snapshot.mockReturnValueOnce(snapshot.promise)
+    await wrapper.get('button[title="common.refresh"]').trigger('click'); await flushPromises()
+    snapshot.reject(new Error('monitor offline')); await flushPromises()
+    expect(displayedCards(wrapper)).toEqual(before)
+    expect(wrapper.get('button[title="common.refresh"]').attributes('disabled')).toBeUndefined()
+    expect((mocks.rates.mock.lastCall![0] as AbortSignal).aborted).toBe(true)
+    rates.resolve({ 1: 99 }); await flushPromises()
+    expect(displayedCards(wrapper)).toEqual(before)
+    expect(mocks.showError).toHaveBeenCalledTimes(1)
+  })
+
+  it('hides rates only after a failed rate refresh completes, then retries on the next refresh', async () => {
+    const fixture = useSortedFixture()
+    const wrapper = mountView(); await flushPromises()
+    const before = displayedCards(wrapper)
+    const rates = deferred<Record<number, number>>()
+    mocks.rates.mockReturnValueOnce(rates.promise)
+    mocks.matrix.mockResolvedValueOnce({ coverage, items: fixture.updatedRows, group_by: 'platform_group' })
+    await wrapper.get('button[title="common.refresh"]').trigger('click'); await flushPromises()
+    expect(displayedCards(wrapper)).toEqual(before)
+    rates.reject(new Error('rates offline')); await flushPromises()
+    expect(wrapper.find('[data-testid="monitor-rates-error"]').exists()).toBe(true)
+    expect(displayedCards(wrapper).every(card => card.rateMultiplier === null && card.health === 'critical')).toBe(true)
+    await wrapper.findAll('button').find(button => button.text() === 'channelMonitorV2.ranges.24h')!.trigger('click')
+    await flushPromises()
+    expect(mocks.rates).toHaveBeenCalledTimes(3)
+    expect(displayedCards(wrapper).map(card => card.rateMultiplier)).toEqual([0, 1])
+    expect(wrapper.find('[data-testid="monitor-rates-error"]').exists()).toBe(false)
   })
 })
