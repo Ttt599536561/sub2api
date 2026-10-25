@@ -1,12 +1,12 @@
 # Sub2API 二开 0.2.17-r5 发布与升级记录
 
-日期：2026-10-25（Asia/Shanghai）。**发布准备中，镜像尚未发布。** 用户授权只构建 Linux 镜像；不运行 macOS，不部署生产。最终 digest、工作流与验证结果在实际完成后补录。
+日期：2026-10-25（Asia/Shanghai）。**镜像已发布并完成双架构与匿名完整运行层核验。** 用户授权只构建 Linux 镜像；不运行 macOS，不部署生产。固定身份及实际验证见下文。
 
 ## 固定来源
 
 - 功能与审查提交：`4efa5ae4e410f603c60dd84f8a15555e16aa1984`。
 - 最终应用源码：`1dd5a33a3d77e2394be906bdb5f9375bd0cb4d1d`，包含后续依赖安全与Go错误检查修正。
-- 计划镜像：`ghcr.io/ttt599536561/sub2api-custom:0.2.17-r5`，只包含 `linux/amd64`、`linux/arm64` 两个运行平台。
+- 已发布镜像：`ghcr.io/ttt599536561/sub2api-custom:0.2.17-r5`，只包含 `linux/amd64`、`linux/arm64` 两个运行平台。
 - [专用工作流](../.github/workflows/publish-custom-v0217-r5.yml)固定上述应用SHA，先要求该SHA最新main/push CI与Security Scan成功，再分别在原生Linux runner构建并运行检查；发布前后均禁止覆盖已有r5。
 - 主目录原Codex/CCSwitch等WIP保留，不属于该固定来源；GitHub镜像只使用提交快照。
 
@@ -16,7 +16,7 @@
 
 发布前修复反代Origin、页签草稿/保存生命周期、恢复/派发批次饥饿、私有图暂存期限及provider Key撤销误阻历史投递；支持紧邻生图提示词并与独立QQ菜单Worker分流一致。安全升级仅x/image0.45.0、DOMPurify3.4.17，Go仍1.27.3，无新增豁免。
 
-详见[全面审查](../docs/changes/2026-10-25-qq-release-review.md)及[安全/质量门禁修正](../docs/changes/2026-10-25-r5-security-and-lint.md)。本机完整unit最终59包、前端442文件3957项通过；后续安全/lint补丁的实际专项验证单独记录，不与早期全量数字混为同一次运行。Linux云端最终结果仍须完成。
+详见[全面审查](../docs/changes/2026-10-25-qq-release-review.md)及[安全/质量门禁修正](../docs/changes/2026-10-25-r5-security-and-lint.md)。本机完整unit最终59包、前端442文件3957项通过；后续安全/lint补丁的实际专项验证单独记录，不与早期全量数字混为同一次运行。最终精确源码的Linux CI与Security Scan现均通过。
 
 ## r4 升级前的准备
 
@@ -29,10 +29,45 @@
 
 ## 用户执行升级时
 
-待本页状态更新为发布完成后，将现有Compose应用服务的image改为上述r5标签或最终固定digest，再使用现有 `-f` / project 参数执行应用服务pull与up。保持原端口、网络、卷、PG/Redis及代理配置。检查启动迁移、health、版本、原用户/余额及QQ连接；只在明确配置后由用户发起真实生图，真实上游可能收费。
+将现有Compose应用服务的image改为上述r5标签或最终固定digest，再使用现有 `-f` / project 参数执行应用服务pull与up。保持原端口、网络、卷、PG/Redis及代理配置。检查启动迁移、health、版本、原用户/余额及QQ连接；只在明确配置后由用户发起真实生图，真实上游可能收费。
 
 如需回退，先停新申请、处理在途/未知订单和冻结资金，再评估旧应用兼容性；不要直接删QQ表、恢复旧数据库覆盖新数据或假定旧版本能处理新hold。保留回退镜像、迁移后的备份与加密主密钥。
 
-## 尚待的发布验证
+## 已完成的发布验证
 
-精确应用SHA的Linux CI/Security Scan、两架构发布运行检查、GHCR index/config/revision与artifact绑定、全部运行层digest核验。未完成前不能将本页计划标签当作可用镜像；没有生产部署。
+| 项目 | 结果 |
+| --- | --- |
+| 应用源码 / OCI revision | `1dd5a33a3d77e2394be906bdb5f9375bd0cb4d1d` |
+| 发布控制提交 | `d3189e6c9cb79011d403497fd06b20c88e536081` |
+| 最终index digest | `sha256:482c9f9a891ffaea15a745bae08706ad044f649850efd2380e1a7d08cf0186dd` |
+| 精确源码CI | [40183525401](https://github.com/Ttt599536561/sub2api/actions/runs/40183525401)，所有5个job成功，包含unit/integration及QQ真实PG。 |
+| 精确源码安全扫描 | [40183525405](https://github.com/Ttt599536561/sub2api/actions/runs/40183525405)，后端与前端门禁成功。 |
+| 双架构发布 | [40184511319](https://github.com/Ttt599536561/sub2api/actions/runs/40184511319)，gate、amd64、arm64、publish共4job成功。 |
+| 两架构实际二进制 | 版本r5、源码SHA、Go1.27.3及x/image0.45.0匹配；pg_dump/psql/价格资源、setup状态及嵌入前端检查通过。 |
+| 工作流产物 | 5份ZIP的SHA256与GitHub元数据一致，run/control/source绑定通过。 |
+| 匿名registry | index/runtime manifest/config/platform/revision/version及artifact绑定通过；全部24个运行层、90,132,419字节SHA256/大小通过，末尾重读标签仍一致。 |
+
+核验时间：北京时间 **2026-10-25 18:33:14**。没有运行macOS，未向本机Docker引擎拉取镜像；运行层通过HTTP流式读取校验。未验证attestation内容或签名。安全门禁保留既有xlsx例外，未新增豁免；Go扫描仍提示2个未调用模块漏洞，不宣称全部依赖零漏洞。
+
+| 平台 | Runtime manifest | OCI config |
+| --- | --- | --- |
+| `linux/amd64` | `sha256:6dbe1addf94cf7e0d512d730cd891ce4b950242611fe819fa9f15b7a929ef078` | `sha256:b2a207af9cdaf900611fe8294586aee55acf334132c04cc1b662e8accfa14bc5` |
+| `linux/arm64` | `sha256:821914a1a4300efa8daeca4368206d775f800f396481591e43b8beceb0c78f8c` | `sha256:5be4165f5f89ef622088abe36ed8d1dec64e22110a55fa43791a978d6f8f3853` |
+
+可直接拉取：
+
+```bash
+docker pull ghcr.io/ttt599536561/sub2api-custom:0.2.17-r5
+```
+
+固定内容地址：
+
+```text
+ghcr.io/ttt599536561/sub2api-custom@sha256:482c9f9a891ffaea15a745bae08706ad044f649850efd2380e1a7d08cf0186dd
+```
+
+证据在主项目 `output/publish-v0.2.17-r5` 与 `.cache/qq-release-review-20261025`；关键身份已归档本页。源代码已整合主目录并推送，原11份tracked WIP与非构建untracked内容保全，`.gitignore`/交接冲突保留双方信息；本机原Codex/版本同步157个PASS事件及CCSwitch25项通过，未把这些WIP打进镜像。
+
+菜单服务另经用户授权仅轮换管理令牌后恢复在线，用户确认收到菜单；没有改BotSecret或盲改重连源码，旧停滞内部原因仍未证实。该独立CF服务不是本镜像的一部分。
+
+本轮native测试PG已停止、端口释放；删除其临时pgdata、两份旧复现场景及两份发布辅助临时夹具被自动审批以blocked by policy拒绝，原位保留未重试。原工作树、WIP保护引用、登录资料和依赖缓存保留。**本轮没有部署或迁移生产服务器。**

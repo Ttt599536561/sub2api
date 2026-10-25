@@ -19,3 +19,7 @@ CI默认展示35条；本地关闭展示截断后共有72项（69errcheck、2sta
 本轮源码、测试及记录一同提交，之后必须在新固定SHA上重新通过完整Linux CI与Security Scan才允许发布镜像。原始失败运行：[CI 40182343836](https://github.com/Ttt599536561/sub2api/actions/runs/40182343836)、[Security Scan 40182343841](https://github.com/Ttt599536561/sub2api/actions/runs/40182343841)。新提交SHA在实际提交后补录或按本主题追溯，不预写。
 
 本机证据在主项目 `.cache/qq-release-review-20261025` 的x-image-security、dependency-security及lint摘要。主目录原WIP已恢复：15个未重叠文件哈希不变，.gitignore与HANDOFF合并保留双方内容，原邮件排查/设计草案完整保留；原stash和备份继续保留。没有运行macOS任务，没有部署生产，也没有代发QQ/邮件或调用付费生成。
+
+## 最终发布完成
+
+最终应用`1dd5a33a3d77e2394be906bdb5f9375bd0cb4d1d`、控制`d3189e6c9cb79011d403497fd06b20c88e536081`已整合main并推送；精确源码CI40183525401和SecurityScan40183525405成功，发布40184511319四job全部成功。仅Linux amd64/arm64，最终digest `sha256:482c9f9a891ffaea15a745bae08706ad044f649850efd2380e1a7d08cf0186dd`；5份artifact与全部24运行层/90,132,419字节完整核验通过。原WIP已保全，未部署生产。来源、升级/回退与验证边界见[r5发布记录](../../deploy/CUSTOM_IMAGE_0.2.17-r5.md)。
