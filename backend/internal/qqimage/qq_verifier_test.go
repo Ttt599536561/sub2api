@@ -84,7 +84,8 @@ func TestQQChallenge(t *testing.T) {
 	seed := strings.Repeat("secret", 6)[:32]
 	key := ed25519.NewKeyFromSeed([]byte(seed))
 	signature, _ := hex.DecodeString(response.Signature)
-	if !ed25519.Verify(key.Public().(ed25519.PublicKey), []byte(stamp+"plain-token"), signature) {
+	publicKey, ok := key.Public().(ed25519.PublicKey)
+	if !ok || !ed25519.Verify(publicKey, []byte(stamp+"plain-token"), signature) {
 		t.Fatal("challenge signature invalid")
 	}
 	raw = []byte(`{"op":13,"d":{"plain_token":"x","event_ts":"1"}}`)

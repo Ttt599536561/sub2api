@@ -88,7 +88,7 @@ func (s *Store) writeReplyTemplates(ctx context.Context, expected int64, overrid
 	if err != nil {
 		return nil, err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	var current int64
 	if err = tx.QueryRowContext(ctx, `SELECT COALESCE(active_revision,0) FROM qq_reply_template_state WHERE id=1 FOR UPDATE`).Scan(&current); err != nil {
 		return nil, err
@@ -137,7 +137,7 @@ func (s *Store) ListReplyTemplateRevisions(ctx context.Context) ([]ReplyTemplate
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	out := []ReplyTemplateRevisionInfo{}
 	for rows.Next() {
 		var value ReplyTemplateRevisionInfo

@@ -65,7 +65,7 @@ func (s *Store) ListOrders(ctx context.Context, userID int64, limit int) ([]Orde
 	if e != nil {
 		return nil, e
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	out := []Order{}
 	for rows.Next() {
 		o, e := scanOrder(rows)
@@ -294,16 +294,16 @@ func (s *Store) ClaimOrder(ctx context.Context, owner string, lease time.Duratio
 			for rows.Next() {
 				var item candidate
 				if e = rows.Scan(&item.id, &item.created); e != nil {
-					rows.Close()
+					_ = rows.Close()
 					return e
 				}
 				items = append(items, item)
 			}
 			if e = rows.Err(); e != nil {
-				rows.Close()
+				_ = rows.Close()
 				return e
 			}
-			rows.Close()
+			_ = rows.Close()
 			for _, item := range items {
 				id := item.id
 				afterCreated, afterID = &item.created, item.id
@@ -611,12 +611,12 @@ func (s *Store) recoverExpired(ctx context.Context) error {
 		for rows.Next() {
 			var v candidate
 			if e = rows.Scan(&v.id, &v.status); e != nil {
-				rows.Close()
+				_ = rows.Close()
 				return e
 			}
 			items = append(items, v)
 		}
-		rows.Close()
+		_ = rows.Close()
 		for _, v := range items {
 			status := "closed_unknown"
 			if v.status == "queued" {

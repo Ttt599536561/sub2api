@@ -36,7 +36,17 @@ func testStore(t *testing.T) *Store {
 	if e != nil {
 		t.Fatal(e)
 	}
-	t.Cleanup(func() { scoped.Close(); db.Exec(`DROP SCHEMA ` + schema + ` CASCADE`); db.Close() })
+	t.Cleanup(func() {
+		if err := scoped.Close(); err != nil {
+			t.Error(err)
+		}
+		if _, err := db.Exec("DROP SCHEMA " + schema + " CASCADE"); err != nil {
+			t.Error(err)
+		}
+		if err := db.Close(); err != nil {
+			t.Error(err)
+		}
+	})
 	_, e = scoped.Exec(`CREATE TABLE users(id BIGSERIAL PRIMARY KEY,email TEXT NOT NULL,password_hash TEXT NOT NULL DEFAULT '',status TEXT NOT NULL DEFAULT 'active',deleted_at TIMESTAMPTZ,balance NUMERIC(20,8) NOT NULL DEFAULT 0,frozen_balance NUMERIC(20,8) NOT NULL DEFAULT 0,updated_at TIMESTAMPTZ NOT NULL DEFAULT now())`)
 	if e != nil {
 		t.Fatal(e)
@@ -196,25 +206,39 @@ func TestOrderReserveAndTerminalConcurrency(t *testing.T) {
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
-		s.CompleteGeneration(ctx, order.ID, claimed.LeaseToken, Artifact{Data: []byte("image"), MIME: "image/png", Width: 1, Height: 1})
+		if _, err := s.CompleteGeneration(ctx, order.ID, claimed.LeaseToken, Artifact{Data: []byte("image"), MIME: "image/png", Width: 1, Height: 1}); err != nil && !errors.Is(err, ErrConflict) {
+			t.Errorf("unexpected capture race result: %v", err)
+		}
 	}()
-	go func() { defer wg.Done(); s.FailGeneration(ctx, order.ID, claimed.LeaseToken, "failed") }()
+	go func() {
+		defer wg.Done()
+		// Capture and release compete; only their expected state conflict is a valid loser.
+		if _, err := s.FailGeneration(ctx, order.ID, claimed.LeaseToken, "failed"); err != nil && !errors.Is(err, ErrConflict) {
+			t.Errorf("unexpected release race result: %v", err)
+		}
+	}()
 	wg.Wait()
 	o, e := s.GetOrder(ctx, order.ID, u)
 	if e != nil {
 		t.Fatal(e)
 	}
-	if o.FundsStatus == "captured" {
+	switch o.FundsStatus {
+	case "captured":
 		checkWallet(t, s, u, "0.00000000", "0.00000000")
 		for range 2 {
 			wg.Add(1)
-			go func() { defer wg.Done(); s.RefundOrder(ctx, order.ID, 99, "compensate") }()
+			go func() {
+				defer wg.Done()
+				if _, err := s.RefundOrder(ctx, order.ID, 99, "compensate"); err != nil {
+					t.Errorf("idempotent refund failed: %v", err)
+				}
+			}()
 		}
 		wg.Wait()
 		checkWallet(t, s, u, "1.00000000", "0.00000000")
-	} else if o.FundsStatus == "released" {
+	case "released":
 		checkWallet(t, s, u, "1.00000000", "0.00000000")
-	} else {
+	default:
 		t.Fatalf("bad final %s", o.FundsStatus)
 	}
 }
@@ -233,7 +257,9 @@ func TestOrderDeadlineRecoveryAndOriginalOwner(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	s.db.Exec(`UPDATE qq_image_orders SET deadline=clock_timestamp()-interval '1 second' WHERE id=$1`, o.ID)
+	if _, err := s.db.Exec(`UPDATE qq_image_orders SET deadline=clock_timestamp()-interval '1 second' WHERE id=$1`, o.ID); err != nil {
+		t.Fatal(err)
+	}
 	if _, e = s.CompleteGeneration(ctx, o.ID, c.LeaseToken, Artifact{Data: []byte("image"), MIME: "image/png", Width: 1, Height: 1}); !errors.Is(e, ErrExpired) {
 		t.Fatalf("late capture: %v", e)
 	}
@@ -381,7 +407,7 @@ func TestOrderCaptureRechecksDeadlineAfterWalletWait(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	if _, e = tx.Exec(`SELECT id FROM users WHERE id=$1 FOR UPDATE`, u); e != nil {
 		t.Fatal(e)
 	}
@@ -412,7 +438,9 @@ func TestBindingRecentSessionAndCurrentEmail(t *testing.T) {
 	if _, e := s.AuthorizeBinding(ctx, r.ID, u, "other-session"); !errors.Is(e, ErrForbidden) {
 		t.Fatal("session freshness bypass")
 	}
-	s.db.Exec(`UPDATE users SET email='changed@example.com' WHERE id=$1`, u)
+	if _, err := s.db.Exec(`UPDATE users SET email='changed@example.com' WHERE id=$1`, u); err != nil {
+		t.Fatal(err)
+	}
 	ok, e := s.EmailVerified(ctx, u)
 	if e != nil || ok {
 		t.Fatal("old email proof survives change")
@@ -494,10 +522,14 @@ func TestOrderRemovedGroupBlocksMediaButDisabledDoesNot(t *testing.T) {
 	fixtureGrant(t, s, u, i)
 	o, _ := s.CreateOrder(ctx, i, "event", "cat")
 	claim, _ := s.ClaimOrder(ctx, "worker", time.Minute)
-	s.CompleteGeneration(ctx, o.ID, claim.LeaseToken, Artifact{Data: []byte("image"), MIME: "image/png", Width: 1, Height: 1})
+	if _, err := s.CompleteGeneration(ctx, o.ID, claim.LeaseToken, Artifact{Data: []byte("image"), MIME: "image/png", Width: 1, Height: 1}); err != nil {
+		t.Fatal(err)
+	}
 	c, _ := s.GetConfig(ctx)
 	c.Enabled = false
-	s.SaveConfig(ctx, *c, 1)
+	if _, err := s.SaveConfig(ctx, *c, 1); err != nil {
+		t.Fatal(err)
+	}
 	d, e := s.ClaimDelivery(ctx, "worker", time.Minute)
 	if e != nil || d == nil {
 		t.Fatal("disabled new entry blocks existing delivery")
@@ -508,7 +540,9 @@ func TestOrderRemovedGroupBlocksMediaButDisabledDoesNot(t *testing.T) {
 	}
 	c, _ = s.GetConfig(ctx)
 	c.AllowedGroups = []string{"group2"}
-	s.SaveConfig(ctx, *c, 1)
+	if _, err := s.SaveConfig(ctx, *c, 1); err != nil {
+		t.Fatal(err)
+	}
 	if _, e = s.ReadMedia(ctx, key); !errors.Is(e, ErrForbidden) {
 		t.Fatal("removed group retains media permission")
 	}
@@ -522,7 +556,9 @@ func TestOrderArtifactPersistenceBeforeCaptureAndRestart(t *testing.T) {
 	fixtureGrant(t, s, u, i)
 	o, _ := s.CreateOrder(ctx, i, "event", "cat")
 	claim, _ := s.ClaimOrder(ctx, "worker", time.Minute)
-	s.db.Exec(`UPDATE users SET status='disabled' WHERE id=$1`, u)
+	if _, err := s.db.Exec(`UPDATE users SET status='disabled' WHERE id=$1`, u); err != nil {
+		t.Fatal(err)
+	}
 	if _, e := s.CompleteGeneration(ctx, o.ID, claim.LeaseToken, Artifact{Data: []byte("image"), MIME: "image/png", Width: 1, Height: 1}); !errors.Is(e, ErrForbidden) {
 		t.Fatal(e)
 	}
@@ -533,7 +569,9 @@ func TestOrderArtifactPersistenceBeforeCaptureAndRestart(t *testing.T) {
 	if _, e := s.GetArtifact(ctx, o.ID, u); e == nil {
 		t.Fatal("unsettled artifact published")
 	}
-	s.db.Exec(`UPDATE users SET status='active' WHERE id=$1`, u)
+	if _, err := s.db.Exec(`UPDATE users SET status='active' WHERE id=$1`, u); err != nil {
+		t.Fatal(err)
+	}
 	if e := s.RecoverExpired(ctx); e != nil {
 		t.Fatal(e)
 	}
@@ -566,7 +604,9 @@ func TestOrderRefundIntentRetriesAfterWalletError(t *testing.T) {
 		t.Fatalf("durable refund intent missing: state=%s err=%v", state, e)
 	}
 	checkWallet(t, s, u, "1.00000000", "0.00000000")
-	s.db.Exec(`DROP TRIGGER reject_refund ON users`)
+	if _, err := s.db.Exec(`DROP TRIGGER reject_refund ON users`); err != nil {
+		t.Fatal(err)
+	}
 	if e := s.RecoverExpired(ctx); e != nil {
 		t.Fatal(e)
 	}
@@ -582,11 +622,15 @@ func TestOrderDailyLimitIdempotenceAndHoldIsolation(t *testing.T) {
 	ctx := context.Background()
 	c, _ := s.GetConfig(ctx)
 	c.UserDailyLimit = 1
-	s.SaveConfig(ctx, *c, 1)
+	if _, err := s.SaveConfig(ctx, *c, 1); err != nil {
+		t.Fatal(err)
+	}
 	u := fixtureUser(t, s, "one@example.com", "3")
 	i := fixtureIdentity("one", "group")
 	fixtureGrant(t, s, u, i)
-	s.db.Exec(`UPDATE users SET frozen_balance=9 WHERE id=$1`, u)
+	if _, err := s.db.Exec(`UPDATE users SET frozen_balance=9 WHERE id=$1`, u); err != nil {
+		t.Fatal(err)
+	}
 	o, e := s.CreateOrder(ctx, i, "event", "cat")
 	if e != nil {
 		t.Fatal(e)
@@ -619,7 +663,9 @@ func TestOrderDailyLimitIdempotenceAndHoldIsolation(t *testing.T) {
 		t.Fatalf("refunded success bypassed daily quota: %v", e)
 	}
 	var count int
-	s.db.QueryRow(`SELECT count(*) FROM qq_image_ledger WHERE order_id=$1 AND operation='refund'`, o.ID).Scan(&count)
+	if err := s.db.QueryRow(`SELECT count(*) FROM qq_image_ledger WHERE order_id=$1 AND operation='refund'`, o.ID).Scan(&count); err != nil {
+		t.Fatal(err)
+	}
 	if count != 1 {
 		t.Fatal("double refund ledger")
 	}
@@ -692,7 +738,9 @@ func TestOrderLateArtifactIsFreeAndOriginalOwnerOnly(t *testing.T) {
 	fixtureGrant(t, s, u, i)
 	o, _ := s.CreateOrder(ctx, i, "event", "cat")
 	claim, _ := s.ClaimOrder(ctx, "worker", time.Minute)
-	s.db.Exec(`UPDATE qq_image_orders SET deadline=clock_timestamp()-interval '1 second' WHERE id=$1`, o.ID)
+	if _, err := s.db.Exec(`UPDATE qq_image_orders SET deadline=clock_timestamp()-interval '1 second' WHERE id=$1`, o.ID); err != nil {
+		t.Fatal(err)
+	}
 	if _, e := s.CompleteGeneration(ctx, o.ID, claim.LeaseToken, Artifact{Data: []byte("image"), MIME: "image/png", Width: 1, Height: 1}); !errors.Is(e, ErrExpired) {
 		t.Fatal(e)
 	}
@@ -729,12 +777,16 @@ func TestOrderDeliveryUnknownAndEventReplay(t *testing.T) {
 	fixtureGrant(t, s, u, i)
 	o, _ := s.CreateOrder(ctx, i, "event", "cat")
 	claim, _ := s.ClaimOrder(ctx, "worker", time.Minute)
-	s.CompleteGeneration(ctx, o.ID, claim.LeaseToken, Artifact{Data: []byte("image"), MIME: "image/png", Width: 1, Height: 1})
+	if _, err := s.CompleteGeneration(ctx, o.ID, claim.LeaseToken, Artifact{Data: []byte("image"), MIME: "image/png", Width: 1, Height: 1}); err != nil {
+		t.Fatal(err)
+	}
 	d, e := s.ClaimDelivery(ctx, "sender", time.Minute)
 	if e != nil {
 		t.Fatal(e)
 	}
-	s.db.Exec(`UPDATE qq_image_deliveries SET lease_until=clock_timestamp()-interval '1 second' WHERE id=$1`, d.ID)
+	if _, err := s.db.Exec(`UPDATE qq_image_deliveries SET lease_until=clock_timestamp()-interval '1 second' WHERE id=$1`, d.ID); err != nil {
+		t.Fatal(err)
+	}
 	if e = s.RecoverExpired(ctx); e != nil {
 		t.Fatal(e)
 	}
@@ -758,7 +810,7 @@ func TestOrderEmailChangeWhileWaitingForWalletRejectsAdmission(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	if _, e = tx.Exec(`SELECT id FROM users WHERE id=$1 FOR UPDATE`, u); e != nil {
 		t.Fatal(e)
 	}
@@ -768,7 +820,9 @@ func TestOrderEmailChangeWhileWaitingForWalletRejectsAdmission(t *testing.T) {
 	if _, e = tx.Exec(`UPDATE users SET email='changed@example.com' WHERE id=$1`, u); e != nil {
 		t.Fatal(e)
 	}
-	tx.Commit()
+	if err := tx.Commit(); err != nil {
+		t.Fatal(err)
+	}
 	if e = <-done; !errors.Is(e, ErrForbidden) {
 		t.Fatalf("email proof became stale while waiting but order admitted: %v", e)
 	}
@@ -819,7 +873,9 @@ func TestOrderMediaAboveQQSizeFallsBack(t *testing.T) {
 	fixtureGrant(t, s, u, i)
 	o, _ := s.CreateOrder(ctx, i, "event", "cat")
 	claim, _ := s.ClaimOrder(ctx, "worker", time.Minute)
-	s.CompleteGeneration(ctx, o.ID, claim.LeaseToken, Artifact{Data: make([]byte, 5*1024*1024+1), MIME: "image/png", Width: 1, Height: 1})
+	if _, err := s.CompleteGeneration(ctx, o.ID, claim.LeaseToken, Artifact{Data: make([]byte, 5*1024*1024+1), MIME: "image/png", Width: 1, Height: 1}); err != nil {
+		t.Fatal(err)
+	}
 	d, e := s.ClaimDelivery(ctx, "worker", time.Minute)
 	if e != nil || d == nil {
 		t.Fatal(e)
@@ -843,7 +899,9 @@ func TestOrderSiteOnlyDeliveryCompletes(t *testing.T) {
 	fixtureGrant(t, s, u, i)
 	o, _ := s.CreateOrder(ctx, i, "event", "cat")
 	claim, _ := s.ClaimOrder(ctx, "worker", time.Minute)
-	s.CompleteGeneration(ctx, o.ID, claim.LeaseToken, Artifact{Data: []byte("image"), MIME: "image/png", Width: 1, Height: 1})
+	if _, err := s.CompleteGeneration(ctx, o.ID, claim.LeaseToken, Artifact{Data: []byte("image"), MIME: "image/png", Width: 1, Height: 1}); err != nil {
+		t.Fatal(err)
+	}
 	d, _ := s.ClaimDelivery(ctx, "worker", time.Minute)
 	if e := s.CompleteDelivery(ctx, d.ID, d.LeaseToken, "site_only", "platform_rejected"); e != nil {
 		t.Fatal(e)
@@ -920,7 +978,9 @@ func TestOrderBotCredentialRevocationInvalidatesMedia(t *testing.T) {
 	fixtureGrant(t, s, u, i)
 	o, _ := s.CreateOrder(ctx, i, "event", "cat")
 	claim, _ := s.ClaimOrder(ctx, "worker", time.Minute)
-	s.CompleteGeneration(ctx, o.ID, claim.LeaseToken, Artifact{Data: []byte("image"), MIME: "image/png", Width: 1, Height: 1})
+	if _, err := s.CompleteGeneration(ctx, o.ID, claim.LeaseToken, Artifact{Data: []byte("image"), MIME: "image/png", Width: 1, Height: 1}); err != nil {
+		t.Fatal(err)
+	}
 	d, _ := s.ClaimDelivery(ctx, "worker", time.Minute)
 	key, _ := s.CreateMediaGrant(ctx, d.ID, d.LeaseToken)
 	c, _ := s.GetConfig(ctx)
@@ -956,7 +1016,9 @@ func TestOrderResultArrivingAfterReleaseDoesNotCharge(t *testing.T) {
 	fixtureGrant(t, s, u, i)
 	o, _ := s.CreateOrder(ctx, i, "event", "cat")
 	claim, _ := s.ClaimOrder(ctx, "worker", time.Minute)
-	s.db.Exec(`UPDATE qq_image_orders SET deadline=clock_timestamp()-interval '1 second' WHERE id=$1`, o.ID)
+	if _, err := s.db.Exec(`UPDATE qq_image_orders SET deadline=clock_timestamp()-interval '1 second' WHERE id=$1`, o.ID); err != nil {
+		t.Fatal(err)
+	}
 	if e := s.RecoverExpired(ctx); e != nil {
 		t.Fatal(e)
 	}
@@ -981,9 +1043,13 @@ func TestOrderDispatchDeadlineAfterWalletWait(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	defer tx.Rollback()
-	tx.Exec(`SELECT id FROM users WHERE id=$1 FOR UPDATE`, u)
-	s.db.Exec(`UPDATE qq_image_orders SET queue_deadline=clock_timestamp()+interval '150 milliseconds' WHERE id=$1`, o.ID)
+	defer func() { _ = tx.Rollback() }()
+	if _, err := tx.Exec(`SELECT id FROM users WHERE id=$1 FOR UPDATE`, u); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.db.Exec(`UPDATE qq_image_orders SET queue_deadline=clock_timestamp()+interval '150 milliseconds' WHERE id=$1`, o.ID); err != nil {
+		t.Fatal(err)
+	}
 	type result struct {
 		o *Order
 		e error
@@ -992,7 +1058,9 @@ func TestOrderDispatchDeadlineAfterWalletWait(t *testing.T) {
 	go func() { o, e := s.ClaimOrder(ctx, "worker", time.Minute); done <- result{o, e} }()
 	waitWalletBlocked(t, s)
 	time.Sleep(200 * time.Millisecond)
-	tx.Commit()
+	if err := tx.Commit(); err != nil {
+		t.Fatal(err)
+	}
 	r := <-done
 	if r.e != nil || r.o != nil {
 		t.Fatalf("expired task dispatched after wallet wait: %+v %v", r.o, r.e)
@@ -1056,7 +1124,9 @@ func TestOrderEmailChangeAfterDispatchKeepsOriginalCharge(t *testing.T) {
 	fixtureGrant(t, s, u, i)
 	o, _ := s.CreateOrder(ctx, i, "event", "cat")
 	claim, _ := s.ClaimOrder(ctx, "worker", time.Minute)
-	s.db.Exec(`UPDATE users SET email='changed@example.com' WHERE id=$1`, u)
+	if _, err := s.db.Exec(`UPDATE users SET email='changed@example.com' WHERE id=$1`, u); err != nil {
+		t.Fatal(err)
+	}
 	if _, e := s.CompleteGeneration(ctx, o.ID, claim.LeaseToken, Artifact{Data: []byte("image"), MIME: "image/png", Width: 1, Height: 1}); e != nil {
 		t.Fatal(e)
 	}
@@ -1092,8 +1162,12 @@ func TestOrderReconciliationAttentionOnceAndArtifactExpiry(t *testing.T) {
 	fixtureGrant(t, s, u, i)
 	o, _ := s.CreateOrder(ctx, i, "event", "cat")
 	claim, _ := s.ClaimOrder(ctx, "worker", time.Minute)
-	s.MarkReconciling(ctx, o.ID, claim.LeaseToken, "uncertain")
-	s.db.Exec(`UPDATE qq_image_audit SET created_at=clock_timestamp()-interval '31 minutes' WHERE object_id=$1 AND action='order.dispatch'`, o.ID)
+	if err := s.MarkReconciling(ctx, o.ID, claim.LeaseToken, "uncertain"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.db.Exec(`UPDATE qq_image_audit SET created_at=clock_timestamp()-interval '31 minutes' WHERE object_id=$1 AND action='order.dispatch'`, o.ID); err != nil {
+		t.Fatal(err)
+	}
 	for range 2 {
 		if e := s.RecoverExpired(ctx); e != nil {
 			t.Fatal(e)
@@ -1103,13 +1177,19 @@ func TestOrderReconciliationAttentionOnceAndArtifactExpiry(t *testing.T) {
 	if e := s.db.QueryRow(`SELECT count(*) FROM qq_image_audit WHERE object_id=$1 AND action='order.reconcile_attention'`, o.ID).Scan(&n); e != nil || n != 1 {
 		t.Fatalf("missing or duplicate attention record: %d %v", n, e)
 	}
-	s.CompleteGeneration(ctx, o.ID, claim.LeaseToken, Artifact{Data: []byte("image"), MIME: "image/png", Width: 1, Height: 1})
-	s.db.Exec(`UPDATE qq_image_orders SET artifact_expires_at=clock_timestamp()-interval '1 second' WHERE id=$1`, o.ID)
+	if _, err := s.CompleteGeneration(ctx, o.ID, claim.LeaseToken, Artifact{Data: []byte("image"), MIME: "image/png", Width: 1, Height: 1}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.db.Exec(`UPDATE qq_image_orders SET artifact_expires_at=clock_timestamp()-interval '1 second' WHERE id=$1`, o.ID); err != nil {
+		t.Fatal(err)
+	}
 	if e := s.RecoverExpired(ctx); e != nil {
 		t.Fatal(e)
 	}
 	var removed bool
-	s.db.QueryRow(`SELECT artifact IS NULL FROM qq_image_orders WHERE id=$1`, o.ID).Scan(&removed)
+	if err := s.db.QueryRow(`SELECT artifact IS NULL FROM qq_image_orders WHERE id=$1`, o.ID).Scan(&removed); err != nil {
+		t.Fatal(err)
+	}
 	if !removed {
 		t.Fatal("expired private artifact remains")
 	}

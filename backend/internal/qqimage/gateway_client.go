@@ -91,7 +91,7 @@ func (g *Gateway) endpoint(ctx context.Context, token string) (gatewayEndpoint, 
 	if err != nil {
 		return gatewayEndpoint{}, gatewayResult{code: "qq_gateway_unavailable"}
 	}
-	defer response.Body.Close()
+	defer func() { _ = response.Body.Close() }()
 	if response.StatusCode != http.StatusOK {
 		result := gatewayResult{code: "qq_gateway_http_failed"}
 		switch response.StatusCode {

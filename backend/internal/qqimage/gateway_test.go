@@ -38,7 +38,7 @@ func gatewayFake(t *testing.T, handler func(*websocket.Conn, int), dispatch func
 		if e != nil {
 			return
 		}
-		defer c.Close()
+		defer func() { _ = c.Close() }()
 		handler(c, int(count.Add(1)))
 	}))
 	t.Cleanup(server.Close)

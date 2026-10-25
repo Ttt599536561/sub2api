@@ -194,7 +194,12 @@ func TestProviderTimeoutAndDisconnectNeverRetryPOST(t *testing.T) {
 					}
 					return
 				}
-				connection, _, err := w.(http.Hijacker).Hijack()
+				hijacker, ok := w.(http.Hijacker)
+				if !ok {
+					t.Error("test response does not support hijacking")
+					return
+				}
+				connection, _, err := hijacker.Hijack()
 				if err != nil {
 					t.Error(err)
 					return

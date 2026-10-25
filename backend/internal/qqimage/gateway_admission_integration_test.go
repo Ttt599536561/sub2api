@@ -35,7 +35,7 @@ func TestGatewayDiscoveryRejectsLostLeaseWhileWaitingForTransaction(t *testing.T
 	if e != nil {
 		t.Fatal(e)
 	}
-	defer blocker.Rollback()
+	defer func() { _ = blocker.Rollback() }()
 	if _, e = blocker.Exec(`SELECT pg_advisory_xact_lock(716709231248)`); e != nil {
 		t.Fatal(e)
 	}

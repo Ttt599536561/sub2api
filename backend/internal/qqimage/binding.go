@@ -213,7 +213,7 @@ func (s *Store) ListGrants(ctx context.Context, userID int64) ([]Grant, error) {
 	if e != nil {
 		return nil, e
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	out := []Grant{}
 	for rows.Next() {
 		var g Grant
@@ -269,12 +269,12 @@ func (s *Store) revokeGrant(ctx context.Context, id string, userID, actorID int6
 		for rows.Next() {
 			var orderID string
 			if e = rows.Scan(&orderID); e != nil {
-				rows.Close()
+				_ = rows.Close()
 				return e
 			}
 			ids = append(ids, orderID)
 		}
-		rows.Close()
+		_ = rows.Close()
 		for _, orderID := range ids {
 			if e = s.release(ctx, tx, orderID, "cancelled", "grant_revoked"); e != nil {
 				return e

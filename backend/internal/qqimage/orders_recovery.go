@@ -21,16 +21,16 @@ func (s *Store) RecoverExpired(ctx context.Context) error {
 	for rows.Next() {
 		var id string
 		if e = rows.Scan(&id); e != nil {
-			rows.Close()
+			_ = rows.Close()
 			return e
 		}
 		ids = append(ids, id)
 	}
 	if e = rows.Err(); e != nil {
-		rows.Close()
+		_ = rows.Close()
 		return e
 	}
-	rows.Close()
+	_ = rows.Close()
 	var firstError error
 	for _, id := range ids {
 		if _, e = s.applyRefund(ctx, id); e != nil && firstError == nil {
@@ -46,16 +46,16 @@ func (s *Store) RecoverExpired(ctx context.Context) error {
 	for rows.Next() {
 		var a saved
 		if e = rows.Scan(&a.id, &a.lease); e != nil {
-			rows.Close()
+			_ = rows.Close()
 			return e
 		}
 		items = append(items, a)
 	}
 	if e = rows.Err(); e != nil {
-		rows.Close()
+		_ = rows.Close()
 		return e
 	}
-	rows.Close()
+	_ = rows.Close()
 	for _, a := range items {
 		_, e = s.captureArtifact(ctx, a.id, a.lease)
 		if e == nil {

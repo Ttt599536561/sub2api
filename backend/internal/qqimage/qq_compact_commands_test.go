@@ -116,7 +116,11 @@ func compactCommandPayload(t *testing.T, content string) []byte {
 	if err := json.Unmarshal(commandPayload("fixture"), &envelope); err != nil {
 		t.Fatal(err)
 	}
-	envelope["d"].(map[string]any)["content"] = content
+	data, ok := envelope["d"].(map[string]any)
+	if !ok {
+		t.Fatal("command fixture data is not an object")
+	}
+	data["content"] = content
 	raw, err := json.Marshal(envelope)
 	if err != nil {
 		t.Fatal(err)

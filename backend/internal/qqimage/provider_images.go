@@ -83,7 +83,7 @@ func (p *ImageProvider) Generate(ctx context.Context, in GenerationRequest) (Art
 	if err != nil {
 		return empty, generationFailure("generation_result_unknown", true)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return empty, generationFailure(fmt.Sprintf("generation_http_%d", resp.StatusCode), resp.StatusCode >= 500 || resp.StatusCode == http.StatusRequestTimeout || resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode < 400)
 	}
@@ -121,7 +121,7 @@ func (p *ImageProvider) Generate(ctx context.Context, in GenerationRequest) (Art
 		if fetchErr != nil {
 			return empty, generationFailure("image_fetch_failed", true)
 		}
-		defer imageResponse.Body.Close()
+		defer func() { _ = imageResponse.Body.Close() }()
 		if imageResponse.StatusCode != http.StatusOK {
 			return empty, generationFailure("image_fetch_failed", true)
 		}

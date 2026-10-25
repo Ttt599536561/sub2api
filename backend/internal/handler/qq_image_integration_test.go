@@ -63,7 +63,17 @@ func TestQQImageHTTPPostgresSignedBindingGenerationAndPrivateRetrieval(t *testin
 	require.NoError(t, err)
 	scoped, err := sql.Open("postgres", dsn+"&search_path="+schema)
 	require.NoError(t, err)
-	t.Cleanup(func() { scoped.Close(); _, _ = db.Exec("DROP SCHEMA " + schema + " CASCADE"); db.Close() })
+	t.Cleanup(func() {
+		if err := scoped.Close(); err != nil {
+			t.Error(err)
+		}
+		if _, err := db.Exec("DROP SCHEMA " + schema + " CASCADE"); err != nil {
+			t.Error(err)
+		}
+		if err := db.Close(); err != nil {
+			t.Error(err)
+		}
+	})
 	_, err = scoped.Exec(`CREATE TABLE users(id BIGSERIAL PRIMARY KEY,email TEXT NOT NULL,status TEXT NOT NULL DEFAULT 'active',deleted_at TIMESTAMPTZ,balance NUMERIC(20,8) NOT NULL DEFAULT 0,frozen_balance NUMERIC(20,8) NOT NULL DEFAULT 0,updated_at TIMESTAMPTZ NOT NULL DEFAULT now());INSERT INTO users(id,email,balance) VALUES(42,'owner@example.test',2),(99,'other@example.test',3)`)
 	require.NoError(t, err)
 	migration, err := os.ReadFile(filepath.Join("..", "..", "migrations", "248_qq_image_generation.sql"))

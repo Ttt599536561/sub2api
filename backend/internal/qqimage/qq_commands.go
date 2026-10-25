@@ -324,25 +324,3 @@ func qqCommandExecutionError(err error) (string, string, error) {
 	// result, allowing a signed platform retry to resume the original command.
 	return "", "", err
 }
-
-func imageHelp(config *RuntimeConfig) string {
-	lines := []string{"生图指令：/绑定、/确认绑定 核对码、/生图 提示词、/任务 订单号、/重发 订单号。"}
-	if !config.Enabled {
-		lines = append(lines, "生图暂未开放。")
-	}
-	details := []string{}
-	if config.Model != "" {
-		details = append(details, "固定模型 "+config.Model)
-	}
-	if config.Size != "" {
-		details = append(details, "规格 "+config.Size)
-	}
-	if config.Price != "" {
-		details = append(details, "每张 US$"+config.Price)
-	}
-	if len(details) > 0 {
-		lines = append(lines, strings.Join(details, "，")+"。")
-	}
-	lines = append(lines, "需本群获授权并完成网站与 QQ 双端绑定。图片在原站可领取时结算；群图片会被群成员看到，重发已有图片不再扣费。")
-	return strings.Join(lines, "\n")
-}

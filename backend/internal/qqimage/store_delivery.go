@@ -115,12 +115,12 @@ func (s *Store) ClaimDelivery(ctx context.Context, owner string, lease time.Dura
 		for rows.Next() {
 			var id string
 			if e = rows.Scan(&id); e != nil {
-				rows.Close()
+				_ = rows.Close()
 				return e
 			}
 			ids = append(ids, id)
 		}
-		rows.Close()
+		_ = rows.Close()
 		for _, id := range ids {
 			var oid, msg string
 			var created time.Time

@@ -73,7 +73,8 @@ func safeQQChallengeToken(token string) bool {
 		return false
 	}
 	for _, c := range []byte(token) {
-		if !((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_' || c == '-') {
+		valid := (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_' || c == '-'
+		if !valid {
 			return false
 		}
 	}
@@ -207,5 +208,6 @@ func (v *QQVerifier) validSignature(headers http.Header, raw []byte, key ed25519
 	signed := make([]byte, 0, len(timestamp)+len(raw))
 	signed = append(signed, timestamp...)
 	signed = append(signed, raw...)
-	return ed25519.Verify(key.Public().(ed25519.PublicKey), signed, signature)
+	publicKey, ok := key.Public().(ed25519.PublicKey)
+	return ok && ed25519.Verify(publicKey, signed, signature)
 }

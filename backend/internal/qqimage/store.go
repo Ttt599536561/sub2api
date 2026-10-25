@@ -75,7 +75,7 @@ func (s *Store) transaction(ctx context.Context, f func(*sql.Tx, time.Time) erro
 	if e != nil {
 		return e
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	if _, e = tx.ExecContext(ctx, "SELECT pg_advisory_xact_lock(716709231248)"); e != nil {
 		return e
 	}
@@ -166,7 +166,7 @@ func (s *Store) PendingBalanceInvalidations(ctx context.Context, limit int) ([]C
 	if e != nil {
 		return nil, e
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	out := []CacheInvalidation{}
 	for rows.Next() {
 		var v CacheInvalidation
@@ -189,7 +189,7 @@ func (s *Store) ListAudit(ctx context.Context, limit int) ([]Audit, error) {
 	if e != nil {
 		return nil, e
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	out := []Audit{}
 	for rows.Next() {
 		var a Audit

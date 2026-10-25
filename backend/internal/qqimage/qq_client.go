@@ -67,7 +67,7 @@ func (c *QQClient) doJSON(ctx context.Context, path, token string, body any) (ma
 	if err != nil {
 		return nil, true, "qq_result_unknown"
 	}
-	defer response.Body.Close()
+	defer func() { _ = response.Body.Close() }()
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
 		return nil, response.StatusCode >= 500 || response.StatusCode == 408 || response.StatusCode < 400, fmt.Sprintf("qq_http_%d", response.StatusCode)
 	}
