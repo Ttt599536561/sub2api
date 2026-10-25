@@ -180,6 +180,7 @@
 <script setup lang="ts">
 import { computed, ref, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
+import { qqAuthTarget, qqReturnPath, safeAuthReturnPath } from '@/utils/qqImage'
 import { useI18n } from 'vue-i18n'
 import { AuthLayout } from '@/components/layout'
 import Icon from '@/components/icons/Icon.vue'
@@ -255,6 +256,7 @@ const pendingAuthToken = ref<string>('')
 const pendingAuthTokenField = ref<PendingAuthTokenField>('pending_auth_token')
 const pendingProvider = ref<string>('')
 const pendingRedirect = ref<string>('')
+const qqRedirect = ref<string>('')
 const pendingAdoptionDecision = ref<{
   adoptDisplayName?: boolean
   adoptAvatar?: boolean
@@ -332,6 +334,7 @@ onMounted(async () => {
   if (registerDataStr) {
     try {
       const registerData = JSON.parse(registerDataStr)
+      qqRedirect.value = qqReturnPath(registerData.qq_return_path)
       email.value = registerData.email || ''
       password.value = registerData.password || ''
       initialTurnstileToken.value =
@@ -744,7 +747,7 @@ async function handleVerify(): Promise<void> {
     appStore.showSuccess(t('auth.accountCreatedSuccess', { siteName: siteName.value }))
 
     // Redirect to dashboard
-    await router.push(pendingRedirect.value || '/dashboard')
+    await router.push(qqRedirect.value || safeAuthReturnPath(pendingRedirect.value))
   } catch (error: unknown) {
     errorMessage.value = buildRegistrationErrorMessage(error, t('auth.verifyFailed'))
 
@@ -764,7 +767,7 @@ function handleBack(): void {
   sessionStorage.removeItem('register_data')
 
   // Go back to registration
-  router.push('/register')
+  router.push(qqRedirect.value ? qqAuthTarget('/register', qqRedirect.value) : '/register')
 }
 
 function buildEmailSuffixNotAllowedMessage(): string {

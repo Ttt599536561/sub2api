@@ -72,6 +72,7 @@ func SetupRouter(
 		}
 		return nil
 	}))
+	r.Use(middleware2.QQImageBindingPagePrivacy())
 	r.Use(middleware2.ServerTiming(cfg.Server.EnableServerTiming))
 
 	// Promotion hosts must be handled before SPA fallback.
@@ -133,6 +134,7 @@ func registerRoutes(
 	panelRateLimiter := middleware2.NewPanelRateLimiter(redisClient, settingService)
 
 	// 注册各模块路由
+	routes.RegisterQQImagePublicRoutes(v1, h)
 	routes.RegisterAuthRoutes(v1, h, jwtAuth, auditLog, redisClient, settingService, panelRateLimiter)
 	routes.RegisterUserRoutes(v1, h, jwtAuth, auditLog, settingService, panelRateLimiter)
 	routes.RegisterModelPlazaRoutes(v1, h, optionalJWTAuth, settingService, panelRateLimiter)

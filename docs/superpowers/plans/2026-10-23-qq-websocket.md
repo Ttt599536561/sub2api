@@ -1,0 +1,19 @@
+# QQ WebSocket Implementation Plan
+
+> Workers: use subagent-driven-development and test-driven-development. User has authorized WebSocket implementation and isolated test deployment; no extra approval or commit is needed.
+
+**Goal:** Connect the existing QQ image feature through official QQ WebSocket while preserving test data and production.
+**Architecture:** Gateway transport feeds a shared trusted event handler; store-owned configuration and a single-connection supervisor enforce mode/version/lifetime. Existing HTTP route continues exact signature verification.
+**Tech Stack:** Go, existing gorilla/websocket, PostgreSQL, Vue3/TypeScript/pnpm, private Linux embed artifact.
+
+- [x] Inspect current code/docs, capture dirty-worktree/main protection baseline, research primary QQ protocol.
+- [x] Core admission (root): types/config add ReceiveMode default webhook and validation; qq_verifier extract shared bounded GROUP_AT parser; qq_commands keep Webhook signature boundary, add HandleGatewayEvent(ctx,configID,appID,raw), recheck config in ProcessEvent tx. Regression first: absent/default modes, invalid mode, stale config, missing signature remains rejected, same-message dedupe and discovery zero side effects.
+- [x] Gateway transport (isolated agent): new gateway.go/client/tests. NewGateway(client,*RuntimeConfig,dispatch) with Run(ctx), Status(). Official bootstrap, strict host/port URL policy, HELLO/identify/resume/heartbeat, bounded queue and ordered checkpoints, close/error classification and retry budgets. Use local mock HTTP/WS and deterministic short timers; no real credentials.
+- [x] Supervisor and wire (root): new gateway_supervisor.go and store_gateway.go; one PG session lock with health guard; cancel on mode/config/credentials change; production runtime Start/Stop integrates supervision; admin GET /connection returns safe state. Regression first with fake store/run factory plus real PG lock exclusivity. Route remains authenticated/compliance gated.
+- [x] UI (isolated agent): QQConfig receive_mode, admin connection API, QQImagePanel selector/status and zh/en translations; bounded manual status refresh with same-session checks. Tests for old default, save mode without dropping fields/secrets, no status/secret persistence after logout; typecheck, ESLint, focused Vitest.
+- [x] Integration/review: focused QQ backend/handler/routes/config tests with PostgreSQL, gateway race-sensitive tests on supported platform, frontend QQ suite/type/lint/build; independent spec and security/code review, fix findings before packaging.
+- [x] Deployment: snapshot production invariants and test business/config hashes; private pg_dump/config backup; hash-bound current frontend+backend Linux build and private server image; stop only test service for atomic app recreation using preserved DB/Redis; switch mode through authenticated existing config API with ID guard, preserve user settings; verify ready and heartbeats or exact sanitized blocker. No actual messaging or paid image test.
+- [x] Documentation: CHANGELOG/HANDOFF/remote acceptance + dedicated changes record, current-source identity, real checks and limitations. Verify links, diff whitespace, main WIP unchanged, secrets absent from artifacts; retain reusable evidence and clean only new unused temporary files.
+
+Primary protocol: https://bot.q.qq.com/wiki/develop/api-v2/dev-prepare/event-emit/websocket.html (2026-07-30); token page (2026-09-16); official tencent-connect/qqbot-nodejs gateway and reconnect sources. Independent Sub2 test site is not QQ sandbox; this increment uses the existing official API environment and never changes robot platform settings.
+Completion: real QQ READY and continuing heartbeat ACK verified on isolated test site; production/data invariants passed. Native race and updated browser rendering were unavailable and are explicitly documented in the implementation record. No real QQ user message or paid image generation was triggered.

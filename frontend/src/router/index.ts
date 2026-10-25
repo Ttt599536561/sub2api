@@ -13,11 +13,24 @@ import { useRoutePrefetch } from '@/composables/useRoutePrefetch'
 import { getSetupStatus } from '@/api/setup'
 import { resolveCompletedSetupRedirectPath } from './setupRedirect'
 import { resolveRouteDocumentTitle } from './title'
+import { qqReturnPath } from '@/utils/qqImage'
 
 /**
  * Route definitions with lazy loading
  */
 const routes: RouteRecordRaw[] = [
+  {
+    path: '/qq/bind', name: 'QQBind', component: () => import('@/views/user/QQBindView.vue'),
+    meta: { requiresAuth: false, title: 'QQ binding', titleKey: 'qqImage.bindTitle' }
+  },
+  {
+    path: '/qq/orders', name: 'QQOrders', component: () => import('@/views/user/QQOrdersView.vue'),
+    meta: { requiresAuth: true, title: 'QQ image orders', titleKey: 'qqImage.ordersTitle' }
+  },
+  {
+    path: '/qq/orders/:id', name: 'QQOrder', component: () => import('@/views/user/QQOrdersView.vue'),
+    meta: { requiresAuth: true, title: 'QQ image order', titleKey: 'qqImage.ordersTitle' }
+  },
   {
     path: '/welfare', name: 'Welfare',
     component: () => import('@/views/user/WelfareView.vue'),
@@ -837,7 +850,7 @@ router.beforeEach(async (to, _from, next) => {
         return
       }
       // Admin users go to admin dashboard, regular users go to user dashboard
-      next(authStore.isAdmin ? '/admin/dashboard' : '/dashboard')
+      next(qqReturnPath(to.query.redirect) || (authStore.isAdmin ? '/admin/dashboard' : '/dashboard'))
       return
     }
     // Model Plaza:公开路由但受「启用开关 + 可选强制登录」双重控制(后端同口径 fail-closed)

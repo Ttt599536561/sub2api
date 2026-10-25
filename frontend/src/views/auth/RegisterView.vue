@@ -360,7 +360,7 @@
       <p class="text-gray-500 dark:text-dark-400">
         {{ t('auth.alreadyHaveAccount') }}
         <router-link
-          to="/login"
+          :to="qqAuthTarget('/login', route.query.redirect)"
           class="font-medium text-primary-600 transition-colors hover:text-primary-500 dark:text-primary-400 dark:hover:text-primary-300"
         >
           {{ t('auth.signIn') }}
@@ -373,6 +373,7 @@
 <script setup lang="ts">
 import { computed, ref, reactive, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
+import { qqAuthTarget, qqReturnPath } from '@/utils/qqImage'
 import { useI18n } from 'vue-i18n'
 import { AuthLayout } from '@/components/layout'
 import LinuxDoOAuthSection from '@/components/auth/LinuxDoOAuthSection.vue'
@@ -1085,6 +1086,7 @@ async function handleRegister(): Promise<void> {
         'register_data',
         JSON.stringify({
           email: formData.email,
+          ...(qqReturnPath(route.query.redirect) ? { qq_return_path: qqReturnPath(route.query.redirect) } : {}),
           password: formData.password,
           turnstile_token:
             turnstileEnabled.value || aliyunCaptchaEnabled.value ? turnstileToken.value : undefined,
@@ -1097,7 +1099,7 @@ async function handleRegister(): Promise<void> {
       )
 
       // Navigate to email verification page
-      await router.push('/email-verify')
+      await router.push(qqReturnPath(route.query.redirect) ? qqAuthTarget('/email-verify', route.query.redirect) : '/email-verify')
       return
     }
 
@@ -1119,7 +1121,7 @@ async function handleRegister(): Promise<void> {
     appStore.showSuccess(t('auth.accountCreatedSuccess', { siteName: siteName.value }))
 
     // Redirect to dashboard
-    await router.push('/dashboard')
+    await router.push(qqReturnPath(route.query.redirect) || '/dashboard')
   } catch (error: unknown) {
     // Handle registration error
     errorMessage.value = buildRegistrationErrorMessage(error, t('auth.registrationFailed'))

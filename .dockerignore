@@ -83,3 +83,9 @@ deploy/redis_data/
 .claude/
 issues/
 CLAUDE.md
+
+# Local workspaces, private credentials and verification artifacts
+/.cache/
+/.worktrees/
+/output/
+/.codex/

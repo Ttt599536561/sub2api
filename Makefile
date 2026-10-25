@@ -30,7 +30,20 @@ FRONTEND_CRITICAL_VITEST := \
 	src/features/channel-monitor-v2/__tests__/designSystem.structure.spec.ts \
 	src/features/channel-monitor-v2/__tests__/monitorFormat.spec.ts \
 	src/features/channel-monitor-v2/__tests__/monitorZoom.spec.ts \
-	src/components/admin/channel/__tests__/PricingEntryCard.modelDefaultPrice.spec.ts
+	src/components/admin/channel/__tests__/PricingEntryCard.modelDefaultPrice.spec.ts \
+	src/api/__tests__/qqImage.spec.ts \
+	src/components/admin/__tests__/QQImagePanel.spec.ts \
+	src/components/admin/__tests__/QQReplyTemplatesPanel.spec.ts \
+	src/components/admin/__tests__/QQTabsLifecycle.spec.ts \
+	src/components/user/__tests__/QQOrderCard.spec.ts \
+	src/views/user/__tests__/QQImageViews.spec.ts \
+	src/utils/__tests__/qqImage.spec.ts \
+	src/utils/__tests__/qqImageConfig.spec.ts \
+	src/utils/__tests__/qqReplyTemplates.spec.ts \
+	src/router/__tests__/feature-access.spec.ts \
+	src/views/auth/__tests__/RegisterView.spec.ts \
+	src/views/auth/__tests__/EmailVerifyView.spec.ts \
+	src/views/user/__tests__/WelfareView.spec.ts
 
 # 一键编译前后端
 build: build-backend build-frontend

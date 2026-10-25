@@ -108,6 +108,13 @@ function runGuard(meta: Record<string, unknown>, path: string) {
 }
 
 describe('feature route guard', () => {
+  it('keeps QQ history reachable independently of the welfare switch', async () => {
+    appStore.publicSettingsLoaded = true
+    appStore.cachedPublicSettings = { welfare_enabled: false }
+    const { navigation, next } = runGuard({}, '/qq/orders')
+    await navigation
+    expect(next).toHaveBeenCalledWith()
+  })
   beforeAll(async () => {
     await import('@/router')
   })

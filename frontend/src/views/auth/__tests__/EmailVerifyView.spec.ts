@@ -157,6 +157,19 @@ describe('EmailVerifyView', () => {
     expect(registerMock).toHaveBeenCalledOnce()
     expect(registerMock.mock.calls[0][0]).not.toHaveProperty('aff_code')
   })
+  it.each([
+    ['/qq/bind', '/qq/bind'],
+    ['https://evil.test', '/dashboard']
+  ])('uses only a fixed QQ registration return after email verification: %s', async (saved, expected) => {
+    sessionStorage.setItem('register_data', JSON.stringify({ email: 'user@example.test', password: 'secret-123', qq_return_path: saved }))
+    registerMock.mockResolvedValue({})
+    const wrapper = mount(EmailVerifyView, { global: { stubs: { AuthLayout: { template: '<div><slot /></div>' }, Icon: true, TurnstileWidget: true, transition: false } } })
+    await flushPromises(); await wrapper.get('#code').setValue('123456')
+    await wrapper.get('form').trigger('submit.prevent'); await flushPromises()
+    expect(pushMock).toHaveBeenCalledWith(expected)
+    expect(sessionStorage.getItem('register_data')).toBeNull()
+    wrapper.unmount()
+  })
 
   it('acquires a fresh Tencent proof for each resend action', async () => {
     getPublicSettingsMock.mockResolvedValue({

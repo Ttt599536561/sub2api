@@ -21,7 +21,7 @@ const initial = { welfare_balance: '2.80', account_balance: '18.35', available_d
 let wrapper: ReturnType<typeof mount>
 let router: Router
 async function start(location = '/welfare') {
-  router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/welfare', component: WelfareView }] })
+  router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/welfare', component: WelfareView }, { path: '/qq/bind', component: { template: '<div />' } }, { path: '/qq/orders', component: { template: '<div />' } }] })
   await router.push(location)
   await router.isReady()
   wrapper = mount(WelfareView, { global: { plugins: [router], stubs: { AppLayout: { template: '<main><slot /></main>' }, BaseDialog: { props: ['show', 'title'], template: '<section v-if="show" role="dialog"><h2>{{title}}</h2><slot/><slot name="footer"/></section>' } } } })

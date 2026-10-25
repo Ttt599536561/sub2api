@@ -9,6 +9,7 @@ const {
   showErrorMock,
   pushMock,
   verifyActionMock,
+  routeQuery,
   appStoreMock
 } = vi.hoisted(() => ({
   getPublicSettingsMock: vi.fn(),
@@ -17,6 +18,7 @@ const {
   showErrorMock: vi.fn(),
   pushMock: vi.fn(),
   verifyActionMock: vi.fn(),
+  routeQuery: {} as Record<string, string>,
   appStoreMock: {
     cachedPublicSettings: null as { promo_code_enabled?: boolean } | null,
     showError: (...args: unknown[]) => showErrorMock(...args),
@@ -44,7 +46,7 @@ const publicSettings = {
 
 vi.mock('vue-router', () => ({
   useRouter: () => ({ push: pushMock }),
-  useRoute: () => ({ query: {} })
+  useRoute: () => ({ query: routeQuery })
 }))
 
 vi.mock('vue-i18n', () => ({
@@ -101,6 +103,7 @@ function mountRegister() {
 describe('RegisterView', () => {
   beforeEach(() => {
     getPublicSettingsMock.mockReset()
+    for (const key of Object.keys(routeQuery)) delete routeQuery[key]
     getAffiliateAttributionMock.mockReset()
     getAffiliateAttributionMock.mockResolvedValue({ locked: false })
     localStorage.removeItem('affiliate_referral_code')
@@ -228,6 +231,21 @@ describe('RegisterView', () => {
       invitationField.element.compareDocumentPosition(turnstile.element) &
         Node.DOCUMENT_POSITION_FOLLOWING
     ).toBeTruthy()
+  })
+
+  it.each([false, true])('keeps the fixed QQ return through registration (email verification %s)', async emailVerify => {
+    routeQuery.redirect = '/qq/bind'
+    getPublicSettingsMock.mockResolvedValue({ ...publicSettings, turnstile_enabled: false, email_verify_enabled: emailVerify })
+    const wrapper = mountRegister(); await flushPromises()
+    await wrapper.get('#email').setValue('user@example.test')
+    await wrapper.get('#password').setValue('secret-123')
+    await wrapper.get('#confirmPassword').setValue('secret-123')
+    await wrapper.get('form').trigger('submit.prevent'); await flushPromises()
+    if (emailVerify) {
+      expect(JSON.parse(sessionStorage.getItem('register_data')!)).toHaveProperty('qq_return_path', '/qq/bind')
+      expect(pushMock).toHaveBeenCalledWith({ path: '/email-verify', query: { redirect: '/qq/bind' } })
+    } else expect(pushMock).toHaveBeenCalledWith('/qq/bind')
+    wrapper.unmount()
   })
 
   it('hides the affiliate field and omits cached attribution from protected registration', async () => {

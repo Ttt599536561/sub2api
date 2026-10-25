@@ -37,12 +37,6 @@ func (s *AuthService) BindEmailIdentity(
 	if strings.TrimSpace(password) == "" {
 		return nil, ErrPasswordRequired
 	}
-	if err := s.VerifyOAuthEmailCode(ctx, normalizedEmail, verifyCode); err != nil {
-		return nil, err
-	}
-	if err := s.validateRegistrationEmailPolicy(ctx, normalizedEmail); err != nil {
-		return nil, err
-	}
 
 	currentUser, err := s.userRepo.GetByID(ctx, userID)
 	if err != nil {
@@ -54,6 +48,14 @@ func (s *AuthService) BindEmailIdentity(
 	}
 	if !firstRealEmailBind && !s.CheckPassword(password, currentUser.PasswordHash) {
 		return nil, ErrPasswordIncorrect
+	}
+	// Reject invalid passwords before consuming the one-time email code so that
+	// the user can correct their password without requesting another email.
+	if err := s.VerifyOAuthEmailCode(ctx, normalizedEmail, verifyCode); err != nil {
+		return nil, err
+	}
+	if err := s.validateRegistrationEmailPolicy(ctx, normalizedEmail); err != nil {
+		return nil, err
 	}
 
 	if err := s.ensureEmailIdentityAvailableForUser(ctx, currentUser, normalizedEmail); err != nil {

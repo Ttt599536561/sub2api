@@ -89,6 +89,7 @@ async function retryRedemption() {
   <AppLayout>
     <div class="welfare-page">
       <div class="wf-heading"><div><h1>{{ t('welfare.title') }}</h1><p>{{ t('welfare.subtitle') }}</p></div><button class="wf-button" :disabled="!rules" @click="dialog = 'rules'"><Icon name="infoCircle" />{{ t('welfare.rules') }}</button></div>
+      <section class="wf-panel flex flex-wrap items-center justify-between gap-4"><div><h2 class="font-semibold">{{ t('qqImage.title') }}</h2><p class="text-sm text-gray-500 dark:text-dark-400">{{ t('qqImage.bindSubtitle') }}</p></div><div class="flex flex-wrap gap-4"><RouterLink to="/qq/bind" class="wf-link">{{ t('qqImage.bindTitle') }}</RouterLink><RouterLink to="/qq/orders" class="wf-link">{{ t('qqImage.ordersTitle') }}</RouterLink></div></section>
       <div v-if="loading && !overview" class="wf-panel text-center" role="status">{{ t('welfare.loading') }}</div>
       <div v-if="error" class="wf-error" role="alert">{{ t(`welfare.errors.${error}`) }} <button class="wf-link" @click="refresh">{{ t('welfare.retry') }}</button></div>
       <div v-if="rulesError" class="wf-error" role="alert">{{ t(`welfare.errors.${rulesError}`) }} <button class="wf-link" @click="loadRules">{{ t('welfare.retry') }}</button></div>

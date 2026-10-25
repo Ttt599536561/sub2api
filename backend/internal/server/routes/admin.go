@@ -73,6 +73,8 @@ func RegisterAdminRoutes(
 		// 优惠码管理
 		registerPromoCodeRoutes(admin, h)
 
+		registerQQImageAdminRoutes(admin, h.QQImage)
+
 		// 系统设置
 		registerSettingsRoutes(admin, h)
 		if h.Welfare != nil {

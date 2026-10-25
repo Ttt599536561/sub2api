@@ -27,6 +27,7 @@ func RegisterUserRoutes(
 	{
 		// 用户接口
 		user := authenticated.Group("/user")
+		registerQQImageUserRoutes(user, h.QQImage)
 		{
 			if h.Welfare != nil {
 				welfare := user.Group("/welfare")

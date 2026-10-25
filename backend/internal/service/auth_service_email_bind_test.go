@@ -19,6 +19,8 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
 	"github.com/Wei-Shaw/sub2api/internal/repository"
 	"github.com/Wei-Shaw/sub2api/internal/service"
+	"github.com/alicebob/miniredis/v2"
+	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/require"
 
 	"entgo.io/ent/dialect"
@@ -577,6 +579,100 @@ func TestAuthServiceBindEmailIdentity_RejectsWrongCurrentPasswordForBoundEmail(t
 		Count(ctx)
 	require.NoError(t, err)
 	require.Equal(t, 0, newIdentityCount)
+}
+
+func newEmailBindVerificationTest(t *testing.T) (*service.AuthService, *dbent.Client) {
+	t.Helper()
+
+	redisServer := miniredis.RunT(t)
+	redisClient := redis.NewClient(&redis.Options{Addr: redisServer.Addr()})
+	t.Cleanup(func() { _ = redisClient.Close() })
+	cache := repository.NewEmailCache(redisClient)
+	now := time.Now().UTC()
+	require.NoError(t, cache.SetVerificationCode(context.Background(), "new@example.com", &service.VerificationCodeData{
+		Code:      "123456",
+		CreatedAt: now,
+		ExpiresAt: now.Add(15 * time.Minute),
+	}, 15*time.Minute))
+	svc, _, client := newAuthServiceForEmailBind(t, nil, cache, nil)
+	return svc, client
+}
+
+func TestAuthServiceBindEmailIdentity_WrongPasswordPreservesCodeForRetry(t *testing.T) {
+	for _, currentEmail := range []string{"current@example.com", "current@local.invalid"} {
+		t.Run(currentEmail, func(t *testing.T) {
+			ctx := context.Background()
+			svc, client := newEmailBindVerificationTest(t)
+			passwordHash, err := svc.HashPassword("current-password")
+			require.NoError(t, err)
+			user := createEmailBindTestUser(t, client, currentEmail, "current", passwordHash)
+
+			updatedUser, err := svc.BindEmailIdentity(ctx, user.ID, "new@example.com", "123456", "wrong-password")
+			require.ErrorIs(t, err, service.ErrPasswordIncorrect)
+			require.Nil(t, updatedUser)
+			storedUser, err := client.User.Get(ctx, user.ID)
+			require.NoError(t, err)
+			require.Equal(t, currentEmail, storedUser.Email)
+			require.Equal(t, passwordHash, storedUser.PasswordHash)
+
+			updatedUser, err = svc.BindEmailIdentity(ctx, user.ID, "new@example.com", "123456", "current-password")
+			require.NoError(t, err, "a password correction must not require another verification email")
+			require.Equal(t, "new@example.com", updatedUser.Email)
+			storedUser, err = client.User.Get(ctx, user.ID)
+			require.NoError(t, err)
+			require.Equal(t, "new@example.com", storedUser.Email)
+			require.True(t, svc.CheckPassword("current-password", storedUser.PasswordHash))
+
+			_, err = svc.BindEmailIdentity(ctx, user.ID, "new@example.com", "123456", "current-password")
+			require.ErrorIs(t, err, service.ErrInvalidVerifyCode, "a successful bind must still consume its code")
+		})
+	}
+}
+
+func TestAuthServiceBindEmailIdentity_ShortFirstPasswordPreservesCodeForRetry(t *testing.T) {
+	ctx := context.Background()
+	svc, client := newEmailBindVerificationTest(t)
+	currentEmail := "oauth-user" + service.OIDCConnectSyntheticEmailDomain
+	user := createEmailBindTestUser(t, client, currentEmail, "oauth-user", "old-hash")
+
+	updatedUser, err := svc.BindEmailIdentity(ctx, user.ID, "new@example.com", "123456", "short")
+	require.ErrorContains(t, err, "password must be at least 6 characters")
+	require.Nil(t, updatedUser)
+	storedUser, err := client.User.Get(ctx, user.ID)
+	require.NoError(t, err)
+	require.Equal(t, currentEmail, storedUser.Email)
+	require.Equal(t, "old-hash", storedUser.PasswordHash)
+
+	updatedUser, err = svc.BindEmailIdentity(ctx, user.ID, "new@example.com", "123456", "new-password")
+	require.NoError(t, err, "correcting the first login password must preserve the verification code")
+	require.Equal(t, "new@example.com", updatedUser.Email)
+	storedUser, err = client.User.Get(ctx, user.ID)
+	require.NoError(t, err)
+	require.True(t, svc.CheckPassword("new-password", storedUser.PasswordHash))
+}
+
+func TestAuthServiceBindEmailIdentity_CorrectPasswordStillEnforcesCodeAttempts(t *testing.T) {
+	ctx := context.Background()
+	svc, client := newEmailBindVerificationTest(t)
+	passwordHash, err := svc.HashPassword("current-password")
+	require.NoError(t, err)
+	user := createEmailBindTestUser(t, client, "current@example.com", "current", passwordHash)
+
+	for attempt := 1; attempt <= 5; attempt++ {
+		updatedUser, err := svc.BindEmailIdentity(ctx, user.ID, "new@example.com", "000000", "current-password")
+		if attempt < 5 {
+			require.ErrorIs(t, err, service.ErrInvalidVerifyCode)
+		} else {
+			require.ErrorIs(t, err, service.ErrVerifyCodeMaxAttempts)
+		}
+		require.Nil(t, updatedUser)
+	}
+	_, err = svc.BindEmailIdentity(ctx, user.ID, "new@example.com", "123456", "current-password")
+	require.ErrorIs(t, err, service.ErrVerifyCodeMaxAttempts)
+	storedUser, err := client.User.Get(ctx, user.ID)
+	require.NoError(t, err)
+	require.Equal(t, "current@example.com", storedUser.Email)
+	require.Equal(t, passwordHash, storedUser.PasswordHash)
 }
 
 func TestAuthServiceBindEmailIdentity_RevokesExistingAccessAndRefreshTokens(t *testing.T) {

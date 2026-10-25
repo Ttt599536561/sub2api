@@ -22,6 +22,22 @@ jobs:
 
   test:
     runs-on: ubuntu-latest
+    services:
+      qq-postgres:
+        image: postgres:18.1-alpine3.23
+        env:
+          POSTGRES_USER: qq_ci
+          POSTGRES_PASSWORD: qq_ci_ephemeral
+          POSTGRES_DB: qq_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U qq_ci -d qq_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      QQ_IMAGE_TEST_DATABASE_URL: postgres://qq_ci:qq_ci_ephemeral@127.0.0.1:5432/qq_ci?sslmode=disable
     steps:
       - uses: actions/checkout@v6
       - name: Check Docker Compose simple mode environment

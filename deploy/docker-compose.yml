@@ -96,6 +96,10 @@ services:
       # will be generated on each startup.
       # Generate a secure secret: openssl rand -hex 32
       - JWT_SECRET=${JWT_SECRET:-}
+      # Optional stable 32-byte hex key for QQ image credentials; empty keeps configuration disabled.
+      - QQ_IMAGE_ENCRYPTION_KEY=${QQ_IMAGE_ENCRYPTION_KEY:-}
+      - QQ_IMAGE_EXTERNAL_HELP=${QQ_IMAGE_EXTERNAL_HELP:-false}
+      - QQ_REPLY_TEMPLATE_SYNC_TOKEN=${QQ_REPLY_TEMPLATE_SYNC_TOKEN:-}
       - JWT_EXPIRE_HOUR=${JWT_EXPIRE_HOUR:-24}
 
       # =======================================================================
