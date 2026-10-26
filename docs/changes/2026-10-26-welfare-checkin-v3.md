@@ -54,3 +54,21 @@
 ## 本机收尾
 
 专属PostgreSQL已正常停止且54394无监听。删除本轮专属pgdata、构建dist和英文路径联接的PowerShell调用在启动前被自动审批以`blocked by policy`拒绝，未提供具体原因；实际删除0文件，不改换工具重试。临时数据与联接原位保留，验证日志/overlay、共享依赖缓存及功能工作树保留用于追溯和继续开发。联接`E:/CodexData/sub2-welfare-v3-cache-link`目标是主项目.cache，禁止递归其目标清理。
+
+
+## 2026-10-26 二次独立审查与回归补强
+
+按用户再次审查要求，对`8e5c5d32e..2dc80b418`分别进行后端账务/算法、迁移/回退、前端/公开契约/CI三路独立复核。未发现可复现的P0/P1/P2业务缺陷；独立精确概率计算再次确认首轮期望约$1.25884、第30天单次上限$2。
+
+发现并关闭一项P3：新增`useWelfare.spec.ts`中的v2→v3规则刷新回归原先没有进入`FRONTEND_CRITICAL_VITEST`固定名单。现加入根Makefile，独立复核确认现有backend-ci.yml→make test-frontend→critical的接入链和续行正确。此为CI覆盖修正，不改变用户行为。
+
+另将两处迁移边界补成持久回归：在真实306库、251仍待执行时并发启动两个迁移器，确认两者成功且251只记录一次；针对251迁移历史INSERT注入真实SQL异常，核验program整行、default、CHECK及完整history全部回滚，移除本测试故障后重试成功。均复用受限loopback DSN和随机独立测试库，不改产品SQL或迁移器。
+
+本轮新验证：
+
+- 服务/handler福利专项：155 PASS事件、133叶、0失败、0跳过。
+- 全部福利、251新旧边界、固定r6与旧v0.2.8升级真实PG集成：140 PASS事件、125叶、0失败、0跳过。
+- 前端福利相关14文件146项；本地按修正后的CI critical名单44文件920项，均通过；两范围重叠不相加。
+- repository vet、差异检查和原主目录11份WIP保全复核通过。业务Go/Vue算法实现未变，本轮未重复运行前轮已完成的类型/lint/构建。
+
+本轮测试仍使用原专属E盘PostgreSQL与每次新库，结束已停止且54394无监听。未再次尝试此前被拒绝的目录清理，日志保留在`.cache/welfare-v3-20261026/reaudit-*`。补强代码与本记录以稳定主题`test: strengthen welfare v3 CI and migration coverage`一并本地提交；未合并、推送、发布或部署。

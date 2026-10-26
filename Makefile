@@ -43,6 +43,7 @@ FRONTEND_CRITICAL_VITEST := \
 	src/router/__tests__/feature-access.spec.ts \
 	src/views/auth/__tests__/RegisterView.spec.ts \
 	src/views/auth/__tests__/EmailVerifyView.spec.ts \
+	src/composables/__tests__/useWelfare.spec.ts \
 	src/views/user/__tests__/WelfareView.spec.ts
 
 # 一键编译前后端

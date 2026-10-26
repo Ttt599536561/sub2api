@@ -203,3 +203,108 @@ func TestWelfareCheckinV3MigrationFreshInstall(t *testing.T) {
 	require.Equal(t, history, upstreamAC1B8F1History(t, ctx, db))
 	welfareCheckinV3AssertSchema(t, ctx, db)
 }
+
+func TestWelfareCheckinV3MigrationConcurrentPendingUpgrade(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+	defer cancel()
+	db := upstreamAC1B8F1TestDatabase(t, ctx)
+	require.NoError(t, applyMigrationsFS(ctx, db, upstreamAC1B8F1Target(t)))
+	beforeHistory := upstreamAC1B8F1History(t, ctx, db)
+	require.Len(t, beforeHistory, 306)
+	require.NotContains(t, beforeHistory, welfareCheckinV3Migration)
+
+	// Both startup attempts begin against the released schema, with 251 pending.
+	// The harness's already-migrated database cannot exercise this race.
+	const instances = 2
+	ready := make(chan struct{}, instances)
+	start := make(chan struct{})
+	results := make(chan error, instances)
+	for range instances {
+		go func() {
+			ready <- struct{}{}
+			<-start
+			results <- ApplyMigrations(ctx, db)
+		}()
+	}
+	for range instances {
+		<-ready
+	}
+	close(start)
+	for range instances {
+		require.NoError(t, <-results)
+	}
+
+	history := welfareCheckinV3AssertHistory(t, ctx, db)
+	for name, entry := range beforeHistory {
+		require.Equal(t, entry, history[name], "old checksum and application time: %s", name)
+	}
+	var recorded int
+	require.NoError(t, db.QueryRowContext(ctx, `SELECT count(*) FROM schema_migrations WHERE filename=$1`, welfareCheckinV3Migration).Scan(&recorded))
+	require.Equal(t, 1, recorded, "concurrent startup must record 251 exactly once")
+	welfareCheckinV3AssertSchema(t, ctx, db)
+}
+
+func TestWelfareCheckinV3MigrationRecordFailureRollsBackAndRetries(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+	defer cancel()
+	db := upstreamAC1B8F1TestDatabase(t, ctx)
+	require.NoError(t, applyMigrationsFS(ctx, db, upstreamAC1B8F1Target(t)))
+	beforeHistory := upstreamAC1B8F1History(t, ctx, db)
+	require.Len(t, beforeHistory, 306)
+	require.NotContains(t, beforeHistory, welfareCheckinV3Migration)
+	_, err := db.ExecContext(ctx, `UPDATE welfare_programs SET enabled=true,
+		launch_at='2026-09-01T04:05:06.123456Z',created_at='2026-08-01T01:02:03.123456Z',
+		updated_at='2026-10-01T07:08:09.123456Z' WHERE id=1`)
+	require.NoError(t, err)
+	queries := map[string]string{
+		"program": `SELECT jsonb_agg(to_jsonb(t) ORDER BY id)::text FROM welfare_programs t`,
+		"default": `SELECT column_default FROM information_schema.columns
+			WHERE table_schema='public' AND table_name='welfare_programs' AND column_name='rules_version'`,
+		"constraint": `SELECT pg_get_constraintdef(oid) FROM pg_constraint
+			WHERE conrelid='welfare_programs'::regclass AND conname='welfare_programs_rules_version_check'`,
+	}
+	before := map[string]string{}
+	for name, query := range queries {
+		before[name] = upstreamAC1B8F1Snapshot(t, ctx, db, query)
+	}
+	require.Equal(t, "'v2'::text", before["default"])
+	require.Contains(t, before["constraint"], "rules_version = 'v2'::text")
+
+	// Fail after all of 251's DDL and data changes, at the history insert.
+	// This trigger exists only in this test's randomly named database.
+	_, err = db.ExecContext(ctx, `CREATE FUNCTION reject_welfare_v3_migration_record() RETURNS trigger
+		LANGUAGE plpgsql AS $$
+		BEGIN
+			IF NEW.filename = '251_welfare_checkin_rules_v3.sql' THEN
+				RAISE EXCEPTION 'injected welfare v3 migration record failure' USING ERRCODE = 'P0001';
+			END IF;
+			RETURN NEW;
+		END;
+		$$;
+		CREATE TRIGGER reject_welfare_v3_migration_record BEFORE INSERT ON schema_migrations
+		FOR EACH ROW EXECUTE FUNCTION reject_welfare_v3_migration_record()`)
+	require.NoError(t, err)
+	err = ApplyMigrations(ctx, db)
+	require.ErrorContains(t, err, "record migration "+welfareCheckinV3Migration)
+	require.ErrorContains(t, err, "injected welfare v3 migration record failure")
+	var pgErr *pq.Error
+	require.ErrorAs(t, err, &pgErr)
+	require.Equal(t, pq.ErrorCode("P0001"), pgErr.Code)
+	for name, query := range queries {
+		require.Equal(t, before[name], upstreamAC1B8F1Snapshot(t, ctx, db, query), name+" must roll back with the migration history")
+	}
+	afterFailureHistory := upstreamAC1B8F1History(t, ctx, db)
+	require.Equal(t, beforeHistory, afterFailureHistory)
+	require.NotContains(t, afterFailureHistory, welfareCheckinV3Migration)
+
+	_, err = db.ExecContext(ctx, `DROP TRIGGER reject_welfare_v3_migration_record ON schema_migrations;
+		DROP FUNCTION reject_welfare_v3_migration_record()`)
+	require.NoError(t, err)
+	require.NoError(t, ApplyMigrations(ctx, db))
+	history := welfareCheckinV3AssertHistory(t, ctx, db)
+	for name, entry := range beforeHistory {
+		require.Equal(t, entry, history[name], "retry preserves old checksum and application time: %s", name)
+	}
+	welfareCheckinV3AssertSchema(t, ctx, db)
+	require.JSONEq(t, welfareCheckinV3ExpectedPrograms(t, before["program"]), upstreamAC1B8F1Snapshot(t, ctx, db, queries["program"]))
+}
