@@ -54,3 +54,8 @@
 ## GitHub精确门禁的契约补充
 
 应用4ae80f8ad的CI 40362114869中前端、Linux lint、shell与release helpers成功，完整unit的TestAPIContracts发现两份管理设置wantJSON遗漏qq_binding_enabled/qq_image_enabled，307与309字段不匹配，integration随前置失败跳过。新增字段本身返回正确，现只给两份精确JSON期望各补两个true字段（4行），不改产品逻辑或弱化断言。本地先RED复现，随后11个契约子例、server完整20叶/0失败0skip与Linux目标unit-tag server lint0 issues通过；后续新源码必须重新通过自身CI/安全门禁。
+
+
+## Linux镜像最终交付
+
+本轮源码与契约修正已合入main并推送，应用固定b048bc329a06b227ced2324af6001fc1960e44c8，控制c612676d61a5167b68808acd8a0d2d11e8a476fb；精确CI/安全和发布40366486180全成功。ghcr.io/ttt599536561/sub2api-custom:0.2.18-r1的5份必要artifact及24层/90,240,959字节匿名核验完成，digest `sha256:899cdd8b73f64853c7421ea9f1a441fb2d544c4f47f26488b59f0db9c73f2de9`。新镜像未部署服务器，用户自行更新；正式QQ配置接管仍在原r7上，用户已确认绑定成功。后续保留QQ密钥和EXTERNAL_HELP环境，详见[完整发布记录](../../deploy/CUSTOM_IMAGE_0.2.18-r1.md)。

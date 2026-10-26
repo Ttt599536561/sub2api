@@ -1,14 +1,12 @@
 # Sub2API 二次开发交接
 
-## 2026-10-27 QQ正式接管已确认，新开关/图库待发布
+## 2026-10-27 QQ正式接管已确认，0.2.18-r1 Linux镜像已发布
 
-新应用源码`b048bc329a06b227ced2324af6001fc1960e44c8`（含管理设置契约校正）已合入主目录main并推送；当前准备仅Linux的0.2.18-r1镜像，最终门禁/摘要见[本版发布记录](../deploy/CUSTOM_IMAGE_0.2.18-r1.md)。正式站仍是已接管QQ的r7，用户自行替换镜像后才显示新开关和图库。
+QQ独立开关、绑定诊断和作品图库已整合主目录main并推送，最终应用/OCI `b048bc329a06b227ced2324af6001fc1960e44c8`，控制`c612676d61a5167b68808acd8a0d2d11e8a476fb`。CI 40364270141、Security 40364269888和发布40366486180全成功；镜像`ghcr.io/ttt599536561/sub2api-custom:0.2.18-r1`支持linux/amd64与linux/arm64，digest `sha256:899cdd8b73f64853c7421ea9f1a441fb2d544c4f47f26488b59f0db9c73f2de9`，北京时间2026-10-27 01:21:39已匿名核验5份必要artifact、24个运行层/90,240,959字节与源码/版本/平台。原11份WIP、4份其他untracked及293份旧dist保全。新界面由用户自行替换镜像后生效；[发布记录](../deploy/CUSTOM_IMAGE_0.2.18-r1.md)说明精确来源与升级条件。
 
-用户批准方案后，在codex/qq-controls-gallery-20261026（基于740c0c582）实现系统功能开关qq_binding_enabled/qq_image_enabled、跨站绑定错误提示与作品网格/详情。新业务域层受控，历史订单、免费晚到图、解绑和资金操作保持；完整源码/验证见[本轮记录](changes/2026-10-27-qq-controls-gallery.md)。新界面尚未部署，后续按仅Linux镜像、用户自行更新的方式交付。
+正式QQ已经按用户明确批准接管，应用仍是原r7：独立QQ_IMAGE_ENCRYPTION_KEY与QQ_IMAGE_EXTERNAL_HELP=true、正式配置1及api.tangguo.xin链接；测试配置8已停收且旧密文/数据保留。两库私有备份及配置位于/root/sub2api-deploy/qq-cutover-backup-20261026，原PG/Redis保持。用户已确认新正式链接绑定成功，后续只读正式active_grants=1、测试=0、无在途订单。更新镜像必须保留现有密钥原值和EXTERNAL_HELP，不能双开测试/正式接收器；CF与模板同步源不改。
 
-真实正式站确认运行0.2.17-r7，但之前QQ密钥未设置、配置0；测试配置7仍在线且回复测试域名。经用户明确选择“正式站接管、测试站停止接收”，已私有备份两库/配置，正式只新增独立QQ_IMAGE_ENCRYPTION_KEY及QQ_IMAGE_EXTERNAL_HELP=true并用原r7重建应用，PG/Redis保全；测试追加配置8（停用且AppID空，密文不撤销），认证waiting_config/锁0后正式追加配置1、PublicBaseURL=https://api.tangguo.xin，生产锁1/健康200。用户明确确认正式链接绑定成功，随后只读production active_grants=1、test=0，无在途订单。
-
-后续替换镜像须保留新QQ密钥与这两项环境。测试历史网站/图片保留，CF菜单/智商和测试published模板源不改，生产采用自身默认文案。服务器私有备份/root/sub2api-deploy/qq-cutover-backup-20261026；回退先停正式并等待连接/在途清理后再恢复测试，不倒灌数据库。代理未发送QQ/邮件或收费生成；只把接收锁作为所有权证据，实际绑定成功来自用户确认。
+全程没有代发QQ、邮件或收费生成。新应用没有替换服务器镜像；线上配置接管与镜像发布是分开的完成事项。回退先停新接收器并等待资金/连接静止后再恢复旧站，禁止倒灌数据库；完整实现、审查修复和验证边界见[本轮记录](changes/2026-10-27-qq-controls-gallery.md)。
 
 ## 2026-10-26 上游版本身份更正：r7已包含官方0.2.18基线
 
