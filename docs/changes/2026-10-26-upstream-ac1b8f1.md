@@ -2,7 +2,7 @@
 
 ## 来源与范围
 
-- 上游固定 `ac1b8f1271be0d674fa6f074403c1410f30a3a81`（0.2.17）。拉取时上游main已经更晚，本次按用户明确提交，不扩到后续提交。
+- 上游固定 `ac1b8f1271be0d674fa6f074403c1410f30a3a81`（官方v0.2.18发布提交，原记录误标为0.2.17）。拉取时上游main已经更晚，本次按用户明确提交，不扩到后续提交。
 - 本仓基线 `cda70a59b584932d3de120423112a9b4feb707e5`，含公开r5及完整二开功能；共同祖先 `060d0160417782cd962a0c7f460f6cd4565d4916`。
 - 纳入最新QQ测试站原图投递修复的11份源码/测试，逐文件SHA256与已部署inline快照 `74148a5aae1ec83aeae7d5213e20996ba9ff1f2810da45b87c2c576b460ccc96`一致。详见[已部署修复](2026-10-26-qq-image-delivery.md)。
 - 主目录其余Codex客户端版本/CCSwitch以及本机环境/历史草案WIP保全，不计入本次发布源码。已完成AI定位文档一并归档。
@@ -64,3 +64,12 @@ QQ已上线投递测试中的两个未检查类型断言按lint要求改为明�
 固定应用02f706a193a1b5c79cd43c4ec5aed85a12553293、控制69b52de91a59472f54694b131f013363c818ba06。CI40303821798、安全40303821916和Linux双架构发布40305430958全部success；前述两次失败候选仅作过程记录，不作为最终门禁状态。5份artifact哈希与全部24层/90,204,030字节匿名校验通过，最终digest `sha256:e19bb55853094c3da1df7649b071b8235bba4fcc2164ca7f87c7f463d51155f1`。镜像/升级边界、各架构manifest和完整链接见[r6发布记录](../../deploy/CUSTOM_IMAGE_0.2.17-r6.md)。原WIP已恢复并通过937个后端PASS事件和CCSwitch25项，后续指纹不变；没有生产部署。
 
 最终清理：Git已注销本轮已合并工作树，但目录删除返回Directory not empty；针对该确认残留的原生删除被自动审批blocked by policy拒绝，未给具体原因，保留且未再尝试。PG目录同样保留。完整源码/发布证据/已合并分支/原WIP快照均保留，测试服务和容器已停止。
+
+
+## 2026-10-26 上游发行版本身份更正
+
+只读核实官方GitHub latest release为v0.2.18，annotated tag对象de86961b627e48db75d61fff8c05535d44a00cbe最终指向ac1b8f1271be0d674fa6f074403c1410f30a3a81；git ls-remote的peeled ref得到相同SHA。该提交分别是r6与r7实际应用源码的祖先，r7的rev-list ac1b8f1 --not 70ba0376b为0，没有漏合并该官方发行提交。
+
+误标原因：此tag提交的backend/cmd/server/VERSION仍写0.2.17，但上游.github/release-tools/release_matrix.py的正式发布分支会从tag去掉v，并将0.2.18写入构建工作区VERSION；成功后才另行同步默认分支。二开工作流则显式传入0.2.17-r6/r7并通过Dockerfile的-X main.Version注入。官方发行身份应核对tag对应SHA，不应只根据VERSION文件或二开镜像名称判断。
+
+本次更正仅修改文档与交接，不重合并同一提交，不修改已发布镜像标签、内容、digest或服务器。官方依据：[v0.2.18发布](https://github.com/Wei-Shaw/sub2api/releases/tag/v0.2.18)、[标签对象](https://api.github.com/repos/Wei-Shaw/sub2api/git/tags/de86961b627e48db75d61fff8c05535d44a00cbe)、[固定提交发布版本脚本](https://github.com/Wei-Shaw/sub2api/blob/ac1b8f1271be0d674fa6f074403c1410f30a3a81/.github/release-tools/release_matrix.py)。

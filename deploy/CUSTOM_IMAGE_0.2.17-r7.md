@@ -4,6 +4,8 @@
 
 ## 固定来源
 
+**上游版本身份更正（2026-10-26）**：官方 [v0.2.18](https://github.com/Wei-Shaw/sub2api/releases/tag/v0.2.18) 的标签对象`de86961b627e48db75d61fff8c05535d44a00cbe`指向提交`ac1b8f1271be0d674fa6f074403c1410f30a3a81`，该提交已包含在本镜像源码祖先中。因此本镜像已经合入官方0.2.18发布基线。文件名和镜像中的`0.2.17-r6/r7`属于沿用的二开发行命名；此前将该上游提交标为0.2.17的说明有误。上游标签提交里的VERSION文件仍为0.2.17，官方发布脚本会按tag改写构建工作区版本，本仓发布则显式注入二开版本号。已发布镜像地址、二进制和digest保持不变，本次仅纠正文档。
+
 - 应用源码/OCI revision：`70ba0376bda2dba0279eca74aeb36992804d64df`，基于main原`8e5c5d32e`，包含签到v3实现、二审回归与测试规范修正。
 - 发布控制提交：`b7c83e429c1d4b3abf0f17269f43ed56a2e6edf4`；[r7专用工作流](../.github/workflows/publish-custom-v0217-r7.yml)固定上述应用SHA，要求其最新main/push CI与安全扫描成功。
 - 镜像：`ghcr.io/ttt599536561/sub2api-custom:0.2.17-r7`，运行平台仅`linux/amd64`、`linux/arm64`，原生Ubuntu构建；没有macOS或通用Release任务。
