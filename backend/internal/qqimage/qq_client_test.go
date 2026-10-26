@@ -3,10 +3,12 @@ package qqimage
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -51,7 +53,7 @@ func TestQQClientUploadsThenSendsImageWithPersistentSequence(t *testing.T) {
 			_, _ = io.WriteString(w, `{"file_info":"opaque-media","ttl":60}`)
 		case "/v2/groups/group-1/messages":
 			media, _ := body["media"].(map[string]any)
-			if body["msg_type"] != float64(7) || body["msg_seq"] != float64(2) || body["msg_id"] != "message1" || media["file_info"] != "opaque-media" {
+			if body["msg_type"] != float64(7) || body["content"] != " " || body["msg_seq"] != float64(2) || body["msg_id"] != "message1" || media["file_info"] != "opaque-media" {
 				t.Errorf("invalid image message: %+v", body)
 			}
 			_, _ = io.WriteString(w, `{"id":"receipt1"}`)
@@ -167,5 +169,218 @@ func TestQQClientOversizeImageRemainsPrivateSiteOnly(t *testing.T) {
 	result := c.SendDelivery(context.Background(), qqConfig(), d, "https://site.example.com/api/v1/qq-image/media?token=opaque")
 	if result.Status != "site_only" || result.Reason != "qq_media_too_large" || calls != 0 {
 		t.Fatalf("oversize QQ upload attempted: %+v calls=%d", result, calls)
+	}
+}
+
+func TestQQClientHTTPFailureDiagnosticsIdentifyStageAndCode(t *testing.T) {
+	for _, tt := range []struct {
+		name, path, reason string
+		calls              int
+	}{
+		{"token", "/app/getAppAccessToken", "qq_token_http_400_code_40034004", 1},
+		{"upload", "/v2/groups/group-1/files", "qq_media_upload_http_400_code_40034004", 2},
+		{"send", "/v2/groups/group-1/messages", "qq_message_send_http_400_code_40034004", 3},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			calls := 0
+			c := qqClientServer(t, func(w http.ResponseWriter, r *http.Request) {
+				calls++
+				if r.URL.Path == tt.path {
+					w.WriteHeader(http.StatusBadRequest)
+					_, _ = io.WriteString(w, `{"code":40034004,"message":"secret details","file_info":"secret media","url":"https://site.example.com/?token=private"}`)
+					return
+				}
+				if r.URL.Path == "/app/getAppAccessToken" {
+					_, _ = io.WriteString(w, `{"access_token":"token","expires_in":7200}`)
+					return
+				}
+				_, _ = io.WriteString(w, `{"file_info":"media","ttl":60}`)
+			})
+			result := c.SendDelivery(context.Background(), qqConfig(), qqDelivery(), "https://site.example.com/api/v1/qq-image/media?token=opaque")
+			if result.Status != "site_only" || result.Reason != tt.reason || calls != tt.calls {
+				t.Fatalf("result=%+v calls=%d", result, calls)
+			}
+		})
+	}
+}
+
+func TestQQClientHTTPErrorBodyIsBoundedAndPrivate(t *testing.T) {
+	valid := `{"code":40034004,"message":"secret details"}`
+	for _, tt := range []struct {
+		name, body, suffix string
+	}{
+		{"html", "<html>secret details</html>", ""},
+		{"truncated", `{"code":40034004,"message":"secret`, ""},
+		{"string_code", `{"code":"secret details"}`, ""},
+		{"object_code", `{"code":{"secret":"details"}}`, ""},
+		{"fraction_code", `{"code":400.5}`, ""},
+		{"exponent_code", `{"code":4e7}`, ""},
+		{"overflow_code", `{"code":9223372036854775808}`, ""},
+		{"null_code", `{"code":null}`, ""},
+		{"missing_code", `{"message":"secret details"}`, ""},
+		{"zero_code", `{"code":0}`, "_code_0"},
+		{"at_limit", valid + strings.Repeat(" ", (64<<10)-len(valid)), "_code_40034004"},
+		{"over_limit", valid + strings.Repeat(" ", (64<<10)+1-len(valid)), ""},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			calls := 0
+			c := qqClientServer(t, func(w http.ResponseWriter, r *http.Request) {
+				calls++
+				if r.URL.Path == "/app/getAppAccessToken" {
+					_, _ = io.WriteString(w, `{"access_token":"token","expires_in":7200}`)
+					return
+				}
+				if strings.HasSuffix(r.URL.Path, "/files") {
+					_, _ = io.WriteString(w, `{"file_info":"media","ttl":60}`)
+					return
+				}
+				w.WriteHeader(http.StatusBadRequest)
+				_, _ = io.WriteString(w, tt.body)
+			})
+			result := c.SendDelivery(context.Background(), qqConfig(), qqDelivery(), "https://site.example.com/api/v1/qq-image/media?token=opaque")
+			if result.Status != "site_only" || result.Reason != "qq_message_send_http_400"+tt.suffix || calls != 3 {
+				t.Fatalf("result=%+v calls=%d", result, calls)
+			}
+		})
+	}
+}
+
+func TestQQClientHTTPDiagnosticsPreserveUnknownDelivery(t *testing.T) {
+	for _, tt := range []struct {
+		name, reason string
+		status       int
+	}{
+		{"server_error", "qq_message_send_http_503_code_40034004", http.StatusServiceUnavailable},
+		{"request_timeout", "qq_message_send_http_408_code_40034004", http.StatusRequestTimeout},
+		{"redirect", "qq_message_send_http_302_code_40034004", http.StatusFound},
+		{"network_error", "qq_result_unknown", 0},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			calls := 0
+			c := qqClientServer(t, func(w http.ResponseWriter, r *http.Request) {
+				calls++
+				if r.URL.Path == "/app/getAppAccessToken" {
+					_, _ = io.WriteString(w, `{"access_token":"token","expires_in":7200}`)
+					return
+				}
+				if strings.HasSuffix(r.URL.Path, "/files") {
+					_, _ = io.WriteString(w, `{"file_info":"media","ttl":60}`)
+					return
+				}
+				w.Header().Set("Location", "https://untrusted.example/secret")
+				w.WriteHeader(tt.status)
+				_, _ = io.WriteString(w, `{"code":40034004,"message":"secret details"}`)
+			})
+			if tt.status == 0 {
+				original := c.client.Transport
+				c.client.Transport = roundTripFunc(func(r *http.Request) (*http.Response, error) {
+					if strings.HasSuffix(r.URL.Path, "/messages") {
+						calls++
+						return nil, errors.New("secret transport details")
+					}
+					return original.RoundTrip(r)
+				})
+			}
+			result := c.SendDelivery(context.Background(), qqConfig(), qqDelivery(), "https://site.example.com/api/v1/qq-image/media?token=opaque")
+			if result.Status != "unknown" || result.Reason != tt.reason || calls != 3 {
+				t.Fatalf("uncertain delivery was changed or retried: result=%+v calls=%d", result, calls)
+			}
+		})
+	}
+}
+
+func TestQQClientTextHTTPDiagnosticsPreserveCustomContent(t *testing.T) {
+	calls := 0
+	const content = "用户自定义文案"
+	c := qqClientServer(t, func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		if r.URL.Path == "/app/getAppAccessToken" {
+			_, _ = io.WriteString(w, `{"access_token":"token","expires_in":7200}`)
+			return
+		}
+		var body map[string]any
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		if body["content"] != content || body["msg_seq"] != float64(1) || body["msg_type"] != float64(0) {
+			t.Errorf("custom text changed: %+v", body)
+		}
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = io.WriteString(w, `{"code":40034004,"message":"secret details"}`)
+	})
+	event := &QQEvent{MessageID: "msg", Identity: qqDelivery().Order.Identity, CreatedAt: time.Now()}
+	result := c.SendText(context.Background(), qqConfig(), event, content, 1)
+	if result.Status != "failed" || result.Reason != "qq_message_send_http_400_code_40034004" || calls != 2 {
+		t.Fatalf("result=%+v calls=%d", result, calls)
+	}
+}
+
+func TestQQClientSlowHTTPErrorBodyHonorsTimeout(t *testing.T) {
+	for _, tt := range []struct {
+		name, status, reason string
+		httpStatus           int
+		clientTimeout        bool
+	}{
+		{"client_400", "site_only", "qq_message_send_http_400", http.StatusBadRequest, true},
+		{"client_503", "unknown", "qq_message_send_http_503", http.StatusServiceUnavailable, true},
+		{"context_400", "site_only", "qq_message_send_http_400", http.StatusBadRequest, false},
+		{"context_503", "unknown", "qq_message_send_http_503", http.StatusServiceUnavailable, false},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			var calls, messages atomic.Int32
+			finished := make(chan struct{}, 1)
+			c := qqClientServer(t, func(w http.ResponseWriter, r *http.Request) {
+				calls.Add(1)
+				if r.URL.Path == "/app/getAppAccessToken" {
+					_, _ = io.WriteString(w, `{"access_token":"token","expires_in":7200}`)
+					return
+				}
+				if strings.HasSuffix(r.URL.Path, "/files") {
+					_, _ = io.WriteString(w, `{"file_info":"media","ttl":60}`)
+					return
+				}
+				messages.Add(1)
+				flusher, ok := w.(http.Flusher)
+				if !ok {
+					t.Error("test response writer does not support flushing")
+					return
+				}
+				w.WriteHeader(tt.httpStatus)
+				flusher.Flush()
+				_, _ = io.WriteString(w, `{"code":40034004,"message":"secret unfinished body`)
+				flusher.Flush()
+				<-r.Context().Done()
+				select {
+				case finished <- struct{}{}:
+				default:
+				}
+			})
+			// Warm the local TLS connection and token before timing body cancellation.
+			if _, reason := c.token(context.Background(), qqConfig()); reason != "" {
+				t.Fatalf("token setup failed: %s", reason)
+			}
+			const shortTimeout = 250 * time.Millisecond
+			const outerTimeout = 2 * time.Second
+			deadline := shortTimeout
+			c.client.Timeout = outerTimeout
+			if tt.clientTimeout {
+				c.client.Timeout = shortTimeout
+				deadline = outerTimeout
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), deadline)
+			defer cancel()
+			started := time.Now()
+			result := c.SendDelivery(ctx, qqConfig(), qqDelivery(), "https://site.example.com/api/v1/qq-image/media?token=opaque")
+			elapsed := time.Since(started)
+			if result.Status != tt.status || result.Reason != tt.reason || calls.Load() != 3 || messages.Load() != 1 {
+				t.Fatalf("slow error body changed classification or retried: result=%+v calls=%d messages=%d", result, calls.Load(), messages.Load())
+			}
+			if elapsed >= outerTimeout {
+				t.Fatalf("error body exceeded bounded timeout: %v", elapsed)
+			}
+			select {
+			case <-finished:
+			case <-time.After(time.Second):
+				t.Fatal("server request did not finish after cancellation")
+			}
+		})
 	}
 }

@@ -404,37 +404,59 @@ func TestGatewayResumeAllowsReplayBeforeResumed(t *testing.T) {
 func TestGatewaySlowBusinessDoesNotBlockHeartbeatAndCancellationJoins(t *testing.T) {
 	entered := make(chan struct{})
 	exited := make(chan struct{})
-	heartbeats := make(chan struct{}, 5)
-	_, cancel, done := gatewayFake(t, func(c *websocket.Conn, n int) {
-		gatewayHello(t, c, 15)
+	heartbeats := make(chan struct{}, 3)
+	g, cancel, done := gatewayFake(t, func(c *websocket.Conn, _ int) {
+		// Request heartbeats explicitly so scheduler jitter cannot trigger an
+		// unrelated 15ms ACK timeout while testing the blocked business worker.
+		gatewayHello(t, c, 300000)
 		gatewaySend(t, c, `{"op":0,"t":"READY","s":1,"d":{"session_id":"session"}}`)
 		gatewaySend(t, c, `{"op":0,"t":"GROUP_AT_MESSAGE_CREATE","s":2,"d":{}}`)
-		for {
+		select {
+		case <-entered:
+		case <-time.After(time.Second):
+			t.Error("business dispatch did not start")
+			return
+		}
+		for i := 0; i < 3; i++ {
+			if !gatewaySend(t, c, `{"op":1}`) {
+				return
+			}
 			m := gatewayRead(c)
 			if m == nil {
 				return
 			}
-			if string(m["op"]) == "1" {
-				if string(m["d"]) != "2" {
-					t.Error("heartbeat must report the latest received sequence while business is pending")
-				}
-				gatewaySend(t, c, `{"op":11}`)
-				select {
-				case heartbeats <- struct{}{}:
-				default:
-				}
+			if string(m["op"]) != "1" || string(m["d"]) != "2" {
+				t.Error("heartbeat must report the latest received sequence while business is pending")
 			}
+			if !gatewaySend(t, c, `{"op":11}`) {
+				return
+			}
+			heartbeats <- struct{}{}
+		}
+		for gatewayRead(c) != nil {
 		}
 	}, func(ctx context.Context, _ []byte) error {
 		close(entered)
 		defer close(exited)
 		<-ctx.Done()
 		return ctx.Err()
+	}, func(g *Gateway) {
+		// An unexpected disconnect must fail this single-connection test,
+		// rather than replay its one-shot dispatch on a new connection.
+		g.wait = func(context.Context, time.Duration) bool { return false }
 	})
-	<-entered
+	select {
+	case <-entered:
+	case <-done:
+		t.Fatalf("gateway stopped before dispatch: %s", g.Status().ErrorCode)
+	case <-time.After(time.Second):
+		t.Fatal("business dispatch did not start")
+	}
 	for i := 0; i < 3; i++ {
 		select {
 		case <-heartbeats:
+		case <-done:
+			t.Fatalf("gateway stopped during blocked dispatch: %s", g.Status().ErrorCode)
 		case <-time.After(time.Second):
 			t.Fatal("business blocked heartbeat")
 		}

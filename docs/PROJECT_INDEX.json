@@ -1,0 +1,394 @@
+{
+  "schema_version": 1,
+  "purpose": "AI task routing; identities and boundaries, not live deployment state",
+  "verified_local_on": "2026-10-26",
+  "timezone": "Asia/Shanghai",
+  "canonical_file": "E:/sub2二次开发项目/docs/PROJECT_INDEX.json",
+  "startup_rules": "E:/sub2二次开发项目/docs/AI_START_HERE.md",
+  "repositories": {
+    "sub2api": {
+      "aliases": [
+        "sub2",
+        "sub2api",
+        "Sub API",
+        "Sub2二开",
+        "主项目",
+        "糖果API"
+      ],
+      "root": "E:/sub2二次开发项目",
+      "env_script": "E:/sub2二次开发项目/tools/project-env.ps1",
+      "context": "docs/AI_CONTEXT.md",
+      "handoff": "docs/HANDOFF.md",
+      "changelog": "CHANGELOG.md",
+      "git_remote": "https://github.com/Ttt599536561/sub2api",
+      "purpose": "Go/Gin/Ent + Vue 管理与API平台；用户、余额、渠道、福利及QQ付费生图业务",
+      "data": [
+        "PostgreSQL",
+        "Redis"
+      ],
+      "services": [
+        "sub2-web",
+        "qq-image"
+      ],
+      "source_selection": "默认主目录；QQ功能已合入main。已有工作树只是同仓checkout，不因名称含QQ就切回旧工作树。",
+      "known_checkouts": [
+        {
+          "path": "E:/sub2二次开发项目/.worktrees/qq-image-generation-20261023",
+          "branch": "codex/qq-image-generation-20261023",
+          "role": "retained_feature_worktree",
+          "default_for_new_tasks": false
+        }
+      ],
+      "legacy_path": {
+        "path": "C:/Users/Administrator/Desktop/Sub2api",
+        "kind": "junction_to_canonical_root_verified_2026-10-26",
+        "instruction": "执行命令使用E盘canonical root；不是第三个项目，禁止递归清理联接目标。"
+      }
+    },
+    "ai-check": {
+      "aliases": [
+        "智商检测",
+        "智商检测站",
+        "AI检测站",
+        "降智检测",
+        "模型观测",
+        "鹈鹕检测"
+      ],
+      "root": "E:/CodexData/sites/ai-check-20261011",
+      "env_script": "E:/CodexData/sites/ai-check-20261011/tools/project-env.ps1",
+      "context": "docs/AI_CONTEXT.md",
+      "handoff": "docs/HANDOFF.md",
+      "changelog": "docs/CHANGELOG.md",
+      "git_remote": null,
+      "git_publish_note": "独立Git历史，Sites工具提供发布流程；remote为空不代表没有仓库，也不能推到Sub2远程。",
+      "purpose": "统一鹈鹕HTML动画任务的模型输出观测、分类、公开展示及QQ截图查询",
+      "data": [
+        "Cloudflare D1",
+        "Cloudflare R2",
+        "Cloudflare SQLite Durable Objects"
+      ],
+      "services": [
+        "ai-site",
+        "ai-generation",
+        "ai-scheduler",
+        "qq-menu-iq"
+      ]
+    }
+  },
+  "services": {
+    "sub2-web": {
+      "repository": "sub2api",
+      "kind": "application",
+      "source": [
+        "backend",
+        "frontend"
+      ],
+      "owns": [
+        "登录/邮箱/SMTP",
+        "账户/余额/渠道",
+        "福利中心",
+        "Sub2管理后台"
+      ],
+      "deployment_unit": "Sub2 Docker application; choose production or qq-test explicitly"
+    },
+    "qq-image": {
+      "repository": "sub2api",
+      "kind": "embedded_business_module",
+      "aliases": [
+        "QQ群生图",
+        "QQ生图项目",
+        "生图机器人",
+        "QQ绑定",
+        "生图订单"
+      ],
+      "source": [
+        "backend/internal/qqimage",
+        "backend/internal/handler/qq_image_handler.go",
+        "backend/internal/server/routes/qq_image.go",
+        "frontend/src/views/user/QQBindView.vue",
+        "frontend/src/views/user/QQOrdersView.vue",
+        "frontend/src/views/admin/WelfareSettingsView.vue",
+        "frontend/src/components/admin/QQImagePanel.vue",
+        "frontend/src/components/admin/QQReplyTemplatesPanel.vue"
+      ],
+      "owns": [
+        "QQ群识别/白名单",
+        "网站账号绑定/授权",
+        "余额冻结与结算",
+        "生图订单",
+        "调用生图上游",
+        "图片保存/投递/重发",
+        "生图侧QQ连接",
+        "回复模板管理与发布"
+      ],
+      "deployment_unit": "same Sub2 application; not an independent repository or Cloudflare Worker",
+      "commands": [
+        "/识别群",
+        "/绑定",
+        "/确认绑定",
+        "/生图帮助",
+        "/生图",
+        "/任务",
+        "/重发"
+      ],
+      "data": "selected Sub2 instance PostgreSQL/Redis; generated images currently PostgreSQL, not AI-site R2",
+      "evidence": [
+        "docs/changes/2026-10-23-qq-unified-menu.md",
+        "deploy/CUSTOM_IMAGE_0.2.17-r5.md"
+      ]
+    },
+    "ai-site": {
+      "repository": "ai-check",
+      "kind": "Sites_application",
+      "source": [
+        "app",
+        "components",
+        "lib",
+        "db",
+        "drizzle"
+      ],
+      "owns": [
+        "检测站首页/后台",
+        "公开分组",
+        "正常率/历史色块",
+        "作品/隔离预览",
+        "新渠道私有试测",
+        "智商截图页面"
+      ],
+      "deployment_unit": "Sites",
+      "identity_file": ".openai/hosting.json",
+      "project_id": "appgprj_6aca68522b7c8191bf45695159c33b7e",
+      "url": "https://ai-check-sub2-20261011.new-crane-6476.chatgpt.site",
+      "data": "own D1/R2; does not share Sub2 users, balances, orders or SMTP"
+    },
+    "ai-generation": {
+      "repository": "ai-check",
+      "kind": "Cloudflare_Worker",
+      "source": [
+        "cloudflare-generation/worker.ts",
+        "lib/direct-generation.ts"
+      ],
+      "config": "cloudflare-generation/wrangler.jsonc",
+      "deployment_unit": "oneapi-observer-generation",
+      "url": "https://oneapi-observer-generation.qkb964199910.workers.dev",
+      "owns": [
+        "统一题目HTML作品直连生成",
+        "每任务DO恢复",
+        "生成后分类协调"
+      ],
+      "not": "QQ付费图片生成；其generation名称不代表QQ群生图服务"
+    },
+    "ai-scheduler": {
+      "repository": "ai-check",
+      "kind": "Cloudflare_Worker",
+      "source": [
+        "cloudflare-cron/worker.ts",
+        "lib/station-schedule.ts",
+        "app/api/automation/tick/route.ts"
+      ],
+      "config": "cloudflare-cron/wrangler.jsonc",
+      "deployment_unit": "oneapi-observer-cron",
+      "url": "https://oneapi-observer-cron.qkb964199910.workers.dev",
+      "cron_utc": "*/30 0-17,23 * * *",
+      "owns": "模型自动检测，每30分钟，北京时间[02:00,07:00)暂停"
+    },
+    "qq-menu-iq": {
+      "repository": "ai-check",
+      "kind": "Cloudflare_Worker",
+      "aliases": [
+        "统一菜单",
+        "裸@菜单",
+        "智商QQ机器人",
+        "Cloudflare QQ网关"
+      ],
+      "source": [
+        "cloudflare-qq/worker.ts",
+        "cloudflare-qq/qq-gateway.ts",
+        "cloudflare-qq/observer.ts",
+        "cloudflare-qq/reply-templates.ts",
+        "cloudflare-qq/gateway-watchdog.ts",
+        "cloudflare-qq/gateway-health.ts"
+      ],
+      "config": "cloudflare-qq/wrangler.jsonc",
+      "deployment_unit": "oneapi-observer-qq",
+      "url": "https://oneapi-observer-qq.qkb964199910.workers.dev",
+      "owns": [
+        "裸@、通用帮助/菜单、未知指令",
+        "智商查询与Browser Run截图",
+        "菜单侧QQ WebSocket/心跳/重连",
+        "QQ网关日志/状态告警"
+      ],
+      "commands": [
+        "bare mention",
+        "/帮助",
+        "/菜单",
+        "/智商"
+      ],
+      "cron_utc": "* * * * *",
+      "cron_purpose": "全天QQ网关巡检；不触发模型、截图或QQ消息",
+      "diagnostics": [
+        "GET /admin/gateway/status (QQ_ADMIN_TOKEN)",
+        "GET /admin/status (QQ_ADMIN_TOKEN)"
+      ],
+      "not": "绑定、余额或订单服务；不代理/转发生图请求到Go"
+    }
+  },
+  "sub2_environments": {
+    "production": {
+      "url": "https://api.tangguo.xin",
+      "purpose": "正式Sub2用户与业务",
+      "deployment_evidence": "docs/HANDOFF.md",
+      "live_state": "must_read_before_change"
+    },
+    "qq-test": {
+      "url": "https://qq-test.tangguo.xin",
+      "purpose": "独立Sub2验收栈，用于QQ生图联调",
+      "remote_root": "/srv/sub2-qq-test",
+      "cohosted_with": "production (last deployment record)",
+      "isolation": "separate application, PostgreSQL, Redis, config and data; not a separate source repository",
+      "deployment_evidence": "docs/changes/2026-10-23-qq-remote-acceptance.md",
+      "live_state": "must_read_before_change"
+    }
+  },
+  "relationships": [
+    {
+      "from": "QQ platform",
+      "to": [
+        "qq-menu-iq",
+        "qq-image"
+      ],
+      "meaning": "共享用户可见机器人，两套独立接收与处理程序；一个在线不证明另一个在线"
+    },
+    {
+      "from": "qq-menu-iq",
+      "to": "ai-site",
+      "meaning": "GET /api/station 读取分组；Browser Run截图 /capture?group=；只查已有作品"
+    },
+    {
+      "from": "qq-menu-iq",
+      "to": "sub2-web",
+      "meaning": "只读已发布回复模板；固定来源 https://qq-test.tangguo.xin/api/v1/qq-image/reply-templates/published；专用同步令牌，不是生图转发"
+    },
+    {
+      "from": "sub2-web",
+      "to": "qq-menu-iq",
+      "meaning": "模板同步诊断读取 /internal/reply-templates/status，使用专用同步权限；只读元数据，不转发生图"
+    },
+    {
+      "from": "ai-site",
+      "to": "qq-menu-iq",
+      "meaning": "可选 /api/qq/webhook 转发原始QQ回调至固定Worker；当前主动WebSocket不依赖此入口"
+    },
+    {
+      "from": "qq-image",
+      "to": "configured image API",
+      "meaning": "用户授权/余额/订单控制下发起图片生成，与检测站生成Worker无关"
+    },
+    {
+      "from": "ai-scheduler",
+      "to": "ai-site",
+      "meaning": "受保护 /api/automation/tick；半小时和夜间规则"
+    },
+    {
+      "from": "ai-site",
+      "to": "ai-generation",
+      "meaning": "按scope/id派发、查询、取消HTML任务；服务间认证"
+    },
+    {
+      "from": "ai-generation",
+      "to": "configured model API and manxue.ai",
+      "meaning": "直接模型生成HTML；manxue只分类HTML，不接收真实生成凭据"
+    }
+  ],
+  "routing_examples": [
+    {
+      "request": "单独@没有菜单 / Cloudflare QQ断线",
+      "services": [
+        "qq-menu-iq"
+      ]
+    },
+    {
+      "request": "/生图无反应 / 余额 / 绑定验证码 / 生图订单",
+      "services": [
+        "qq-image",
+        "sub2-web"
+      ],
+      "secondary": "若紧邻指令或归属异常，同时核对qq-menu-iq的静默分流"
+    },
+    {
+      "request": "智商查询截图错误",
+      "services": [
+        "qq-menu-iq",
+        "ai-site"
+      ]
+    },
+    {
+      "request": "检测站分组 / 正常率 / 鹈鹕 / 色块",
+      "services": [
+        "ai-site"
+      ]
+    },
+    {
+      "request": "自动检测次数或夜间时间",
+      "services": [
+        "ai-scheduler",
+        "ai-site"
+      ]
+    },
+    {
+      "request": "QQ心跳巡检频率或重连告警",
+      "services": [
+        "qq-menu-iq"
+      ]
+    },
+    {
+      "request": "统一菜单文字 / 智商回复文字",
+      "services": [
+        "qq-image",
+        "qq-menu-iq"
+      ],
+      "secondary": "先分清后台已发布文案编辑，还是默认文案/同步协议改动"
+    },
+    {
+      "request": "新渠道试测 / 检测站生成失败",
+      "services": [
+        "ai-site",
+        "ai-generation"
+      ]
+    },
+    {
+      "request": "Sub2镜像 / GitHub Linux构建",
+      "services": [
+        "sub2-web",
+        "qq-image"
+      ],
+      "secondary": "不会更新Cloudflare QQ或Sites"
+    }
+  ],
+  "ambiguous_terms": {
+    "QQ机器人": "ask or inspect whether menu/iq or binding/image; generic silence requires both services",
+    "生图/生成": "use QQ/order/balance context versus pelican/HTML/检测站 context; otherwise clarify",
+    "测试站": "qq-test domain is Sub2; 检测站 means ai-check, not a staging alias",
+    "后台/正式站/主项目": "resolve domain and repository from task/session before any deployment/data write",
+    "image-2/iamge-2/即梦": "other app projects outside this registry; do not map them to QQ-image without evidence"
+  },
+  "freshness": {
+    "identity_authority": "this registry + repository AGENTS/AI_CONTEXT",
+    "implementation_authority": "current source and configuration; read source before behavior changes",
+    "deployment_authority": "dated per-service HANDOFF/release evidence followed by live read-only verification when operating",
+    "historical_checkpoints": [
+      {
+        "date": "2026-10-25",
+        "repository": "sub2api",
+        "meaning": "r5 Linux image published, QQ merged main; does not prove production upgraded",
+        "evidence": "deploy/CUSTOM_IMAGE_0.2.17-r5.md"
+      },
+      {
+        "date": "2026-10-25",
+        "repository": "ai-check",
+        "meaning": "QQ gateway recovery deployed and natural Cron verified; source contains uncommitted QQ WIP",
+        "evidence": "docs/QQ_GATEWAY_RECOVERY_2026-10-25.md"
+      }
+    ]
+  }
+}

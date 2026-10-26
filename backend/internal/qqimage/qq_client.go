@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -16,6 +17,18 @@ import (
 )
 
 const qqAPIBase = "https://api.bot.qq.com"
+
+// Keep Base64 and JSON overhead below QQ's 5 MB inline request limit.
+// This is deliberately smaller than the independent 5 MiB image limit.
+const maxQQInlineArtifactBytes int64 = 3_500_000
+
+type qqRequestStage string
+
+const (
+	qqStageToken       qqRequestStage = "token"
+	qqStageMediaUpload qqRequestStage = "media_upload"
+	qqStageMessageSend qqRequestStage = "message_send"
+)
 
 type QQSendResult struct{ Status, Reason string }
 type QQSender interface {
@@ -44,7 +57,7 @@ func (c *QQClient) currentTime() time.Time {
 	}
 	return time.Now()
 }
-func (c *QQClient) doJSON(ctx context.Context, path, token string, body any) (map[string]json.RawMessage, bool, string) {
+func (c *QQClient) doJSON(ctx context.Context, stage qqRequestStage, path, token string, body any) (map[string]json.RawMessage, bool, string) {
 	raw, err := json.Marshal(body)
 	if err != nil {
 		return nil, false, "qq_invalid_request"
@@ -69,7 +82,19 @@ func (c *QQClient) doJSON(ctx context.Context, path, token string, body any) (ma
 	}
 	defer func() { _ = response.Body.Close() }()
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
-		return nil, response.StatusCode >= 500 || response.StatusCode == 408 || response.StatusCode < 400, fmt.Sprintf("qq_http_%d", response.StatusCode)
+		reason := fmt.Sprintf("qq_%s_http_%d", stage, response.StatusCode)
+		// Persist only our fixed stage and numeric protocol fields. QQ messages
+		// and other response fields can contain credentials or private URLs.
+		if data, readErr := boundedRead(response.Body, 64<<10); readErr == nil {
+			var failure struct {
+				Code *int64 `json:"code"`
+			}
+			if json.Unmarshal(data, &failure) == nil && failure.Code != nil {
+				reason += fmt.Sprintf("_code_%d", *failure.Code)
+			}
+		}
+		// A diagnostic code cannot establish whether an uncertain send happened.
+		return nil, response.StatusCode >= 500 || response.StatusCode == 408 || response.StatusCode < 400, reason
 	}
 	data, err := boundedRead(response.Body, 64<<10)
 	if err != nil {
@@ -102,7 +127,7 @@ func (c *QQClient) token(ctx context.Context, config *RuntimeConfig) (string, st
 	if token, ok := c.tokens[cacheKey]; ok && now.Add(time.Minute).Before(token.expires) {
 		return token.value, ""
 	}
-	result, _, reason := c.doJSON(ctx, "/app/getAppAccessToken", "", map[string]string{"appId": config.AppID, "clientSecret": config.BotSecret})
+	result, _, reason := c.doJSON(ctx, qqStageToken, "/app/getAppAccessToken", "", map[string]string{"appId": config.AppID, "clientSecret": config.BotSecret})
 	if reason != "" {
 		return "", reason
 	}
@@ -149,7 +174,7 @@ func (c *QQClient) SendText(ctx context.Context, config *RuntimeConfig, event *Q
 		return QQSendResult{Status: "failed", Reason: reason}
 	}
 	body := map[string]any{"msg_type": 0, "content": content, "msg_id": event.MessageID, "msg_seq": sequence}
-	response, unknown, reason := c.doJSON(ctx, "/v2/groups/"+url.PathEscape(event.Identity.GroupID)+"/messages", token, body)
+	response, unknown, reason := c.doJSON(ctx, qqStageMessageSend, "/v2/groups/"+url.PathEscape(event.Identity.GroupID)+"/messages", token, body)
 	if reason != "" {
 		status := "failed"
 		if unknown {
@@ -180,6 +205,29 @@ func (c *QQClient) SendDelivery(ctx context.Context, config *RuntimeConfig, deli
 	if err != nil || target.Path != "/api/v1/qq-image/media" || target.Query().Get("token") == "" || len(target.Query()) != 1 {
 		return fallback("qq_media_url_invalid")
 	}
+	uploadBody := map[string]any{"file_type": 1, "srv_send_msg": false}
+	if artifact := delivery.Artifact; artifact != nil {
+		if len(artifact.Data) == 0 || int64(len(artifact.Data)) != delivery.ArtifactBytes {
+			return fallback("qq_media_data_invalid")
+		}
+		filename := ""
+		switch artifact.MIME {
+		case "image/png":
+			filename = "image.png"
+		case "image/jpeg":
+			filename = "image.jpg"
+		case "image/webp": // Preserve the existing URL path; never transcode originals.
+		default:
+			return fallback("qq_media_type_unsupported")
+		}
+		if filename != "" && delivery.ArtifactBytes <= maxQQInlineArtifactBytes {
+			uploadBody["file_data"] = base64.StdEncoding.EncodeToString(artifact.Data)
+			uploadBody["file_name"] = filename
+		}
+	}
+	if _, inline := uploadBody["file_data"]; !inline {
+		uploadBody["url"] = mediaURL
+	}
 	token, reason := c.token(ctx, config)
 	if reason != "" {
 		return fallback(reason)
@@ -187,7 +235,7 @@ func (c *QQClient) SendDelivery(ctx context.Context, config *RuntimeConfig, deli
 	path := "/v2/groups/" + url.PathEscape(delivery.Order.Identity.GroupID)
 	// srv_send_msg=false makes an ambiguous upload harmless: it cannot itself
 	// publish a message. Only the subsequent send can have unknown delivery.
-	upload, _, reason := c.doJSON(ctx, path+"/files", token, map[string]any{"file_type": 1, "url": mediaURL, "srv_send_msg": false})
+	upload, _, reason := c.doJSON(ctx, qqStageMediaUpload, path+"/files", token, uploadBody)
 	if reason != "" {
 		return fallback(reason)
 	}
@@ -196,7 +244,8 @@ func (c *QQClient) SendDelivery(ctx context.Context, config *RuntimeConfig, deli
 	if fileInfo == "" || len(fileInfo) > 32768 {
 		return fallback("qq_missing_media_receipt")
 	}
-	response, unknown, reason := c.doJSON(ctx, path+"/messages", token, map[string]any{"msg_type": 7, "media": map[string]string{"file_info": fileInfo}, "msg_id": delivery.ReplyMessageID, "msg_seq": delivery.ReplySequence})
+	// QQ requires content for group messages, including media-only messages.
+	response, unknown, reason := c.doJSON(ctx, qqStageMessageSend, path+"/messages", token, map[string]any{"msg_type": 7, "content": " ", "media": map[string]string{"file_info": fileInfo}, "msg_id": delivery.ReplyMessageID, "msg_seq": delivery.ReplySequence})
 	if reason != "" {
 		if unknown {
 			return QQSendResult{Status: "unknown", Reason: reason}

@@ -170,10 +170,11 @@ func (s *Store) ClaimDelivery(ctx context.Context, owner string, lease time.Dura
 				return e
 			}
 			var artifactBytes int64
-			if e = tx.QueryRowContext(ctx, `SELECT octet_length(artifact) FROM qq_image_orders WHERE id=$1`, oid).Scan(&artifactBytes); e != nil {
+			var artifactMIME string
+			if e = tx.QueryRowContext(ctx, `SELECT octet_length(artifact),artifact_mime FROM qq_image_orders WHERE id=$1`, oid).Scan(&artifactBytes, &artifactMIME); e != nil {
 				return e
 			}
-			out = &Delivery{ID: id, Order: o, LeaseToken: lt, ReplyMessageID: msg, ReplySequence: seq, ReplyCreatedAt: created, ArtifactBytes: artifactBytes}
+			out = &Delivery{ID: id, Order: o, LeaseToken: lt, ReplyMessageID: msg, ReplySequence: seq, ReplyCreatedAt: created, ArtifactBytes: artifactBytes, ArtifactMIME: artifactMIME}
 			return nil
 		}
 		return nil

@@ -6,8 +6,11 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"net/http"
 	"net/url"
+	"regexp"
+	"strconv"
 	"strings"
 	"time"
 	"unicode"
@@ -192,14 +195,55 @@ func (h *QQCommandHandler) handleEvent(ctx context.Context, runtime *RuntimeConf
 		replyContext, cancel := context.WithTimeout(ctx, 20*time.Second)
 		defer cancel()
 		result := h.sender.SendText(replyContext, runtime, event, content, 1)
+		logQQCommandReplyResult(command, content, 1, result)
 		// A known rejection of a link can safely use the manual short-code flow.
 		// Unknown receipts are never automatically retried with a new sequence.
 		if manual != "" && result.Status == "failed" {
-			h.sender.SendText(replyContext, runtime, event, manual, 2)
+			manualResult := h.sender.SendText(replyContext, runtime, event, manual, 2)
+			logQQCommandReplyResult(command, manual, 2, manualResult)
 		}
 	}
 	return nil, nil
 }
+
+var qqReplyHTTPReasonPattern = regexp.MustCompile(`^qq_(?:token|media_upload|message_send)_http_([1-5][0-9]{2})(?:_code_(-?[0-9]{1,19}))?$`)
+
+func safeQQCommandReplyReason(reason string) string {
+	switch reason {
+	case "qq_invalid_request", "qq_result_unknown", "qq_invalid_response", "qq_credentials_unavailable", "qq_invalid_token_response", "qq_reply_ineligible", "qq_missing_receipt", "qq_media_too_large", "qq_media_origin_invalid", "qq_media_url_invalid", "qq_missing_media_receipt":
+		return reason
+	}
+	validCode := func(code string) bool {
+		value, err := strconv.ParseInt(code, 10, 64)
+		return err == nil && strconv.FormatInt(value, 10) == code
+	}
+	if strings.HasPrefix(reason, "qq_error_") && validCode(strings.TrimPrefix(reason, "qq_error_")) {
+		return reason
+	}
+	if match := qqReplyHTTPReasonPattern.FindStringSubmatch(reason); match != nil && match[1][0] != '2' && (match[2] == "" || validCode(match[2])) {
+		return reason
+	}
+	return "qq_unclassified"
+}
+
+func logQQCommandReplyResult(command, content string, sequence int, result QQSendResult) {
+	if result.Status != "failed" && result.Status != "unknown" {
+		return
+	}
+	switch command {
+	case "/绑定", "/确认绑定", "/帮助", "/生图帮助", "/生图", "/任务", "/重发":
+	default:
+		command = "unknown"
+	}
+	// Only fixed command/status/reason values and content metadata enter logs.
+	// The committed business event is never retried because a text reply failed.
+	lower := strings.ToLower(content)
+	slog.Warn("QQ command reply not confirmed", "command", command, "reply_sequence", sequence,
+		"status", result.Status, "reason", safeQQCommandReplyReason(result.Reason),
+		"has_url", strings.Contains(lower, "https://") || strings.Contains(lower, "http://"),
+		"length", utf8.RuneCountInString(content))
+}
+
 func splitQQCommand(content string) (string, string) {
 	content = strings.TrimSpace(content)
 	// Reserve the help prefix so a misspelled help command cannot create a paid

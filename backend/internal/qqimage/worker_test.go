@@ -90,6 +90,9 @@ func (s *workerMemoryStore) CreateMediaGrant(ctx context.Context, id, token stri
 	s.media++
 	return "opaque", nil
 }
+func (s *workerMemoryStore) ReadMedia(context.Context, string) (*Artifact, error) {
+	return &Artifact{Data: []byte{1}, MIME: "image/png"}, nil
+}
 
 type workerGenerator struct {
 	calls    int
@@ -188,6 +191,8 @@ func TestWorkerDeliveryUsesExistingArtifactAndPrivateGrant(t *testing.T) {
 	store.order.Status = "succeeded"
 	store.delivery = qqDelivery()
 	store.delivery.Order.ConfigID = 42
+	store.delivery.ArtifactBytes = 1
+	store.delivery.ArtifactMIME = "image/png"
 	generator := &workerGenerator{}
 	sender := &workerSender{status: "unknown"}
 	worker := NewWorker(store, generator, sender)

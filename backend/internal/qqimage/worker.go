@@ -25,6 +25,7 @@ type WorkerStore interface {
 	ClaimDelivery(context.Context, string, time.Duration) (*Delivery, error)
 	CompleteDelivery(context.Context, string, string, string, string) error
 	CreateMediaGrant(context.Context, string, string) (string, error)
+	ReadMedia(context.Context, string) (*Artifact, error)
 }
 type Worker struct {
 	store     WorkerStore
@@ -169,34 +170,63 @@ func (w *Worker) generate(ctx context.Context, order *Order) error {
 	return err
 }
 func (w *Worker) deliver(ctx context.Context, delivery *Delivery) error {
-	result := QQSendResult{Status: "site_only", Reason: "qq_delivery_unavailable"}
-	if delivery.Order != nil && w.sender != nil {
-		config, err := w.store.DeliveryConfig(ctx, delivery.Order.ConfigID)
-		if err == nil && config != nil {
-			base, baseErr := safeHTTPSURL(config.PublicBaseURL, "")
-			if baseErr == nil {
-				token, tokenErr := w.store.CreateMediaGrant(ctx, delivery.ID, delivery.LeaseToken)
-				if tokenErr == nil {
-					base.Path = "/api/v1/qq-image/media"
-					base.RawPath = ""
-					base.RawQuery = url.Values{"token": []string{token}}.Encode()
-					request, cancel := context.WithTimeout(ctx, 35*time.Second)
-					result = w.sender.SendDelivery(request, config, delivery, base.String())
-					cancel()
-				} else {
-					result.Reason = "qq_media_authorization_unavailable"
-				}
-			} else {
-				result.Reason = "qq_media_origin_invalid"
-			}
-		} else {
-			result.Reason = "qq_credentials_unavailable"
-		}
-	}
+	// Configuration, authorization, private reading and sending share one budget,
+	// leaving time to persist a result before the 60-second delivery lease expires.
+	request, requestCancel := context.WithTimeout(ctx, 35*time.Second)
+	result := w.sendDelivery(request, delivery)
+	requestCancel()
 	if result.Status != "sent" && result.Status != "unknown" && result.Status != "site_only" {
 		result = QQSendResult{Status: "site_only", Reason: "qq_delivery_failed"}
 	}
 	finish, cancel := recoveryContext(ctx)
 	defer cancel()
 	return w.store.CompleteDelivery(finish, delivery.ID, delivery.LeaseToken, result.Status, result.Reason)
+}
+
+func (w *Worker) sendDelivery(ctx context.Context, delivery *Delivery) QQSendResult {
+	fallback := func(reason string) QQSendResult { return QQSendResult{Status: "site_only", Reason: reason} }
+	if delivery.Order == nil || w.sender == nil {
+		return fallback("qq_delivery_unavailable")
+	}
+	config, err := w.store.DeliveryConfig(ctx, delivery.Order.ConfigID)
+	if err != nil || config == nil {
+		return fallback("qq_credentials_unavailable")
+	}
+	base, err := safeHTTPSURL(config.PublicBaseURL, "")
+	if err != nil {
+		return fallback("qq_media_origin_invalid")
+	}
+	token, err := w.store.CreateMediaGrant(ctx, delivery.ID, delivery.LeaseToken)
+	if err != nil {
+		return fallback("qq_media_authorization_unavailable")
+	}
+	if delivery.ArtifactBytes <= 0 {
+		return fallback("qq_media_read_unavailable")
+	}
+	inline := false
+	switch delivery.ArtifactMIME {
+	case "image/png", "image/jpeg":
+		inline = delivery.ArtifactBytes <= maxQQInlineArtifactBytes
+	case "image/webp": // Leave all three public fetches available to QQ.
+	default:
+		return fallback("qq_media_type_unsupported")
+	}
+	attempt := *delivery
+	attempt.Artifact = nil
+	if inline {
+		// Reuse the same grant and read checks used by the public media endpoint.
+		// A failed private read never falls through to a different upload path.
+		artifact, readErr := w.store.ReadMedia(ctx, token)
+		if readErr != nil || artifact == nil || len(artifact.Data) == 0 || int64(len(artifact.Data)) != delivery.ArtifactBytes || artifact.MIME != delivery.ArtifactMIME {
+			return fallback("qq_media_read_unavailable")
+		}
+		attempt.Artifact = artifact
+	}
+	if ctx.Err() != nil {
+		return fallback("qq_delivery_cancelled")
+	}
+	base.Path = "/api/v1/qq-image/media"
+	base.RawPath = ""
+	base.RawQuery = url.Values{"token": []string{token}}.Encode()
+	return w.sender.SendDelivery(ctx, config, &attempt, base.String())
 }

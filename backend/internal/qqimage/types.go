@@ -185,6 +185,8 @@ type Delivery struct {
 	ReplySequence  int
 	ReplyCreatedAt time.Time
 	ArtifactBytes  int64
+	ArtifactMIME   string    `json:"-"` // Trusted storage metadata from the delivery claim.
+	Artifact       *Artifact `json:"-"` // Authorized bytes for this delivery attempt only.
 }
 type Audit struct {
 	ID        int64     `json:"id"`

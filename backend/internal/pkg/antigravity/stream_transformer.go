@@ -125,7 +125,8 @@ func (p *StreamingProcessor) ProcessLine(line string) []byte {
 		metadata := p.usageMetadata
 		if json.Unmarshal(parsed.UsageMetadata, &metadata) == nil {
 			p.usageMetadata = metadata
-			p.inputTokens = metadata.PromptTokenCount - metadata.CachedContentTokenCount
+			// Blocked prompts can report cached tokens without the prompt total.
+			p.inputTokens = max(metadata.PromptTokenCount-metadata.CachedContentTokenCount, 0)
 			p.outputTokens = metadata.CandidatesTokenCount + metadata.ThoughtsTokenCount
 			p.cacheReadTokens = metadata.CachedContentTokenCount
 			p.imageOutputTokens = metadata.ImageOutputTokens()
