@@ -2,6 +2,8 @@
 
 ## 2026-10-27 QQ正式接管已确认，新开关/图库待发布
 
+新应用源码`4ae80f8adc94a100ed4988d972e117221f028918`已合入主目录main并推送；当前准备仅Linux的0.2.18-r1镜像，最终门禁/摘要见[本版发布记录](../deploy/CUSTOM_IMAGE_0.2.18-r1.md)。正式站仍是已接管QQ的r7，用户自行替换镜像后才显示新开关和图库。
+
 用户批准方案后，在codex/qq-controls-gallery-20261026（基于740c0c582）实现系统功能开关qq_binding_enabled/qq_image_enabled、跨站绑定错误提示与作品网格/详情。新业务域层受控，历史订单、免费晚到图、解绑和资金操作保持；完整源码/验证见[本轮记录](changes/2026-10-27-qq-controls-gallery.md)。新界面尚未部署，后续按仅Linux镜像、用户自行更新的方式交付。
 
 真实正式站确认运行0.2.17-r7，但之前QQ密钥未设置、配置0；测试配置7仍在线且回复测试域名。经用户明确选择“正式站接管、测试站停止接收”，已私有备份两库/配置，正式只新增独立QQ_IMAGE_ENCRYPTION_KEY及QQ_IMAGE_EXTERNAL_HELP=true并用原r7重建应用，PG/Redis保全；测试追加配置8（停用且AppID空，密文不撤销），认证waiting_config/锁0后正式追加配置1、PublicBaseURL=https://api.tangguo.xin，生产锁1/健康200。用户明确确认正式链接绑定成功，随后只读production active_grants=1、test=0，无在途订单。
