@@ -5,7 +5,7 @@
 ## 固定来源
 
 - 上游：`ac1b8f1271be0d674fa6f074403c1410f30a3a81`，本轮按用户指定提交，不跟随更晚main。
-- 最终应用源码：`12356b53a3d869243cb83f94d6d4815db18ebb7f`；合并提交787d5a4a3的父提交为本仓cda70a59b与指定上游ac1b8f1；最终来源追加了Docker PostgreSQL迁移测试兼容修正，应用业务代码未改。
+- 最终应用源码：`02f706a193a1b5c79cd43c4ec5aed85a12553293`；合并提交787d5a4a3的父提交为本仓cda70a59b与指定上游ac1b8f1；最终来源追加了Docker PostgreSQL迁移测试兼容修正及福利集成回归适配，应用业务代码未改。
 - 目标镜像：`ghcr.io/ttt599536561/sub2api-custom:0.2.17-r6`。
 - 平台仅 `linux/amd64`、`linux/arm64`，原生Ubuntu runner构建和运行检查；不触发通用release或macOS任务。
 - [专用工作流](../.github/workflows/publish-custom-v0217-r6.yml)固定应用SHA，要求该SHA最新main/push CI及Security Scan成功，禁止覆盖已有r6标签；控制提交和最终digest在发布完成后补充。
