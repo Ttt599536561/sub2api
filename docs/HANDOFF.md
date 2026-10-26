@@ -1,10 +1,10 @@
 # Sub2API 二次开发交接
 
-## 2026-10-26 签到v3已整合main，r7 Linux发布准备中
+## 2026-10-26 签到v3已整合main，r7 Linux镜像已发布
 
-用户已授权合并主目录、推送GitHub并只构建Linux镜像，服务器由用户自行更新。应用`70ba0376bda2dba0279eca74aeb36992804d64df`（含发布门禁测试规范修正）已合入主目录main并推送；原11份tracked WIP、4份其他untracked和全部293份dist文件保全，.gitignore原内容恢复并追加福利文档例外。发布源码来自干净提交，不包含这些WIP。
+用户授权的合并、推送和GitHub仅Linux构建已完成。应用/OCI revision固定`70ba0376bda2dba0279eca74aeb36992804d64df`，发布控制`b7c83e429c1d4b3abf0f17269f43ed56a2e6edf4`；精确CI 40331079734、Security 40331079778和发布40333254809均成功。镜像`ghcr.io/ttt599536561/sub2api-custom:0.2.17-r7`支持linux/amd64与linux/arm64，固定digest `sha256:97d789383cdc65d4ff6e758a1b5db4e176ebcbfc23d5fe537450a0bc78b4dccd`；北京时间2026-10-26 21:52:24完成5份必要artifact、24个运行层/90,211,611字节与源码/版本/平台绑定核验。
 
-新增r7专用工作流固定该源码，等待对应完整CI/安全门禁后构建Linux amd64/arm64，不触发macOS或通用Release。预定镜像`ghcr.io/ttt599536561/sub2api-custom:0.2.17-r7`，尚未声称发布成功；本轮不部署任何服务器。当前公开镜像仍r6，最终状态和251迁移/避免旧新发奖节点混跑要求见[r7发布记录](../deploy/CUSTOM_IMAGE_0.2.17-r7.md)。以下“本地分支、未合并”属于此前开发/二审阶段。
+主目录main和GitHub已整合，原11份tracked WIP、4份其他untracked及全部293份dist文件保持；.gitignore保留原改动并追加福利文档例外，WIP不属于镜像。首轮测试staticcheck已作等价switch修正，最终源码全门禁通过。没有macOS构建、服务器/CF/检测站操作或真实QQ/收费调用；用户自行更新服务器。251仅升级福利规则元数据、保留既有余额/历史/连续和保底，避免v2/v3发奖节点混跑；完整升级/回退和核验边界见[r7发布记录](../deploy/CUSTOM_IMAGE_0.2.17-r7.md)。下方本地开发/二审记录为历史阶段。
 
 ## 2026-10-26 签到v3降额开发（本地功能分支）
 

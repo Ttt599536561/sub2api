@@ -1,35 +1,61 @@
 # Sub2API 二开 0.2.17-r7 Linux 发布与升级记录
 
-日期：2026-10-26（Asia/Shanghai）。状态：应用源码已合入main并推送；r7发布准备中，尚未发布镜像或部署服务器。
+日期：2026-10-26（Asia/Shanghai）。**镜像已发布，双架构实际运行检查、来源及匿名完整运行层核验通过。** 服务器由用户自行更新，本任务未部署任何实例。
 
-## 固定来源与平台
+## 固定来源
 
-- 本次应用源码/OCI revision固定为`70ba0376bda2dba0279eca74aeb36992804d64df`，包含签到v3实现`569817eae`、二审回归补强`c630c7308`和测试规范修正`70ba0376b`，基于main原`8e5c5d32e`。
-- 专用工作流：[publish-custom-v0217-r7.yml](../.github/workflows/publish-custom-v0217-r7.yml)。控制提交与应用来源分离，控制提交只改工作流/交接记录；构建checkout和运行标签均绑定上述完整应用SHA。
-- 预定镜像`ghcr.io/ttt599536561/sub2api-custom:0.2.17-r7`，仅原生Ubuntu构建`linux/amd64`和`linux/arm64`，不触发通用Release、Git版本标签或macOS工作流。
-- 入口严格要求对应应用SHA最新main/push CI与Security Scan成功，最终标签禁止覆盖；发布后核验两架构、二进制/OCI来源、artifact及匿名运行层。
-- 主目录11份未提交修改和4份非dist未跟踪文件保留；完整293份dist文件/10,332,156字节保持。重叠.gitignore仅增两条福利文档例外，原用户内容保留；这些WIP不属于镜像源码。
+- 应用源码/OCI revision：`70ba0376bda2dba0279eca74aeb36992804d64df`，基于main原`8e5c5d32e`，包含签到v3实现、二审回归与测试规范修正。
+- 发布控制提交：`b7c83e429c1d4b3abf0f17269f43ed56a2e6edf4`；[r7专用工作流](../.github/workflows/publish-custom-v0217-r7.yml)固定上述应用SHA，要求其最新main/push CI与安全扫描成功。
+- 镜像：`ghcr.io/ttt599536561/sub2api-custom:0.2.17-r7`，运行平台仅`linux/amd64`、`linux/arm64`，原生Ubuntu构建；没有macOS或通用Release任务。
+- 最终index digest：`sha256:97d789383cdc65d4ff6e758a1b5db4e176ebcbfc23d5fe537450a0bc78b4dccd`。
+- 源码和发布配置已整合主目录main并推送；原11份tracked WIP、4份其他untracked及293份dist文件/10,332,156字节保全。.gitignore原用户内容保留并追加两条福利文档例外，WIP不属于镜像。
 
 ## 用户可见变化
 
-签到日奖降至$0.01～$0.05；连续第7/15天额外$0.03～$0.08/$0.08～$0.20；第30天额外分档随机$0.20～$1.95，含日奖单次最高$2。首次满勤30天平均约$1.25884，较旧规则降88.56%；整个周期不是$2封顶，理论最高$3.73。
+签到日奖降至$0.01～$0.05；连续第7/15天额外$0.03～$0.08/$0.08～$0.20；第30天额外分档随机$0.20～$1.95，含日奖单次最高$2。首次满勤30天平均约$1.25884，较旧规则降88.56%；整轮不是$2封顶，理论最高$3.73。
 
-保底计数、连续周期和历史余额保留，旧成功请求原样回放；抽奖/兑换算法保持。完整概率及本地验证见[签到v3记录](../docs/changes/2026-10-26-welfare-checkin-v3.md)。
+已有余额、历史、连续进度和保底计数保留，旧成功请求原样回放；抽奖/兑换算法保持。完整概率、二审与本地验证见[签到v3记录](../docs/changes/2026-10-26-welfare-checkin-v3.md)。
 
-## 发布门禁与证据
+## 实际发布验证
 
-首轮c630的完整测试通过，但lint发现QF1003；仅将测试if/else改为switch后，福利专项、Linux目标service lint0 issues及独立复核通过。本次必须使用70ba自己的CI/安全结果；旧结果不替代新SHA门禁。
+| 项目 | 核验结果 |
+| --- | --- |
+| 精确源码CI | [40331079734](https://github.com/Ttt599536561/sub2api/actions/runs/40331079734)，5个job全部成功，包含unit/integration、前端、lint与辅助检查。 |
+| 精确源码Security Scan | [40331079778](https://github.com/Ttt599536561/sub2api/actions/runs/40331079778)，后端/前端安全门禁成功；不宣称依赖零漏洞。 |
+| Linux双架构发布 | [40333254809](https://github.com/Ttt599536561/sub2api/actions/runs/40333254809)，gate、两架构build和publish成功。 |
+| 运行及二进制 | 两架构r7版本、完整源码SHA和Go1.27.3相符，x/image v0.45.0；psql/pg_dump、价格资源、setup与嵌入前端验证通过。 |
+| 工作流产物 | 5份必要ZIP的SHA256与GitHub元数据一致，绑定同一run/control/source；另有2份Buildx自动记录未作为运行产物核验。 |
+| 匿名拉取核验 | index/runtime manifest/config、平台、版本及来源与架构artifact相符；24个运行层、90,211,611字节SHA256/大小全部通过，最后重读标签未变。 |
 
-- 应用精确SHA CI：[40331079734](https://github.com/Ttt599536561/sub2api/actions/runs/40331079734)，发布前核实最终状态。
-- 应用精确SHA Security Scan：[40331079778](https://github.com/Ttt599536561/sub2api/actions/runs/40331079778)，等待本次精确源码检查完成。
-- 本地在相同源码的福利服务专项重新通过；原二审后端133叶、真实PG125叶、前端CI名单920项证据来自开发阶段，不能代替本次GitHub完整门禁。
-- 发布工作流矩阵/固定来源/仅dispatch与5段shell语法检查通过；原始证据在主项目`.cache/publish-welfare-r7-20261026`，最终产物核验使用`output/publish-v0.2.17-r7`。
-- 发布run、最终digest和匿名拉取验证在实际完成后补充，本记录不预先声称发布成功。
+核验完成时间：北京时间**2026-10-26 21:52:24**。镜像层通过HTTP流式校验，未在本机Docker引擎拉取本次镜像；实际运行检查由GitHub各架构任务完成。合法attestation索引条目允许存在，但未核验其内容或签名。
 
-## 升级和回退
+| 平台 | Runtime manifest | OCI config |
+| --- | --- | --- |
+| `linux/amd64` | `sha256:7bb90126c4a08d60e262b23e62bfdca276ac802b5900c32812e5276a167b3ba2` | `sha256:d3c0c3ca8054767e0fc3aa914bfd182ea87266491f3e95dfad648d60b0ea39f8` |
+| `linux/arm64` | `sha256:ef70b870c18f8d474f64d673ab3b8d59211ceab8f388bdb3c91fdfd0e4e0d512` | `sha256:7f079f4b9950e1c777fb23f664ac5eb16e59e28768b04a0cd2c04e9e6c4d11b1` |
 
-1. 用户在服务器自行替换镜像；本任务不操作生产、QQ测试站、Cloudflare或检测站，不调用收费模型或发送QQ。
-2. 更新前保留数据库/Compose/配置/密钥备份和原镜像。r6→r7新增251，仅修改福利program版本/default/check，完整迁移306→307；不修改旧迁移校验和，不清空余额、流水、连续天数或保底计数。
-3. 下一次成功签到立即执行v3，包括升级前已连续6/14/29天的用户；已经发放的旧金额不追回，重试返回原结果。
-4. 避免v2/v3发奖节点混跑。旧二进制回退会恢复旧高额算法，应先暂停福利奖励并协调应用版本；不要恢复旧库覆盖升级后新增账务事实。
-5. 若从r4或更早版本升级，还会包含[r5 QQ迁移/密钥与资金注意事项](CUSTOM_IMAGE_0.2.17-r5.md)及[r6 Gemini分组生图开关迁移](CUSTOM_IMAGE_0.2.17-r6.md#升级与回退)。保留现有业务配置；升级后核查health、版本、迁移、余额和启用模块。
+首轮c630的完整测试成功，但lint发现测试QF1003；仅把失败阶段选择改为等价switch，福利专项/Linux目标service lint0 issues及独立复核通过后，重新固定70ba并完成其自己的全部门禁，未绕过检查。
+
+## 镜像地址
+
+```text
+ghcr.io/ttt599536561/sub2api-custom:0.2.17-r7
+```
+
+固定内容地址：
+
+```text
+ghcr.io/ttt599536561/sub2api-custom@sha256:97d789383cdc65d4ff6e758a1b5db4e176ebcbfc23d5fe537450a0bc78b4dccd
+```
+
+## 用户升级与回退
+
+1. 用户自行更新服务器；先保留数据库、Compose、配置、密钥备份及原镜像。本任务未操作正式站、QQ测试站、Cloudflare、检测站、真实QQ或收费模型。
+2. r6→r7新增251迁移，仅更新福利program版本/default/check，完整迁移306→307；旧余额、流水、活动状态、首次开放时间、连续及保底计数保留。不修改旧SQL/checksum或清空数据。
+3. 下一次成功签到立即执行v3，包括升级前已连续6/14/29天的用户；旧奖励不追回，重复请求返回已保存结果。
+4. 避免v2/v3发奖节点混跑。回退旧二进制会恢复旧高额算法，应先暂停福利奖励并协调应用版本；不要恢复旧库覆盖升级后新增账务。
+5. 若从r4或更早版本升级，还包含[r5 QQ迁移/密钥和资金注意事项](CUSTOM_IMAGE_0.2.17-r5.md)以及[r6 Gemini分组生图开关迁移](CUSTOM_IMAGE_0.2.17-r6.md#升级与回退)。升级后核查health、版本、迁移、余额及启用模块。
+
+## 本机证据
+
+原始核验产物位于`output/publish-v0.2.17-r7`，过程日志、WIP保护和验证脚本位于`.cache/publish-welfare-r7-20261026`。复用已有依赖缓存，没有新建本机Docker构建或测试容器；此前被审批拒绝的福利测试临时目录保持原样，未重试清理。
