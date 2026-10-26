@@ -48,3 +48,13 @@ QQ已上线投递测试中的两个未检查类型断言按lint要求改为明�
 测试修复保留显式loopback客户端DSN、参数白名单、每项全新随机database和实际database/schema验证，改为验证连接可用，兼容Docker端口映射；不改变产品SQL、迁移器、业务代码或数据。修后真实PG4顶层+10子例全通过/0skip，repository vet、格式和差异检查通过；两独占库已清理，复用的本轮PG再次停止、目录保留。最终源码门禁将重新运行，不能把首轮失败标成通过。
 
 本轮本地测试PG已停止；删除本任务pgdata目录在进程启动前被自动审批以blocked by policy拒绝，未给具体原因，未删除或绕过。因CI兼容专项需复用该目录重启测试，最终结束后再次停止，保留日志和数据目录。
+
+## 福利事务回滚集成测试对齐
+
+候选12356b53a的CI40300844842已通过全部unit（含容器迁移）、lint、前端与发布辅助检查，Security Scan40300844681成功；integration唯一失败是旧 `TestWelfareSpendRollbackAndDisabledAccrual`。旧测试用不存在账号期待ErrAccountNotFound，上游现明确允许已删除账号跳过账号配额、仍结算已完成请求，因此旧的故障注入不再成立。
+
+只调整集成测试：新建有效账号并用限定该账号的PostgreSQL trigger在账号配额写入处抛真实错误，保留并强化余额、福利钱包/事件、Key配额/速率、账号配额及dedup全部回滚；解除故障后用同一完整命令重试并检查幂等，关闭福利只阻止累计。新增APIKey/ServiceAccount软删除仍结算余额与福利一次、账号配额不变的回归。独立代码复核通过，不改变产品结算行为。
+
+本地Docker实际宿主磁盘已新鲜核对为E:/CodexData/DockerBackup/DockerDesktopWSL/disk/docker_data.vhdx，配置与注册WSL目录均在E盘；启动前引擎未运行、启动后无原运行容器。复用现有镜像运行完整repository integration，不创建C盘项目/测试目录。
+
+本地完整repository integration通过：1788个PASS事件/1655叶、0失败、3跳过（既有并发缓存TODO及未设置独立DSN的2个迁移专项；后两项已在前轮CI unit的真实容器PG通过）。随后仅将ServiceAccount夹具平台明确为Gemini，最终全部福利专项19PASS事件/17叶、0失败/0跳过，以及integration-tag repository vet和差异检查通过。真实SQL故障保留了资金/福利原子回滚断言，没有通过弱化测试掩盖产品问题。所有本轮测试容器已自动清理，docker ps为空。

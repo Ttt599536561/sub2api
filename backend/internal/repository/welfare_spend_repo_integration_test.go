@@ -60,45 +60,143 @@ func TestWelfareSpendCrossesThresholdSynchronouslyAndDeduplicates(t *testing.T) 
 func TestWelfareSpendRollbackAndDisabledAccrual(t *testing.T) {
 	repo, u, k := welfareSpendFixture(t)
 	ctx := context.Background()
-	requestID := uuid.NewString()
-	// Missing API keys deliberately do not abort settlement. Fail the later
-	// account quota update so balance, welfare and key counters must roll back.
-	result, err := repo.Apply(ctx, &service.UsageBillingCommand{
-		RequestID: requestID, UserID: u, APIKeyID: k,
-		BalanceCost: 50, APIKeyQuotaCost: 50, APIKeyRateLimitCost: 50,
-		AccountID: -999, AccountType: service.AccountTypeAPIKey, AccountQuotaCost: 50,
+	account := mustCreateAccount(t, testEntClient(t), &service.Account{
+		Name:  "welfare-spend-rollback-" + uuid.NewString(),
+		Type:  service.AccountTypeAPIKey,
+		Extra: map[string]any{"quota_limit": 100.0},
 	})
-	require.ErrorIs(t, err, service.ErrAccountNotFound)
+	functionName := fmt.Sprintf("fail_welfare_spend_quota_%d", account.ID)
+	triggerName := functionName + "_trigger"
+	_, err := integrationDB.ExecContext(ctx, fmt.Sprintf(`
+		CREATE FUNCTION %s() RETURNS trigger LANGUAGE plpgsql AS $$
+		BEGIN
+			IF NEW.id = %d THEN
+				RAISE EXCEPTION 'forced welfare spend quota update failure';
+			END IF;
+			RETURN NEW;
+		END;
+		$$`, functionName, account.ID))
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		_, cleanupErr := integrationDB.ExecContext(context.Background(), fmt.Sprintf("DROP FUNCTION IF EXISTS %s()", functionName))
+		require.NoError(t, cleanupErr)
+	})
+	_, err = integrationDB.ExecContext(ctx, fmt.Sprintf(
+		"CREATE TRIGGER %s BEFORE UPDATE OF extra ON accounts FOR EACH ROW EXECUTE FUNCTION %s()",
+		triggerName, functionName))
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		_, cleanupErr := integrationDB.ExecContext(context.Background(), fmt.Sprintf("DROP TRIGGER IF EXISTS %s ON accounts", triggerName))
+		require.NoError(t, cleanupErr)
+	})
+
+	// Missing/deleted accounts deliberately do not abort settlement. A real SQL
+	// failure after balance, welfare and key updates must still roll them all back.
+	cmd := &service.UsageBillingCommand{
+		RequestID: uuid.NewString(), UserID: u, APIKeyID: k,
+		BalanceCost: 50, APIKeyQuotaCost: 50, APIKeyRateLimitCost: 50,
+		AccountID: account.ID, AccountType: account.Type, AccountQuotaCost: 50,
+	}
+	result, err := repo.Apply(ctx, cmd)
+	require.ErrorContains(t, err, "forced welfare spend quota update failure")
 	require.Nil(t, result)
 	var balance string
 	require.NoError(t, integrationDB.QueryRow(`SELECT balance::text FROM users WHERE id=$1`, u).Scan(&balance))
 	require.Equal(t, "200.00000000", balance)
-	var quotaUsed, usage5h float64
+	var quotaUsed, usage5h, accountQuotaUsed float64
 	require.NoError(t, integrationDB.QueryRow(`SELECT quota_used,usage_5h FROM api_keys WHERE id=$1`, k).Scan(&quotaUsed, &usage5h))
 	require.Zero(t, quotaUsed)
 	require.Zero(t, usage5h)
+	require.NoError(t, integrationDB.QueryRow(`SELECT COALESCE((extra->>'quota_used')::numeric,0) FROM accounts WHERE id=$1`, account.ID).Scan(&accountQuotaUsed))
+	require.Zero(t, accountQuotaUsed)
 	var events, wallets, dedup int
 	require.NoError(t, integrationDB.QueryRow(`SELECT count(*) FROM welfare_spend_events WHERE user_id=$1`, u).Scan(&events))
 	require.Zero(t, events)
 	require.NoError(t, integrationDB.QueryRow(`SELECT count(*) FROM welfare_wallets WHERE user_id=$1`, u).Scan(&wallets))
 	require.Zero(t, wallets)
-	require.NoError(t, integrationDB.QueryRow(`SELECT count(*) FROM usage_billing_dedup WHERE request_id=$1 AND api_key_id=$2`, requestID, k).Scan(&dedup))
+	require.NoError(t, integrationDB.QueryRow(`SELECT count(*) FROM usage_billing_dedup WHERE request_id=$1 AND api_key_id=$2`, cmd.RequestID, k).Scan(&dedup))
 	require.Zero(t, dedup)
+
+	_, err = integrationDB.ExecContext(ctx, fmt.Sprintf("DROP TRIGGER %s ON accounts", triggerName))
+	require.NoError(t, err)
 	_, err = integrationDB.Exec(`UPDATE welfare_programs SET enabled=false WHERE id=1`)
 	require.NoError(t, err)
-	// The rolled-back request can be retried, and disabling welfare must not
-	// prevent the underlying balance charge from committing.
-	result, err = repo.Apply(ctx, &service.UsageBillingCommand{RequestID: requestID, UserID: u, APIKeyID: k, BalanceCost: 50})
+	// Retry the identical rolled-back command after removing the SQL fault.
+	// Disabling welfare suppresses only accrual, not balance or quota settlement.
+	result, err = repo.Apply(ctx, cmd)
 	require.NoError(t, err)
 	require.True(t, result.Applied)
+	require.NotNil(t, result.QuotaState)
+	require.Equal(t, 50.0, result.QuotaState.TotalUsed)
+	replay, err := repo.Apply(ctx, cmd)
+	require.NoError(t, err)
+	require.False(t, replay.Applied)
 	require.NoError(t, integrationDB.QueryRow(`SELECT balance::text FROM users WHERE id=$1`, u).Scan(&balance))
 	require.Equal(t, "150.00000000", balance)
+	require.NoError(t, integrationDB.QueryRow(`SELECT quota_used,usage_5h FROM api_keys WHERE id=$1`, k).Scan(&quotaUsed, &usage5h))
+	require.Equal(t, 50.0, quotaUsed)
+	require.Equal(t, 50.0, usage5h)
+	require.NoError(t, integrationDB.QueryRow(`SELECT COALESCE((extra->>'quota_used')::numeric,0) FROM accounts WHERE id=$1`, account.ID).Scan(&accountQuotaUsed))
+	require.Equal(t, 50.0, accountQuotaUsed)
 	require.NoError(t, integrationDB.QueryRow(`SELECT count(*) FROM welfare_spend_events WHERE user_id=$1`, u).Scan(&events))
 	require.Zero(t, events)
 	require.NoError(t, integrationDB.QueryRow(`SELECT count(*) FROM welfare_wallets WHERE user_id=$1`, u).Scan(&wallets))
 	require.Zero(t, wallets)
-	require.NoError(t, integrationDB.QueryRow(`SELECT count(*) FROM usage_billing_dedup WHERE request_id=$1 AND api_key_id=$2`, requestID, k).Scan(&dedup))
+	require.NoError(t, integrationDB.QueryRow(`SELECT count(*) FROM usage_billing_dedup WHERE request_id=$1 AND api_key_id=$2`, cmd.RequestID, k).Scan(&dedup))
 	require.Equal(t, 1, dedup)
+}
+
+func TestWelfareSpendDeletedAccountStillAccruesAndDeduplicates(t *testing.T) {
+	for _, accountType := range []string{service.AccountTypeAPIKey, service.AccountTypeServiceAccount} {
+		t.Run(accountType, func(t *testing.T) {
+			repo, u, k := welfareSpendFixture(t)
+			ctx := context.Background()
+			platform := service.PlatformAnthropic
+			if accountType == service.AccountTypeServiceAccount {
+				platform = service.PlatformGemini
+			}
+			account := mustCreateAccount(t, testEntClient(t), &service.Account{
+				Name:     "welfare-spend-deleted-account-" + uuid.NewString(),
+				Type:     accountType,
+				Platform: platform,
+				Extra:    map[string]any{"quota_limit": 100.0, "quota_used": 7.0},
+			})
+			_, err := integrationDB.ExecContext(ctx, `UPDATE accounts SET deleted_at=NOW() WHERE id=$1`, account.ID)
+			require.NoError(t, err)
+			cmd := &service.UsageBillingCommand{
+				RequestID: uuid.NewString(), UserID: u, APIKeyID: k,
+				AccountID: account.ID, AccountType: account.Type,
+				BalanceCost: 50, APIKeyQuotaCost: 50, APIKeyRateLimitCost: 50, AccountQuotaCost: 50,
+			}
+			result, err := repo.Apply(ctx, cmd)
+			require.NoError(t, err)
+			require.True(t, result.Applied)
+			require.Nil(t, result.QuotaState)
+			replay, err := repo.Apply(ctx, cmd)
+			require.NoError(t, err)
+			require.False(t, replay.Applied)
+
+			var balance, spend string
+			require.NoError(t, integrationDB.QueryRow(`SELECT balance::text FROM users WHERE id=$1`, u).Scan(&balance))
+			require.Equal(t, "150.00000000", balance)
+			var tickets, version int64
+			require.NoError(t, integrationDB.QueryRow(`SELECT eligible_spend::text,floor(eligible_spend/50)::bigint-draws_used,wallet_version FROM welfare_wallets WHERE user_id=$1`, u).Scan(&spend, &tickets, &version))
+			require.Equal(t, "50.00000000", spend)
+			require.EqualValues(t, 1, tickets)
+			require.EqualValues(t, 1, version)
+			var events, dedup int
+			require.NoError(t, integrationDB.QueryRow(`SELECT count(*) FROM welfare_spend_events WHERE user_id=$1`, u).Scan(&events))
+			require.Equal(t, 1, events)
+			require.NoError(t, integrationDB.QueryRow(`SELECT count(*) FROM usage_billing_dedup WHERE request_id=$1 AND api_key_id=$2`, cmd.RequestID, k).Scan(&dedup))
+			require.Equal(t, 1, dedup)
+			var quotaUsed, usage5h, accountQuotaUsed float64
+			require.NoError(t, integrationDB.QueryRow(`SELECT quota_used,usage_5h FROM api_keys WHERE id=$1`, k).Scan(&quotaUsed, &usage5h))
+			require.Equal(t, 50.0, quotaUsed)
+			require.Equal(t, 50.0, usage5h)
+			require.NoError(t, integrationDB.QueryRow(`SELECT (extra->>'quota_used')::numeric FROM accounts WHERE id=$1`, account.ID).Scan(&accountQuotaUsed))
+			require.Equal(t, 7.0, accountQuotaUsed, "deleted account quota remains untouched")
+		})
+	}
 }
 
 func TestWelfareSpendDeletedAPIKeyStillAccruesAndDeduplicates(t *testing.T) {
