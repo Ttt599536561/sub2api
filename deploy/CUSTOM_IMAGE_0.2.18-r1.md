@@ -4,7 +4,7 @@
 
 ## 固定来源与功能
 
-- 应用源码/OCI revision：`4ae80f8adc94a100ed4988d972e117221f028918`，基于740c0c582，继承官方v0.2.18对应ac1b8f1及r7签到v3，不额外拉取上游未发布main。
+- 应用源码/OCI revision：`b048bc329a06b227ced2324af6001fc1960e44c8`，基于740c0c582，继承官方v0.2.18对应ac1b8f1及r7签到v3，不额外拉取上游未发布main。
 - 本次基础VERSION已同步0.2.18，二开发行号为0.2.18-r1；源码身份按Git SHA判断，历史0.2.17-r7已包含官方0.2.18基线。
 - [专用工作流](../.github/workflows/publish-custom-v0218-r1.yml)固定完整应用SHA，仅Ubuntu原生linux/amd64和linux/arm64；要求同SHA最新main/push CI和Security Scan成功，最终标签拒绝覆盖，不触发macOS/通用Release。
 - 预定镜像：`ghcr.io/ttt599536561/sub2api-custom:0.2.18-r1`。
@@ -26,7 +26,9 @@
 
 ## 发布证据
 
-- 精确源码CI：[40362114869](https://github.com/Ttt599536561/sub2api/actions/runs/40362114869)。
-- 精确源码Security Scan：[40362114890](https://github.com/Ttt599536561/sub2api/actions/runs/40362114890)。
+首轮4ae的完整unit发现两份管理设置JSON契约遗漏新增字段；只补4行精确期望、保持JSONEq，11契约子例/server20叶/Linux unit-tag lint通过。现固定b048并重新等待其自己的CI/安全门禁，旧失败候选不用于发布。
+
+- 精确源码CI：[40364270141](https://github.com/Ttt599536561/sub2api/actions/runs/40364270141)。
+- 精确源码Security Scan：[40364269888](https://github.com/Ttt599536561/sub2api/actions/runs/40364269888)。
 
 精确CI/安全/发布run、最终digest和匿名artifact/运行层核验在实际完成后补充。原始发布证据放`output/publish-v0.2.18-r1`，过程缓存和WIP保护放`.cache/publish-qq-v0218-r1-20261027`。主目录11份WIP、4份其他untracked及293份原dist文件已保全，不进入发布源码。
