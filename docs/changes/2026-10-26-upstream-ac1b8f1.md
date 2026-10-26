@@ -40,3 +40,11 @@ QQ已上线投递测试中的两个未检查类型断言按lint要求改为明�
 真实PG16.15 QQ模块483个PASS事件、0失败/0跳过；305→306升级与全新安装、旧checksum/applied_at、余额冻结、推广域/QQ代表数据和结构保全、重复启动均通过，删除新增SQL的负向控制正确失败。Linux目标lint零问题，四包vet与调度/配额/福利/流式独立审查通过。最终源码整仓unit：59包、25,714个PASS事件、0失败、18项外部服务/环境条件跳过；本轮真实PG项目不跳过。Linux目标最终lint为0 issues，源码4611文件指纹与验证快照一致，前端1064文件亦与此前验证一致。4项部署脚本检查、Apple脚本仅语法检查及本机Compose配置16组合检查通过。通用release-matrix的Windows本机执行受POSIX可执行位/路径条件限制，交由精确源码Linux CI验证；没有运行macOS构建。独立审查无剩余阻塞，准备合入主目录并推送。GitHub CI/安全门禁成功后才发布固定源码 `0.2.17-r6`，发布记录另列精确源码、控制提交、Actions与digest。
 
 本任务不部署生产/测试站、不改变用户数据、不调用收费模型或发送QQ。镜像发布与服务器实际运行版本分开记录。
+
+## 首轮GitHub CI与容器测试环境兼容
+
+应用候选787d5a4a3的安全门禁40299079810成功；CI40299080153中shell、release-helpers、frontend和golangci-lint成功。unit仅新增迁移Upgrade/FreshInstall两项失败：从127.0.0.1端口映射连接容器时，PostgreSQL的inet_server_addr返回容器内网地址，测试把服务端地址错误要求为loopback；没有产品业务失败，integration尚未执行。
+
+测试修复保留显式loopback客户端DSN、参数白名单、每项全新随机database和实际database/schema验证，改为验证连接可用，兼容Docker端口映射；不改变产品SQL、迁移器、业务代码或数据。修后真实PG4顶层+10子例全通过/0skip，repository vet、格式和差异检查通过；两独占库已清理，复用的本轮PG再次停止、目录保留。最终源码门禁将重新运行，不能把首轮失败标成通过。
+
+本轮本地测试PG已停止；删除本任务pgdata目录在进程启动前被自动审批以blocked by policy拒绝，未给具体原因，未删除或绕过。因CI兼容专项需复用该目录重启测试，最终结束后再次停止，保留日志和数据目录。

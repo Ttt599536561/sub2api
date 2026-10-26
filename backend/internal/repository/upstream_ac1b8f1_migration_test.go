@@ -119,9 +119,10 @@ func upstreamAC1B8F1TestDatabase(t *testing.T, ctx context.Context) *sql.DB {
 	admin, err := sql.Open("postgres", u.String())
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, admin.Close()) })
-	var serverAddress string
-	require.NoError(t, admin.QueryRowContext(ctx, "SELECT host(inet_server_addr())").Scan(&serverAddress))
-	require.True(t, net.ParseIP(serverAddress).IsLoopback(), "test PostgreSQL must resolve to loopback")
+	// The URL constrains the client endpoint. A loopback-published Docker
+	// service can report its bridge IP via inet_server_addr(), so verify
+	// connectivity without requiring the server-side address to be loopback.
+	require.NoError(t, admin.PingContext(ctx))
 
 	var nonce [12]byte
 	_, err = rand.Read(nonce[:])
