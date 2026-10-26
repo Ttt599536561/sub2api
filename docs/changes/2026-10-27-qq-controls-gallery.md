@@ -49,3 +49,8 @@
 参考：[Midjourney作品管理](https://docs.midjourney.com/hc/en-us/articles/33329462451469-Organizing-Your-Creations)、[Firefly生成历史](https://helpx.adobe.com/in/firefly/mobile/view-generation-history/generation-history-overview.html)。
 
 本地QA前台受控进程和专属测试PostgreSQL已停止，端口13926/54394均无监听；没有重试删除先前被审批拒绝的旧数据目录。
+
+
+## GitHub精确门禁的契约补充
+
+应用4ae80f8ad的CI 40362114869中前端、Linux lint、shell与release helpers成功，完整unit的TestAPIContracts发现两份管理设置wantJSON遗漏qq_binding_enabled/qq_image_enabled，307与309字段不匹配，integration随前置失败跳过。新增字段本身返回正确，现只给两份精确JSON期望各补两个true字段（4行），不改产品逻辑或弱化断言。本地先RED复现，随后11个契约子例、server完整20叶/0失败0skip与Linux目标unit-tag server lint0 issues通过；后续新源码必须重新通过自身CI/安全门禁。
