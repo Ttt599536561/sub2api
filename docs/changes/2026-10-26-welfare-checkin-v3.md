@@ -2,7 +2,7 @@
 
 ## 范围与来源
 
-用户授权代理自行设计并从主目录8e5c5d32e5b224526f91f22ff41a6261738b8141拉分支开发。对应代码主题为`feat: reduce welfare check-in rewards with v3 rules`。实现位于codex/welfare-v3-20261026；本轮为本地开发，不合并主目录、不推送、不发布镜像、不部署。主目录已有11份tracked WIP独立保全。
+用户授权代理自行设计并从主目录8e5c5d32e5b224526f91f22ff41a6261738b8141拉分支开发。实现提交：`569817eaee381ae293b7b65fa40fc45de94ec770`（已本地提交）。对应代码主题为`feat: reduce welfare check-in rewards with v3 rules`。实现位于codex/welfare-v3-20261026；本轮为本地开发，不合并主目录、不推送、不发布镜像、不部署。主目录已有11份tracked WIP独立保全。
 
 完整设计见[规则设计](../superpowers/specs/2026-10-26-welfare-checkin-v3-design.md)，执行步骤见[实施计划](../superpowers/plans/2026-10-26-welfare-checkin-v3.md)。既有v2设计/发布记录仅代表历史规则。
 
