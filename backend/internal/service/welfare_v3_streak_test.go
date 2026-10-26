@@ -191,9 +191,10 @@ func TestWelfareV3MilestoneBoundariesAndPrivateAudit(t *testing.T) {
 func TestWelfareV3EveryRandomFailureAbortsMutationAndCanRetry(t *testing.T) {
 	for _, day := range []int64{1, 7, 15, 30} {
 		stages := 2
-		if day == 7 || day == 15 {
+		switch day {
+		case 7, 15:
 			stages = 3
-		} else if day == 30 {
+		case 30:
 			stages = 4
 		}
 		for stage := 1; stage <= stages; stage++ {

@@ -72,3 +72,8 @@
 - repository vet、差异检查和原主目录11份WIP保全复核通过。业务Go/Vue算法实现未变，本轮未重复运行前轮已完成的类型/lint/构建。
 
 本轮测试仍使用原专属E盘PostgreSQL与每次新库，结束已停止且54394无监听。未再次尝试此前被拒绝的目录清理，日志保留在`.cache/welfare-v3-20261026/reaudit-*`。补强代码与本记录以稳定主题`test: strengthen welfare v3 CI and migration coverage`一并本地提交；未合并、推送、发布或部署。
+
+
+## 2026-10-26 r7 Linux发布门禁修正
+
+源码c630c7308的GitHub CI 40329169174中完整unit/integration、frontend、shell和release-helpers成功；golangci-lint在welfare_v3_streak_test.go失败阶段选择处报告staticcheck QF1003。现改为switch day，普通日/第7/15/30天仍分别测试2/3/3/4个随机失败阶段，回滚与重试断言不变。福利service专项通过，复用golangci-lint2.14.0以GOOS=linux检查service得到0 issues，独立复核语义一致。该修正仅测试代码，不改奖励、余额或迁移；后续发布必须绑定修正后提交并取得其自己的main/push CI及Security Scan成功，不能复用旧源码的结果。
