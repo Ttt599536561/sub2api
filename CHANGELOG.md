@@ -8,7 +8,7 @@
 
 - **r6迁移回归兼容Docker端口映射**：首轮Linux CI识别新增测试误把容器服务端内网地址要求为loopback；修正测试连接检查，保留本机DSN白名单和独立新库隔离，不改产品代码/SQL。重新验证与门禁记录见[本次合并审查](docs/changes/2026-10-26-upstream-ac1b8f1.md)。
 
-- **固定r6 Linux发布源码**：主目录已合入并推送`787d5a4a3`；新增专用工作流固定完整SHA，要求同SHA的main CI/安全成功，只构建原生Linux amd64/arm64且禁止覆盖标签。原WIP已恢复保全，发布结果待核验；见[r6发布记录](deploy/CUSTOM_IMAGE_0.2.17-r6.md)。
+- **固定r6 Linux发布源码**：主目录已合入并推送`787d5a4a3`，最终固定候选`12356b53a`含CI迁移测试兼容修正；新增专用工作流固定完整SHA，要求同SHA的main CI/安全成功，只构建原生Linux amd64/arm64且禁止覆盖标签。原WIP已恢复保全，发布结果待核验；见[r6发布记录](deploy/CUSTOM_IMAGE_0.2.17-r6.md)。
 
 - **合并上游ac1b8f1与最新已上线QQ投递修复（本地验证完成，待Linux发布）**：固定上游0.2.17提交，合并114文件差异并处理6文件冲突，保留福利/推广/监控/ultrafast/QQ二开；纳入与测试站部署manifest一致的11份QQ修复。前端442文件3961项及类型/lint/build通过；最终后端unit59包25714个PASS事件/0失败/18外部条件skip，QQ真实PG483PASS/0skip、305→306迁移升级/全新安装/保全、Linux lint0 issues、安全扫描0可达和独立审查通过。修复Gemini原生SSE写失败/分隔符/EOF未完整交付误计图片、QQ测试夹具心跳时序及lint断言，保留已有WIP。新增Gemini生图开关迁移的升级影响及后续完整验证见[合并审查记录](docs/changes/2026-10-26-upstream-ac1b8f1.md)。本条与合并源码一并提交，GitHub精确源码门禁及镜像发布状态另见后续记录；本轮未部署线上。
 
