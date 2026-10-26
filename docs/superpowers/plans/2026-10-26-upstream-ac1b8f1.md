@@ -13,9 +13,11 @@
 - [x] 纳入11份已上线QQ源码/测试及定位文档；不纳入无上线证据的Codex/CCSwitch/历史草案WIP。
 - [x] 独立审查后端流式/调度/计费、前端/依赖/发布、QQ与迁移；确认福利、推广、ultrafast、监控、QQ功能仍在。
 - [x] 本地完整unit、真实PG QQ与迁移升级回归、Go vet/lint/security、前端完整test/typecheck/lint/build；必要修复先复现再回归。
-- [ ] 维护CHANGELOG/HANDOFF/本次changes；精确源码提交，保全主目录WIP后fast-forward回main并推送；核对origin SHA。
-- [ ] 精确源码GitHub CI与Security Scan成功；新增r6专用workflow固定SOURCE_COMMIT，Ubuntu原生amd64/arm64，禁止v标签触发通用多平台release。
-- [ ] 触发Linux发布，核验工作流成功、artifact/digest/OCI来源与两架构；归档最终镜像地址，文档提交推送。
-- [ ] 校验主目录WIP保全，停止本次临时测试进程，清理已不用的本次临时文件，保留必要证据与缓存。
+- [x] 维护CHANGELOG/HANDOFF/本次changes；精确源码提交，保全主目录WIP后fast-forward回main并推送；核对origin SHA。
+- [x] 精确源码GitHub CI与Security Scan成功；新增r6专用workflow固定SOURCE_COMMIT，Ubuntu原生amd64/arm64，禁止v标签触发通用多平台release。
+- [x] 触发Linux发布，核验工作流成功、artifact/digest/OCI来源与两架构；归档最终镜像地址，文档提交推送。
+- [x] 校验主目录WIP保全，停止本次临时测试进程，清理已不用的本次临时文件，保留必要证据与缓存。
 
 验证限制：本任务发布镜像，不部署正式站/QQ测试站、不发送QQ或真实模型请求。新246迁移会启用已有Gemini/Antigravity分组生图权限，须验证并写入升级注意事项；按完整文件名识别迁移，不重命名已发布历史SQL。
+
+完成结果：应用02f706a19、控制69b52de91，CI40303821798/安全40303821916/发布40305430958均success。r6匿名24层与来源校验通过，详见deploy/CUSTOM_IMAGE_0.2.17-r6.md。清理项按实际边界完成：测试进程停止、Docker恢复原状态；pgdata删除被自动审批blocked by policy拒绝，保留未绕过，原WIP和缓存不清理。

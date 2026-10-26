@@ -58,3 +58,7 @@ QQ已上线投递测试中的两个未检查类型断言按lint要求改为明�
 本地Docker实际宿主磁盘已新鲜核对为E:/CodexData/DockerBackup/DockerDesktopWSL/disk/docker_data.vhdx，配置与注册WSL目录均在E盘；启动前引擎未运行、启动后无原运行容器。复用现有镜像运行完整repository integration，不创建C盘项目/测试目录。
 
 本地完整repository integration通过：1788个PASS事件/1655叶、0失败、3跳过（既有并发缓存TODO及未设置独立DSN的2个迁移专项；后两项已在前轮CI unit的真实容器PG通过）。随后仅将ServiceAccount夹具平台明确为Gemini，最终全部福利专项19PASS事件/17叶、0失败/0跳过，以及integration-tag repository vet和差异检查通过。真实SQL故障保留了资金/福利原子回滚断言，没有通过弱化测试掩盖产品问题。所有本轮测试容器已自动清理，docker ps为空。
+
+## 最终公开发布完成
+
+固定应用02f706a193a1b5c79cd43c4ec5aed85a12553293、控制69b52de91a59472f54694b131f013363c818ba06。CI40303821798、安全40303821916和Linux双架构发布40305430958全部success；前述两次失败候选仅作过程记录，不作为最终门禁状态。5份artifact哈希与全部24层/90,204,030字节匿名校验通过，最终digest `sha256:e19bb55853094c3da1df7649b071b8235bba4fcc2164ca7f87c7f463d51155f1`。镜像/升级边界、各架构manifest和完整链接见[r6发布记录](../../deploy/CUSTOM_IMAGE_0.2.17-r6.md)。原WIP已恢复并通过937个后端PASS事件和CCSwitch25项，后续指纹不变；没有生产部署。
