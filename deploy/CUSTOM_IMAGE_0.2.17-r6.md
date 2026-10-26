@@ -63,3 +63,5 @@ ghcr.io/ttt599536561/sub2api-custom@sha256:e19bb55853094c3da1df7649b071b8235bba4
 原始证据在 `output/publish-v0.2.17-r6` 和 `.cache/merge-ac1b8f1-20261026`，关键身份已归档本页。源码和控制提交已合入主目录并推送GitHub；原11份WIP在所有后续整合中指纹未变。
 
 本轮Docker磁盘实际路径已核对在E盘，测试容器自动清理；引擎已恢复最初停止状态并保留共享镜像缓存。本轮native PG已停止、端口释放。其临时pgdata删除被自动审批以 `blocked by policy` 拒绝，未提供具体原因；目录保留，没有通过换工具或删除父目录绕过。没有清理旧工作树、用户资料或登录信息。
+
+本轮已完全合入的隔离工作树从Git注销后，Windows删除目录返回Directory not empty；只针对该已核对残留目录的本机清理亦在启动前被自动审批以blocked by policy拒绝（无具体原因），未执行、未再次尝试或绕过。残留目录保留，完整源码仍在main和保留的已合并分支，原WIP保护快照不受影响。

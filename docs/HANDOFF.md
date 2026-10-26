@@ -6,7 +6,7 @@
 
 已纳入最新QQ测试站原图投递修复，保留福利/推广/监控/ultrafast/QQ二开；修复Gemini下游写失败及SSE边界计图。后续CI发现的两个问题均为测试与Docker/上游语义不匹配，已通过强化回滚/隔离回归修正，最终完整CI通过。来源和验证阶段见[合并审查](changes/2026-10-26-upstream-ac1b8f1.md)。主目录原11份Codex/CCSwitch等WIP、非构建untracked内容及保护快照保留，不在镜像内，恢复后专项通过且后续指纹未变。
 
-本任务没有部署正式站/QQ测试站或修改CF/检测站、真实用户数据。新246会启用既有Gemini/Antigravity分组生图开关，升级前务必核对策略；两个246按完整filename识别，305→306已验证。测试容器已清理、Docker恢复原停止状态、native PG已停；删除本轮pgdata被自动审批以blocked by policy拒绝且未给具体原因，保留目录而未绕过。
+本任务没有部署正式站/QQ测试站或修改CF/检测站、真实用户数据。新246会启用既有Gemini/Antigravity分组生图开关，升级前务必核对策略；两个246按完整filename识别，305→306已验证。测试容器已清理、Docker恢复原停止状态、native PG已停；删除本轮pgdata被自动审批以blocked by policy拒绝且未给具体原因，保留目录而未绕过。本轮已合并工作树已从Git注销，但目录残留的清理也被自动审批拒绝，原位保留；完整源码在main与保留分支，原WIP快照保留。
 
 ## AI接手先定位
 
