@@ -76,23 +76,23 @@ func TestWelfareDailyStatefulDistributionBoundaries(t *testing.T) {
 		{0, 19, true, 0}, {0, 20, false, 1}, {1, 29, true, 0}, {1, 30, false, 2},
 		{2, 49, true, 0}, {2, 50, false, 3}, {3, 99, true, 0},
 	} {
-		amount, next, audit, err := sampleWelfareDaily(tc.low, welfareSequence(tc.roll, 0, 0))
+		amount, next, audit, err := sampleWelfareDaily(tc.low, welfareSequence(tc.roll, 0))
 		require.NoError(t, err)
 		require.Equal(t, tc.next, next)
 		require.Equal(t, tc.surprise, audit.Surprise)
 		if tc.surprise {
-			require.EqualValues(t, 10, amount)
+			require.EqualValues(t, 3, amount)
 		} else {
 			require.EqualValues(t, 1, amount)
 		}
 	}
-	for _, tc := range []struct{ roll, want int64 }{{0, 1}, {7, 1}, {8, 2}, {56, 2}, {57, 3}, {399, 9}} {
+	for _, tc := range []struct{ roll, want int64 }{{0, 1}, {69, 1}, {70, 2}, {99, 2}} {
 		amount, _, _, err := sampleWelfareDaily(0, welfareSequence(99, tc.roll))
 		require.NoError(t, err)
 		require.Equal(t, tc.want, amount)
 	}
-	for _, tc := range []struct{ tier, within, want int64 }{{64, 10, 20}, {65, 0, 21}, {89, 14, 35}, {90, 0, 36}, {98, 14, 50}, {99, 49, 100}} {
-		amount, _, _, err := sampleWelfareDaily(0, welfareSequence(0, tc.tier, tc.within))
+	for _, tc := range []struct{ roll, want int64 }{{0, 3}, {69, 3}, {70, 4}, {94, 4}, {95, 5}, {99, 5}} {
+		amount, _, _, err := sampleWelfareDaily(0, welfareSequence(0, tc.roll))
 		require.NoError(t, err)
 		require.Equal(t, tc.want, amount)
 	}
@@ -101,27 +101,28 @@ func TestWelfareDailyStatefulDistributionBoundaries(t *testing.T) {
 func TestWelfareCheckinCalendarGapCycleAndMilestones(t *testing.T) {
 	date := time.Date(2026, 9, 19, 0, 0, 0, 0, time.UTC)
 	for _, tc := range []struct {
-		last                      string
-		day, total, cycle         int64
-		wantDay, wantCycle, bonus int64
+		last               string
+		day, total, cycle  int64
+		wantDay, wantCycle int64
 	}{
-		{"", 0, 0, 0, 1, 1, 0}, {"2026-09-18", 6, 6, 1, 7, 1, 60},
-		{"2026-09-18", 14, 100, 5, 15, 5, 200}, {"2026-09-18", 29, 29, 1, 30, 1, 500},
-		{"2026-09-18", 30, 30, 1, 1, 2, 0}, {"2026-09-17", 6, 6, 1, 1, 2, 0},
+		{"", 0, 0, 0, 1, 1}, {"2026-09-18", 6, 6, 1, 7, 1},
+		{"2026-09-18", 14, 100, 5, 15, 5}, {"2026-09-18", 29, 29, 1, 30, 1},
+		{"2026-09-18", 30, 30, 1, 1, 2}, {"2026-09-17", 6, 6, 1, 1, 2},
 	} {
 		w := WelfareWallet{LastCheckinDate: tc.last, CycleDay: tc.day, TotalCheckinDays: tc.total, CycleID: tc.cycle, DailyLowCount: 3}
-		bonus, err := advanceWelfareCheckin(&w, date.Format("2006-01-02"))
+		err := advanceWelfareCheckin(&w, date.Format("2006-01-02"))
 		require.NoError(t, err)
 		require.Equal(t, tc.wantDay, w.CycleDay)
 		require.Equal(t, tc.wantCycle, w.CycleID)
 		require.Equal(t, tc.total+1, w.TotalCheckinDays)
-		require.Equal(t, tc.bonus, bonus)
+		require.Zero(t, w.BalanceCents, "date advancement must not award money")
+		require.Zero(t, w.TotalEarnedCents)
 		require.Equal(t, 3, w.DailyLowCount, "gap and rollover preserve hidden counter")
 	}
 	w := WelfareWallet{LastCheckinDate: "2026-09-19"}
-	_, err := advanceWelfareCheckin(&w, "2026-09-19")
+	err := advanceWelfareCheckin(&w, "2026-09-19")
 	require.ErrorIs(t, err, ErrWelfareAlreadyCheckedIn)
-	_, err = advanceWelfareCheckin(&WelfareWallet{LastCheckinDate: "2026-09-20"}, "2026-09-19")
+	err = advanceWelfareCheckin(&WelfareWallet{LastCheckinDate: "2026-09-20"}, "2026-09-19")
 	require.Error(t, err, "clock rollback cannot award old days")
 }
 

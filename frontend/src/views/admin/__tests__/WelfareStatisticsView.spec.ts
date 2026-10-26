@@ -43,7 +43,7 @@ describe('administrator welfare statistics', () => {
     getStatistics.mockResolvedValue(overview)
     getStatisticsUsers.mockResolvedValue(users)
     getStatisticsRecords.mockResolvedValue(records)
-    getSettings.mockResolvedValue({ enabled: false, launch_at: null, rules_version: 2 })
+    getSettings.mockResolvedValue({ enabled: false, launch_at: null, rules_version: 3 })
   })
   afterEach(() => { wrapper?.unmount(); localStorage.clear(); vi.useRealTimers() })
 

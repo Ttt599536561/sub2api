@@ -61,16 +61,28 @@ func welfareTickets(spend string, used, subscriptionDraws int64) (available, deb
 }
 
 type welfareDailyAudit struct {
-	Surprise   bool  `json:"surprise"`
-	LowBefore  int   `json:"low_before"`
-	LowAfter   int   `json:"low_after"`
-	BranchRoll int64 `json:"branch_roll"`
-	AmountRoll int64 `json:"amount_roll"`
-	BandRoll   int64 `json:"band_roll,omitempty"`
+	RulesVersion string              `json:"rules_version"`
+	Surprise     bool                `json:"surprise"`
+	LowBefore    int                 `json:"low_before"`
+	LowAfter     int                 `json:"low_after"`
+	BranchRoll   int64               `json:"branch_roll"`
+	AmountRoll   int64               `json:"amount_roll"`
+	BandRoll     int64               `json:"band_roll,omitempty"`
+	AmountCents  int64               `json:"amount_cents"`
+	Streak       *welfareStreakAudit `json:"streak,omitempty"`
+}
+
+type welfareStreakAudit struct {
+	Day          int64  `json:"day"`
+	BranchRoll   *int64 `json:"branch_roll,omitempty"`
+	BandMinCents int64  `json:"band_min_cents"`
+	BandMaxCents int64  `json:"band_max_cents"`
+	AmountRoll   int64  `json:"amount_roll"`
+	AmountCents  int64  `json:"amount_cents"`
 }
 
 func sampleWelfareDaily(low int, random WelfareRandom) (int64, int, welfareDailyAudit, error) {
-	audit := welfareDailyAudit{LowBefore: low}
+	audit := welfareDailyAudit{RulesVersion: "v3", LowBefore: low}
 	if low < 0 || low > 3 {
 		return 0, low, audit, fmt.Errorf("invalid welfare daily counter")
 	}
@@ -80,41 +92,59 @@ func sampleWelfareDaily(low int, random WelfareRandom) (int64, int, welfareDaily
 	}
 	audit.BranchRoll = roll
 	chance := []int64{20, 30, 50, 100}[low]
-	if roll >= chance {
-		roll, err = random(400)
-		if err != nil {
-			return 0, low, audit, err
-		}
-		audit.AmountRoll = roll
-		amount := int64(1)
-		if roll >= 8 {
-			amount = 2 + (roll-8)/49
-		}
-		audit.LowAfter = low + 1
-		return amount, low + 1, audit, nil
-	}
-	audit.Surprise = true
+	audit.Surprise = roll < chance
 	roll, err = random(100)
 	if err != nil {
 		return 0, low, audit, err
 	}
 	audit.AmountRoll = roll
-	min, max := int64(10), int64(20)
-	switch {
-	case roll >= 99:
-		min, max = 51, 100
-	case roll >= 90:
-		min, max = 36, 50
-	case roll >= 65:
-		min, max = 21, 35
+	amount, next := int64(1), low+1
+	if audit.Surprise {
+		amount, next = 3, 0
+		if roll >= 95 {
+			amount = 5
+		} else if roll >= 70 {
+			amount = 4
+		}
+	} else if roll >= 70 {
+		amount = 2
 	}
+	audit.LowAfter, audit.AmountCents = next, amount
+	return amount, next, audit, nil
+}
+
+func sampleWelfareStreak(day int64, random WelfareRandom) (int64, *welfareStreakAudit, error) {
+	audit := &welfareStreakAudit{Day: day}
+	min, max := int64(0), int64(0)
+	switch day {
+	case 7:
+		min, max = 3, 8
+	case 15:
+		min, max = 8, 20
+	case 30:
+		roll, err := random(100)
+		if err != nil {
+			return 0, audit, err
+		}
+		audit.BranchRoll = &roll
+		switch {
+		case roll < 80:
+			min, max = 20, 50
+		case roll < 98:
+			min, max = 51, 100
+		default:
+			min, max = 101, 195
+		}
+	default:
+		return 0, nil, nil
+	}
+	audit.BandMinCents, audit.BandMaxCents = min, max
 	within, err := random(max - min + 1)
 	if err != nil {
-		return 0, low, audit, err
+		return 0, audit, err
 	}
-	audit.BandRoll = within
-	audit.LowAfter = 0
-	return min + within, 0, audit, nil
+	audit.AmountRoll, audit.AmountCents = within, min+within
+	return min + within, audit, nil
 }
 
 var welfareLotteryAmounts = []int64{50, 100, 200, 500, 1000, 2000, 5000}
@@ -134,13 +164,13 @@ func sampleWelfareLottery(random WelfareRandom) (int64, error) {
 	return 0, fmt.Errorf("invalid welfare random sample")
 }
 
-func advanceWelfareCheckin(w *WelfareWallet, date string) (int64, error) {
+func advanceWelfareCheckin(w *WelfareWallet, date string) error {
 	day, err := time.Parse("2006-01-02", date)
 	if err != nil {
-		return 0, ErrWelfareInvalidRequest
+		return ErrWelfareInvalidRequest
 	}
 	if w.LastCheckinDate >= date {
-		return 0, ErrWelfareAlreadyCheckedIn
+		return ErrWelfareAlreadyCheckedIn
 	}
 	consecutive := w.LastCheckinDate == day.AddDate(0, 0, -1).Format("2006-01-02")
 	if !consecutive || w.CycleDay >= 30 {
@@ -151,15 +181,7 @@ func advanceWelfareCheckin(w *WelfareWallet, date string) (int64, error) {
 	}
 	w.LastCheckinDate = date
 	w.TotalCheckinDays++
-	switch w.CycleDay {
-	case 7:
-		return 60, nil
-	case 15:
-		return 200, nil
-	case 30:
-		return 500, nil
-	}
-	return 0, nil
+	return nil
 }
 
 func welfarePrizeFor(cents int64) WelfarePrize {

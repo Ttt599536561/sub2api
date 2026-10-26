@@ -9,6 +9,10 @@ import (
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 )
 
+// WelfareRulesVersion identifies new check-ins and the current public rules.
+// Previously saved operations retain their original response and audit version.
+const WelfareRulesVersion = 3
+
 var (
 	ErrWelfarePaused              = infraerrors.Conflict("WELFARE_PAUSED", "welfare rewards are paused")
 	ErrWelfareNotLaunched         = infraerrors.Conflict("WELFARE_NOT_LAUNCHED", "welfare program has not launched")

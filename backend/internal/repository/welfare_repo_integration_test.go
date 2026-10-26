@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -48,12 +49,12 @@ func TestWelfareRepositoryConcurrentCheckinReplaysExactly(t *testing.T) {
 			first = result.OperationID
 		}
 		require.Equal(t, first, result.OperationID)
-		require.Equal(t, "0.10", result.RewardAmount)
+		require.Equal(t, "0.03", result.RewardAmount)
 	}
 	overview, err := s.Overview(ctx, id)
 	require.NoError(t, err)
 	require.EqualValues(t, 1, overview.TotalCheckinDays)
-	require.Equal(t, "0.10", overview.WelfareBalance)
+	require.Equal(t, "0.03", overview.WelfareBalance)
 	var ledger, checkins int
 	require.NoError(t, integrationDB.QueryRow(`SELECT count(*) FROM welfare_ledger WHERE user_id=$1`, id).Scan(&ledger))
 	require.Equal(t, 1, ledger)
@@ -68,7 +69,7 @@ func TestWelfareRepositoryRedeemAtomicReplayVersionAndPausedProgram(t *testing.T
 	require.NoError(t, err)
 	q, err := s.Quote(ctx, id, "all", "")
 	require.NoError(t, err)
-	require.Equal(t, "5.22345678", q.AccountBalanceAfter)
+	require.Equal(t, "5.15345678", q.AccountBalanceAfter)
 	// Usage changes the general wallet version, not the quoted welfare balance version.
 	_, err = integrationDB.Exec(`UPDATE welfare_wallets SET eligible_spend=100,wallet_version=wallet_version+1 WHERE user_id=$1`, id)
 	require.NoError(t, err)
@@ -90,7 +91,7 @@ func TestWelfareRepositoryRedeemAtomicReplayVersionAndPausedProgram(t *testing.T
 	var balance string
 	var outbox, ledger int
 	require.NoError(t, integrationDB.QueryRow(`SELECT balance::text FROM users WHERE id=$1`, id).Scan(&balance))
-	require.Equal(t, "5.22345678", balance)
+	require.Equal(t, "5.15345678", balance)
 	require.NoError(t, integrationDB.QueryRow(`SELECT count(*) FROM welfare_balance_outbox WHERE user_id=$1`, id).Scan(&outbox))
 	require.Equal(t, 1, outbox)
 	require.NoError(t, integrationDB.QueryRow(`SELECT count(*) FROM welfare_ledger WHERE user_id=$1 AND type='redeem'`, id).Scan(&ledger))
@@ -164,16 +165,16 @@ func TestWelfareRepositoryMilestoneCalendarLedgerAndOperationOwnership(t *testin
 	require.NoError(t, err)
 	result, err := s.CheckIn(ctx, id)
 	require.NoError(t, err)
-	require.Equal(t, "0.10", result.BaseRewardAmount)
-	require.Equal(t, "0.60", result.StreakRewardAmount)
-	require.Equal(t, "0.70", result.RewardAmount)
+	require.Equal(t, "0.03", result.BaseRewardAmount)
+	require.Equal(t, "0.03", result.StreakRewardAmount)
+	require.Equal(t, "0.06", result.RewardAmount)
 	calendar, err := s.Calendar(ctx, id, result.Overview.BusinessDate[:7])
 	require.NoError(t, err)
 	var checked int
 	for _, day := range calendar.Days {
 		if day.CheckedIn {
 			checked++
-			require.Equal(t, "0.10", day.RewardAmount)
+			require.Equal(t, "0.03", day.RewardAmount)
 		}
 	}
 	require.Equal(t, 1, checked)
@@ -182,8 +183,8 @@ func TestWelfareRepositoryMilestoneCalendarLedgerAndOperationOwnership(t *testin
 	require.EqualValues(t, 2, records.Total)
 	require.Len(t, records.Items, 1)
 	require.Equal(t, "streak", records.Items[0].Type)
-	require.Equal(t, "0.60", records.Items[0].Amount)
-	require.Equal(t, "0.70", records.Items[0].BalanceAfter)
+	require.Equal(t, "0.03", records.Items[0].Amount)
+	require.Equal(t, "0.06", records.Items[0].BalanceAfter)
 	op, err := s.Operation(ctx, id, result.OperationID)
 	require.NoError(t, err)
 	require.Equal(t, result.OperationID, op.OperationID)
@@ -267,4 +268,162 @@ func TestWelfareRepositoryProgramLaunchTimestampPersistsAcrossPause(t *testing.T
 	require.NoError(t, err)
 	require.True(t, resumed.Enabled)
 	require.True(t, first.LaunchAt.Equal(*resumed.LaunchAt))
+}
+
+func welfareV3RepositoryFixture(t *testing.T, day int64) (service.WelfareRepository, int64, time.Time) {
+	t.Helper()
+	_, id := welfareFixture(t)
+	now := time.Date(2026, 10, 26, 4, 0, 0, 0, time.UTC)
+	_, err := integrationDB.Exec(`INSERT INTO welfare_wallets(user_id,balance_cents,total_earned_cents,total_redeemed_cents,total_checkin_days,cycle_id,cycle_day,last_checkin_date,daily_low_count,eligible_spend,draws_used,subscription_draws,wallet_version,welfare_balance_version)
+		VALUES($1,123,300,177,$2,2,$3,'2026-10-25',3,100,1,2,11,7)`, id, day+29, day-1)
+	require.NoError(t, err)
+	return NewWelfareRepository(integrationDB), id, now
+}
+
+func requireWelfareV3RepositoryFactCounts(t *testing.T, id int64, want [4]int) {
+	t.Helper()
+	var got [4]int
+	require.NoError(t, integrationDB.QueryRow(`SELECT
+		(SELECT count(*) FROM welfare_operations WHERE user_id=$1),
+		(SELECT count(*) FROM welfare_ledger WHERE user_id=$1),
+		(SELECT count(*) FROM welfare_checkins WHERE user_id=$1),
+		(SELECT count(*) FROM welfare_balance_outbox WHERE user_id=$1)`, id).Scan(&got[0], &got[1], &got[2], &got[3]))
+	require.Equal(t, want, got, "operations, ledger, checkins and balance outbox must commit together")
+}
+
+func requireWelfareV3OperationReplay(t *testing.T, original, replay *service.WelfareOperation) {
+	t.Helper()
+	// JSON persistence preserves the public timestamp and offset, not the
+	// in-memory time.Location name. Compare every field in the stored contract.
+	originalJSON, err := json.Marshal(original)
+	require.NoError(t, err)
+	replayJSON, err := json.Marshal(replay)
+	require.NoError(t, err)
+	require.JSONEq(t, string(originalJSON), string(replayJSON))
+}
+
+func requireWelfareV3CommittedCheckin(t *testing.T, repo service.WelfareRepository, id, day, base, streak int64, before *service.WelfareState) {
+	t.Helper()
+	after, err := repo.State(context.Background(), id)
+	require.NoError(t, err)
+	want := *before
+	want.Wallet.BalanceCents += base + streak
+	want.Wallet.TotalEarnedCents += base + streak
+	want.Wallet.TotalCheckinDays++
+	want.Wallet.CycleDay = day
+	want.Wallet.LastCheckinDate = "2026-10-26"
+	want.Wallet.DailyLowCount = 0
+	want.Wallet.WalletVersion++
+	want.Wallet.WelfareBalanceVersion++
+	require.Equal(t, want, *after, "every other wallet field and account balance must remain unchanged")
+	requireWelfareV3RepositoryFactCounts(t, id, [4]int{1, 2, 1, 0})
+	var dailyAmount, dailyBalance, streakAmount, streakBalance int64
+	require.NoError(t, integrationDB.QueryRow(`SELECT amount_cents,balance_after_cents FROM welfare_ledger WHERE user_id=$1 AND type='daily'`, id).Scan(&dailyAmount, &dailyBalance))
+	require.NoError(t, integrationDB.QueryRow(`SELECT amount_cents,balance_after_cents FROM welfare_ledger WHERE user_id=$1 AND type='streak'`, id).Scan(&streakAmount, &streakBalance))
+	require.Equal(t, base, dailyAmount)
+	require.Equal(t, before.Wallet.BalanceCents+base, dailyBalance)
+	require.Equal(t, streak, streakAmount)
+	require.Equal(t, want.Wallet.BalanceCents, streakBalance)
+	var daily, bonus, cycle, cycleDay int64
+	var date, auditVersion, fingerprint string
+	require.NoError(t, integrationDB.QueryRow(`SELECT daily_cents,streak_cents,cycle_id,cycle_day,business_date::text FROM welfare_checkins WHERE user_id=$1`, id).Scan(&daily, &bonus, &cycle, &cycleDay, &date))
+	require.Equal(t, []int64{base, streak, before.Wallet.CycleID, day}, []int64{daily, bonus, cycle, cycleDay})
+	require.Equal(t, "2026-10-26", date)
+	require.NoError(t, integrationDB.QueryRow(`SELECT private_audit->>'rules_version',request_fingerprint FROM welfare_operations WHERE user_id=$1`, id).Scan(&auditVersion, &fingerprint))
+	require.Equal(t, "v3", auditVersion)
+	require.Equal(t, "checkin:2026-10-26", fingerprint)
+}
+
+func TestWelfareRepositoryV3Day30ConcurrentCheckinSamplesOnce(t *testing.T) {
+	repo, id, now := welfareV3RepositoryFixture(t, 30)
+	ctx := context.Background()
+	before, err := repo.State(ctx, id)
+	require.NoError(t, err)
+	var calls atomic.Int32
+	rolls, ranges := []int64{99, 99, 98, 94}, []int64{100, 100, 100, 95}
+	svc := service.NewWelfareService(repo, service.WithWelfareClock(func() time.Time { return now }), service.WithWelfareRandom(func(n int64) (int64, error) {
+		index := int(calls.Add(1)) - 1
+		if index >= len(rolls) || n != ranges[index] {
+			return 0, fmt.Errorf("unexpected random call %d range %d", index, n)
+		}
+		return rolls[index], nil
+	}))
+	const concurrency = 20
+	results := make(chan *service.WelfareOperation, concurrency)
+	errs := make(chan error, concurrency)
+	var wg sync.WaitGroup
+	for i := 0; i < concurrency; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			result, err := svc.CheckIn(ctx, id)
+			results <- result
+			errs <- err
+		}()
+	}
+	wg.Wait()
+	close(results)
+	close(errs)
+	for err := range errs {
+		require.NoError(t, err)
+	}
+	var first *service.WelfareOperation
+	for result := range results {
+		if first == nil {
+			first = result
+		}
+		requireWelfareV3OperationReplay(t, first, result)
+		require.Equal(t, "2.00", result.RewardAmount)
+		require.Equal(t, "0.05", result.BaseRewardAmount)
+		require.Equal(t, "1.95", result.StreakRewardAmount)
+	}
+	require.EqualValues(t, 4, calls.Load())
+	requireWelfareV3CommittedCheckin(t, repo, id, 30, 5, 195, before)
+	var raw []byte
+	require.NoError(t, integrationDB.QueryRow(`SELECT private_audit FROM welfare_operations WHERE user_id=$1`, id).Scan(&raw))
+	require.JSONEq(t, `{"rules_version":"v3","surprise":true,"low_before":3,"low_after":0,"branch_roll":99,"amount_roll":99,"amount_cents":5,"streak":{"day":30,"branch_roll":98,"band_min_cents":101,"band_max_cents":195,"amount_roll":94,"amount_cents":195}}`, string(raw))
+}
+
+func TestWelfareRepositoryV3MilestoneEntropyFailuresRollbackAndRetry(t *testing.T) {
+	for _, tc := range []struct {
+		day, bonus int64
+		stages     int
+	}{{7, 3, 3}, {15, 8, 3}, {30, 20, 4}} {
+		for stage := 1; stage <= tc.stages; stage++ {
+			t.Run(fmt.Sprintf("day_%d_stage_%d", tc.day, stage), func(t *testing.T) {
+				repo, id, now := welfareV3RepositoryFixture(t, tc.day)
+				ctx := context.Background()
+				before, err := repo.State(ctx, id)
+				require.NoError(t, err)
+				failure := errors.New("entropy unavailable")
+				calls := 0
+				broken := service.NewWelfareService(repo, service.WithWelfareClock(func() time.Time { return now }), service.WithWelfareRandom(func(int64) (int64, error) {
+					calls++
+					if calls == stage {
+						return 0, failure
+					}
+					return 0, nil
+				}))
+				_, err = broken.CheckIn(ctx, id)
+				require.ErrorIs(t, err, failure)
+				require.Equal(t, stage, calls)
+				afterFailure, err := repo.State(ctx, id)
+				require.NoError(t, err)
+				require.Equal(t, before, afterFailure, "date, hidden counter, balances and versions all roll back")
+				requireWelfareV3RepositoryFactCounts(t, id, [4]int{})
+				retryCalls := 0
+				retry := service.NewWelfareService(repo, service.WithWelfareClock(func() time.Time { return now }), service.WithWelfareRandom(func(int64) (int64, error) {
+					retryCalls++
+					return 0, nil
+				}))
+				result, err := retry.CheckIn(ctx, id)
+				require.NoError(t, err)
+				replayed, err := retry.CheckIn(ctx, id)
+				require.NoError(t, err)
+				requireWelfareV3OperationReplay(t, result, replayed)
+				require.Equal(t, tc.stages, retryCalls, "retry commits once, replay never samples")
+				requireWelfareV3CommittedCheckin(t, repo, id, tc.day, 3, tc.bonus, before)
+			})
+		}
+	}
 }

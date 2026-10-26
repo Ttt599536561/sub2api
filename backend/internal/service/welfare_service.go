@@ -83,7 +83,7 @@ func welfareOverview(state *WelfareState, now time.Time) (*WelfareOverview, erro
 		BusinessDate: date, NextResetAt: today.AddDate(0, 0, 1), EligibleSpend: w.EligibleSpend, NextDrawRemaining: remaining, TicketDebt: debt,
 		SubscriptionDraws: w.SubscriptionDraws,
 		WalletVersion:     w.WalletVersion, WelfareBalanceVersion: w.WelfareBalanceVersion,
-		RewardsEnabled: state.Program.Enabled, RulesVersion: 2, Milestones: milestones}, nil
+		RewardsEnabled: state.Program.Enabled, RulesVersion: WelfareRulesVersion, Milestones: milestones}, nil
 }
 
 func (s *WelfareService) Rules(ctx context.Context) (*WelfareRules, error) {
@@ -94,7 +94,7 @@ func (s *WelfareService) Rules(ctx context.Context) (*WelfareRules, error) {
 	for _, amount := range welfareLotteryAmounts {
 		prizes = append(prizes, welfarePrizeFor(amount))
 	}
-	return &WelfareRules{RulesVersion: 2, Timezone: "Asia/Shanghai", DrawThreshold: "50.00", SubscriptionDrawThreshold: "50.00", SubscriptionDrawCurrency: "CNY", RedemptionRate: "1:1", Prizes: prizes}, nil
+	return &WelfareRules{RulesVersion: WelfareRulesVersion, Timezone: "Asia/Shanghai", DrawThreshold: "50.00", SubscriptionDrawThreshold: "50.00", SubscriptionDrawCurrency: "CNY", RedemptionRate: "1:1", Prizes: prizes}, nil
 }
 
 func (s *WelfareService) Calendar(ctx context.Context, userID int64, month string) (*WelfareCalendar, error) {
@@ -136,14 +136,18 @@ func (s *WelfareService) CheckIn(ctx context.Context, userID int64) (*WelfareOpe
 			return nil, err
 		}
 		w := &state.Wallet
-		bonus, err := advanceWelfareCheckin(w, date)
-		if err != nil {
+		if err := advanceWelfareCheckin(w, date); err != nil {
 			return nil, err
 		}
 		base, low, audit, err := sampleWelfareDaily(w.DailyLowCount, s.random)
 		if err != nil {
 			return nil, err
 		}
+		bonus, streakAudit, err := sampleWelfareStreak(w.CycleDay, s.random)
+		if err != nil {
+			return nil, err
+		}
+		audit.Streak = streakAudit
 		w.DailyLowCount = low
 		if w.BalanceCents > math.MaxInt64-base-bonus || w.TotalEarnedCents > math.MaxInt64-base-bonus {
 			return nil, fmt.Errorf("welfare reward overflow")

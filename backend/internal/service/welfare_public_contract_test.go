@@ -117,6 +117,7 @@ func requireWelfarePublicOverview(t *testing.T, object map[string]any, statuses 
 		"welfare_balance", "account_balance", "available_draws", "draws_used", "total_checkin_days", "cycle_day",
 		"today_checked_in", "business_date", "next_reset_at", "eligible_spend", "subscription_draws", "next_draw_remaining", "ticket_debt",
 		"wallet_version", "welfare_balance_version", "rewards_enabled", "rules_version", "milestones")
+	require.Equal(t, float64(3), object["rules_version"])
 	milestones, ok := object["milestones"].([]any)
 	require.True(t, ok)
 	require.Len(t, milestones, 3)
@@ -133,7 +134,7 @@ func requireWelfarePublicRules(t *testing.T, rules *WelfareRules) {
 	t.Helper()
 	object := welfarePublicContractObject(t, rules)
 	requireWelfarePublicKeys(t, object, "rules_version", "timezone", "draw_threshold", "subscription_draw_threshold", "subscription_draw_currency", "redemption_rate", "prizes")
-	require.Equal(t, float64(2), object["rules_version"])
+	require.Equal(t, float64(3), object["rules_version"])
 	require.Equal(t, "Asia/Shanghai", object["timezone"])
 	require.Equal(t, "50.00", object["draw_threshold"])
 	require.Equal(t, "50.00", object["subscription_draw_threshold"])
@@ -242,10 +243,10 @@ func TestWelfarePublicCheckinAndSavedReplayExposeOnlyEarnedAmounts(t *testing.T)
 		rolls    []int64
 		statuses []string
 	}{
-		{1, "0.09", "0.00", "0.09", []int64{99, 399}, []string{"locked", "locked", "locked"}},
-		{7, "0.28", "0.60", "0.88", []int64{0, 65, 7}, []string{"claimed", "locked", "locked"}},
-		{15, "0.28", "2.00", "2.28", []int64{0, 65, 7}, []string{"claimed", "claimed", "locked"}},
-		{30, "0.28", "5.00", "5.28", []int64{0, 65, 7}, []string{"claimed", "claimed", "claimed"}},
+		{1, "0.02", "0.00", "0.02", []int64{99, 99}, []string{"locked", "locked", "locked"}},
+		{7, "0.04", "0.08", "0.12", []int64{0, 70, 5}, []string{"claimed", "locked", "locked"}},
+		{15, "0.04", "0.20", "0.24", []int64{0, 70, 12}, []string{"claimed", "claimed", "locked"}},
+		{30, "0.05", "1.95", "2.00", []int64{0, 95, 98, 94}, []string{"claimed", "claimed", "claimed"}},
 	} {
 		t.Run(fmt.Sprintf("day_%d", tc.day), func(t *testing.T) {
 			repo := &welfarePublicContractRepo{state: WelfareState{
@@ -283,6 +284,26 @@ func TestWelfarePublicCheckinAndSavedReplayExposeOnlyEarnedAmounts(t *testing.T)
 			require.Contains(t, audit, "branch_roll")
 			require.Contains(t, audit, "amount_roll")
 			require.Contains(t, audit, "low_before")
+			require.Equal(t, "v3", audit["rules_version"])
+			baseCents, err := parseWelfareAmount(tc.base)
+			require.NoError(t, err)
+			require.Equal(t, float64(baseCents), audit["amount_cents"])
+			require.Equal(t, float64(tc.rolls[0]), audit["branch_roll"])
+			require.Equal(t, float64(tc.rolls[1]), audit["amount_roll"])
+			if tc.day > 1 {
+				streak, ok := audit["streak"].(map[string]any)
+				require.True(t, ok)
+				require.Equal(t, float64(tc.day), streak["day"])
+				require.Contains(t, streak, "amount_roll")
+				bonusCents, err := parseWelfareAmount(tc.bonus)
+				require.NoError(t, err)
+				require.Equal(t, float64(bonusCents), streak["amount_cents"])
+				if tc.day == 30 {
+					require.Equal(t, float64(98), streak["branch_roll"])
+				}
+			} else {
+				require.NotContains(t, audit, "streak")
+			}
 			require.Equal(t, len(tc.rolls), rollIndex)
 
 			overview, err := svc.Overview(ctx, 42)
@@ -312,4 +333,26 @@ func TestWelfarePublicCheckinAndSavedReplayExposeOnlyEarnedAmounts(t *testing.T)
 			require.Equal(t, len(tc.rolls), rollIndex)
 		})
 	}
+}
+
+func TestWelfarePublicHistoricalV2CheckinReplaysSavedResultWithoutSampling(t *testing.T) {
+	repo, now := welfareV3CheckinRepo(30)
+	repo.kind, repo.key, repo.fingerprint = "checkin", "2026-10-26", "checkin:2026-10-26"
+	repo.operationID = "b5ec3d11-4c19-4d9e-9a54-53aef6a1add8"
+	repo.snapshot = []byte(`{"operation_id":"b5ec3d11-4c19-4d9e-9a54-53aef6a1add8","status":"completed","overview":{"welfare_balance":"5.28","account_balance":"12.34000000","rules_version":2,"cycle_day":30,"today_checked_in":true,"milestones":[{"day":7,"status":"claimed"},{"day":15,"status":"claimed"},{"day":30,"status":"claimed"}]},"reward_amount":"5.28","base_reward_amount":"0.28","streak_reward_amount":"5.00"}`)
+	repo.state.Program.Enabled = false
+	want, err := repo.savedOperation()
+	require.NoError(t, err)
+	svc := NewWelfareService(repo, WithWelfareClock(func() time.Time { return now }), WithWelfareRandom(func(int64) (int64, error) {
+		t.Fatal("historical v2 operations must never sample v3 rewards")
+		return 0, nil
+	}))
+	replayed, err := svc.CheckIn(context.Background(), 42)
+	require.NoError(t, err)
+	require.Equal(t, want, replayed)
+	stored, err := svc.Operation(context.Background(), 42, repo.operationID)
+	require.NoError(t, err)
+	require.Equal(t, want, stored)
+	require.Equal(t, 2, replayed.Overview.RulesVersion)
+	require.Zero(t, repo.applyCalls)
 }

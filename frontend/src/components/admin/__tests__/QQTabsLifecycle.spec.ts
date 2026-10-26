@@ -4,7 +4,7 @@ import { reactive, ref } from 'vue'
 import QQImagePanel from '@/components/admin/QQImagePanel.vue'
 import WelfareSettingsView from '@/views/admin/WelfareSettingsView.vue'
 import { adminQQImageAPI } from '@/api/qqImage'
-vi.mock('@/api/admin/welfare', () => ({ adminWelfareAPI: { getSettings: vi.fn().mockResolvedValue({ enabled: false, launch_at: null, rules_version: 2 }) } }))
+vi.mock('@/api/admin/welfare', () => ({ adminWelfareAPI: { getSettings: vi.fn().mockResolvedValue({ enabled: false, launch_at: null, rules_version: 3 }) } }))
 vi.mock('@/stores/app', () => ({ useAppStore: () => ({}) }))
 vi.mock('@/components/layout/AppLayout.vue', () => ({ default: { template: '<div><slot /></div>' } }))
 vi.mock('@/components/admin/welfare/WelfareStatisticsPanel.vue', () => ({ default: { template: '<div />' } }))

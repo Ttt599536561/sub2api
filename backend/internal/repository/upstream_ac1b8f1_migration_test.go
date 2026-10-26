@@ -52,6 +52,18 @@ func TestUpstreamAC1B8F1MigrationBaseline(t *testing.T) {
 	upstreamAC1B8F1Baseline(t)
 }
 
+// Keep the historical 305 -> 306 regression pinned to its released target.
+// Starting from the verified baseline excludes every migration after 250.
+func upstreamAC1B8F1Target(t *testing.T) fstest.MapFS {
+	t.Helper()
+	target := upstreamAC1B8F1Baseline(t)
+	contents, err := migrations.FS.ReadFile(upstreamAC1B8F1Migration)
+	require.NoError(t, err)
+	target[upstreamAC1B8F1Migration] = &fstest.MapFile{Data: contents}
+	require.Len(t, target, 306)
+	return target
+}
+
 // Only the explicit loopback URL used by the existing QQ CI fixture is accepted.
 // Query parameters cannot redirect host/database or select an existing schema.
 func upstreamAC1B8F1DatabaseURL(raw string) (*url.URL, error) {
@@ -198,6 +210,7 @@ func upstreamAC1B8F1AssertHistory(t *testing.T, history map[string]upstreamAC1B8
 
 func TestUpstreamAC1B8F1MigrationUpgrade(t *testing.T) {
 	baseline := upstreamAC1B8F1Baseline(t)
+	target := upstreamAC1B8F1Target(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
 	db := upstreamAC1B8F1TestDatabase(t, ctx)
@@ -267,7 +280,7 @@ func TestUpstreamAC1B8F1MigrationUpgrade(t *testing.T) {
 		before[name] = upstreamAC1B8F1Snapshot(t, ctx, db, query)
 	}
 
-	require.NoError(t, ApplyMigrations(ctx, db))
+	require.NoError(t, applyMigrationsFS(ctx, db, target))
 	for _, platform := range []string{"gemini", "antigravity", "composite", "openai"} {
 		for _, original := range []bool{false, true} {
 			var enabled bool
@@ -289,7 +302,7 @@ func TestUpstreamAC1B8F1MigrationUpgrade(t *testing.T) {
 	_, err := db.ExecContext(ctx, "UPDATE groups SET allow_image_generation=false WHERE name='upgrade-gemini-false'")
 	require.NoError(t, err)
 	groupsAfterChoice := upstreamAC1B8F1Snapshot(t, ctx, db, "SELECT jsonb_agg(to_jsonb(t) ORDER BY id)::text FROM groups t")
-	require.NoError(t, ApplyMigrations(ctx, db))
+	require.NoError(t, applyMigrationsFS(ctx, db, target))
 	require.Equal(t, afterHistory, upstreamAC1B8F1History(t, ctx, db), "repeated startup must not rewrite migration history")
 	require.JSONEq(t, groupsAfterChoice, upstreamAC1B8F1Snapshot(t, ctx, db, "SELECT jsonb_agg(to_jsonb(t) ORDER BY id)::text FROM groups t"), "do not re-enable a choice made after the upgrade")
 	for name, query := range queries {
@@ -298,10 +311,11 @@ func TestUpstreamAC1B8F1MigrationUpgrade(t *testing.T) {
 }
 
 func TestUpstreamAC1B8F1MigrationFreshInstall(t *testing.T) {
+	target := upstreamAC1B8F1Target(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
 	db := upstreamAC1B8F1TestDatabase(t, ctx)
-	require.NoError(t, ApplyMigrations(ctx, db))
+	require.NoError(t, applyMigrationsFS(ctx, db, target))
 	history := upstreamAC1B8F1History(t, ctx, db)
 	upstreamAC1B8F1AssertHistory(t, history)
 	for _, table := range []string{"affiliate_promotion_hosts", "qq_image_orders", "qq_image_ledger", "qq_image_discoveries", "qq_reply_template_revisions"} {
@@ -314,6 +328,6 @@ func TestUpstreamAC1B8F1MigrationFreshInstall(t *testing.T) {
 		AND ((table_name='groups' AND column_name IN ('force_openai_ultrafast','allow_subscription_day_reset','i18n'))
 		OR (table_name='users' AND column_name IN ('balance','frozen_balance')))`).Scan(&customColumns))
 	require.Equal(t, 5, customColumns)
-	require.NoError(t, ApplyMigrations(ctx, db))
+	require.NoError(t, applyMigrationsFS(ctx, db, target))
 	require.Equal(t, history, upstreamAC1B8F1History(t, ctx, db))
 }

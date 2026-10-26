@@ -24,6 +24,26 @@ beforeEach(() => {
 })
 afterEach(() => { wrapper?.unmount(); vi.useRealTimers(); vi.unstubAllGlobals() })
 describe('welfare state', () => {
+  it('reloads v3 rules after an upgrade without changing the wallet or rewards', async () => {
+    vi.mocked(welfareAPI.overview).mockResolvedValue({ ...snapshot(), rules_version: 2 })
+    vi.mocked(welfareAPI.rules).mockResolvedValue({ rules_version: 2, prizes: [], draw_threshold: '50.00', timezone: 'Asia/Shanghai' })
+    await start()
+    const calendarCalls = vi.mocked(welfareAPI.calendar).mock.calls.length
+    const recordCalls = vi.mocked(welfareAPI.records).mock.calls.length
+    const ruleCalls = vi.mocked(welfareAPI.rules).mock.calls.length
+    vi.mocked(welfareAPI.overview).mockResolvedValue({ ...snapshot(), rules_version: 3 })
+    vi.mocked(welfareAPI.rules).mockResolvedValue({ rules_version: 3, prizes: [], draw_threshold: '50.00', timezone: 'Asia/Shanghai' })
+
+    await state.refresh()
+    await flushPromises()
+
+    expect(state.overview.value).toMatchObject({ rules_version: 3, welfare_balance: '2.80', wallet_version: 1, welfare_balance_version: 1 })
+    expect(state.rules.value?.rules_version).toBe(3)
+    expect(welfareAPI.rules).toHaveBeenCalledTimes(ruleCalls + 1)
+    expect(welfareAPI.calendar).toHaveBeenCalledTimes(calendarCalls)
+    expect(welfareAPI.records).toHaveBeenCalledTimes(recordCalls)
+    expect(welfareAPI.checkIn).not.toHaveBeenCalled()
+  })
   it('keeps an in-flight redemption when refreshing the same user', async () => {
     await start()
     let resolve!: (value: Awaited<ReturnType<typeof welfareAPI.redeem>>) => void

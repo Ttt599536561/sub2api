@@ -34,7 +34,7 @@ func scanWelfareWallet(row welfareRowScanner) (service.WelfareWallet, error) {
 }
 
 func scanWelfareSettings(row welfareRowScanner) (*service.WelfareSettings, error) {
-	p := &service.WelfareSettings{RulesVersion: 2}
+	p := &service.WelfareSettings{RulesVersion: service.WelfareRulesVersion}
 	var launch sql.NullTime
 	if err := row.Scan(&p.Enabled, &launch); err != nil {
 		return nil, err
@@ -108,7 +108,7 @@ func (r *welfareRepository) State(ctx context.Context, userID int64) (*service.W
 	if launch.Valid {
 		state.Program.LaunchAt = &launch.Time
 	}
-	state.Program.RulesVersion = 2
+	state.Program.RulesVersion = service.WelfareRulesVersion
 	return state, nil
 }
 

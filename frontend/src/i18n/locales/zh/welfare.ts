@@ -11,7 +11,7 @@ export default {
     redemption: '福利兑换', redeemable: '可兑换福利余额', redeem: '兑换余额', exchangeNote: '1:1 转入账户余额 · 无手续费', redemptionTitle: '兑换账户余额', amount: '兑换金额', all: '全部', quote: '查看兑换金额', confirm: '确认兑换', cancel: '取消', rate: '兑换比例', rateValue: '1:1 · 无手续费', accountAfter: '兑换后账户余额', redemptionHint: '支持任意可用金额，精确到 $0.01。确认后立即转入账户余额。', invalidAmount: '请输入大于 0 的金额，最多两位小数。', insufficient: '兑换金额不能超过福利余额。', redemptionSuccess: '{amount} 已转入账户余额。', retryTransfer: '重试本次兑换', uncertainTransfer: '暂未收到兑换结果。请重试确认本次兑换，系统不会重复扣款。',
     records: '福利记录', totalDraws: '累计抽奖 {count} 次', recordType: '记录类型', from: '开始日期', to: '结束日期', reset: '重置', time: '时间', type: '类型', detail: '明细', change: '福利余额变动', recordCount: '共 {count} 条记录', prevPage: '上一页', nextPage: '下一页', empty: '该条件下暂无福利记录', footer: '30 天为一轮 · 断签重新累计 · 不支持补签 · 福利余额 1:1 兑换账户余额',
     types: { all: '全部类型', daily: '每日签到', streak: '连续签到奖励', draw: '抽奖', redeem: '兑换余额' },
-    ruleCheck: '每天签到一次，领取当日惊喜。以北京时间 00:00 划分日期，不支持补签。', ruleStreak: '连续第 7、15、30 天解锁神秘奖励，达成后自动到账并揭晓金额。30 天完成一轮，次日开始新一轮；断签仅重置连续进度，累计签到天数保留。', ruleSpend: '活动开放期间，API 实际账户余额扣款每累计满 {amount}，获得 1 次抽奖机会，未满部分继续累计。充值本身及订阅额度内的 API 用量不计入。',
+    ruleCheck: '签到提供小额随机使用补贴，日常用量请按需充值。每天可领取一次，金额签到后揭晓；以北京时间 00:00 划分日期，不支持补签。', ruleStreak: '连续第 7、15、30 天额外获得小额随机奖励，达成后自动到账并揭晓金额。30 天完成一轮，次日开始新一轮；断签仅重置连续进度，累计签到天数保留。', ruleSpend: '活动开放期间，API 实际账户余额扣款每累计满 {amount}，获得 1 次抽奖机会，未满部分继续累计。充值本身及订阅额度内的 API 用量不计入。',
     ruleSubscription: '月卡、周卡等人民币订阅订单付款并完成后，单笔实付每满 ¥{amount} 赠送 1 次抽奖。每笔独立计算，余数不累计，也不与 API 美元消费合并；两种来源的抽奖次数可一起使用。',
     ruleSubscriptionEligibility: '套餐赠送仅适用于活动开放期间完成的新订单。首次开放前付款、历史已完成订单及暂停期间完成的订单不补发。',
     ruleSubscriptionRefund: '退款确认后，按该订单剩余实付金额重新计算赠送次数。多用的次数从后续获得的次数中抵扣，已获得的福利余额不收回。',

@@ -92,15 +92,18 @@ describe('welfare user interactions', () => {
     await wrapper.get('[data-testid="open-redemption"]').trigger('click')
     expect(wrapper.get('[role="dialog"]').text()).toContain('兑换账户余额')
   })
-  it('reveals credited check-in amounts and refreshes calendar and history', async () => {
+  it.each([
+    { version: 2, daily: '0.08', streak: '0.60', total: '0.68', balance: '3.48' },
+    { version: 3, daily: '0.03', streak: '0.03', total: '0.06', balance: '2.86' }
+  ])('reveals credited v$version check-in amounts and refreshes calendar and history', async ({ version, daily, streak, total, balance }) => {
     await start()
-    const after = { ...initial, today_checked_in: true, welfare_balance: '3.48', cycle_day: 7, total_checkin_days: 24, wallet_version: 2, welfare_balance_version: 2 }
-    vi.mocked(welfareAPI.checkIn).mockResolvedValue({ operation_id: 'check', status: 'completed', reward_amount: '0.68', base_reward_amount: '0.08', streak_reward_amount: '0.60', overview: after })
+    const after = { ...initial, today_checked_in: true, rules_version: version, welfare_balance: balance, cycle_day: 7, total_checkin_days: 24, wallet_version: 2, welfare_balance_version: 2 }
+    vi.mocked(welfareAPI.checkIn).mockResolvedValue({ operation_id: 'check', status: 'completed', reward_amount: total, base_reward_amount: daily, streak_reward_amount: streak, overview: after })
     vi.mocked(welfareAPI.overview).mockResolvedValue(after)
     const calendarCalls = vi.mocked(welfareAPI.calendar).mock.calls.length
     await wrapper.get('[data-testid="check-in"]').trigger('click'); await flushPromises()
-    expect(wrapper.text()).toContain('每日奖励 $0.08')
-    expect(wrapper.text()).toContain('连续签到奖励 $0.60')
+    expect(wrapper.text()).toContain(`每日奖励 $${daily}`)
+    expect(wrapper.text()).toContain(`连续签到奖励 $${streak}`)
     expect(wrapper.get('[data-testid="check-in"]').attributes('disabled')).toBeDefined()
     expect(vi.mocked(welfareAPI.calendar).mock.calls.length).toBeGreaterThan(calendarCalls)
     expect(auth.refreshUser).not.toHaveBeenCalled()

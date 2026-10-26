@@ -17,9 +17,8 @@ type welfareDailyOutcome struct {
 
 type welfareDailyDistribution map[welfareDailyOutcome]*big.Rat
 
-// Discover every random choice from the sampler itself, including the changing
-// range of its final draw. A leaf has probability 1 / product(requested ranges),
-// so equally counting leaves would incorrectly overweight the wider bands.
+// Discover every random choice from the sampler itself. Weight each leaf by
+// 1 / product(requested ranges), and reject an unexpected third random draw.
 func enumerateWelfareDailyDistribution(t *testing.T, low int) welfareDailyDistribution {
 	t.Helper()
 	needChoice := errors.New("enumeration needs another random choice")
@@ -44,8 +43,8 @@ func enumerateWelfareDailyDistribution(t *testing.T, low int) welfareDailyDistri
 			return value, nil
 		})
 		if errors.Is(err, needChoice) {
-			if len(prefix) >= 3 {
-				t.Fatalf("low=%d prefix=%v: sampler requested more than three choices", low, prefix)
+			if len(prefix) >= 2 {
+				t.Fatalf("low=%d prefix=%v: sampler requested more than two choices", low, prefix)
 			}
 			for choice := int64(0); choice < nextRange; choice++ {
 				visit(append(prefix, choice), denominator*nextRange)
@@ -83,7 +82,7 @@ func welfareDailyZeroState() [4]*big.Rat {
 	return [4]*big.Rat{new(big.Rat), new(big.Rat), new(big.Rat), new(big.Rat)}
 }
 
-func TestWelfareDailyApprovedV2DistributionAndCost(t *testing.T) {
+func TestWelfareDailyApprovedV3DistributionAndCost(t *testing.T) {
 	var laws [4]welfareDailyDistribution
 	for low := range laws {
 		laws[low] = enumerateWelfareDailyDistribution(t, low)
@@ -96,20 +95,12 @@ func TestWelfareDailyApprovedV2DistributionAndCost(t *testing.T) {
 				// roll thresholds. Check every amount, branch and resulting state.
 				want := make(welfareDailyDistribution)
 				if surprisePercent < 100 {
-					for cents := int64(1); cents <= 9; cents++ {
-						weight := int64(49)
-						if cents == 1 {
-							weight = 8
-						}
-						want[welfareDailyOutcome{cents: cents, nextLow: low + 1}] = big.NewRat((100-surprisePercent)*weight, 100*400)
+					for cents, weight := range map[int64]int64{1: 70, 2: 30} {
+						want[welfareDailyOutcome{cents: cents, nextLow: low + 1}] = big.NewRat((100-surprisePercent)*weight, 100*100)
 					}
 				}
-				for _, band := range []struct{ min, max, weight int64 }{
-					{10, 20, 65}, {21, 35, 25}, {36, 50, 9}, {51, 100, 1},
-				} {
-					for cents := band.min; cents <= band.max; cents++ {
-						want[welfareDailyOutcome{cents: cents, nextLow: 0, surprise: true}] = big.NewRat(surprisePercent*band.weight, 100*100*(band.max-band.min+1))
-					}
+				for cents, weight := range map[int64]int64{3: 70, 4: 25, 5: 5} {
+					want[welfareDailyOutcome{cents: cents, nextLow: 0, surprise: true}] = big.NewRat(surprisePercent*weight, 100*100)
 				}
 				require.Len(t, laws[low], len(want), "unexpected amount, branch or state")
 				total, surprise := new(big.Rat), new(big.Rat)
@@ -134,8 +125,8 @@ func TestWelfareDailyApprovedV2DistributionAndCost(t *testing.T) {
 			surprise bool
 			wantUSD  *big.Rat
 		}{
-			{"ordinary", false, big.NewRat(541, 10000)},   // $0.0541
-			{"surprise", true, big.NewRat(21375, 100000)}, // $0.21375
+			{"ordinary", false, big.NewRat(13, 1000)},  // $0.013
+			{"surprise", true, big.NewRat(335, 10000)}, // $0.0335
 		} {
 			t.Run(branch.name, func(t *testing.T) {
 				for low, law := range laws {
@@ -182,7 +173,7 @@ func TestWelfareDailyApprovedV2DistributionAndCost(t *testing.T) {
 		surpriseMean, _ := surprises.Float64()
 		rewardMean, _ := rewardUSD.Float64()
 		require.InDelta(t, 11.1384311653, surpriseMean, 5e-11)
-		require.InDelta(t, 3.4012505355, rewardMean, 5e-11)
+		require.InDelta(t, 0.618337838889, rewardMean, 5e-13)
 	})
 
 	t.Run("at_most_three_consecutive_ordinary_rewards", func(t *testing.T) {
@@ -231,6 +222,6 @@ func TestWelfareDailyApprovedV2DistributionAndCost(t *testing.T) {
 		}
 		mean := new(big.Rat).Quo(rewardUSD[0], duration[0])
 		meanUSD, _ := mean.Float64()
-		require.InDelta(t, 0.11457348485, meanUSD, 5e-12)
+		require.InDelta(t, 0.020765151515, meanUSD, 5e-13)
 	})
 }
