@@ -4,7 +4,7 @@
 
 ## 固定来源与平台
 
-- 本次应用源码/OCI revision固定为`c630c730837a1491d208010ca7f2e1f1f3150f41`，包含签到v3实现`569817eae`和二审回归补强`c630c7308`，基于main原`8e5c5d32e`。
+- 本次应用源码/OCI revision固定为`70ba0376bda2dba0279eca74aeb36992804d64df`，包含签到v3实现`569817eae`、二审回归补强`c630c7308`和测试规范修正`70ba0376b`，基于main原`8e5c5d32e`。
 - 专用工作流：[publish-custom-v0217-r7.yml](../.github/workflows/publish-custom-v0217-r7.yml)。控制提交与应用来源分离，控制提交只改工作流/交接记录；构建checkout和运行标签均绑定上述完整应用SHA。
 - 预定镜像`ghcr.io/ttt599536561/sub2api-custom:0.2.17-r7`，仅原生Ubuntu构建`linux/amd64`和`linux/arm64`，不触发通用Release、Git版本标签或macOS工作流。
 - 入口严格要求对应应用SHA最新main/push CI与Security Scan成功，最终标签禁止覆盖；发布后核验两架构、二进制/OCI来源、artifact及匿名运行层。
@@ -18,8 +18,10 @@
 
 ## 发布门禁与证据
 
-- 应用精确SHA CI：[40329169174](https://github.com/Ttt599536561/sub2api/actions/runs/40329169174)，发布前核实最终状态。
-- 应用精确SHA Security Scan：[40329169161](https://github.com/Ttt599536561/sub2api/actions/runs/40329169161)，已成功。
+首轮c630的完整测试通过，但lint发现QF1003；仅将测试if/else改为switch后，福利专项、Linux目标service lint0 issues及独立复核通过。本次必须使用70ba自己的CI/安全结果；旧结果不替代新SHA门禁。
+
+- 应用精确SHA CI：[40331079734](https://github.com/Ttt599536561/sub2api/actions/runs/40331079734)，发布前核实最终状态。
+- 应用精确SHA Security Scan：[40331079778](https://github.com/Ttt599536561/sub2api/actions/runs/40331079778)，等待本次精确源码检查完成。
 - 本地在相同源码的福利服务专项重新通过；原二审后端133叶、真实PG125叶、前端CI名单920项证据来自开发阶段，不能代替本次GitHub完整门禁。
 - 发布工作流矩阵/固定来源/仅dispatch与5段shell语法检查通过；原始证据在主项目`.cache/publish-welfare-r7-20261026`，最终产物核验使用`output/publish-v0.2.17-r7`。
 - 发布run、最终digest和匿名拉取验证在实际完成后补充，本记录不预先声称发布成功。

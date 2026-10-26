@@ -2,7 +2,7 @@
 
 ## 2026-10-26 签到v3已整合main，r7 Linux发布准备中
 
-用户已授权合并主目录、推送GitHub并只构建Linux镜像，服务器由用户自行更新。应用`c630c730837a1491d208010ca7f2e1f1f3150f41`已合入主目录main并推送；原11份tracked WIP、4份其他untracked和全部293份dist文件保全，.gitignore原内容恢复并追加福利文档例外。发布源码来自干净提交，不包含这些WIP。
+用户已授权合并主目录、推送GitHub并只构建Linux镜像，服务器由用户自行更新。应用`70ba0376bda2dba0279eca74aeb36992804d64df`（含发布门禁测试规范修正）已合入主目录main并推送；原11份tracked WIP、4份其他untracked和全部293份dist文件保全，.gitignore原内容恢复并追加福利文档例外。发布源码来自干净提交，不包含这些WIP。
 
 新增r7专用工作流固定该源码，等待对应完整CI/安全门禁后构建Linux amd64/arm64，不触发macOS或通用Release。预定镜像`ghcr.io/ttt599536561/sub2api-custom:0.2.17-r7`，尚未声称发布成功；本轮不部署任何服务器。当前公开镜像仍r6，最终状态和251迁移/避免旧新发奖节点混跑要求见[r7发布记录](../deploy/CUSTOM_IMAGE_0.2.17-r7.md)。以下“本地分支、未合并”属于此前开发/二审阶段。
 
