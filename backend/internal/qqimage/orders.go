@@ -125,6 +125,13 @@ func (s *Store) CreateOrderFromEvent(ctx context.Context, i Identity, eventID, m
 		if e != sql.ErrNoRows {
 			return e
 		}
+		_, imageEnabled, e := s.BusinessControls(context.WithValue(ctx, storeTxKey{}, storeTransaction{s, tx}))
+		if e != nil {
+			return e
+		}
+		if !imageEnabled {
+			return ErrDisabled
+		}
 		var configID int64
 		var b, botCredential, apiCredential []byte
 		if e = tx.QueryRowContext(ctx, `SELECT id,config,bot_secret,api_key FROM qq_image_configs ORDER BY id DESC LIMIT 1`).Scan(&configID, &b, &botCredential, &apiCredential); e != nil {

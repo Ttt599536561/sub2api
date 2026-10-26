@@ -52,3 +52,19 @@ describe('QQ email error messages', () => {
     expect(qqErrorKey({ status: 503, message: 'EMAIL_NOT_CONFIGURED private SMTP detail' })).toBe('failed')
   })
 })
+
+
+describe('QQ deterministic binding errors', () => {
+  it('distinguishes a missing request on the current site from an uncertain write', () => {
+    expect(qqErrorKey({ status: 404, reason: 'QQ_IMAGE_NOT_FOUND' }, 'binding')).toBe('requestNotFound')
+    expect(qqErrorKey({ status: 404, reason: 'QQ_IMAGE_NOT_FOUND' })).toBe('notFound')
+    expect(qqErrorKey({ status: 500 }, 'binding')).toBe('failed')
+    expect(qqErrorKey({ status: 0 }, 'binding')).toBe('failed')
+  })
+  it('maps deterministic disabled and invalid responses without parsing message text', () => {
+    expect(qqErrorKey({ status: 503, reason: 'QQ_IMAGE_DISABLED' }, 'binding')).toBe('bindingDisabled')
+    expect(qqErrorKey({ status: 400, reason: 'QQ_IMAGE_INVALID' }, 'binding')).toBe('invalid')
+    expect(qqErrorKey({ status: 503, reason: 'QQ_IMAGE_ENCRYPTION_UNAVAILABLE' })).toBe('unavailable')
+    expect(qqErrorKey({ status: 500, message: 'QQ_IMAGE_NOT_FOUND' }, 'binding')).toBe('failed')
+  })
+})

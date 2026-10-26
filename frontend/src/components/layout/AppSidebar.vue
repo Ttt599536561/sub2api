@@ -732,6 +732,7 @@ function buildSelfNavItems(withDashboard: boolean): NavItem[] {
     { path: '/subscriptions', label: t('nav.mySubscriptions'), icon: CreditCardIcon, hideInSimpleMode: true, featureFlag: flagSubscription },
     { path: '/purchase', label: purchaseNavLabel.value, icon: RechargeSubscriptionIcon, hideInSimpleMode: true, featureFlag: flagPayment },
     { path: '/welfare', label: t('welfare.title'), icon: GiftIcon, hideInSimpleMode: true, featureFlag: flagWelfare },
+    // QQ business switches pause new operations; keep existing grants and history reachable.
     { path: '/qq/bind', label: t('qqImage.bindTitle'), icon: UsersIcon },
     { path: '/qq/orders', label: t('qqImage.ordersTitle'), icon: OrderListIcon },
     { path: '/orders', label: t('nav.myOrders'), icon: OrderListIcon, hideInSimpleMode: true, featureFlag: flagPayment },

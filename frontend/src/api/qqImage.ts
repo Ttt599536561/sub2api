@@ -5,12 +5,13 @@ import { assertAuthSessionCurrent } from './authSession'
 export interface QQGrant {
   id: string; group_id: string; subject_hint?: string; status: string; created_at: string; user_id?: number
 }
-export interface QQStatus { enabled: boolean; email_verified: boolean; recent_authorization: boolean; email: string; grants: QQGrant[] }
+export interface QQStatus { enabled: boolean; binding_enabled?: boolean; image_enabled?: boolean; email_verified: boolean; recent_authorization: boolean; email: string; grants: QQGrant[] }
 export interface QQBindingRequest { id: string; status: string; group_id: string; subject_hint: string; expires_at: string }
 export interface QQConfirmation { confirmation_code: string; expires_at: string }
 export interface QQOrder {
   id: string; prompt: string; price: string; model: string; size: string; status: string; funds_status: string
   delivery_status: string; created_at: string; deadline: string; artifact_expires_at?: string; error?: string; user_id?: number
+  website_status?: 'available' | 'pending' | 'expired'
   currency?: 'USD'; provider_cost?: string | null; provider_currency?: string | null; provider_cost_status?: 'unknown'
 }
 export type QQReceiveMode = 'webhook' | 'websocket'

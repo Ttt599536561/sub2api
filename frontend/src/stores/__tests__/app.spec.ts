@@ -327,6 +327,31 @@ describe('useAppStore', () => {
   // --- 公开设置 ---
 
   describe('公开设置加载', () => {
+    it('QQ business switches default to enabled in the loaded-without-cache fallback', async () => {
+      const store = useAppStore()
+      store.publicSettingsLoaded = true
+
+      await expect(store.fetchPublicSettings()).resolves.toMatchObject({
+        qq_binding_enabled: true,
+        qq_image_enabled: true,
+      })
+      expect(getPublicSettings).not.toHaveBeenCalled()
+    })
+
+    it('preserves independent QQ switches from SSR injection through a forced public refresh', async () => {
+      window.__APP_CONFIG__ = createPublicSettings({ qq_binding_enabled: false, qq_image_enabled: true })
+      const store = useAppStore()
+      expect(store.initFromInjectedConfig()).toBe(true)
+      expect(store.cachedPublicSettings).toMatchObject({ qq_binding_enabled: false, qq_image_enabled: true })
+
+      vi.mocked(getPublicSettings).mockResolvedValue(createPublicSettings({ qq_binding_enabled: true, qq_image_enabled: false }))
+      await store.fetchPublicSettings(true)
+      expect(store.cachedPublicSettings).toMatchObject({ qq_binding_enabled: true, qq_image_enabled: false })
+      expect(window.__APP_CONFIG__).toMatchObject({ qq_binding_enabled: true, qq_image_enabled: false })
+      await expect(store.fetchPublicSettings()).resolves.toMatchObject({ qq_binding_enabled: true, qq_image_enabled: false })
+      expect(getPublicSettings).toHaveBeenCalledTimes(1)
+    })
+
     it('并发调用复用并等待同一个请求，包括 force 调用', async () => {
       const deferred = createDeferred<PublicSettings>()
       vi.mocked(getPublicSettings).mockReturnValue(deferred.promise)

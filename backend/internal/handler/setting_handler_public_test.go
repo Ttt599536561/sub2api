@@ -53,6 +53,23 @@ func (s *settingHandlerPublicRepoStub) Delete(ctx context.Context, key string) e
 	panic("unexpected Delete call")
 }
 
+func TestSettingHandlerQQControlsPublicDTO(t *testing.T) {
+	for _, values := range []map[string]string{nil, {"qq_binding_enabled": "false", "qq_image_enabled": "true"}, {"qq_binding_enabled": "true", "qq_image_enabled": "false"}} {
+		h := NewSettingHandler(service.NewSettingService(&settingHandlerPublicRepoStub{values: values}, &config.Config{}), "test")
+		rec := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(rec)
+		c.Request = httptest.NewRequest(http.MethodGet, "/api/v1/settings/public", nil)
+		h.GetPublicSettings(c)
+		require.Equal(t, http.StatusOK, rec.Code)
+		var response struct {
+			Data map[string]any `json:"data"`
+		}
+		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
+		require.Equal(t, values["qq_binding_enabled"] != "false", response.Data["qq_binding_enabled"])
+		require.Equal(t, values["qq_image_enabled"] != "false", response.Data["qq_image_enabled"])
+	}
+}
+
 func TestSettingHandler_GetPublicSettings_ExposesForceEmailOnThirdPartySignup(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 

@@ -17,6 +17,7 @@ import (
 )
 
 type qqImageStore interface {
+	BusinessControls(context.Context) (bool, bool, error)
 	StartDiscovery(context.Context, int64) (*qqimage.Discovery, error)
 	GetDiscovery(context.Context) (*qqimage.Discovery, error)
 	CloseDiscovery(context.Context, string, int64) (*qqimage.Discovery, error)
@@ -167,7 +168,13 @@ func (h *QQImageHandler) Status(c *gin.Context) {
 		qqImageResult(c, nil, err)
 		return
 	}
-	qqImageResult(c, gin.H{"enabled": conf.Enabled && (h.cfg == nil || h.cfg.RunMode != config.RunModeSimple), "email": email, "email_verified": verified, "recent_authorization": recent, "grants": grants}, nil)
+	bindingEnabled, imageEnabled, err := h.store.BusinessControls(ctx)
+	if err != nil {
+		qqImageResult(c, nil, err)
+		return
+	}
+	enabled := conf.Enabled && (h.cfg == nil || h.cfg.RunMode != config.RunModeSimple)
+	qqImageResult(c, gin.H{"enabled": enabled, "binding_enabled": enabled && bindingEnabled, "image_enabled": enabled && imageEnabled, "email": email, "email_verified": verified, "recent_authorization": recent, "grants": grants}, nil)
 }
 func (h *QQImageHandler) SendEmailCode(c *gin.Context) {
 	id, ok := h.user(c)

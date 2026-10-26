@@ -12,6 +12,8 @@ func firstNonEmpty(values ...string) string {
 }
 
 type SystemSettings struct {
+	QQBindingEnabled                    bool `json:"qq_binding_enabled"`
+	QQImageEnabled                      bool `json:"qq_image_enabled"`
 	RegistrationEnabled                 bool
 	EmailVerifyEnabled                  bool
 	RegistrationEmailSuffixWhitelist    []string
@@ -327,6 +329,8 @@ type DefaultSubscriptionSetting struct {
 }
 
 type PublicSettings struct {
+	QQBindingEnabled                    bool `json:"qq_binding_enabled"`
+	QQImageEnabled                      bool `json:"qq_image_enabled"`
 	WelfareEnabled                      bool `json:"welfare_enabled"`
 	RegistrationEnabled                 bool
 	EmailVerifyEnabled                  bool

@@ -724,6 +724,62 @@ describe("admin SettingsView payment visible method controls", () => {
     adminSettingsFetch.mockResolvedValue(undefined);
   });
 
+  it.each([
+    { qq_binding_enabled: false, qq_image_enabled: true },
+    { qq_binding_enabled: true, qq_image_enabled: false },
+  ])("loads and independently saves QQ business switches: %j", async (initial) => {
+    getSettings.mockResolvedValue({ ...baseSettingsResponse, ...initial });
+    const wrapper = mountView();
+    await flushPromises();
+    const featuresTab = wrapper.findAll("button").find((node) => node.text().includes("admin.settings.tabs.features"));
+    await featuresTab?.trigger("click");
+
+    const bindingToggle = wrapper.get<HTMLInputElement>('[data-testid="qq-binding-enabled"]');
+    const imageToggle = wrapper.get<HTMLInputElement>('[data-testid="qq-image-enabled"]');
+    expect(bindingToggle.isVisible()).toBe(true);
+    expect(bindingToggle.element.checked).toBe(initial.qq_binding_enabled);
+    expect(imageToggle.element.checked).toBe(initial.qq_image_enabled);
+    expect(wrapper.get('[data-testid="qq-business-config-link"]').attributes("to")).toBe("/admin/welfare");
+
+    await bindingToggle.setValue(!initial.qq_binding_enabled);
+    await imageToggle.setValue(!initial.qq_image_enabled);
+    await wrapper.get("form").trigger("submit");
+    await flushPromises();
+
+    expect(updateSettings).toHaveBeenCalledWith(expect.objectContaining({
+      qq_binding_enabled: !initial.qq_binding_enabled,
+      qq_image_enabled: !initial.qq_image_enabled,
+    }));
+    expect(fetchPublicSettings).toHaveBeenCalledWith(true);
+    expect(adminSettingsFetch).toHaveBeenCalledWith(true);
+    wrapper.unmount();
+  });
+
+  it("defaults both QQ switches to enabled when older settings responses omit them", async () => {
+    const wrapper = mountView();
+    await flushPromises();
+    expect(wrapper.get<HTMLInputElement>('[data-testid="qq-binding-enabled"]').element.checked).toBe(true);
+    expect(wrapper.get<HTMLInputElement>('[data-testid="qq-image-enabled"]').element.checked).toBe(true);
+
+    await wrapper.get("form").trigger("submit");
+    await flushPromises();
+    expect(updateSettings).toHaveBeenCalledWith(expect.objectContaining({ qq_binding_enabled: true, qq_image_enabled: true }));
+    wrapper.unmount();
+  });
+
+  it("explains QQ prerequisites and preserved authorizations, history, and accepted tasks in both locales", () => {
+    const zh = zhSettings.settings.features.qqBusiness;
+    const en = enSettings.settings.features.qqBusiness;
+    expect(zh.description).toContain("技术配置");
+    expect(zh.bindingHint).toContain("新绑定");
+    expect(zh.bindingHint).toContain("解绑");
+    expect(zh.imageHint).toContain("历史作品");
+    expect(zh.imageHint).toContain("已受理任务");
+    expect(en.description).toContain("technical configuration");
+    expect(en.bindingHint).toContain("unlinked");
+    expect(en.imageHint).toContain("accepted tasks");
+  });
+
   it("loads and saves the open button visibility for each custom menu", async () => {
     const menuItems = [
       { id: "docs", label: "Docs", url: "https://example.com/docs", icon_svg: "", visibility: "user", sort_order: 0 },

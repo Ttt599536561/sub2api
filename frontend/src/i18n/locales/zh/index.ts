@@ -7,6 +7,7 @@ import admin from './admin'
 import misc from './misc'
 import welfare from './welfare'
 import qqImage from './qqImage'
+import qqGallery from './qqGallery'
 
 export default {
   ...landing,
@@ -18,4 +19,5 @@ export default {
   ...misc,
   ...welfare,
   ...qqImage,
+  ...qqGallery,
 }

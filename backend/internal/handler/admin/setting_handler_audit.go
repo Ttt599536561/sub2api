@@ -56,6 +56,12 @@ func diffSettings(before *service.SystemSettings, after *service.SystemSettings,
 	if before.FrontendURL != after.FrontendURL {
 		changed = append(changed, "frontend_url")
 	}
+	if before.QQBindingEnabled != after.QQBindingEnabled {
+		changed = append(changed, "qq_binding_enabled")
+	}
+	if before.QQImageEnabled != after.QQImageEnabled {
+		changed = append(changed, "qq_image_enabled")
+	}
 	if before.TotpEnabled != after.TotpEnabled {
 		changed = append(changed, "totp_enabled")
 	}

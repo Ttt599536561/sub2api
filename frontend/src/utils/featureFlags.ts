@@ -53,6 +53,8 @@
  *   9. **Frontend `utils/featureFlags.ts` (this file)** → register via `defineFlag`
  *  10. Frontend `views/admin/SettingsView.vue` → Toggle UI + form defaults + save payload
  *  11. Frontend `components/layout/AppSidebar.vue` → attach via `makeSidebarFlag`
+ *      only when the switch should hide the entire entry. QQ business switches
+ *      pause new operations while keeping authorization and history pages reachable.
  *
  * ## Usage
  *
@@ -110,6 +112,16 @@ export const FeatureFlags = {
     mode: 'opt-out',
     label: 'Subscription',
   }),
+  qqBinding: defineFlag({
+    key: 'qq_binding_enabled',
+    mode: 'opt-out',
+    label: 'QQ Binding',
+  }),
+  qqImage: defineFlag({
+    key: 'qq_image_enabled',
+    mode: 'opt-out',
+    label: 'QQ Image Generation',
+  }),
   modelPlaza: defineFlag({
     key: 'model_plaza_enabled',
     mode: 'opt-in',
@@ -141,8 +153,9 @@ export type RegisteredFeatureFlag = keyof typeof FeatureFlags
 
 /**
  * Read the current value of a flag, honoring the mode's fallback.
- * `true`  → the feature is enabled (menu/route should render).
- * `false` → the feature is disabled (menu/route should hide).
+ * `true`  → the controlled feature or operation is enabled.
+ * `false` → the controlled feature or operation is disabled. Business-only
+ * switches need not hide routes that also manage existing authorizations/history.
  */
 export function isFeatureFlagEnabled(flag: FeatureFlagDefinition): boolean {
   const appStore = useAppStore()

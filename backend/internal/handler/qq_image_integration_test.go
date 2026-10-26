@@ -77,6 +77,8 @@ func TestQQImageHTTPPostgresSignedBindingGenerationAndPrivateRetrieval(t *testin
 	_, err = scoped.Exec(`CREATE TABLE users(id BIGSERIAL PRIMARY KEY,email TEXT NOT NULL,status TEXT NOT NULL DEFAULT 'active',deleted_at TIMESTAMPTZ,balance NUMERIC(20,8) NOT NULL DEFAULT 0,frozen_balance NUMERIC(20,8) NOT NULL DEFAULT 0,updated_at TIMESTAMPTZ NOT NULL DEFAULT now());INSERT INTO users(id,email,balance) VALUES(42,'owner@example.test',2),(99,'other@example.test',3)`)
 	require.NoError(t, err)
 	migration, err := os.ReadFile(filepath.Join("..", "..", "migrations", "248_qq_image_generation.sql"))
+	_, settingsErr := scoped.Exec(`CREATE TABLE settings (id BIGSERIAL PRIMARY KEY,key VARCHAR(100) NOT NULL UNIQUE,value TEXT NOT NULL,updated_at TIMESTAMPTZ NOT NULL DEFAULT now())`)
+	require.NoError(t, settingsErr)
 	require.NoError(t, err)
 	_, err = scoped.Exec(string(migration))
 	require.NoError(t, err)
@@ -140,6 +142,17 @@ func TestQQImageHTTPPostgresSignedBindingGenerationAndPrivateRetrieval(t *testin
 	require.NoError(t, scoped.QueryRow(`SELECT id FROM qq_image_binding_requests`).Scan(&requestID))
 	verified := qqHTTPRequest(h, "POST", "/item/email", `{"code":"123456"}`, 42, "user", h.VerifyEmail)
 	require.Equal(t, 200, verified.Code, verified.Body.String())
+	_, err = scoped.Exec(`INSERT INTO settings(key,value) VALUES('qq_binding_enabled','false')`)
+	require.NoError(t, err)
+	blocked := qqHTTPRequest(h, "POST", "/item/"+requestID, `{"consent":true}`, 42, "user", h.AuthorizeBinding)
+	require.Equal(t, 403, blocked.Code, blocked.Body.String())
+	require.Contains(t, blocked.Body.String(), "QQ_IMAGE_DISABLED")
+	require.Equal(t, 200, send("blocked-bind", "/绑定", conf.BotSecret).Code)
+	var requests int
+	require.NoError(t, scoped.QueryRow(`SELECT count(*) FROM qq_image_binding_requests`).Scan(&requests))
+	require.Equal(t, 1, requests)
+	_, err = scoped.Exec(`UPDATE settings SET value='true' WHERE key='qq_binding_enabled'`)
+	require.NoError(t, err)
 	authorized := qqHTTPRequest(h, "POST", "/item/"+requestID, `{"consent":true}`, 42, "user", h.AuthorizeBinding)
 	require.Equal(t, 200, authorized.Code, authorized.Body.String())
 	var reply struct {
@@ -147,13 +160,27 @@ func TestQQImageHTTPPostgresSignedBindingGenerationAndPrivateRetrieval(t *testin
 	}
 	require.NoError(t, json.Unmarshal(authorized.Body.Bytes(), &reply))
 	require.NotEmpty(t, reply.Data.ConfirmationCode)
+	_, err = scoped.Exec(`UPDATE settings SET value='false' WHERE key='qq_binding_enabled'`)
+	require.NoError(t, err)
+	require.Equal(t, 200, send("blocked-confirm", "/确认绑定 "+reply.Data.ConfirmationCode, conf.BotSecret).Code)
+	var grants int
+	require.NoError(t, scoped.QueryRow(`SELECT count(*) FROM qq_image_grants`).Scan(&grants))
+	require.Zero(t, grants)
+	_, err = scoped.Exec(`UPDATE settings SET value='true' WHERE key='qq_binding_enabled'`)
+	require.NoError(t, err)
 	require.Equal(t, 200, send("confirm", "/确认绑定 "+reply.Data.ConfirmationCode, conf.BotSecret).Code)
 	require.Equal(t, 200, send("generate", "/生图 a tree", conf.BotSecret).Code)
+	_, err = scoped.Exec(`INSERT INTO settings(key,value) VALUES('qq_image_enabled','false') ON CONFLICT(key) DO UPDATE SET value=EXCLUDED.value;UPDATE settings SET value='false' WHERE key='qq_binding_enabled'`)
+	require.NoError(t, err)
 	require.Equal(t, 200, send("generate", "/生图 a tree", conf.BotSecret).Code, "QQ retry must not charge/create twice")
+	require.Equal(t, 200, send("blocked-generate", "/生图 a new tree", conf.BotSecret).Code)
 	var orderID string
 	var count int
 	require.NoError(t, scoped.QueryRow(`SELECT count(*) FROM qq_image_orders`).Scan(&count))
 	require.Equal(t, 1, count)
+	var holds int
+	require.NoError(t, scoped.QueryRow(`SELECT count(*) FROM qq_image_ledger WHERE operation='hold'`).Scan(&holds))
+	require.Equal(t, 1, holds)
 	require.NoError(t, scoped.QueryRow(`SELECT id FROM qq_image_orders`).Scan(&orderID))
 	// A mode switch blocks new events but must preserve already authorized orders and retrieval.
 	h.cfg = &config.Config{RunMode: config.RunModeSimple}

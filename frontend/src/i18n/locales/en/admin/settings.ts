@@ -14,6 +14,15 @@ export default {
         payment: 'Payment',
       },
       features: {
+        qqBusiness: {
+          title: 'QQ Binding and Image Generation',
+          description: 'Control new bindings and new image orders independently. Complete and enable the QQ technical configuration in Welfare first.',
+          configureLink: 'Configure the QQ bot in Welfare',
+          bindingEnabled: 'Allow new QQ bindings',
+          bindingHint: 'When off, new bindings are paused. Existing authorizations can still be viewed and unlinked; they are not revoked automatically.',
+          imageEnabled: 'Allow new QQ image orders',
+          imageHint: 'When off, new image orders are paused. Previous images remain available to view and download, and accepted tasks continue processing.',
+        },
         channelMonitor: {
           title: 'Channel Monitor',
           description: 'Choose either V1 active probes or V2 passive usage monitoring. When disabled, both background jobs stop and the user entry is hidden.',

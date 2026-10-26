@@ -25,7 +25,8 @@ func ProvideQQImageRuntime(db *sql.DB, balance *service.BillingCacheService, key
 	if externalHelpValue != "" && parseErr != nil {
 		slog.Warn("QQ image external-help flag invalid; standalone help retained")
 	}
-	store := qqimage.NewStore(db, key)
+	// The admission policy is immutable and installed before any receiver starts.
+	store := qqimage.NewStore(db, key, qqimage.StoreOptions{DisableNewAdmissions: cfg != nil && cfg.RunMode == config.RunModeSimple})
 	client := qqimage.NewQQClient()
 	runtime := &QQImageRuntime{core: store, commands: qqimage.NewQQCommandHandlerWithOptions(store, client, qqimage.QQCommandOptions{ExternalGeneralHelp: externalHelp}), worker: qqimage.NewWorker(store, qqimage.NewImageProvider(), client), outbox: store, balance: balance, auth: keys}
 	if cfg == nil || cfg.RunMode != config.RunModeSimple {

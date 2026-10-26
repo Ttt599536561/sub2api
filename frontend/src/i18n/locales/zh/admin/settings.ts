@@ -14,6 +14,15 @@ export default {
         payment: '支付设置',
       },
       features: {
+        qqBusiness: {
+          title: 'QQ 绑定与生图',
+          description: '分别控制新绑定与新生图订单。使用前需在福利中心完成并启用 QQ 技术配置。',
+          configureLink: '前往福利中心配置 QQ 机器人',
+          bindingEnabled: '允许 QQ 新绑定',
+          bindingHint: '关闭后暂停新绑定，已有授权仍可查看和解绑，不会自动解除绑定。',
+          imageEnabled: '允许 QQ 生图下单',
+          imageHint: '关闭后暂停新生图下单，历史作品仍可查看和下载，已受理任务继续处理。',
+        },
         channelMonitor: {
           title: '渠道监控',
           description: '启用后在 V1 主动探测与 V2 被动用量监控中二选一。关闭后两种模式的后台任务均停止，用户端入口隐藏。',

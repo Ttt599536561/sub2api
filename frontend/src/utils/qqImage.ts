@@ -28,10 +28,14 @@ export function restoreQQRequest(now = Date.now()): string {
   } catch { /* A malformed or unavailable session never grants authorization. */ }
   return ''
 }
-export function qqErrorKey(error: unknown): string {
+export function qqErrorKey(error: unknown, context: 'general' | 'binding' = 'general'): string {
   const value = error as { status?: number; code?: string; reason?: string }
   const code = String(value?.reason || value?.code || '').toUpperCase()
   switch (code) {
+    case 'QQ_IMAGE_NOT_FOUND': return context === 'binding' ? 'requestNotFound' : 'notFound'
+    case 'QQ_IMAGE_INVALID': return 'invalid'
+    case 'QQ_IMAGE_DISABLED': return context === 'binding' ? 'bindingDisabled' : 'disabled'
+    case 'QQ_IMAGE_ENCRYPTION_UNAVAILABLE': return 'unavailable'
     case 'EMAIL_NOT_CONFIGURED': return 'emailNotConfigured'
     case 'EMAIL_RESERVED': return 'emailReserved'
     case 'INVALID_VERIFY_CODE': return 'invalidVerifyCode'

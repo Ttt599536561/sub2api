@@ -51,6 +51,9 @@ func testStore(t *testing.T) *Store {
 	if e != nil {
 		t.Fatal(e)
 	}
+	if _, e = scoped.Exec(`CREATE TABLE settings (id BIGSERIAL PRIMARY KEY,key VARCHAR(100) NOT NULL UNIQUE,value TEXT NOT NULL,updated_at TIMESTAMPTZ NOT NULL DEFAULT now())`); e != nil {
+		t.Fatal(e)
+	}
 	b, e := os.ReadFile(filepath.Join("..", "..", "migrations", "248_qq_image_generation.sql"))
 	if e != nil {
 		t.Fatal(e)

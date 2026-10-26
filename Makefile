@@ -44,6 +44,11 @@ FRONTEND_CRITICAL_VITEST := \
 	src/views/auth/__tests__/RegisterView.spec.ts \
 	src/views/auth/__tests__/EmailVerifyView.spec.ts \
 	src/composables/__tests__/useWelfare.spec.ts \
+	src/views/user/__tests__/QQBindDiagnostics.spec.ts \
+	src/composables/__tests__/useQQGalleryMedia.spec.ts \
+	src/components/layout/__tests__/AppSidebar.qqControls.spec.ts \
+	src/stores/__tests__/app.spec.ts \
+	src/utils/__tests__/featureFlags.spec.ts \
 	src/views/user/__tests__/WelfareView.spec.ts
 
 # 一键编译前后端

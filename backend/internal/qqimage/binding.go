@@ -39,17 +39,8 @@ func (s *Store) CreateBindingRequest(ctx context.Context, i Identity) (*BindingR
 	}
 	var out *BindingRequest
 	e := s.transaction(ctx, func(tx *sql.Tx, now time.Time) error {
-		var b []byte
-		var configID int64
-		if e := tx.QueryRowContext(ctx, `SELECT id,config FROM qq_image_configs ORDER BY id DESC LIMIT 1`).Scan(&configID, &b); e != nil {
-			return ErrDisabled
-		}
-		var c Config
-		if e := json.Unmarshal(b, &c); e != nil {
+		if e := s.requireBindingAdmission(ctx, tx, i); e != nil {
 			return e
-		}
-		if !c.Enabled || c.AppID != i.AppID || !contains(c.AllowedGroups, i.GroupID) {
-			return ErrDisabled
 		}
 		if e := s.rate(ctx, tx, "bind:"+i.Key(), 5, 5*time.Minute, now); e != nil {
 			return e
@@ -118,9 +109,17 @@ func (s *Store) AuthorizeBinding(ctx context.Context, id string, userID int64, s
 		var expires time.Time
 		var candidate sql.NullInt64
 		var session sql.NullString
-		e := tx.QueryRowContext(ctx, `SELECT status,expires_at,candidate_user_id,session_hash FROM qq_image_binding_requests WHERE id=$1 FOR UPDATE`, strings.ToUpper(id)).Scan(&status, &expires, &candidate, &session)
+		var identityData []byte
+		e := tx.QueryRowContext(ctx, `SELECT status,expires_at,candidate_user_id,session_hash,identity FROM qq_image_binding_requests WHERE id=$1 FOR UPDATE`, strings.ToUpper(id)).Scan(&status, &expires, &candidate, &session, &identityData)
 		if e != nil {
 			return normalizeError(e)
+		}
+		var identity Identity
+		if e = json.Unmarshal(identityData, &identity); e != nil {
+			return e
+		}
+		if e = s.requireBindingAdmission(ctx, tx, identity); e != nil {
+			return e
 		}
 		if !now.Before(expires) {
 			return ErrExpired
@@ -149,6 +148,9 @@ func (s *Store) ConfirmBinding(ctx context.Context, i Identity, code string) (*G
 	var out *Grant
 	var resultErr error
 	e := s.transaction(ctx, func(tx *sql.Tx, now time.Time) error {
+		if e := s.requireBindingAdmission(ctx, tx, i); e != nil {
+			return e
+		}
 		if e := s.rate(ctx, tx, "confirm:"+i.Key(), 5, 5*time.Minute, now); e != nil {
 			return e
 		}

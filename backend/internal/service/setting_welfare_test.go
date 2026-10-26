@@ -63,7 +63,7 @@ func TestWelfarePublicSettingsAndSSRExposeOnlyAvailability(t *testing.T) {
 	// normalize that naming difference without deriving the list from the DTO.
 	approved := make(map[string]struct{})
 	for _, field := range strings.Fields(`
-		welfare_enabled registration_enabled email_verify_enabled force_email_on_third_party_signup
+		welfare_enabled qq_binding_enabled qq_image_enabled registration_enabled email_verify_enabled force_email_on_third_party_signup
 		registration_email_suffix_whitelist registration_email_domain_quota_enabled promo_code_enabled
 		password_reset_enabled invitation_code_enabled totp_enabled passkey_enabled login_agreement_enabled
 		login_agreement_mode login_agreement_updated_at login_agreement_revision login_agreement_documents

@@ -745,6 +745,10 @@ export interface SystemSettings {
   // Subscription feature switch (user sidebar "My Subscriptions" entry)
   subscription_enabled: boolean;
 
+  // QQ new-business switches; omitted by older servers, default enabled.
+  qq_binding_enabled?: boolean;
+  qq_image_enabled?: boolean;
+
   // Model Plaza feature switches + description
   model_plaza_enabled: boolean;
   model_plaza_require_auth: boolean;
@@ -1056,6 +1060,10 @@ export interface UpdateSettingsRequest {
 
   // Subscription feature switch
   subscription_enabled?: boolean;
+
+  // QQ new-business switches (independent of technical configuration).
+  qq_binding_enabled?: boolean;
+  qq_image_enabled?: boolean;
 
   // Model Plaza feature switches + description
   model_plaza_enabled?: boolean;

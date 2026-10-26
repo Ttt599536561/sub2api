@@ -63,3 +63,32 @@ describe('resolveFeatureFlag', () => {
     expect(isFeatureFlagEnabled(FeatureFlags.subscription)).toBe(false)
   })
 })
+
+describe('QQ business feature flags', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+  })
+
+  it.each([
+    ['qqBinding', 'qq_binding_enabled'],
+    ['qqImage', 'qq_image_enabled'],
+  ] as const)('%s defaults to enabled for older public settings', (name, key) => {
+    const flag = FeatureFlags[name]
+    expect(flag).toMatchObject({ key, mode: 'opt-out' })
+    expect(resolveFeatureFlag(null, flag)).toBe(true)
+    expect(resolveFeatureFlag({}, flag)).toBe(true)
+    expect(resolveFeatureFlag({ [key]: false }, flag)).toBe(false)
+    expect(resolveFeatureFlag({ [key]: true }, flag)).toBe(true)
+  })
+
+  it('resolves binding and image generation independently', () => {
+    const store = useAppStore()
+    store.cachedPublicSettings = { qq_binding_enabled: false, qq_image_enabled: true } as PublicSettings
+    expect(isFeatureFlagEnabled(FeatureFlags.qqBinding)).toBe(false)
+    expect(isFeatureFlagEnabled(FeatureFlags.qqImage)).toBe(true)
+
+    store.cachedPublicSettings = { qq_binding_enabled: true, qq_image_enabled: false } as PublicSettings
+    expect(isFeatureFlagEnabled(FeatureFlags.qqBinding)).toBe(true)
+    expect(isFeatureFlagEnabled(FeatureFlags.qqImage)).toBe(false)
+  })
+})

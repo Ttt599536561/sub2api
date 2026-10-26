@@ -28,6 +28,8 @@ type CustomEndpoint struct {
 
 // SystemSettings represents the admin settings API response payload.
 type SystemSettings struct {
+	QQBindingEnabled                    bool                     `json:"qq_binding_enabled"`
+	QQImageEnabled                      bool                     `json:"qq_image_enabled"`
 	RegistrationEnabled                 bool                     `json:"registration_enabled"`
 	EmailVerifyEnabled                  bool                     `json:"email_verify_enabled"`
 	RegistrationEmailSuffixWhitelist    []string                 `json:"registration_email_suffix_whitelist"`
@@ -365,6 +367,8 @@ type DefaultSubscriptionSetting struct {
 }
 
 type PublicSettings struct {
+	QQBindingEnabled                    bool                     `json:"qq_binding_enabled"`
+	QQImageEnabled                      bool                     `json:"qq_image_enabled"`
 	WelfareEnabled                      bool                     `json:"welfare_enabled"`
 	RegistrationEnabled                 bool                     `json:"registration_enabled"`
 	EmailVerifyEnabled                  bool                     `json:"email_verify_enabled"`

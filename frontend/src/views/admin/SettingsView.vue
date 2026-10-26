@@ -7165,6 +7165,59 @@
         <div class="card">
           <div class="border-b border-gray-100 px-6 py-4 dark:border-dark-700">
             <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+              {{ t('admin.settings.features.qqBusiness.title') }}
+            </h2>
+            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+              {{ t('admin.settings.features.qqBusiness.description') }}
+            </p>
+            <router-link
+              to="/admin/welfare"
+              data-testid="qq-business-config-link"
+              class="mt-1.5 inline-flex items-center gap-1 text-xs text-primary-600 hover:underline dark:text-primary-400"
+            >
+              {{ t('admin.settings.features.qqBusiness.configureLink') }}
+              <span aria-hidden="true">→</span>
+            </router-link>
+          </div>
+          <div class="space-y-5 p-6">
+            <div class="flex items-start justify-between gap-4">
+              <div>
+                <p class="text-sm font-medium text-gray-700 dark:text-gray-300">
+                  {{ t('admin.settings.features.qqBusiness.bindingEnabled') }}
+                </p>
+                <p id="qq-binding-enabled-hint" class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                  {{ t('admin.settings.features.qqBusiness.bindingHint') }}
+                </p>
+              </div>
+              <Toggle
+                v-model="form.qq_binding_enabled"
+                data-testid="qq-binding-enabled"
+                :aria-label="t('admin.settings.features.qqBusiness.bindingEnabled')"
+                aria-describedby="qq-binding-enabled-hint"
+              />
+            </div>
+            <div class="flex items-start justify-between gap-4">
+              <div>
+                <p class="text-sm font-medium text-gray-700 dark:text-gray-300">
+                  {{ t('admin.settings.features.qqBusiness.imageEnabled') }}
+                </p>
+                <p id="qq-image-enabled-hint" class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                  {{ t('admin.settings.features.qqBusiness.imageHint') }}
+                </p>
+              </div>
+              <Toggle
+                v-model="form.qq_image_enabled"
+                data-testid="qq-image-enabled"
+                :aria-label="t('admin.settings.features.qqBusiness.imageEnabled')"
+                aria-describedby="qq-image-enabled-hint"
+              />
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="border-b border-gray-100 px-6 py-4 dark:border-dark-700">
+            <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
               {{ t('admin.settings.features.channelMonitor.title') }}
             </h2>
             <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
@@ -9740,6 +9793,8 @@ type SettingsForm = Omit<
   | "openai_oauth_scheduling_rate_multiplier"
 > & {
   /** Form always binds a concrete boolean (SystemSettings marks this optional). */
+  qq_binding_enabled: boolean;
+  qq_image_enabled: boolean;
   channel_monitor_hide_throughput: boolean;
   channel_monitor_show_quota: boolean;
   channel_monitor_hide_user_ranking: boolean;
@@ -10081,6 +10136,9 @@ const form = reactive<SettingsForm>({
   available_channels_enabled: false,
   // Subscription feature switch (user sidebar "My Subscriptions" entry)
   subscription_enabled: true,
+  // QQ switches pause new bindings/orders while preserving existing management.
+  qq_binding_enabled: true,
+  qq_image_enabled: true,
   // Model Plaza feature switches + description
   model_plaza_enabled: false,
   model_plaza_require_auth: false,
@@ -11816,6 +11874,8 @@ async function saveSettings() {
       available_channels_enabled: form.available_channels_enabled,
       // Subscription feature switch
       subscription_enabled: form.subscription_enabled,
+      qq_binding_enabled: form.qq_binding_enabled,
+      qq_image_enabled: form.qq_image_enabled,
       // Model Plaza feature switches + description
       model_plaza_enabled: form.model_plaza_enabled,
       model_plaza_require_auth: form.model_plaza_require_auth,

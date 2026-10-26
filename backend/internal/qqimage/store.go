@@ -12,8 +12,13 @@ import (
 )
 
 type Store struct {
-	db  *sql.DB
-	key []byte
+	db                   *sql.DB
+	key                  []byte
+	disableNewAdmissions bool
+}
+
+type StoreOptions struct {
+	DisableNewAdmissions bool
 }
 
 type storeTxKey struct{}
@@ -34,7 +39,13 @@ func (s *Store) queryer(ctx context.Context) storeQueryer {
 	return s.db
 }
 
-func NewStore(db *sql.DB, key []byte) *Store { return &Store{db: db, key: append([]byte(nil), key...)} }
+func NewStore(db *sql.DB, key []byte, options ...StoreOptions) *Store {
+	s := &Store{db: db, key: append([]byte(nil), key...)}
+	if len(options) > 0 {
+		s.disableNewAdmissions = options[0].DisableNewAdmissions
+	}
+	return s
+}
 func ParseEncryptionKey(value string) ([]byte, error) {
 	if value == "" {
 		return nil, nil

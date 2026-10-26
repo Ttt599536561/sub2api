@@ -283,6 +283,10 @@ export interface PublicSettings {
   available_channels_enabled: boolean
   /** When false, the whole user-facing subscription surface is hidden. Default true. */
   subscription_enabled: boolean
+  /** New QQ bindings only; missing on older servers means enabled. Existing grants remain manageable. */
+  qq_binding_enabled?: boolean
+  /** New QQ image orders only; missing on older servers means enabled. History remains accessible. */
+  qq_image_enabled?: boolean
   /** Mirrors payment config BALANCE_PAYMENT_DISABLED; true = balance top-up closed (subscription-only site). */
   payment_balance_disabled: boolean
   model_plaza_enabled: boolean

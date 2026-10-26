@@ -22,6 +22,8 @@ import (
 
 // UpdateSettingsRequest 更新设置请求
 type UpdateSettingsRequest struct {
+	QQBindingEnabled *bool `json:"qq_binding_enabled"`
+	QQImageEnabled   *bool `json:"qq_image_enabled"`
 	// 注册设置
 	RegistrationEnabled                 bool                         `json:"registration_enabled"`
 	EmailVerifyEnabled                  bool                         `json:"email_verify_enabled"`
@@ -515,6 +517,21 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		return
 	}
 
+	// QQ业务开关省略时保留现值，兼容尚未认识这两个字段的客户端。
+	qqBindingEnabled := previousSettings.QQBindingEnabled
+	if req.QQBindingEnabled != nil {
+		qqBindingEnabled = *req.QQBindingEnabled
+	} else {
+		// Do not persist the earlier snapshot when this client omitted the flag:
+		// a concurrent administrator may have closed admission in the meantime.
+		omitted[service.SettingKeyQQBindingEnabled] = struct{}{}
+	}
+	qqImageEnabled := previousSettings.QQImageEnabled
+	if req.QQImageEnabled != nil {
+		qqImageEnabled = *req.QQImageEnabled
+	} else {
+		omitted[service.SettingKeyQQImageEnabled] = struct{}{}
+	}
 	// 两个安全开关的请求字段为指针：省略字段=保持现值，避免旧客户端/脚本
 	// 用不含新字段的全量 payload 保存设置时把安全开关静默重置。
 	sessionBindingEnabled := previousSettings.SessionBindingEnabled
@@ -1530,6 +1547,8 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		EmailVerifyEnabled:                  req.EmailVerifyEnabled,
 		RegistrationEmailSuffixWhitelist:    req.RegistrationEmailSuffixWhitelist,
 		RegistrationEmailDomainQuotaEnabled: registrationEmailDomainQuotaEnabled,
+		QQBindingEnabled:                    qqBindingEnabled,
+		QQImageEnabled:                      qqImageEnabled,
 		PromoCodeEnabled:                    req.PromoCodeEnabled,
 		PasswordResetEnabled:                req.PasswordResetEnabled,
 		FrontendURL:                         req.FrontendURL,
@@ -2195,6 +2214,8 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		EmailVerifyEnabled:                                     updatedSettings.EmailVerifyEnabled,
 		RegistrationEmailSuffixWhitelist:                       updatedSettings.RegistrationEmailSuffixWhitelist,
 		RegistrationEmailDomainQuotaEnabled:                    updatedSettings.RegistrationEmailDomainQuotaEnabled,
+		QQBindingEnabled:                                       updatedSettings.QQBindingEnabled,
+		QQImageEnabled:                                         updatedSettings.QQImageEnabled,
 		PromoCodeEnabled:                                       updatedSettings.PromoCodeEnabled,
 		PasswordResetEnabled:                                   updatedSettings.PasswordResetEnabled,
 		FrontendURL:                                            updatedSettings.FrontendURL,

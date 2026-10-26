@@ -1,5 +1,6 @@
 export default {
   qqImage: {
+    bindingPaused: '新 QQ 绑定已暂停，已有授权仍可查看和解绑。', requestSite: '当前绑定站点：{site}', siteHint: '申请编号只属于创建它的站点。请打开机器人回复的原始链接；测试站申请不能用于正式站。',
     title: 'QQ 群生图', bindTitle: 'QQ 绑定管理', bindSubtitle: '只授权您本人刚在原 QQ 群发起的申请。',
     ordersTitle: '我的 QQ 生图订单', login: '登录后绑定', register: '注册账号', loginHint: '使用原网站账号登录后继续。打开此页不会授权消费或扣费。',
     registrationRules: '注册、邀请码和邮箱要求沿用本站原有规则，关闭注册时请联系管理员。',
@@ -21,7 +22,7 @@ export default {
     revokeHint: '未派发订单会尽可能取消，已提交订单仍可能按原账号结算。历史订单和图片始终归原网站账号；解绑前已发出的 QQ 消息仍可能迟到。',
     back: '返回', refresh: '刷新', order: '订单', details: '查看详情', allOrders: '全部订单', task: '生成状态', funds: '资金状态', delivery: 'QQ 投递状态', price: '本单价格', model: '模型', size: '图片规格', deadline: '资金核查截止', retention: '图片保留至',
     ordersHint: '订单保留原始报价，生成、资金和 QQ 投递状态分别展示。', emptyOrders: '暂无 QQ 生图订单。', orderProblem: '此订单需要处理，请刷新状态或凭订单编号联系管理员。',
-    settlementHint: '图片在本站可领取即结算，QQ 投递失败不会自动退款。重发只发送已有图片，不重新生成或重复收费。',
+    settlementHint: '资金已释放后返回的图片可在本站免费领取。QQ 投递失败不会自动退款，重发不会重新生成或重复收费。',
     cancelOrder: '取消排队订单', cancelHint: '只有派发前可以成功取消。取消成功后释放本订单预留资金。', confirmCancel: '确认取消',
     dispatchedHint: '请求已提交，无法保证取消。结果不确定时核查原订单，不会再次提交生图请求。',
     loadImage: '查看私有图片', download: '下载图片', imageAlt: '本订单生成的图片', imageExpired: '图片保留期已结束，此订单不会自动重新生图或再次扣费。',
@@ -29,7 +30,7 @@ export default {
     taskStates: { closed_unknown: '核查到期，未扣费；请查看资金状态', queued: '排队中', dispatching: '正在提交', submitted: '已提交', generating: '生成中', reconciling: '结果核查中', completed: '已完成', succeeded: '已完成', failed: '失败', cancelled: '已取消', expired: '已到期', unknown: '状态待确认' },
     fundsStates: { held: '已预留', captured: '已结算', released: '已释放', refunded: '已退款', release_pending: '释放恢复中', refund_pending: '退款恢复中', unknown: '资金状态待确认' },
     deliveryStates: { site_only: '仅在网站领取', pending: '等待投递', sending: '投递中', sent: '已发送至 QQ', delivered: '已送达', failed: 'QQ 投递失败，可查看站内图片', blocked: 'QQ 投递已阻止', website_only: '请在本站领取', not_sent: '未发送', unknown: '投递回执未知，可能重复展示', none: '未发送' },
-    errors: { imageHosts: '图片域名只能填写精确域名，不允许协议、路径、端口、IP 或通配符。', failed: '请求未能完成，请刷新后重试；不要据此认定操作已成功。', conflict: '此申请已被占用或已有绑定。请在原 QQ 群重新申请，或联系管理员核验。', expired: '申请或图片已到期，如需绑定请重新发起。', recent: '授权或解绑前，请再次确认当前邮箱。', email: '请先完成当前邮箱验证。', emailNotConfigured: '邮件服务尚未配置，请联系管理员配置 SMTP 后再发送验证码。', emailReserved: '当前邮箱无法接收验证码，请点击“管理我的邮箱”更换为真实邮箱。', invalidVerifyCode: '验证码无效或已过期，请重新获取验证码。', verifyCodeMaxAttempts: '验证码尝试次数过多，请重新获取验证码。', rate: '操作过于频繁，请稍后重试。', forbidden: '当前账号或作用域无法执行此操作，请确认邮箱或联系管理员。', request: '请输入官方 QQ 机器人返回的有效申请编号。', config: '请检查 HTTPS 地址、正数金额、允许的群和正整数限额。' },
+    errors: { requestNotFound: '当前站点找不到此绑定申请。请核对机器人原始链接的域名；若要在本站绑定，请先让管理员确认机器人接收配置，再于原群重新发送 /绑定。', notFound: '当前站点找不到这条记录，请核对链接或联系管理员。', invalid: '请求内容不符合要求，请检查输入后重试。', bindingDisabled: '新 QQ 绑定已暂停，已有授权仍可查看和解绑。', disabled: '新的 QQ 业务已暂停，历史订单和授权管理仍可用。', unavailable: 'QQ 服务暂不可用，请联系管理员检查机器人配置。', imageHosts: '图片域名只能填写精确域名，不允许协议、路径、端口、IP 或通配符。', failed: '请求未能完成，请刷新后重试；不要据此认定操作已成功。', conflict: '此申请已被占用或已有绑定。请在原 QQ 群重新申请，或联系管理员核验。', expired: '申请或图片已到期，如需绑定请重新发起。', recent: '授权或解绑前，请再次确认当前邮箱。', email: '请先完成当前邮箱验证。', emailNotConfigured: '邮件服务尚未配置，请联系管理员配置 SMTP 后再发送验证码。', emailReserved: '当前邮箱无法接收验证码，请点击“管理我的邮箱”更换为真实邮箱。', invalidVerifyCode: '验证码无效或已过期，请重新获取验证码。', verifyCodeMaxAttempts: '验证码尝试次数过多，请重新获取验证码。', rate: '操作过于频繁，请稍后重试。', forbidden: '当前账号或作用域无法执行此操作，请确认邮箱或联系管理员。', request: '请输入官方 QQ 机器人返回的有效申请编号。', config: '请检查 HTTPS 地址、正数金额、允许的群和正整数限额。' },
     admin: {
       configValidation: {
         required: '开启生图前，请填写这一项。', out_of_range: '请输入 1～{max} 的整数。', rangeHint: '允许范围：1～{max}。',

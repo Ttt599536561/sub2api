@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import AppLayout from '@/components/layout/AppLayout.vue'
@@ -22,6 +22,11 @@ const session = useQQSession(identityChanged => {
   if (identityChanged) rememberQQRequest('')
 })
 const needsProof = computed(() => status.value && (!status.value.email_verified || !status.value.recent_authorization))
+const bindingEnabled = computed(() => !!status.value?.enabled && (status.value.binding_enabled ?? status.value.enabled))
+watch(bindingEnabled, enabled => {
+  if (!enabled) { confirmation.value = null; consent.value = false }
+}, { flush: 'sync' })
+const currentSite = window.location.host
 const expired = computed(() => !!request.value && Date.parse(request.value.expires_at) <= now.value)
 const mayAuthorize = computed(() => request.value && ['pending', 'await_website'].includes(request.value.status) && !expired.value && !confirmation.value)
 const requestState = computed(() => expired.value ? 'expired' : request.value?.status || 'pending')
@@ -31,17 +36,26 @@ const grants = computed(() => status.value?.grants.filter(grant => grant.status 
 async function refresh() {
   if (!session.current() || loading.value || busy.value) return
   loading.value = true; error.value = ''
+  let stage: 'general' | 'binding' = 'general'
   try {
     const next = await qqImageAPI.status(session.signal)
     if (!session.current()) return
     status.value = next
     if (requestID.value) {
+      stage = 'binding'
       const nextRequest = await qqImageAPI.request(requestID.value, session.signal)
       if (!session.current()) return
       request.value = nextRequest
       if (!['pending', 'await_website', 'await_qq', 'authorized'].includes(nextRequest.status)) { confirmation.value = null; consent.value = false }
     }
-  } catch (e) { if (session.current()) error.value = qqErrorKey(e) }
+  } catch (e) {
+    if (session.current()) {
+      error.value = qqErrorKey(e, stage)
+      if (stage === 'binding' && ['requestNotFound', 'expired'].includes(error.value)) {
+        request.value = null; confirmation.value = null; consent.value = false
+      }
+    }
+  }
   finally { if (session.current()) loading.value = false }
 }
 async function lookup() {
@@ -51,21 +65,21 @@ async function lookup() {
   requestID.value = id; rememberQQRequest(id); request.value = null; confirmation.value = null; consent.value = false
   await refresh()
 }
-async function mutate(operation: () => Promise<void>) {
+async function mutate(operation: () => Promise<void>, context: 'general' | 'binding' = 'general') {
   if (!session.current() || busy.value || loading.value) return
   busy.value = true; error.value = ''; notice.value = ''
   try { await operation() }
-  catch (e) { if (session.current()) error.value = qqErrorKey(e) }
+  catch (e) { if (session.current()) error.value = qqErrorKey(e, context) }
   finally { if (session.current()) busy.value = false }
 }
 async function authorize() {
-  if (!consent.value || !mayAuthorize.value || !status.value?.enabled || needsProof.value) return
+  if (!consent.value || !mayAuthorize.value || !bindingEnabled.value || needsProof.value) return
   await mutate(async () => {
     const result = await qqImageAPI.authorize(request.value!.id, session.signal)
     if (!session.current()) return
     now.value = Date.now(); confirmation.value = result; consent.value = false
     if (request.value) request.value.status = 'await_qq'
-  })
+  }, 'binding')
 }
 async function sendCode() {
   await mutate(async () => { await qqImageAPI.sendEmailCode(session.signal); if (session.current()) notice.value = 'emailSent' })
@@ -120,7 +134,7 @@ onBeforeUnmount(() => { if (timer) clearInterval(timer) })
         <div v-if="loading" role="status" class="qq-muted">{{ t('common.loading') }}</div>
         <div v-if="error" class="qq-error" role="alert">{{ t(`qqImage.errors.${error}`) }} <button class="qq-link" :disabled="loading || busy" @click="refresh">{{ t('qqImage.refresh') }}</button></div>
         <div v-if="notice" class="qq-notice" role="status">{{ t(`qqImage.${notice}`) }}</div>
-        <div v-if="status && !status.enabled" class="qq-notice">{{ t('qqImage.disabled') }}</div>
+        <div v-if="status && !bindingEnabled" class="qq-notice">{{ t('qqImage.bindingPaused') }}</div>
         <section v-if="status" class="qq-panel space-y-4">
           <h2>{{ t('qqImage.account') }}</h2><p class="break-all text-sm">{{ status.email || t('qqImage.missingEmail') }}</p>
           <p class="qq-muted">{{ status.email_verified ? t('qqImage.emailVerified') : t('qqImage.emailRequired') }}</p>
@@ -134,17 +148,18 @@ onBeforeUnmount(() => { if (timer) clearInterval(timer) })
         </section>
         <section class="qq-panel space-y-4">
           <h2>{{ t('qqImage.requestTitle') }}</h2><p class="qq-muted">{{ t('qqImage.requestHint') }}</p>
+          <p data-test="request-site" class="qq-notice">{{ t('qqImage.requestSite', { site: currentSite }) }}<span class="mt-1 block text-sm">{{ t('qqImage.siteHint') }}</span></p>
           <form class="flex flex-wrap gap-3" @submit.prevent="lookup"><label class="qq-label min-w-0 flex-1">{{ t('qqImage.requestID') }}<input v-model="requestID" data-test="request-id" class="qq-input" autocomplete="off" maxlength="160" :disabled="busy || loading" /></label><button class="btn btn-secondary self-end" :disabled="busy || loading || !requestID.trim()">{{ t('qqImage.lookup') }}</button></form>
           <template v-if="request">
             <dl class="qq-meta"><div><dt>{{ t('qqImage.group') }}</dt><dd>{{ request.group_id }}</dd></div><div><dt>{{ t('qqImage.subject') }}</dt><dd>{{ request.subject_hint }}</dd></div><div><dt>{{ t('qqImage.expires') }}</dt><dd>{{ new Date(request.expires_at).toLocaleString() }}</dd></div></dl>
             <p class="qq-notice">{{ t(`qqImage.bindingStates.${requestState}`) }}</p>
-            <div v-if="confirmation && remaining > 0" class="space-y-3" aria-live="polite"><p class="qq-muted">{{ t('qqImage.confirmHint') }}</p><code class="qq-code">/确认绑定 {{ confirmation.confirmation_code }}</code><p class="qq-muted">{{ t('qqImage.codeLifetime', { seconds: remaining }) }}</p><button class="btn btn-secondary" :disabled="loading || busy" @click="refresh">{{ t('qqImage.refreshBinding') }}</button></div>
-            <template v-else-if="mayAuthorize && status?.enabled">
+            <div v-if="bindingEnabled && confirmation && remaining > 0" class="space-y-3" aria-live="polite"><p class="qq-muted">{{ t('qqImage.confirmHint') }}</p><code class="qq-code">/确认绑定 {{ confirmation.confirmation_code }}</code><p class="qq-muted">{{ t('qqImage.codeLifetime', { seconds: remaining }) }}</p><button class="btn btn-secondary" :disabled="loading || busy" @click="refresh">{{ t('qqImage.refreshBinding') }}</button></div>
+            <template v-else-if="mayAuthorize && bindingEnabled">
               <div class="qq-notice">{{ t('qqImage.chargeNotice') }}<br />{{ t('qqImage.publicNotice') }}</div>
               <label class="flex items-start gap-3 text-sm leading-6"><input v-model="consent" data-test="consent" type="checkbox" class="mt-1" :disabled="busy || !!needsProof" /><span>{{ t('qqImage.consent') }}</span></label>
               <button data-test="authorize" class="btn btn-primary" :disabled="busy || loading || !consent || !!needsProof" @click="authorize">{{ t('qqImage.authorize') }}</button>
             </template>
-            <p v-else-if="!confirmation" class="qq-muted">{{ t('qqImage.restartHint') }}</p>
+            <p v-else-if="!confirmation && bindingEnabled" class="qq-muted">{{ t('qqImage.restartHint') }}</p>
           </template>
         </section>
         <section v-if="status" class="qq-panel space-y-4"><h2>{{ t('qqImage.grantsTitle') }}</h2><p class="qq-muted">{{ t('qqImage.scopeHint') }}</p><p v-if="!grants.length" class="qq-muted">{{ t('qqImage.emptyGrants') }}</p>
