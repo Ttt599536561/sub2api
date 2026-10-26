@@ -5,6 +5,7 @@ import { createMemoryHistory, createRouter, type Router } from 'vue-router'
 import WelfareView from '../WelfareView.vue'
 vi.mock('@/components/layout/AppLayout.vue', () => ({ default: { template: '<main><slot /></main>' } }))
 import { welfareAPI } from '@/api/welfare'
+import { lotteryV4Prizes } from '@/__tests__/fixtures/welfare'
 const { welfareLocale } = vi.hoisted(() => ({ welfareLocale: { value: 'zh' as 'zh' | 'en' } }))
 vi.mock('vue-i18n', async () => {
   const { default: zh } = await import('@/i18n/locales/zh/welfare')
@@ -36,10 +37,27 @@ beforeEach(() => {
   vi.mocked(welfareAPI.overview).mockResolvedValue({ ...initial })
   vi.mocked(welfareAPI.calendar).mockResolvedValue({ month: '2026-09', days: [{ date: '2026-09-18', checked_in: true, reward_amount: '0.08' }] })
   vi.mocked(welfareAPI.records).mockResolvedValue({ items: [], total: 0, page: 1, page_size: 10, total_draws: 2 })
-  vi.mocked(welfareAPI.rules).mockResolvedValue({ prizes: ['0.50', '1', '2', '5', '10', '20', '50'].map((amount, index) => ({ id: String(index), name: amount, amount, probability: '1%' })), draw_threshold: '50.00', timezone: 'Asia/Shanghai' })
+  vi.mocked(welfareAPI.rules).mockResolvedValue({ prizes: lotteryV4Prizes, draw_threshold: '50.00', timezone: 'Asia/Shanghai' })
 })
 afterEach(() => wrapper?.unmount())
 describe('welfare user interactions', () => {
+  it.each([
+    { locale: 'zh' as const, guaranteed: '每次抽奖必得小额福利补贴', hint: '抽奖提供小额随机使用补贴，日常用量请按需充值。每次独立随机，无累计抽数保底，奖励均存入福利余额。' },
+    { locale: 'en' as const, guaranteed: 'Every draw earns a small welfare credit', hint: 'Draws offer a small random usage credit. Top up as needed for regular usage. Each draw is independent, with no guaranteed prize tier after any number of draws. Every prize is credited to welfare balance.' }
+  ])('explains the small lottery supplement and displays all v4 prize probabilities in $locale', async ({ locale, guaranteed, hint }) => {
+    welfareLocale.value = locale
+    vi.mocked(welfareAPI.overview).mockResolvedValue({ ...initial, rules_version: 4 })
+    await start()
+
+    expect(wrapper.get('.wf-ticket').text()).toContain(guaranteed)
+    expect(wrapper.findAll('.wf-prize').map(prize => prize.text())).toEqual(lotteryV4Prizes.map(prize => `$${prize.amount}`))
+    await wrapper.get('.wf-lottery .wf-panel-title button').trigger('click')
+    const dialog = wrapper.get('[role="dialog"]')
+    expect(dialog.text()).toContain(hint)
+    expect(dialog.findAll('strong').map(prize => prize.text())).toEqual(lotteryV4Prizes.map(prize => `$${prize.amount}`))
+    expect(dialog.findAll('span').map(probability => probability.text())).toEqual(lotteryV4Prizes.map(prize => prize.probability))
+  })
+
   it.each([
     { locale: 'zh' as const, progress: 'API 余额消费进度', apiThreshold: 'API 余额每消费 $40.00 获得 1 次', subscriptionThreshold: '套餐单笔实付每满 ¥75.00 送 1 次', perOrder: '每笔独立计算，余数不累计', rulesLabel: '活动规则', refund: '退款确认后，按该订单剩余实付金额重新计算赠送次数', rewardsKept: '已获得的福利余额不收回' },
     { locale: 'en' as const, progress: 'API balance spending progress', apiThreshold: 'One draw per $40.00 in API balance spending', subscriptionThreshold: 'One draw per ¥75.00 paid on each subscription order', perOrder: 'Each order is calculated separately; remainders do not carry over', rulesLabel: 'Program rules', refund: 'After a refund is confirmed, draws are recalculated from the amount still paid on that order', rewardsKept: 'Welfare funds already earned are kept' },
@@ -145,15 +163,32 @@ describe('welfare user interactions', () => {
     await wrapper.get('[data-testid="open-redemption"]').trigger('click')
     expect(wrapper.get<HTMLInputElement>('#welfare-redemption-amount').element.value).toBe('')
   })
-  it('shows the returned draw prize and current remaining tickets', async () => {
-    vi.mocked(welfareAPI.overview).mockResolvedValue({ ...initial, available_draws: 1 })
+  it.each(lotteryV4Prizes)('shows the returned v4 $amount prize and current remaining tickets', async prize => {
+    vi.mocked(welfareAPI.overview).mockResolvedValue({ ...initial, rules_version: 4, available_draws: 1 })
     await start()
-    const after = { ...initial, welfare_balance: '3.80', welfare_balance_version: 2, wallet_version: 2 }
-    vi.mocked(welfareAPI.draw).mockResolvedValue({ operation_id: 'draw', status: 'completed', reward_amount: '1.00', overview: after })
+    const after = { ...initial, rules_version: 4, welfare_balance: (2.80 + Number(prize.amount)).toFixed(2), welfare_balance_version: 2, wallet_version: 2 }
+    vi.mocked(welfareAPI.draw).mockResolvedValue({ operation_id: 'draw', status: 'completed', reward_amount: prize.amount, prize, overview: after })
     vi.mocked(welfareAPI.overview).mockResolvedValue(after)
     await wrapper.get('[data-testid="draw"]').trigger('click'); await flushPromises()
-    expect(wrapper.get('[role="dialog"]').text()).toContain('+$1.00')
+    expect(wrapper.get('[role="dialog"]').text()).toContain(`+$${prize.amount}`)
     expect(wrapper.get('[role="dialog"]').text()).toContain('剩余 0 次')
+  })
+  it('recovers an original committed v3 $50 prize while displaying the current v4 pool', async () => {
+    sessionStorage.setItem('welfare.pending:1:first', JSON.stringify({ drawKey: 'committed-v3-draw', redemption: null }))
+    const current = { ...initial, rules_version: 4, welfare_balance: '52.80', wallet_version: 2, welfare_balance_version: 2 }
+    vi.mocked(welfareAPI.overview).mockResolvedValue(current)
+    // Historical committed results retain their original reward and rule version.
+    vi.mocked(welfareAPI.operationByKey).mockResolvedValueOnce({ operation_id: 'old-draw', status: 'completed', reward_amount: '50.00', prize: { id: '5000', name: '$50.00', amount: '50.00', probability: '0.1%' }, overview: { ...current, rules_version: 3 } })
+    await start()
+
+    expect(welfareAPI.operationByKey).toHaveBeenCalledWith('draw', 'committed-v3-draw', expect.any(AbortSignal))
+    expect(welfareAPI.draw).not.toHaveBeenCalled()
+    expect(wrapper.get('[role="dialog"]').text()).toContain('+$50.00')
+    expect(wrapper.findAll('.wf-prize').map(prize => prize.text())).toEqual(lotteryV4Prizes.map(prize => `$${prize.amount}`))
+    expect(wrapper.findAll('.wf-stat')[0].get('strong').text()).toBe('$52.80')
+    expect(welfareAPI.rules).toHaveBeenCalledOnce()
+    expect(wrapper.find('[data-testid="retry-pending-draw"]').exists()).toBe(false)
+    expect(sessionStorage.getItem('welfare.pending:1:first')).toBeNull()
   })
   it('allows redemption while rewards are paused and refreshes account data after transfer', async () => {
     vi.mocked(welfareAPI.overview).mockResolvedValue({ ...initial, rewards_enabled: false })

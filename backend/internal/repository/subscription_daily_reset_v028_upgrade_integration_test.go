@@ -192,6 +192,7 @@ func testDeployedCustomUpgrade(t *testing.T, baseline migrationUpgradeBaseline) 
 	}
 	before["groups"] = migrationUpgradeExpectedGroupDefaults(t, before["groups"])
 	before["programs"] = welfareCheckinV3ExpectedPrograms(t, before["programs"])
+	before["programs"] = welfareLotteryV4ExpectedPrograms(t, before["programs"])
 
 	require.NoError(t, ApplyMigrations(ctx, db))
 	for name, query := range queries {

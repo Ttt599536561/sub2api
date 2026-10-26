@@ -147,7 +147,7 @@ func sampleWelfareStreak(day int64, random WelfareRandom) (int64, *welfareStreak
 	return min + within, audit, nil
 }
 
-var welfareLotteryAmounts = []int64{50, 100, 200, 500, 1000, 2000, 5000}
+var welfareLotteryAmounts = []int64{1, 2, 5, 10, 20, 50, 100}
 var welfareLotteryWeights = []int64{450, 300, 180, 50, 15, 4, 1}
 
 func sampleWelfareLottery(random WelfareRandom) (int64, error) {

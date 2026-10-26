@@ -39,7 +39,7 @@ func TestWelfareSubscriptionOnlyUserCanDraw(t *testing.T) {
 	require.NoError(t, err)
 	require.EqualValues(t, 1, result.Overview.DrawsUsed)
 	require.Zero(t, result.Overview.AvailableDraws)
-	require.Equal(t, "0.50", result.RewardAmount)
+	require.Equal(t, "0.01", result.RewardAmount)
 	_, err = svc.Draw(context.Background(), 1, "subscription-second-draw")
 	require.ErrorIs(t, err, ErrWelfareNoTickets)
 	rules, err := svc.Rules(context.Background())

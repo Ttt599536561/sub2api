@@ -175,6 +175,8 @@ func (s *WelfareService) Draw(ctx context.Context, userID int64, key string) (*W
 		return nil, ErrWelfareInvalidRequest
 	}
 	now := s.now()
+	// The fingerprint describes the unchanged request, not the payout algorithm.
+	// Keep draw:v2 so keys committed before v4 still replay their saved response.
 	return s.repo.Mutate(ctx, userID, "draw", key, "draw:v2", func(state *WelfareState) (*WelfareMutation, error) {
 		if err := welfareRewardsAllowed(&state.Program, now); err != nil {
 			return nil, err
@@ -210,7 +212,7 @@ func (s *WelfareService) Draw(ctx context.Context, userID int64, key string) (*W
 		}
 		prize := welfarePrizeFor(amount)
 		return &WelfareMutation{BusinessDate: welfareBusinessDate(now), Entries: []WelfareLedgerEntry{{Type: "draw", AmountCents: amount, BalanceAfterCents: w.BalanceCents}},
-			PrivateAudit: map[string]any{"rules_version": "v2", "amount_cents": amount, "uniform_roll": uniformRoll}, Result: &WelfareOperation{Status: "completed", Overview: overview, RewardAmount: welfareMoney(amount), Prize: &prize}}, nil
+			PrivateAudit: map[string]any{"rules_version": "v4", "amount_cents": amount, "uniform_roll": uniformRoll}, Result: &WelfareOperation{Status: "completed", Overview: overview, RewardAmount: welfareMoney(amount), Prize: &prize}}, nil
 	})
 }
 

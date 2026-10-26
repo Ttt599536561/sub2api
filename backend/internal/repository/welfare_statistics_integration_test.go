@@ -80,14 +80,14 @@ func TestWelfareAdminStatisticsImmutableFacts(t *testing.T) {
 	now = time.Date(2027, 1, 9, 4, 0, 0, 0, time.UTC)
 	secondDraw, err := high.Draw(ctx, b.ID, "statistics-second-user-draw")
 	require.NoError(t, err)
-	require.Equal(t, "1.00", secondDraw.RewardAmount)
+	require.Equal(t, "0.02", secondDraw.RewardAmount)
 	_, err = integrationDB.Exec(`INSERT INTO welfare_wallets(user_id,eligible_spend) VALUES($1,50)`, c.ID)
 	require.NoError(t, err)
 	_, err = s.Draw(ctx, c.ID, "statistics-only-draw-user")
 	require.NoError(t, err)
 	quote, err := s.Quote(ctx, a.ID, "all", "")
 	require.NoError(t, err)
-	require.Equal(t, "1.27", quote.Amount)
+	require.Equal(t, "0.29", quote.Amount)
 	_, err = s.Redeem(ctx, a.ID, "statistics-redeem-does-not-change-issued-total", quote.Amount, quote.WelfareBalanceVersion)
 	require.NoError(t, err)
 	var redeemed int64
@@ -96,7 +96,7 @@ func TestWelfareAdminStatisticsImmutableFacts(t *testing.T) {
 
 	filter := service.WelfareStatisticsFilter{DateFrom: "2027-01-07", DateTo: "2027-01-11", Search: prefix}
 	expected := service.WelfareRewardTotals{
-		DailyAmount: "0.11", StreakAmount: "0.03", CheckinAmount: "0.14", DrawAmount: "2.50", TotalAmount: "2.64",
+		DailyAmount: "0.11", StreakAmount: "0.03", CheckinAmount: "0.14", DrawAmount: "0.05", TotalAmount: "0.19",
 		CheckinUsers: 2, CheckinCount: 3, StreakUsers: 1, DrawUsers: 3, DrawCount: 4, ParticipatingUsers: 3,
 	}
 	zero := service.WelfareRewardTotals{DailyAmount: "0.00", StreakAmount: "0.00", CheckinAmount: "0.00", DrawAmount: "0.00", TotalAmount: "0.00"}
@@ -107,8 +107,8 @@ func TestWelfareAdminStatisticsImmutableFacts(t *testing.T) {
 	require.Len(t, statistics.Daily, 5)
 	require.Equal(t, "2027-01-07", statistics.Daily[0].Date)
 	require.Equal(t, "0.11", statistics.Daily[0].TotalAmount)
-	require.Equal(t, "0.53", statistics.Daily[1].TotalAmount)
-	require.Equal(t, "2.00", statistics.Daily[2].TotalAmount)
+	require.Equal(t, "0.04", statistics.Daily[1].TotalAmount)
+	require.Equal(t, "0.04", statistics.Daily[2].TotalAmount)
 	require.Equal(t, zero, statistics.Daily[3].WelfareRewardTotals)
 	require.Equal(t, zero, statistics.Daily[4].WelfareRewardTotals)
 	for _, amount := range []struct {
@@ -135,9 +135,9 @@ func TestWelfareAdminStatisticsImmutableFacts(t *testing.T) {
 		require.EqualValues(t, 3, result.Total)
 		require.Len(t, result.Items, 3)
 		require.Equal(t, a.ID, result.Items[0].UserID)
-		require.Equal(t, "1.09", result.Items[0].Period.TotalAmount)
+		require.Equal(t, "0.11", result.Items[0].Period.TotalAmount)
 		require.EqualValues(t, 2, result.Items[0].Period.CheckinCount)
-		require.Equal(t, "1.27", result.Items[0].Lifetime.TotalAmount)
+		require.Equal(t, "0.29", result.Items[0].Lifetime.TotalAmount)
 		require.Equal(t, "0.24", result.Items[0].Lifetime.DailyAmount)
 		require.EqualValues(t, 8, result.Items[0].Lifetime.CheckinCount)
 	})
@@ -152,13 +152,13 @@ func TestWelfareAdminStatisticsImmutableFacts(t *testing.T) {
 		for _, item := range result.Items {
 			require.Equal(t, zero, item.Period)
 		}
-		require.Equal(t, "1.27", result.Items[0].Lifetime.TotalAmount)
+		require.Equal(t, "0.29", result.Items[0].Lifetime.TotalAmount)
 		require.EqualValues(t, 8, result.Items[0].Lifetime.CheckinCount)
 		noActivity.Search = prefix + "-alice"
 		onlyAlice, err := s.AdminStatisticsUsers(ctx, service.WelfareStatisticsUsersFilter{WelfareStatisticsFilter: noActivity})
 		require.NoError(t, err)
 		require.EqualValues(t, 1, onlyAlice.Total)
-		require.Equal(t, "1.27", onlyAlice.Items[0].Lifetime.TotalAmount)
+		require.Equal(t, "0.29", onlyAlice.Items[0].Lifetime.TotalAmount)
 	})
 	t.Run("literal_search_and_user_identity", func(t *testing.T) {
 		literal := filter
@@ -172,7 +172,7 @@ func TestWelfareAdminStatisticsImmutableFacts(t *testing.T) {
 		numeric.UserID = b.ID
 		summary, err := s.AdminStatistics(ctx, numeric)
 		require.NoError(t, err)
-		require.Equal(t, "1.05", summary.Summary.TotalAmount)
+		require.Equal(t, "0.07", summary.Summary.TotalAmount)
 		require.EqualValues(t, 1, summary.Summary.ParticipatingUsers)
 	})
 	t.Run("stable_server_pagination", func(t *testing.T) {
@@ -232,7 +232,7 @@ func TestWelfareAdminStatisticsImmutableFacts(t *testing.T) {
 			require.NoError(t, err)
 			require.EqualValues(t, 1, result.Total)
 			require.Equal(t, date, result.Items[0].BusinessDate)
-			require.Equal(t, "0.50", result.Items[0].Amount)
+			require.Equal(t, "0.01", result.Items[0].Amount)
 		}
 		result, err := s.AdminStatisticsRecords(ctx, service.WelfareStatisticsRecordsFilter{WelfareStatisticsFilter: filter, Type: "streak"})
 		require.NoError(t, err)
@@ -253,7 +253,7 @@ func TestWelfareAdminStatisticsImmutableFacts(t *testing.T) {
 		require.NoError(t, err)
 		require.EqualValues(t, 1, userResult.Total)
 		require.Equal(t, c.Email, userResult.Items[0].Email)
-		require.Equal(t, "0.50", userResult.Items[0].Lifetime.TotalAmount)
+		require.Equal(t, "0.01", userResult.Items[0].Lifetime.TotalAmount)
 		recordResult, err := s.AdminStatisticsRecords(ctx, service.WelfareStatisticsRecordsFilter{WelfareStatisticsFilter: deleted})
 		require.NoError(t, err)
 		require.EqualValues(t, 1, recordResult.Total)

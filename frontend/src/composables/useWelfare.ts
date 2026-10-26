@@ -72,6 +72,8 @@ export function useWelfare(initialFilters: Partial<WelfareRecordQuery> = {}) {
     if (old && !refreshRelated && next.welfare_balance_version === old.welfare_balance_version && next.wallet_version === old.wallet_version) return
     overview.value = next
     if (!month.value) month.value = next.business_date.slice(0, 7)
+    // A mutation may observe an upgrade before the next overview poll.
+    if (old && old.rules_version !== next.rules_version) void loadRules()
     if (refreshRelated && old) {
       const calendarChanged = old.business_date !== next.business_date || old.total_checkin_days !== next.total_checkin_days || old.today_checked_in !== next.today_checked_in
       if (calendarChanged) {
@@ -79,7 +81,6 @@ export function useWelfare(initialFilters: Partial<WelfareRecordQuery> = {}) {
         else void loadCalendar()
       }
       if (old.welfare_balance_version !== next.welfare_balance_version || old.draws_used !== next.draws_used) void loadRecords()
-      if (old.rules_version !== next.rules_version) void loadRules()
     }
   }
   async function loadCalendar() {

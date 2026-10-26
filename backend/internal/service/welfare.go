@@ -9,9 +9,10 @@ import (
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 )
 
-// WelfareRulesVersion identifies new check-ins and the current public rules.
+// WelfareRulesVersion identifies the current public rules. Lottery audits use
+// v4; daily and streak rewards retain their independent v3 algorithm and audit.
 // Previously saved operations retain their original response and audit version.
-const WelfareRulesVersion = 3
+const WelfareRulesVersion = 4
 
 var (
 	ErrWelfarePaused              = infraerrors.Conflict("WELFARE_PAUSED", "welfare rewards are paused")

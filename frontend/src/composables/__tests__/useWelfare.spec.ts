@@ -3,6 +3,7 @@ import { defineComponent, reactive } from 'vue'
 import { flushPromises, mount } from '@vue/test-utils'
 import { useWelfare } from '../useWelfare'
 import { welfareAPI } from '@/api/welfare'
+import { lotteryV4Prizes } from '@/__tests__/fixtures/welfare'
 
 vi.mock('@/api/welfare', () => ({ welfareAPI: { overview: vi.fn(), calendar: vi.fn(), records: vi.fn(), rules: vi.fn(), checkIn: vi.fn(), draw: vi.fn(), quote: vi.fn(), redeem: vi.fn(), operationByKey: vi.fn() } }))
 const auth = reactive({ sessionRevision: 'first', user: { id: 1 }, isAuthenticated: true })
@@ -43,6 +44,52 @@ describe('welfare state', () => {
     expect(welfareAPI.calendar).toHaveBeenCalledTimes(calendarCalls)
     expect(welfareAPI.records).toHaveBeenCalledTimes(recordCalls)
     expect(welfareAPI.checkIn).not.toHaveBeenCalled()
+  })
+  it('replaces v3 prizes with v4 prizes when only the public rules version changes', async () => {
+    const oldPrizes = [{ id: '5000', name: '$50.00', amount: '50.00', probability: '0.1%' }]
+    vi.mocked(welfareAPI.overview).mockResolvedValue({ ...snapshot(), rules_version: 3 })
+    vi.mocked(welfareAPI.rules).mockResolvedValue({ prizes: oldPrizes, draw_threshold: '50.00', timezone: 'Asia/Shanghai' })
+    await start()
+    expect(state.rules.value?.prizes).toEqual(oldPrizes)
+    const calendarCalls = vi.mocked(welfareAPI.calendar).mock.calls.length
+    const recordCalls = vi.mocked(welfareAPI.records).mock.calls.length
+    const ruleCalls = vi.mocked(welfareAPI.rules).mock.calls.length
+    vi.mocked(welfareAPI.overview).mockResolvedValue({ ...snapshot(), rules_version: 4 })
+    vi.mocked(welfareAPI.rules).mockResolvedValue({ prizes: lotteryV4Prizes, draw_threshold: '50.00', timezone: 'Asia/Shanghai' })
+
+    await state.refresh()
+    await flushPromises()
+
+    expect(state.overview.value).toEqual({ ...snapshot(), rules_version: 4 })
+    expect(state.rules.value?.prizes).toEqual(lotteryV4Prizes)
+    expect(welfareAPI.rules).toHaveBeenCalledTimes(ruleCalls + 1)
+    expect(welfareAPI.calendar).toHaveBeenCalledTimes(calendarCalls)
+    expect(welfareAPI.records).toHaveBeenCalledTimes(recordCalls)
+    expect(welfareAPI.checkIn).not.toHaveBeenCalled()
+    expect(welfareAPI.draw).not.toHaveBeenCalled()
+  })
+  it.each(['checkIn', 'draw', 'redeem'] as const)('refreshes v4 prizes when %s observes the upgrade before polling', async operation => {
+    const oldPrizes = [{ id: '5000', name: '$50.00', amount: '50.00', probability: '0.1%' }]
+    vi.mocked(welfareAPI.overview).mockResolvedValue({ ...snapshot(), rules_version: 3 })
+    vi.mocked(welfareAPI.rules).mockResolvedValue({ prizes: oldPrizes, draw_threshold: '50.00', timezone: 'Asia/Shanghai' })
+    await start()
+    expect(state.rules.value?.prizes).toEqual(oldPrizes)
+    const ruleCalls = vi.mocked(welfareAPI.rules).mock.calls.length
+    const upgraded = { ...snapshot(2, operation === 'redeem' ? '1.80' : '2.81'), rules_version: 4 }
+    vi.mocked(welfareAPI[operation]).mockResolvedValue({ operation_id: 'first-v4-operation', status: 'completed', overview: upgraded })
+    vi.mocked(welfareAPI.overview).mockResolvedValue(upgraded)
+    vi.mocked(welfareAPI.rules).mockResolvedValue({ prizes: lotteryV4Prizes, draw_threshold: '50.00', timezone: 'Asia/Shanghai' })
+
+    const result = operation === 'redeem'
+      ? await state.redeem({ amount: '1.00', welfare_balance_version: 1 })
+      : await state[operation]()
+    await flushPromises()
+
+    expect(result?.status).toBe('completed')
+    expect(welfareAPI.overview).toHaveBeenCalledTimes(2)
+    expect(state.overview.value).toEqual(upgraded)
+    expect(state.rules.value?.prizes).toEqual(lotteryV4Prizes)
+    expect(welfareAPI.rules).toHaveBeenCalledTimes(ruleCalls + 1)
   })
   it('keeps an in-flight redemption when refreshing the same user', async () => {
     await start()

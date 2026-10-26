@@ -128,7 +128,7 @@ func TestWelfareRepositoryDrawSerializesLastTicketAndImmutableLedger(t *testing.
 	require.Equal(t, 1, failed)
 	overview, err := s.Overview(ctx, id)
 	require.NoError(t, err)
-	require.Equal(t, "0.50", overview.WelfareBalance)
+	require.Equal(t, "0.01", overview.WelfareBalance)
 	require.EqualValues(t, 1, overview.DrawsUsed)
 	_, err = integrationDB.Exec(`UPDATE welfare_ledger SET amount_cents=999 WHERE user_id=$1`, id)
 	require.Error(t, err, "financial ledger must be immutable")

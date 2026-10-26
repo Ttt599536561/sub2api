@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"testing/fstest"
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/service"
@@ -17,6 +18,17 @@ import (
 )
 
 const welfareCheckinV3Migration = "251_welfare_checkin_rules_v3.sql"
+
+// Preserve the released 306 -> 307 migration target when later rules ship.
+func welfareCheckinV3Target(t *testing.T) fstest.MapFS {
+	t.Helper()
+	target := upstreamAC1B8F1Target(t)
+	contents, err := migrations.FS.ReadFile(welfareCheckinV3Migration)
+	require.NoError(t, err)
+	target[welfareCheckinV3Migration] = &fstest.MapFile{Data: contents}
+	require.Len(t, target, 307)
+	return target
+}
 
 func TestWelfareCheckinV3MigrationFile(t *testing.T) {
 	_, err := migrations.FS.ReadFile(welfareCheckinV3Migration)
@@ -138,7 +150,7 @@ func TestWelfareCheckinV3MigrationUpgradePreservesState(t *testing.T) {
 					require.JSONEq(t, before[name], upstreamAC1B8F1Snapshot(t, ctx, db, query), name)
 				}
 			}
-			require.NoError(t, ApplyMigrations(ctx, db))
+			require.NoError(t, applyMigrationsFS(ctx, db, welfareCheckinV3Target(t)))
 			assertPreserved()
 			welfareCheckinV3AssertSchema(t, ctx, db)
 			history := welfareCheckinV3AssertHistory(t, ctx, db)
@@ -148,10 +160,10 @@ func TestWelfareCheckinV3MigrationUpgradePreservesState(t *testing.T) {
 			repo := NewWelfareRepository(db)
 			settings, err := repo.GetSettings(ctx)
 			require.NoError(t, err)
-			require.Equal(t, 3, settings.RulesVersion)
+			require.Equal(t, service.WelfareRulesVersion, settings.RulesVersion)
 			state, err := repo.State(ctx, userID)
 			require.NoError(t, err)
-			require.Equal(t, 3, state.Program.RulesVersion)
+			require.Equal(t, service.WelfareRulesVersion, state.Program.RulesVersion)
 			var expected service.WelfareOperation
 			require.NoError(t, json.Unmarshal([]byte(oldResult), &expected))
 			replayed, err := repo.Mutate(ctx, userID, "checkin", "2026-10-25", "checkin:2026-10-25", func(*service.WelfareState) (*service.WelfareMutation, error) {
@@ -160,7 +172,7 @@ func TestWelfareCheckinV3MigrationUpgradePreservesState(t *testing.T) {
 			})
 			require.NoError(t, err)
 			require.Equal(t, expected, *replayed)
-			require.NoError(t, ApplyMigrations(ctx, db))
+			require.NoError(t, applyMigrationsFS(ctx, db, welfareCheckinV3Target(t)))
 			require.Equal(t, history, upstreamAC1B8F1History(t, ctx, db), "repeated startup preserves migration history")
 			// Direct SQL re-entry must also be harmless, even without the runner's history check.
 			contents, err := migrations.FS.ReadFile(welfareCheckinV3Migration)
@@ -186,7 +198,7 @@ func TestWelfareCheckinV3MigrationFreshInstall(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
 	db := upstreamAC1B8F1TestDatabase(t, ctx)
-	require.NoError(t, ApplyMigrations(ctx, db))
+	require.NoError(t, applyMigrationsFS(ctx, db, welfareCheckinV3Target(t)))
 	welfareCheckinV3AssertSchema(t, ctx, db)
 	history := welfareCheckinV3AssertHistory(t, ctx, db)
 	var enabled bool
@@ -199,7 +211,7 @@ func TestWelfareCheckinV3MigrationFreshInstall(t *testing.T) {
 		require.NoError(t, db.QueryRowContext(ctx, "SELECT count(*) FROM "+pq.QuoteIdentifier(table)).Scan(&count))
 		require.Zero(t, count, table)
 	}
-	require.NoError(t, ApplyMigrations(ctx, db))
+	require.NoError(t, applyMigrationsFS(ctx, db, welfareCheckinV3Target(t)))
 	require.Equal(t, history, upstreamAC1B8F1History(t, ctx, db))
 	welfareCheckinV3AssertSchema(t, ctx, db)
 }
@@ -223,7 +235,7 @@ func TestWelfareCheckinV3MigrationConcurrentPendingUpgrade(t *testing.T) {
 		go func() {
 			ready <- struct{}{}
 			<-start
-			results <- ApplyMigrations(ctx, db)
+			results <- applyMigrationsFS(ctx, db, welfareCheckinV3Target(t))
 		}()
 	}
 	for range instances {
@@ -284,7 +296,7 @@ func TestWelfareCheckinV3MigrationRecordFailureRollsBackAndRetries(t *testing.T)
 		CREATE TRIGGER reject_welfare_v3_migration_record BEFORE INSERT ON schema_migrations
 		FOR EACH ROW EXECUTE FUNCTION reject_welfare_v3_migration_record()`)
 	require.NoError(t, err)
-	err = ApplyMigrations(ctx, db)
+	err = applyMigrationsFS(ctx, db, welfareCheckinV3Target(t))
 	require.ErrorContains(t, err, "record migration "+welfareCheckinV3Migration)
 	require.ErrorContains(t, err, "injected welfare v3 migration record failure")
 	var pgErr *pq.Error
@@ -300,7 +312,7 @@ func TestWelfareCheckinV3MigrationRecordFailureRollsBackAndRetries(t *testing.T)
 	_, err = db.ExecContext(ctx, `DROP TRIGGER reject_welfare_v3_migration_record ON schema_migrations;
 		DROP FUNCTION reject_welfare_v3_migration_record()`)
 	require.NoError(t, err)
-	require.NoError(t, ApplyMigrations(ctx, db))
+	require.NoError(t, applyMigrationsFS(ctx, db, welfareCheckinV3Target(t)))
 	history := welfareCheckinV3AssertHistory(t, ctx, db)
 	for name, entry := range beforeHistory {
 		require.Equal(t, entry, history[name], "retry preserves old checksum and application time: %s", name)

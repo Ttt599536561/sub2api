@@ -45,6 +45,7 @@ func TestWelfareRecordsAllFilterAndLotteryPrivateAudit(t *testing.T) {
 	audit, err := json.Marshal(repo.mutation.PrivateAudit)
 	require.NoError(t, err)
 	require.Contains(t, string(audit), `"uniform_roll":777`)
+	require.Contains(t, string(audit), `"rules_version":"v4"`)
 	public, err := json.Marshal(result)
 	require.NoError(t, err)
 	require.NotContains(t, string(public), "uniform_roll")
@@ -128,12 +129,29 @@ func TestWelfareCheckinCalendarGapCycleAndMilestones(t *testing.T) {
 
 func TestWelfareLotteryHasExactThousandWeightPartition(t *testing.T) {
 	counts := map[int64]int{}
+	var totalCents, smallPrizes, maxCents int64
 	for i := int64(0); i < 1000; i++ {
-		cents, err := sampleWelfareLottery(welfareSequence(i))
+		calls := 0
+		cents, err := sampleWelfareLottery(func(n int64) (int64, error) {
+			require.EqualValues(t, 1000, n)
+			calls++
+			return i, nil
+		})
 		require.NoError(t, err)
+		require.Equal(t, 1, calls)
 		counts[cents]++
+		totalCents += cents
+		if cents <= 5 {
+			smallPrizes++
+		}
+		if cents > maxCents {
+			maxCents = cents
+		}
 	}
-	require.Equal(t, map[int64]int{50: 450, 100: 300, 200: 180, 500: 50, 1000: 15, 2000: 4, 5000: 1}, counts)
+	require.Equal(t, map[int64]int{1: 450, 2: 300, 5: 180, 10: 50, 20: 15, 50: 4, 100: 1}, counts)
+	require.EqualValues(t, 3050, totalCents, "mean reward is exactly 3.05 cents")
+	require.EqualValues(t, 930, smallPrizes, "93%% of draws award at most five cents")
+	require.EqualValues(t, 100, maxCents)
 	errRandom := errors.New("entropy unavailable")
 	_, err := sampleWelfareLottery(func(int64) (int64, error) { return 0, errRandom })
 	require.ErrorIs(t, err, errRandom)

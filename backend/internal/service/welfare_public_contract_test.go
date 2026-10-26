@@ -117,7 +117,7 @@ func requireWelfarePublicOverview(t *testing.T, object map[string]any, statuses 
 		"welfare_balance", "account_balance", "available_draws", "draws_used", "total_checkin_days", "cycle_day",
 		"today_checked_in", "business_date", "next_reset_at", "eligible_spend", "subscription_draws", "next_draw_remaining", "ticket_debt",
 		"wallet_version", "welfare_balance_version", "rewards_enabled", "rules_version", "milestones")
-	require.Equal(t, float64(3), object["rules_version"])
+	require.Equal(t, float64(4), object["rules_version"])
 	milestones, ok := object["milestones"].([]any)
 	require.True(t, ok)
 	require.Len(t, milestones, 3)
@@ -134,7 +134,7 @@ func requireWelfarePublicRules(t *testing.T, rules *WelfareRules) {
 	t.Helper()
 	object := welfarePublicContractObject(t, rules)
 	requireWelfarePublicKeys(t, object, "rules_version", "timezone", "draw_threshold", "subscription_draw_threshold", "subscription_draw_currency", "redemption_rate", "prizes")
-	require.Equal(t, float64(3), object["rules_version"])
+	require.Equal(t, float64(4), object["rules_version"])
 	require.Equal(t, "Asia/Shanghai", object["timezone"])
 	require.Equal(t, "50.00", object["draw_threshold"])
 	require.Equal(t, "50.00", object["subscription_draw_threshold"])
@@ -142,11 +142,11 @@ func requireWelfarePublicRules(t *testing.T, rules *WelfareRules) {
 	require.Equal(t, "1:1", object["redemption_rate"])
 	prizes, ok := object["prizes"].([]any)
 	require.True(t, ok)
-	// Lottery amounts and probabilities are intentionally public. In particular,
-	// $2.00 and $5.00 here must not be mistaken for undisclosed streak bonuses.
+	// Lottery amounts and probabilities are public; unrevealed streak bonuses
+	// remain private even when they share an amount with the lottery table.
 	want := []struct{ id, amount, probability string }{
-		{"50", "0.50", "45%"}, {"100", "1.00", "30%"}, {"200", "2.00", "18%"},
-		{"500", "5.00", "5%"}, {"1000", "10.00", "1.5%"}, {"2000", "20.00", "0.4%"}, {"5000", "50.00", "0.1%"},
+		{"1", "0.01", "45%"}, {"2", "0.02", "30%"}, {"5", "0.05", "18%"},
+		{"10", "0.10", "5%"}, {"20", "0.20", "1.5%"}, {"50", "0.50", "0.4%"}, {"100", "1.00", "0.1%"},
 	}
 	require.Len(t, prizes, len(want))
 	for i, expected := range want {
