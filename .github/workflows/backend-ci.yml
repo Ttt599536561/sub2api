@@ -38,6 +38,7 @@ jobs:
           --health-retries 20
     env:
       QQ_IMAGE_TEST_DATABASE_URL: postgres://qq_ci:qq_ci_ephemeral@127.0.0.1:5432/qq_ci?sslmode=disable
+      SCOPED_ADMIN_TEST_DSN: host=127.0.0.1 port=5432 user=qq_ci password=qq_ci_ephemeral dbname=qq_ci sslmode=disable
     steps:
       - uses: actions/checkout@v6
       - name: Check Docker Compose simple mode environment
@@ -95,8 +96,11 @@ jobs:
       - name: Install frontend dependencies
         working-directory: frontend
         run: pnpm install --frozen-lockfile
-      - name: Frontend typecheck and critical vitest
-        run: make test-frontend
+      - name: Frontend lint, typecheck and full Vitest suite
+        run: |
+          pnpm --dir frontend run lint:check
+          pnpm --dir frontend run typecheck
+          pnpm --dir frontend run test:run
 
   golangci-lint:
     runs-on: ubuntu-latest

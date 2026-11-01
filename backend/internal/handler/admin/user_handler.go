@@ -503,19 +503,13 @@ func (h *UserHandler) GetBalanceHistory(c *gin.Context) {
 		return
 	}
 
-	// Convert to admin DTO (includes notes field for admin visibility)
-	out := make([]dto.AdminRedeemCode, 0, len(codes))
-	for i := range codes {
-		out = append(out, *dto.RedeemCodeFromServiceAdmin(&codes[i]))
-	}
-
 	// Custom response with total_recharged alongside pagination
 	pages := int((total + int64(pageSize) - 1) / int64(pageSize))
 	if pages < 1 {
 		pages = 1
 	}
 	response.Success(c, gin.H{
-		"items":           out,
+		"items":           adminBalanceHistoryResponses(c, codes),
 		"total":           total,
 		"page":            page,
 		"page_size":       pageSize,
