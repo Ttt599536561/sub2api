@@ -2,11 +2,11 @@
 
 日期：2026-11-01（Asia/Shanghai）。本版处于 GitHub 门禁与镜像发布准备阶段，尚未确认镜像发布成功。用户自行替换服务器镜像，本轮不连接或更改服务器。
 
-首轮 `b2a9207d8` 的安全扫描和历史integration夹具存在阻断，已完成[后续修正](../docs/changes/2026-11-01-v0219-ci-followup.md)。下方为首轮准备记录；最终固定来源将在修正提交后更新，尚未发布镜像。
+首轮 `b2a9207d8` 的安全扫描和历史integration夹具存在阻断，已完成[后续修正](../docs/changes/2026-11-01-v0219-ci-followup.md)。最终候选改为下述修正后源码，重新执行全部门禁，尚未发布镜像。
 
 ## 固定来源与平台
 
-- 应用源码/OCI revision：`b2a9207d8876af773758ed9179022a345791c127`。包含官方 v0.2.19 合并 `15abe960d`、后续修复 `587133d4b`，以及本轮计费/权限加固。
+- 应用源码/OCI revision：`49fb2d996bb5d9cc035c6bdb89fb8236b316341c`。包含官方 v0.2.19 合并 `15abe960d`、后续修复 `587133d4b`、本轮计费/权限加固 `b2a9207d8`，以及依赖安全和历史升级夹具修正。
 - 专用发布工作流：[publish-custom-v0219-r1.yml](../.github/workflows/publish-custom-v0219-r1.yml)，固定上述完整应用 SHA；要求此 SHA 的最新 main/push CI 和 Security 成功，拒绝覆盖已有最终标签。
 - 目标镜像：`ghcr.io/ttt599536561/sub2api-custom:0.2.19-r1`，仅 `linux/amd64` 与 `linux/arm64`，各自使用原生 Ubuntu runner。不推送 `v*` Git 标签，不触发通用 Release 或 Apple/macOS 工作流，不更新 latest。
 - 发布控制 SHA、CI/发布 run、最终 digest 和匿名核验结果在构建成功后据实补录；此准备记录不作为镜像已可用的证据。

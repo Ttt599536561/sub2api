@@ -6,6 +6,8 @@
 
 ## 2026-11-01
 
+- **0.2.19-r1发布来源重新固定**：专用Linux工作流改为应用源码 `49fb2d996`，包括首轮CI的依赖安全与历史升级夹具修正；精确提交CI/Security重新运行，镜像尚待门禁成功后构建。当前来源与验证阶段同步至[发布记录](deploy/CUSTOM_IMAGE_0.2.19-r1.md)和交接。
+
 - **0.2.19-r1首轮GitHub门禁修正**：更新Vue I18n/Intlify、decode-uri-component和follow-redirects以消除实际安全扫描新告警，前端构建链统一Node24；历史订阅升级测试对新增按张计费列单独验默认false并继续比较全部旧字段。前端4203项/类型/lint/构建、审计门禁、独立PG升级回归和复审通过，无新增豁免，详见[CI修正记录](docs/changes/2026-11-01-v0219-ci-followup.md)。最终镜像改用包含此修正的新源码，尚未发布或部署。
 
 - **0.2.19-r1 Linux发布准备（镜像尚待构建）**：应用源码 `b2a9207d8` 已整合主目录并推送GitHub，三项计费/权限修复及记录一并提交；新增固定完整应用SHA的专用Linux amd64/arm64工作流，要求精确CI/Security成功并禁止覆盖标签。没有macOS或服务器操作，发布结果以[本版记录](deploy/CUSTOM_IMAGE_0.2.19-r1.md)为准。
