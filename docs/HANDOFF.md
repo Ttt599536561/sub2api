@@ -1,5 +1,15 @@
 # Sub2API 二次开发交接
 
+## 当前代码和发布状态
+
+核对日期：2026-11-01（Asia/Shanghai）。官方最新正式tag v0.2.19/dece26153已合入本地分支 `codex/merge-upstream-v0.2.19-20261101`（E盘同名工作树），合并、兼容修复与本地验证完成；源码VERSION=0.2.19。此分支未合入主目录main，未推送、发布镜像或部署。
+
+08:23只读核实正式站healthy，仍运行0.2.18-r2，应用/OCI源码03eb8f3fc，镜像digest e64c9d7ee865c4c976c495b611caafb0438b9975ad1b674dc1a0f8dfcf2b26b8；测试站仍0.2.17-qq-inline.74148a5aae1e。main/远端main为7c1ade8b7，主目录已有未提交修改保全，不纳入本轮。
+
+全Go、前端、PG迁移/管理员权限、Linux静态检查及嵌入构建通过，条件跳过/未做检查与修复细节见[合并记录](changes/2026-11-01-upstream-v0219.md)。用户明确要求“不要发布服务器，等我确认才能动服务器”；后续不得据本地通过直接部署。发布前固定最终提交并跑精确Linux CI，升级保留原QQ密钥与EXTERNAL_HELP、保持测试收费接收关闭，新增迁移按完整文件名共存，auth缓存版本升26。
+
+下方发布/部署说明保留各自历史时点。
+
 ## 2026-10-27 抽奖v4已整合main，0.2.18-r2 Linux镜像已发布
 
 用户授权的合并、GitHub推送及仅Linux构建完成。固定应用/OCI revision `03eb8f3fc4a61729eb6a1525547a2f79b38b71f0`、控制`35408a76f13de0b9a4c521c167148fc47c6ae39d`；精确CI40378772884、安全40378772920及发布40380627800全部成功。镜像`ghcr.io/ttt599536561/sub2api-custom:0.2.18-r2`仅linux/amd64和linux/arm64，digest `sha256:e64c9d7ee865c4c976c495b611caafb0438b9975ad1b674dc1a0f8dfcf2b26b8`，北京时间2026-10-27 02:53:38匿名核验5份必要artifact与全部24个运行层/90,241,086字节及来源绑定；独立复核通过。镜像、运行验证和升级边界见[本版发布记录](../deploy/CUSTOM_IMAGE_0.2.18-r2.md)。

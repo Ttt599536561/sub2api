@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest'
+import { afterEach, describe, it, expect, vi } from 'vitest'
 import {
   useStepUp,
   isStepUpRequired,
@@ -104,5 +104,50 @@ describe('useStepUp.run', () => {
     expect(isStepUpRequired(cancelled)).toBe(false)
     expect(isStepUpBlocked(cancelled)).toBe(false)
     expect(isStepUpCancelled({ status: 403, code: 'STEP_UP_REQUIRED' })).toBe(false)
+  })
+})
+
+
+describe('useStepUp login ownership', () => {
+  afterEach(() => localStorage.clear())
+
+  it('does not retry an old sensitive action after the login session changes during verification', async () => {
+    localStorage.setItem('auth_session_id', 'original-session')
+    const stepUp = useStepUp()
+    const action = vi.fn().mockRejectedValueOnce({ code: 'STEP_UP_REQUIRED' }).mockResolvedValue('new-account-result')
+    const pending = stepUp.run(action).catch(error => error)
+    await Promise.resolve()
+    expect(stepUp.visible.value).toBe(true)
+    localStorage.setItem('auth_session_id', 'replacement-session')
+    stepUp.onVerified()
+    expect(isStepUpCancelled(await pending)).toBe(true)
+    expect(action).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not open an old verification prompt after a delayed failure crosses login sessions', async () => {
+    localStorage.setItem('auth_session_id', 'original-session')
+    let reject!: (error: unknown) => void
+    const stepUp = useStepUp()
+    const action = vi.fn(() => new Promise<void>((_, fail) => { reject = fail }))
+    const pending = stepUp.run(action).catch(error => error)
+    localStorage.setItem('auth_session_id', 'replacement-session')
+    reject({ code: 'STEP_UP_REQUIRED' })
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(stepUp.visible.value).toBe(false)
+    expect(isStepUpCancelled(await pending)).toBe(true)
+    expect(action).toHaveBeenCalledTimes(1)
+  })
+
+  it('permits a token refresh in the same login session', async () => {
+    localStorage.setItem('auth_session_id', 'original-session')
+    const stepUp = useStepUp()
+    const action = vi.fn().mockRejectedValueOnce({ code: 'STEP_UP_REQUIRED' }).mockResolvedValue('ok')
+    const pending = stepUp.run(action)
+    await Promise.resolve()
+    localStorage.setItem('auth_token', 'refreshed-token')
+    stepUp.onVerified()
+    await expect(pending).resolves.toBe('ok')
+    expect(action).toHaveBeenCalledTimes(2)
   })
 })

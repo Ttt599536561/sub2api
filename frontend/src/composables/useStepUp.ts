@@ -13,6 +13,7 @@
  *   // template: <TotpStepUpDialog :controller="stepUp" />
  */
 import { ref } from 'vue'
+import { getAuthSessionID } from '@/api/authSession'
 
 /** Error codes the backend uses to signal step-up state. */
 const STEP_UP_REQUIRED = 'STEP_UP_REQUIRED'
@@ -102,9 +103,16 @@ export function useStepUp() {
    * distinguish "user changed their mind" from real failures.
    */
   async function run<T>(action: () => Promise<T>): Promise<T> {
+    const sessionID = getAuthSessionID()
+    const assertOwner = () => {
+      if (sessionID !== getAuthSessionID()) throw new StepUpCancelledError()
+    }
     try {
       return await action()
     } catch (err) {
+      // A challenge belongs to the login that initiated the action, including
+      // when another tab signs out and signs back in as the same user.
+      assertOwner()
       if (isStepUpBlocked(err)) {
         blockedReason.value = markerOf(err)
         throw err
@@ -116,7 +124,8 @@ export function useStepUp() {
       if (!ok) {
         throw new StepUpCancelledError()
       }
-      // Retry once now that the session holds a step-up grant.
+      // Never replay the original operation with a replacement login's grant.
+      assertOwner()
       return await action()
     }
   }

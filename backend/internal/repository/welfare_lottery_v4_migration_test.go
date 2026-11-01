@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"testing/fstest"
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/service"
@@ -17,6 +18,18 @@ import (
 )
 
 const welfareLotteryV4Migration = "252_welfare_lottery_rules_v4.sql"
+
+// Keep this historical 307 -> 308 regression on the released r2 target.
+// Later upstream migrations can reuse lower numeric prefixes.
+func welfareLotteryV4Target(t *testing.T) fstest.MapFS {
+	t.Helper()
+	target := welfareCheckinV3Target(t)
+	contents, err := migrations.FS.ReadFile(welfareLotteryV4Migration)
+	require.NoError(t, err)
+	target[welfareLotteryV4Migration] = &fstest.MapFile{Data: contents}
+	require.Len(t, target, 308)
+	return target
+}
 
 func TestWelfareLotteryV4MigrationFile(t *testing.T) {
 	_, err := migrations.FS.ReadFile(welfareLotteryV4Migration)
@@ -162,7 +175,7 @@ func TestWelfareLotteryV4MigrationUpgradePreservesState(t *testing.T) {
 			beforeHistory := upstreamAC1B8F1History(t, ctx, db)
 			expected := welfareLotteryV4Snapshot(t, ctx, db)
 			expected["welfare_programs"] = welfareLotteryV4ExpectedPrograms(t, expected["welfare_programs"])
-			require.NoError(t, ApplyMigrations(ctx, db))
+			require.NoError(t, applyMigrationsFS(ctx, db, welfareLotteryV4Target(t)))
 			welfareLotteryV4AssertSchema(t, ctx, db)
 			history := welfareLotteryV4AssertHistory(t, ctx, db, beforeHistory)
 			welfareLotteryV4AssertPreserved(t, ctx, db, expected)
@@ -188,7 +201,7 @@ func TestWelfareLotteryV4MigrationUpgradePreservesState(t *testing.T) {
 			stored, err := svc.Operation(ctx, userID, welfareLotteryV4OldDrawID)
 			require.NoError(t, err)
 			require.Equal(t, saved, *stored)
-			require.NoError(t, ApplyMigrations(ctx, db))
+			require.NoError(t, applyMigrationsFS(ctx, db, welfareLotteryV4Target(t)))
 			require.Equal(t, history, upstreamAC1B8F1History(t, ctx, db))
 			// Exercise direct SQL re-entry as well as the startup history guard.
 			contents, err := migrations.FS.ReadFile(welfareLotteryV4Migration)
@@ -211,7 +224,7 @@ func TestWelfareLotteryV4MigrationUpgradePreservesState(t *testing.T) {
 
 func TestWelfareLotteryV4MigrationFreshInstall(t *testing.T) {
 	ctx, db := welfareLotteryV4Database(t, false)
-	require.NoError(t, ApplyMigrations(ctx, db))
+	require.NoError(t, applyMigrationsFS(ctx, db, welfareLotteryV4Target(t)))
 	welfareLotteryV4AssertSchema(t, ctx, db)
 	history := welfareLotteryV4AssertHistory(t, ctx, db, nil)
 	var enabled bool
@@ -225,7 +238,7 @@ func TestWelfareLotteryV4MigrationFreshInstall(t *testing.T) {
 			require.JSONEq(t, "[]", rows, table)
 		}
 	}
-	require.NoError(t, ApplyMigrations(ctx, db))
+	require.NoError(t, applyMigrationsFS(ctx, db, welfareLotteryV4Target(t)))
 	require.Equal(t, history, upstreamAC1B8F1History(t, ctx, db))
 	welfareLotteryV4AssertPreserved(t, ctx, db, snapshot)
 }
@@ -241,7 +254,7 @@ func TestWelfareLotteryV4MigrationConcurrentPendingUpgrade(t *testing.T) {
 		go func() {
 			ready <- struct{}{}
 			<-start
-			results <- ApplyMigrations(ctx, db)
+			results <- applyMigrationsFS(ctx, db, welfareLotteryV4Target(t))
 		}()
 	}
 	for range 2 {
@@ -274,7 +287,7 @@ func TestWelfareLotteryV4MigrationRecordFailureRollsBackAndRetries(t *testing.T)
 		CREATE TRIGGER reject_welfare_v4_migration_record BEFORE INSERT ON schema_migrations
 		FOR EACH ROW EXECUTE FUNCTION reject_welfare_v4_migration_record()`)
 	require.NoError(t, err)
-	err = ApplyMigrations(ctx, db)
+	err = applyMigrationsFS(ctx, db, welfareLotteryV4Target(t))
 	require.ErrorContains(t, err, "record migration "+welfareLotteryV4Migration)
 	require.ErrorContains(t, err, "injected welfare v4 migration record failure")
 	var pgErr *pq.Error
@@ -286,7 +299,7 @@ func TestWelfareLotteryV4MigrationRecordFailureRollsBackAndRetries(t *testing.T)
 	_, err = db.ExecContext(ctx, `DROP TRIGGER reject_welfare_v4_migration_record ON schema_migrations;
 		DROP FUNCTION reject_welfare_v4_migration_record()`)
 	require.NoError(t, err)
-	require.NoError(t, ApplyMigrations(ctx, db))
+	require.NoError(t, applyMigrationsFS(ctx, db, welfareLotteryV4Target(t)))
 	welfareLotteryV4AssertSchema(t, ctx, db)
 	welfareLotteryV4AssertHistory(t, ctx, db, beforeHistory)
 	before["welfare_programs"] = welfareLotteryV4ExpectedPrograms(t, before["welfare_programs"])

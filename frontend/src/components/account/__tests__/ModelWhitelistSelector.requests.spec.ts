@@ -20,7 +20,7 @@ let wrapper: VueWrapper | undefined
 function start(props = {}) { wrapper = mount(ModelWhitelistSelector, { props: { modelValue: [], platform: 'openai', syncCredentials: credentials, ...props }, global: { stubs: { ModelIcon: true } } }); return wrapper }
 async function sync() { await wrapper!.findAll('button').find(b => b.text() === 'admin.accounts.syncUpstreamModels')?.trigger('click') }
 beforeEach(() => { vi.resetAllMocks(); setActivePinia(createPinia()) })
-afterEach(() => { wrapper?.unmount(); wrapper = undefined })
+afterEach(() => { wrapper?.unmount(); wrapper = undefined; localStorage.clear() })
 
 describe('model sync form request ownership', () => {
   it.each(['platform', 'account', 'key', 'endpoint', 'in-place-key', 'type', 'platforms', 'unmount'].flatMap(change => ['success', 'failure'].map(outcome => ({ change, outcome }))))('ignores an old sync $outcome after $change changes', async ({ change, outcome }) => {
@@ -68,5 +68,27 @@ describe('model sync form request ownership', () => {
     expect(wrapper!.emitted('update:modelValue')).toBeUndefined()
     fresh.resolve({ models: ['new-provider-model'] }); await flushPromises()
     expect(wrapper!.emitted('update:modelValue')).toEqual([[['new-provider-model']]])
+  })
+})
+
+
+describe('model sync completion event ownership after upstream merge', () => {
+  it.each(['success', 'fallback', 'failure'])('does not refresh the account or show stale notifications on %s after a replacement login', async outcome => {
+    localStorage.setItem('auth_session_id', 'original-session')
+    const pending = deferred<{ models: string[]; discovery_source?: string }>()
+    api.sync.mockReturnValue(pending.promise)
+    start({ platform: 'grok', accountId: 7 })
+    await sync()
+    localStorage.setItem('auth_session_id', 'replacement-session')
+    window.dispatchEvent(new StorageEvent('storage', { key: 'auth_session_id' }))
+    if (outcome === 'failure') pending.reject(new Error('old sync failure'))
+    else pending.resolve({ models: ['old-private-catalog'], discovery_source: outcome === 'fallback' ? 'configured_fallback' : 'upstream' })
+    await flushPromises()
+    expect(wrapper!.emitted('update:modelValue')).toBeUndefined()
+    expect(wrapper!.emitted('upstream-sync-finished')).toBeUndefined()
+    expect(wrapper!.emitted('upstream-synced')).toBeUndefined()
+    expect(api.showSuccess).not.toHaveBeenCalled()
+    expect(api.showError).not.toHaveBeenCalled()
+    expect(api.showWarning).not.toHaveBeenCalled()
   })
 })

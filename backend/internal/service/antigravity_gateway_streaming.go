@@ -846,6 +846,11 @@ func (s *AntigravityGatewayService) collectClaudeStreamResponse(c *gin.Context, 
 				continue
 			}
 
+			// 最后的错误帧可能没有 parts，必须在聚合选择前保留失败原因。
+			if extractGeminiFinishReason(parsed) == "MALFORMED_FUNCTION_CALL" {
+				return nil, nil, antigravity.ErrMalformedFunctionCall
+			}
+
 			finalResponse = mergeGeminiCollectedResponseChunk(finalResponse, parsed)
 
 			// 收集所有 parts；结束状态和用量由响应累积器独立保留
@@ -1158,7 +1163,7 @@ func (s *AntigravityGatewayService) extractImageInputSize(body []byte) string {
 }
 
 // isImageGenerationModel 判断模型是否为图片生成模型
-// 支持的模型：gemini-3.1-flash-image, gemini-3-pro-image, gemini-2.5-flash-image 等
+// 支持的模型：gemini-3.1-flash-image, gemini-3.1-flash-lite-image, gemini-3-pro-image, gemini-2.5-flash-image 等
 func isImageGenerationModel(model string) bool {
 	modelLower := strings.ToLower(model)
 	// 移除 models/ 前缀
@@ -1168,6 +1173,8 @@ func isImageGenerationModel(model string) bool {
 	return modelLower == "gemini-3.1-flash-image" ||
 		modelLower == "gemini-3.1-flash-image-preview" ||
 		strings.HasPrefix(modelLower, "gemini-3.1-flash-image-") ||
+		modelLower == "gemini-3.1-flash-lite-image" ||
+		strings.HasPrefix(modelLower, "gemini-3.1-flash-lite-image-") ||
 		modelLower == "gemini-3-pro-image" ||
 		modelLower == "gemini-3-pro-image-preview" ||
 		strings.HasPrefix(modelLower, "gemini-3-pro-image-") ||

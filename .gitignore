@@ -139,6 +139,7 @@ docs/*
 !docs/UPSTREAM_MERGE_V0.2.7_2026-09-20.md
 !docs/UPSTREAM_MERGE_V0.2.8_2026-09-24.md
 !docs/upstream-v0.2.8-file-comparison.csv
+!docs/admin-api-keys.md
 !docs/PAYMENT.md
 !docs/PAYMENT_CN.md
 !docs/ADMIN_PAYMENT_INTEGRATION_API.md
@@ -215,3 +216,4 @@ docs/superpowers/specs/*
 
 !docs/superpowers/specs/2026-10-27-welfare-lottery-v4-design.md
 !docs/superpowers/plans/2026-10-27-welfare-lottery-v4.md
+!docs/superpowers/plans/2026-11-01-upstream-v0219.md
