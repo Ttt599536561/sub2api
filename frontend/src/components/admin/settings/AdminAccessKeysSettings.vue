@@ -98,6 +98,7 @@ const expiration = ref('')
 const initialExpiration = ref('')
 const ips = ref('')
 const unavailable = ref(false)
+let loadGeneration = 0
 function clearSessionState() {
   unavailable.value = true
   items.value = []; permissions.value = []; groups.value = []
@@ -146,17 +147,22 @@ function ruleSummary(rule: AccessRule): string {
 function emptyRule(): AccessRule { return { permissions: [], group_ids: [], all_groups: false, include_ungrouped: false, account_types: [], platforms: [] } }
 function report(e: unknown) { if (!isStepUpCancelled(e)) error.value = (e as { message?: string })?.message || t('adminAccessKeys.operationFailed') }
 async function load() {
-  if (!current()) return
+  if (!current() || busy.value) return
+  const generation = ++loadGeneration
   loading.value = true
   error.value = ''
   try {
     const [result, allGroups] = await Promise.all([api.list(), getAllIncludingInactive()])
-    if (!current()) return
+    if (!current() || generation !== loadGeneration) return
     items.value = (result.items ?? []).map(normalizeItem)
     permissions.value = result.permissions ?? []
     groups.value = allGroups ?? []
     loaded.value = true
-  } catch (e) { if (current()) report(e) } finally { if (current()) loading.value = false }
+  } catch (e) {
+    if (current() && generation === loadGeneration) report(e)
+  } finally {
+    if (current() && generation === loadGeneration) loading.value = false
+  }
 }
 function edit(item?: AdminKey) {
   if (!current() || busy.value || !loaded.value) return
@@ -170,6 +176,10 @@ function edit(item?: AdminKey) {
 }
 async function mutate(action: () => Promise<void>) {
   if (!current() || busy.value) return
+  // A refresh started before this mutation may still be waiting for groups.
+  // Its snapshot, error and loading state must not overwrite newer operations.
+  loadGeneration++
+  loading.value = false
   busy.value = true; error.value = ''; notice.value = ''; secret.value = ''
   try { await stepUp.run(async () => { if (current()) await action() }) } catch (e) { if (current()) report(e) } finally { if (current()) busy.value = false }
 }

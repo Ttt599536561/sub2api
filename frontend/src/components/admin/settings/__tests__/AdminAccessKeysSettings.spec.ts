@@ -256,6 +256,121 @@ describe('管理员受限密钥配置', () => {
 })
 
 
+describe('管理员密钥刷新与修改的先后顺序', () => {
+  const original = { id: 'key-race', name: '原权限', description: '', enabled: true, key_prefix: 'race-prefix', expires_at: null, allowed_ips: [], policy: { rules: [], global_permissions: ['settings.write'] }, revoked_at: null }
+  const restricted = { ...original, policy: { rules: [], global_permissions: [] } }
+  const permissions = [{ id: 'settings.write', label: '修改设置', scope: 'global', category: '设置' }]
+  const button = (wrapper: ReturnType<typeof mountSettings>, text: string) => wrapper.findAll('button').find(button => button.text() === text)!
+  function deferred<T>() {
+    let resolve!: (value: T) => void
+    let reject!: (reason: Error) => void
+    const promise = new Promise<T>((done, fail) => { resolve = done; reject = fail })
+    return { promise, resolve, reject }
+  }
+  async function startRefresh() {
+    mocks.list.mockResolvedValue({ items: [original], permissions })
+    const wrapper = mountSettings()
+    await flushPromises()
+    const groups = deferred<Awaited<ReturnType<typeof getAllIncludingInactive>>>()
+    vi.mocked(getAllIncludingInactive).mockReturnValueOnce(groups.promise)
+    await button(wrapper, zh.refresh).trigger('click')
+    await flushPromises()
+    return { wrapper, groups }
+  }
+
+  it('保存收紧后的权限后，迟到的刷新不会使下一次启停重新授予旧权限', async () => {
+    const { wrapper, groups } = await startRefresh()
+    await button(wrapper, zh.editPermissions).trigger('click')
+    await wrapper.get('input[value="settings.write"]').setValue(false)
+    mocks.update.mockResolvedValueOnce(restricted)
+    await wrapper.get('[data-test="save"]').trigger('click')
+    await flushPromises()
+    expect(mocks.update).toHaveBeenLastCalledWith(original.id, expect.objectContaining({ policy: restricted.policy }))
+
+    groups.resolve([])
+    await flushPromises()
+    mocks.update.mockResolvedValueOnce({ ...restricted, enabled: false })
+    await button(wrapper, zh.disable).trigger('click')
+    await flushPromises()
+    expect(mocks.update).toHaveBeenLastCalledWith(original.id, expect.objectContaining({ enabled: false, policy: restricted.policy }))
+  })
+
+  it('修改后的新刷新仍在等待时，旧刷新不能覆盖状态或提前结束加载', async () => {
+    const { wrapper, groups } = await startRefresh()
+    mocks.update.mockResolvedValueOnce({ ...restricted, enabled: false })
+    await button(wrapper, zh.disable).trigger('click')
+    await flushPromises()
+    expect(button(wrapper, zh.refresh).attributes('disabled')).toBeUndefined()
+
+    const latest = deferred<{ items: typeof original[]; permissions: typeof permissions }>()
+    mocks.list.mockReturnValueOnce(latest.promise)
+    await button(wrapper, zh.refresh).trigger('click')
+    groups.resolve([])
+    await flushPromises()
+    expect(wrapper.text()).toContain(zh.statusDisabled)
+    expect(button(wrapper, zh.refresh).attributes('disabled')).toBeDefined()
+    expect(wrapper.get('[data-test="create"]').attributes('disabled')).toBeDefined()
+
+    latest.resolve({ items: [{ ...restricted, enabled: false, name: '最新服务端名称' }], permissions })
+    await flushPromises()
+    expect(wrapper.text()).toContain('最新服务端名称')
+    expect(button(wrapper, zh.refresh).attributes('disabled')).toBeUndefined()
+  })
+
+  it('修改成功后忽略旧刷新错误，保留成功状态', async () => {
+    const { wrapper, groups } = await startRefresh()
+    mocks.update.mockResolvedValueOnce({ ...restricted, enabled: false })
+    await button(wrapper, zh.disable).trigger('click')
+    await flushPromises()
+    groups.reject(new Error('旧刷新失败'))
+    await flushPromises()
+    expect(wrapper.find('[role="alert"]').exists()).toBe(false)
+    expect(wrapper.get('[role="status"]').text()).toBe(zh.statusUpdated)
+    expect(wrapper.text()).toContain(zh.statusDisabled)
+  })
+
+  it('保存失败后旧刷新错误不会覆盖保存错误或丢失可重试的草稿', async () => {
+    const { wrapper, groups } = await startRefresh()
+    await button(wrapper, zh.editPermissions).trigger('click')
+    await wrapper.get('[data-test="name"]').setValue('保留草稿')
+    await wrapper.get('input[value="settings.write"]').setValue(false)
+    mocks.update.mockRejectedValueOnce(new Error('保存失败'))
+    await wrapper.get('[data-test="save"]').trigger('click')
+    await flushPromises()
+    groups.reject(new Error('旧刷新失败'))
+    await flushPromises()
+    expect(wrapper.get('[role="alert"]').text()).toBe('保存失败')
+    expect((wrapper.get('[data-test="name"]').element as HTMLInputElement).value).toBe('保留草稿')
+    mocks.update.mockResolvedValueOnce({ ...restricted, name: '保留草稿' })
+    await wrapper.get('[data-test="save"]').trigger('click')
+    await flushPromises()
+    expect(mocks.update).toHaveBeenLastCalledWith(original.id, expect.objectContaining({ name: '保留草稿', policy: restricted.policy }))
+    expect(wrapper.find('[data-test="save"]').exists()).toBe(false)
+  })
+
+  it('删除已撤销密钥后，迟到的刷新不能恢复记录', async () => {
+    const revoked = { ...original, enabled: false, revoked_at: '2026-10-22T00:00:00Z' }
+    mocks.list.mockResolvedValue({ items: [revoked], permissions })
+    const wrapper = mountSettings()
+    await flushPromises()
+    const groups = deferred<Awaited<ReturnType<typeof getAllIncludingInactive>>>()
+    vi.mocked(getAllIncludingInactive).mockReturnValueOnce(groups.promise)
+    await button(wrapper, zh.refresh).trigger('click')
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true)
+    try {
+      mocks.deleteRecord.mockResolvedValueOnce({ message: 'ok' })
+      await button(wrapper, zh.deleteRecord).trigger('click')
+      await flushPromises()
+      expect(wrapper.text()).not.toContain(original.key_prefix)
+      groups.resolve([])
+      await flushPromises()
+      expect(wrapper.text()).not.toContain(original.key_prefix)
+    } finally {
+      confirm.mockRestore()
+    }
+  })
+})
+
 describe('管理员密钥页面登录身份隔离', () => {
   function replaceLogin(notify = true) {
     localStorage.setItem('auth_session_id', 'replacement-session')

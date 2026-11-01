@@ -68,7 +68,7 @@ func (h *PaymentHandler) ListOrders(c *gin.Context) {
 		response.ErrorFrom(c, err)
 		return
 	}
-	response.Paginated(c, sanitizeAdminPaymentOrdersForResponse(orders), int64(total), page, pageSize)
+	response.Paginated(c, adminPaymentOrdersResponse(c, orders), int64(total), page, pageSize)
 }
 
 // GetOrderDetail returns detailed information about a single order.
@@ -84,7 +84,7 @@ func (h *PaymentHandler) GetOrderDetail(c *gin.Context) {
 		return
 	}
 	auditLogs, _ := h.paymentService.GetOrderAuditLogs(c.Request.Context(), orderID)
-	response.Success(c, gin.H{"order": sanitizeAdminPaymentOrderForResponse(order), "auditLogs": auditLogs})
+	response.Success(c, gin.H{"order": adminPaymentOrderResponse(c, order), "auditLogs": adminPaymentAuditLogsResponse(c, auditLogs)})
 }
 
 // CancelOrder cancels a pending order (admin).
@@ -158,16 +158,6 @@ type AdminPaymentOrderResult struct {
 	SrcURL              *string    `json:"src_url,omitempty"`
 	CreatedAt           time.Time  `json:"created_at"`
 	UpdatedAt           time.Time  `json:"updated_at"`
-}
-
-func sanitizeAdminPaymentOrdersForResponse(orders []*dbent.PaymentOrder) []*AdminPaymentOrderResult {
-	out := make([]*AdminPaymentOrderResult, 0, len(orders))
-	for _, order := range orders {
-		if item := sanitizeAdminPaymentOrderForResponse(order); item != nil {
-			out = append(out, item)
-		}
-	}
-	return out
 }
 
 func sanitizeAdminPaymentOrderForResponse(order *dbent.PaymentOrder) *AdminPaymentOrderResult {

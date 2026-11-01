@@ -16,12 +16,13 @@ import (
 )
 
 var (
-	ErrRedeemCodeNotFound  = infraerrors.NotFound("REDEEM_CODE_NOT_FOUND", "redeem code not found")
-	ErrRedeemCodeUsed      = infraerrors.Conflict("REDEEM_CODE_USED", "redeem code already used")
-	ErrRedeemCodeExpired   = infraerrors.Conflict("REDEEM_CODE_EXPIRED", "redeem code expired")
-	ErrInsufficientBalance = infraerrors.BadRequest("INSUFFICIENT_BALANCE", "insufficient balance")
-	ErrRedeemRateLimited   = infraerrors.TooManyRequests("REDEEM_RATE_LIMITED", "too many failed attempts, please try again later")
-	ErrRedeemCodeLocked    = infraerrors.Conflict("REDEEM_CODE_LOCKED", "redeem code is being processed, please try again")
+	ErrPaymentRedeemCodeReserved = infraerrors.Forbidden("PAYMENT_REDEEM_CODE_RESERVED", "payment recharge codes are reserved for payment fulfillment")
+	ErrRedeemCodeNotFound        = infraerrors.NotFound("REDEEM_CODE_NOT_FOUND", "redeem code not found")
+	ErrRedeemCodeUsed            = infraerrors.Conflict("REDEEM_CODE_USED", "redeem code already used")
+	ErrRedeemCodeExpired         = infraerrors.Conflict("REDEEM_CODE_EXPIRED", "redeem code expired")
+	ErrInsufficientBalance       = infraerrors.BadRequest("INSUFFICIENT_BALANCE", "insufficient balance")
+	ErrRedeemRateLimited         = infraerrors.TooManyRequests("REDEEM_RATE_LIMITED", "too many failed attempts, please try again later")
+	ErrRedeemCodeLocked          = infraerrors.Conflict("REDEEM_CODE_LOCKED", "redeem code is being processed, please try again")
 )
 
 const (
@@ -390,8 +391,20 @@ func unsupportedRedeemTypeError(codeType string) error {
 	return infraerrors.BadRequest("REDEEM_CODE_UNSUPPORTED_TYPE", fmt.Sprintf("unsupported redeem type: %s", codeType))
 }
 
+// ValidateGeneralRedeemCode reserves internal payment codes for trusted payment
+// fulfillment, not public redemption or external admin integrations.
+func ValidateGeneralRedeemCode(code string) error {
+	if strings.HasPrefix(strings.TrimSpace(code), "PAY-") {
+		return ErrPaymentRedeemCodeReserved
+	}
+	return nil
+}
+
 // Redeem 使用兑换码
 func (s *RedeemService) Redeem(ctx context.Context, userID int64, code string) (*RedeemCode, error) {
+	if err := ValidateGeneralRedeemCode(code); err != nil {
+		return nil, err
+	}
 	return s.redeem(ctx, userID, code, enforceRedeemRateLimit)
 }
 
@@ -408,6 +421,9 @@ func (s *RedeemService) redeemForPaymentFulfillment(ctx context.Context, userID 
 // redeem failure counter. Unlike payment fulfillment, the normal redeem-level
 // affiliate rebate remains enabled.
 func (s *RedeemService) RedeemForAdminFulfillment(ctx context.Context, userID int64, code string) (*RedeemCode, error) {
+	if err := ValidateGeneralRedeemCode(code); err != nil {
+		return nil, err
+	}
 	return s.redeem(ctx, userID, code, bypassRedeemRateLimit)
 }
 

@@ -772,7 +772,9 @@ func (s *OpenAIGatewayService) forwardOpenAIImagesAPIKey(
 			return nil, err
 		}
 		usage = streamUsage
-		imageCount = resolveBillableImageCount(streamCount, 0, imageCountBillingEnabled(getAPIKeyFromContext(c)))
+		// API-key SSE passthrough can finish without an error even for an error event
+		// or an empty stream. Only observed completed images are billable here.
+		imageCount = streamCount
 		imageOutputSizes := streamSizes
 		firstTokenMs = ttft
 		return &OpenAIForwardResult{
