@@ -101,7 +101,7 @@ func TestSubscriptionDailyResetUpgradeReview3_ExistingUpstreamDataAndMigrationHi
 	}
 	queries := map[string]string{
 		"users":             "SELECT jsonb_agg(to_jsonb(t) ORDER BY id)::text FROM users t",
-		"groups":            "SELECT jsonb_agg(to_jsonb(t)-'allow_subscription_day_reset' ORDER BY id)::text FROM groups t",
+		"groups":            "SELECT jsonb_agg(to_jsonb(t)-ARRAY['allow_subscription_day_reset','image_count_billing'] ORDER BY id)::text FROM groups t",
 		"subscriptions":     "SELECT jsonb_agg(to_jsonb(t)-ARRAY['auto_daily_reset_enabled','daily_reset_version','preserve_calendar_daily_reset'] ORDER BY id)::text FROM user_subscriptions t",
 		"keys":              "SELECT jsonb_agg(to_jsonb(t) ORDER BY id)::text FROM api_keys t",
 		"migration_history": migrationUpgradeHistoryQuery(t, upstream),
@@ -113,6 +113,8 @@ func TestSubscriptionDailyResetUpgradeReview3_ExistingUpstreamDataAndMigrationHi
 	before["groups"] = migrationUpgradeExpectedGroupDefaults(t, before["groups"])
 
 	require.NoError(t, ApplyMigrations(ctx, db))
+	require.Equal(t, "0", snapshot("SELECT count(*)::text FROM groups WHERE image_count_billing IS DISTINCT FROM false"),
+		"upgrading must leave image-count billing disabled for every existing group")
 	for name, query := range queries {
 		require.JSONEq(t, before[name], snapshot(query), "%s must survive upgrade unchanged", name)
 	}

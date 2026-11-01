@@ -161,7 +161,7 @@ func testDeployedCustomUpgrade(t *testing.T, baseline migrationUpgradeBaseline) 
 	}
 	queries := map[string]string{
 		"users":                "SELECT jsonb_agg(to_jsonb(t) ORDER BY id)::text FROM users t",
-		"groups":               "SELECT jsonb_agg(to_jsonb(t)-'model_pricing' ORDER BY id)::text FROM groups t",
+		"groups":               "SELECT jsonb_agg(to_jsonb(t)-ARRAY['model_pricing','image_count_billing'] ORDER BY id)::text FROM groups t",
 		"subscriptions":        "SELECT jsonb_agg(to_jsonb(t) ORDER BY id)::text FROM user_subscriptions t",
 		"reset_events":         "SELECT jsonb_agg(to_jsonb(t) ORDER BY id)::text FROM subscription_daily_reset_events t",
 		"keys":                 "SELECT jsonb_agg(to_jsonb(t) ORDER BY id)::text FROM api_keys t",
@@ -182,7 +182,7 @@ func testDeployedCustomUpgrade(t *testing.T, baseline migrationUpgradeBaseline) 
 		"migration_history":    migrationUpgradeHistoryQuery(t, previous),
 	}
 	if hasV028Migrations {
-		queries["groups"] = "SELECT jsonb_agg(to_jsonb(t) ORDER BY id)::text FROM groups t"
+		queries["groups"] = "SELECT jsonb_agg(to_jsonb(t)-'image_count_billing' ORDER BY id)::text FROM groups t"
 		queries["moderation"] = "SELECT jsonb_agg(to_jsonb(t) ORDER BY id)::text FROM content_moderation_logs t"
 		queries["affiliate_ledger"] = "SELECT jsonb_agg(to_jsonb(t) ORDER BY id)::text FROM user_affiliate_ledger t"
 	}
@@ -195,6 +195,8 @@ func testDeployedCustomUpgrade(t *testing.T, baseline migrationUpgradeBaseline) 
 	before["programs"] = welfareLotteryV4ExpectedPrograms(t, before["programs"])
 
 	require.NoError(t, ApplyMigrations(ctx, db))
+	require.Equal(t, "0", snapshot("SELECT count(*)::text FROM groups WHERE image_count_billing IS DISTINCT FROM false"),
+		"upgrading must leave image-count billing disabled for every existing group")
 	for name, query := range queries {
 		require.JSONEq(t, before[name], snapshot(query), "%s must survive the deployed custom upgrade unchanged", name)
 	}
