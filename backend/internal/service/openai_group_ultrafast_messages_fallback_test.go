@@ -20,7 +20,7 @@ import (
 
 func TestOpenAIGroupUltrafastMessagesFallback(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	for _, model := range []string{"gpt-6.1-sol", "gpt-6-astra"} {
+	for _, model := range []string{"gpt-6.1-sol", "gpt-6-astra", "gpt-5.4", "o3", "custom-reasoning-alias"} {
 		for _, action := range []string{BetaPolicyActionPass, BetaPolicyActionBlock} {
 			t.Run(model+"/"+action, func(t *testing.T) {
 				body := []byte(`{"model":"` + model + `","max_tokens":32,"messages":[{"role":"user","content":"hello"}],"stream":false}`)
@@ -105,8 +105,8 @@ func TestOpenAIGroupUltrafastMessagesFallbackPolicyBoundaries(t *testing.T) {
 		},
 		{name: "disabled group stays standard", groupMode: "off"},
 		{name: "missing group stays standard", groupMode: "none"},
-		{name: "non target model stays standard", model: "gpt-6-sol"},
-		{name: "target mapped to non target stays standard", mappedModel: "gpt-6-sol"},
+		{name: "older model forces ultrafast", model: "gpt-6-sol", wantTier: OpenAIFastTierUltrafast, wantResultTier: OpenAIFastTierUltrafast},
+		{name: "mapping outside old whitelist forces ultrafast", mappedModel: "gpt-6-sol", wantTier: OpenAIFastTierUltrafast, wantResultTier: OpenAIFastTierUltrafast},
 		{name: "composite group does not force ultrafast", groupMode: "composite"},
 		{
 			name: "other platform retains inbound tier metadata without injection", accountPlatform: PlatformZhipu,

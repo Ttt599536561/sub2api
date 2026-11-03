@@ -35,8 +35,8 @@ func TestForward_GroupUltrafastCompactFallbackReappliesTierForActualModel(t *tes
 		}{
 			{name: "non_target_to_astra", requestModel: "gpt-5.5", fallbackModel: "gpt-6-astra", wantTier: OpenAIFastTierUltrafast},
 			{name: "flex_to_sol", requestModel: "gpt-5.5", fallbackModel: "gpt-6.1-sol", inputTier: OpenAIFastTierFlex, wantTier: OpenAIFastTierUltrafast},
-			{name: "target_to_non_target_restores_missing", requestModel: "gpt-6-astra", fallbackModel: "gpt-5.4"},
-			{name: "target_to_non_target_restores_flex", requestModel: "gpt-6.1-sol", fallbackModel: "gpt-5.4", inputTier: OpenAIFastTierFlex, wantTier: OpenAIFastTierFlex},
+			{name: "target_to_older_model_forces_missing", requestModel: "gpt-6-astra", fallbackModel: "gpt-5.4", wantTier: OpenAIFastTierUltrafast},
+			{name: "target_to_older_model_overrides_flex", requestModel: "gpt-6.1-sol", fallbackModel: "gpt-5.4", inputTier: OpenAIFastTierFlex, wantTier: OpenAIFastTierUltrafast},
 			{name: "explicit_ultrafast_is_preserved", requestModel: "gpt-6-astra", fallbackModel: "gpt-5.4", inputTier: OpenAIFastTierUltrafast, wantTier: OpenAIFastTierUltrafast},
 			{name: "target_to_target", requestModel: "gpt-6-astra", fallbackModel: "gpt-6.1-sol", wantTier: OpenAIFastTierUltrafast},
 			{name: "global_filter_cannot_downgrade_fallback", requestModel: "gpt-5.5", fallbackModel: "gpt-6-astra", wantTier: OpenAIFastTierUltrafast, policyAction: BetaPolicyActionFilter},
@@ -82,6 +82,7 @@ func TestForward_GroupUltrafastCompactFallbackReappliesTierForActualModel(t *tes
 				if tc.policyAction != "" {
 					policySvc := newOpenAIGatewayServiceWithSettings(t, &OpenAIFastPolicySettings{Rules: []OpenAIFastPolicyRule{{
 						ServiceTier: OpenAIFastTierUltrafast, Action: tc.policyAction, Scope: BetaPolicyScopeAll,
+						ModelWhitelist: []string{tc.fallbackModel}, FallbackAction: BetaPolicyActionPass,
 					}}})
 					svc.settingService = policySvc.settingService
 				}

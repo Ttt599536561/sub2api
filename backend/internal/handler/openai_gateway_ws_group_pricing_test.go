@@ -317,8 +317,8 @@ func TestOpenAIResponsesWebSocket_UltrafastPolicySnapshotSurvivesGroupRefresh(t 
 					wantConnectionTier: "ultrafast", wantReconnectTier: "ultrafast", reconnectFactor: 8,
 				},
 				{
-					name: "non_target_model", model: "gpt-5.6-sol", initialUltrafast: true,
-					reconnectFactor: 1,
+					name: "older_text_model", model: "gpt-5.6-sol", initialUltrafast: true,
+					wantConnectionTier: "ultrafast", reconnectFactor: 1,
 				},
 			} {
 				t.Run(tc.name, func(t *testing.T) {
@@ -368,6 +368,10 @@ func TestOpenAIResponsesWebSocket_UltrafastPolicySnapshotSurvivesGroupRefresh(t 
 						tc.model, service.UsageTokens{InputTokens: 2, OutputTokens: 1}, 1,
 					)
 					require.NoError(t, err)
+					if tc.initialUltrafast {
+						require.InDelta(t, standard.TotalCost*8, got.logs[0].TotalCost, 1e-12,
+							"every text model on the original connection uses Standard x8")
+					}
 					wantReconnectTotal := standard.TotalCost * tc.reconnectFactor
 					require.InDelta(t, wantReconnectTotal, reconnected.log.TotalCost, 1e-12)
 					require.InDelta(t, wantReconnectTotal*0.3, reconnected.log.ActualCost, 1e-12,

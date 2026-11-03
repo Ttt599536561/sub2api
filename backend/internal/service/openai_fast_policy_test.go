@@ -584,14 +584,14 @@ func TestSetOpenAIFastPolicySettings_Validation(t *testing.T) {
 	require.Equal(t, OpenAIFastPolicyActionForcePriority, got.Rules[2].Action)
 }
 
-func TestApplyOpenAIFastPolicyToBody_GroupForceUltrafastTargetsOnlySupportedModels(t *testing.T) {
+func TestApplyOpenAIFastPolicyToBody_GroupForceUltrafastAllTextModels(t *testing.T) {
 	svc := newOpenAIGatewayServiceWithSettings(t, DefaultOpenAIFastPolicySettings())
 	account := &Account{Platform: PlatformOpenAI, Type: AccountTypeOAuth}
 	ctx := context.WithValue(context.Background(), ctxkey.Group, &Group{
 		ID: 8, Platform: PlatformOpenAI, Status: StatusActive, Hydrated: true, ForceOpenAIUltrafast: true,
 	})
 
-	for _, model := range []string{"gpt-6.1-sol", "gpt-6-astra"} {
+	for _, model := range []string{"gpt-6.1-sol", "gpt-6-astra", "gpt-6-sol", "gpt-6-luna", "gpt-5.6-sol", "gpt-4o", "o3", "custom-reasoning-alias"} {
 		for _, body := range [][]byte{
 			[]byte(`{"model":"` + model + `"}`),
 			[]byte(`{"model":"` + model + `","service_tier":"priority"}`),
@@ -603,12 +603,6 @@ func TestApplyOpenAIFastPolicyToBody_GroupForceUltrafastTargetsOnlySupportedMode
 		}
 	}
 
-	for _, model := range []string{"gpt-6-sol", "gpt-6-luna", "gpt-5.6-sol"} {
-		body := []byte(`{"model":"` + model + `","service_tier":"priority"}`)
-		updated, err := svc.applyOpenAIFastPolicyToBody(ctx, account, model, body)
-		require.NoError(t, err)
-		require.Equal(t, OpenAIFastTierPriority, gjson.GetBytes(updated, "service_tier").String())
-	}
 }
 
 func TestApplyOpenAIFastPolicyToBody_GroupForceUltrafastIgnoresFilterAndForcePriority(t *testing.T) {

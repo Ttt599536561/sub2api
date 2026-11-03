@@ -62,7 +62,7 @@ func TestOpenAIGatewayServiceRecordUsage_NoResolverWithGroupPreservesLegacyBilli
 		forceUltrafast bool
 	}{
 		{name: "disabled_group"},
-		{name: "enabled_group_non_target_model", forceUltrafast: true},
+		{name: "enabled_group_without_text_tier", forceUltrafast: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			usageRepo := &openAIRecordUsageLogRepoStub{inserted: true}
@@ -102,7 +102,7 @@ func TestOpenAIGatewayServiceRecordUsage_NoResolverWithGroupPreservesLegacyBilli
 }
 
 func TestOpenAIGatewayServiceRecordUsage_GroupUltrafastWithoutResolverKeepsEightTimesStandard(t *testing.T) {
-	for _, model := range []string{"gpt-6.1-sol", "gpt-6-astra"} {
+	for _, model := range []string{"gpt-6.1-sol", "gpt-6-astra", "gpt-5.4"} {
 		t.Run(model, func(t *testing.T) {
 			usageRepo := &openAIRecordUsageLogRepoStub{inserted: true}
 			userRepo := &openAIRecordUsageUserRepoStub{}

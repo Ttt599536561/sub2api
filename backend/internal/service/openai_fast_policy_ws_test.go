@@ -164,16 +164,20 @@ func TestWSResponseCreate_GroupForceUltrafastOverridesTierAndSurvivesFilter(t *t
 		ID: 9, Platform: PlatformOpenAI, Status: StatusActive, Hydrated: true, ForceOpenAIUltrafast: true,
 	})
 
-	for _, tier := range []string{"", "priority", "flex"} {
-		frame := []byte(`{"type":"response.create","model":"gpt-6-astra","service_tier":"` + tier + `"}`)
-		if tier == "" {
-			frame = []byte(`{"type":"response.create","model":"gpt-6-astra"}`)
+	// Later response.create turns can select any model and request a different tier.
+	for _, model := range []string{"gpt-6-astra", "gpt-5.4", "o3", "custom-reasoning-alias"} {
+		for _, tier := range []string{"", "priority", "flex"} {
+			frame := []byte(`{"type":"response.create","model":"` + model + `","service_tier":"` + tier + `"}`)
+			if tier == "" {
+				frame = []byte(`{"type":"response.create","model":"` + model + `"}`)
+			}
+			updated, blocked, err := svc.applyOpenAIFastPolicyToWSResponseCreate(ctx, account, model, frame)
+			require.NoError(t, err)
+			require.Nil(t, blocked)
+			require.Equal(t, OpenAIFastTierUltrafast, gjson.GetBytes(updated, "service_tier").String())
 		}
-		updated, blocked, err := svc.applyOpenAIFastPolicyToWSResponseCreate(ctx, account, "gpt-6-astra", frame)
-		require.NoError(t, err)
-		require.Nil(t, blocked)
-		require.Equal(t, OpenAIFastTierUltrafast, gjson.GetBytes(updated, "service_tier").String())
 	}
+
 }
 
 func TestWSResponseCreate_GroupForceUltrafastStillHonorsBlock(t *testing.T) {

@@ -16,7 +16,7 @@ import (
 )
 
 func TestInflightEstimate_GroupUltrafastMatchesSettlementAndAdmission(t *testing.T) {
-	for _, model := range []string{"gpt-6.1-sol", "gpt-6-astra"} {
+	for _, model := range []string{"gpt-6.1-sol", "gpt-6-astra", "gpt-5.4", "gpt-6-luna", "o3"} {
 		for _, enabled := range []bool{false, true} {
 			t.Run(fmt.Sprintf("%s/enabled=%t", model, enabled), func(t *testing.T) {
 				ctx := context.Background()
@@ -84,7 +84,7 @@ func TestInflightEstimate_GroupUltrafastMatchesSettlementAndAdmission(t *testing
 	}
 }
 
-func TestInflightEstimate_GroupUltrafastUsesActualModelForRequestedPricing(t *testing.T) {
+func TestInflightEstimate_GroupUltrafastAllModelsWithRequestedPricing(t *testing.T) {
 	for _, tc := range []struct {
 		name          string
 		requestModel  string
@@ -93,9 +93,9 @@ func TestInflightEstimate_GroupUltrafastUsesActualModelForRequestedPricing(t *te
 		want          float64
 	}{
 		{name: "channel_alias_to_target", requestModel: "client-model", channelModel: "gpt-6-astra", want: 1.20},
-		{name: "target_mapped_to_non_target", requestModel: "gpt-6-astra", channelModel: "gpt-5.4", want: 0.15},
+		{name: "target_mapped_to_non_target", requestModel: "gpt-6-astra", channelModel: "gpt-5.4", want: 1.20},
 		{name: "priced_alias_account_mapping_to_target", requestModel: "client-model", accountModels: []string{"gpt-6.1-sol"}, want: 1.20},
-		{name: "non_target_unchanged", requestModel: "gpt-5.4", want: 0.15},
+		{name: "older_model", requestModel: "gpt-5.4", want: 1.20},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			inputPrice, outputPrice := 0.001, 0.002
@@ -140,26 +140,25 @@ func TestInflightEstimate_GroupUltrafastWithoutResolver(t *testing.T) {
 	}
 }
 
-func TestInflightEstimate_GroupUltrafastUsesCompleteAccountCandidates(t *testing.T) {
+func TestInflightEstimate_GroupUltrafastAllCandidateRoutes(t *testing.T) {
 	for _, tc := range []struct {
 		name, requestModel, channelModel                          string
 		normalModel, compactModel, compactKey, globalCompactModel string
 		finalModel                                                string
 		mixed, passthrough, unsupported                           bool
 		legacyCompact, nativeCompact, retryCompact                bool
-		wantUltrafast                                             bool
 	}{
 		{name: "all_accounts_map_target_out", requestModel: "gpt-6-astra", finalModel: "gpt-5.4"},
 		{name: "channel_then_all_accounts_map_target_out", requestModel: "client-model", channelModel: "gpt-6-astra", finalModel: "gpt-5.4"},
-		{name: "mixed_accounts_retain_target_candidate", requestModel: "gpt-6-astra", mixed: true, finalModel: "gpt-6-astra", wantUltrafast: true},
-		{name: "passthrough_ignores_regular_mapping", requestModel: "gpt-6-astra", passthrough: true, finalModel: "gpt-6-astra", wantUltrafast: true},
+		{name: "mixed_accounts_retain_target_candidate", requestModel: "gpt-6-astra", mixed: true, finalModel: "gpt-6-astra"},
+		{name: "passthrough_ignores_regular_mapping", requestModel: "gpt-6-astra", passthrough: true, finalModel: "gpt-6-astra"},
 		{name: "unsupported_identity_is_not_a_candidate", requestModel: "gpt-6-astra", unsupported: true, finalModel: "gpt-5.4"},
-		{name: "legacy_compact_specific_target", requestModel: "gpt-6-astra", compactModel: "gpt-6.1-sol", legacyCompact: true, finalModel: "gpt-6.1-sol", wantUltrafast: true},
-		{name: "legacy_compact_configured_target", requestModel: "gpt-6-astra", globalCompactModel: "gpt-6.1-sol", legacyCompact: true, finalModel: "gpt-6.1-sol", wantUltrafast: true},
+		{name: "legacy_compact_specific_target", requestModel: "gpt-6-astra", compactModel: "gpt-6.1-sol", legacyCompact: true, finalModel: "gpt-6.1-sol"},
+		{name: "legacy_compact_configured_target", requestModel: "gpt-6-astra", globalCompactModel: "gpt-6.1-sol", legacyCompact: true, finalModel: "gpt-6.1-sol"},
 		{name: "legacy_compact_maps_out_of_target", requestModel: "gpt-6-astra", normalModel: "gpt-6-astra", compactModel: "gpt-5.4", legacyCompact: true, finalModel: "gpt-5.4"},
-		{name: "native_compact_fallback_target", requestModel: "gpt-6-astra", compactModel: "gpt-6.1-sol", nativeCompact: true, retryCompact: true, finalModel: "gpt-6.1-sol", wantUltrafast: true},
-		{name: "native_compact_keeps_initial_target", requestModel: "gpt-6-astra", normalModel: "gpt-6-astra", compactModel: "gpt-5.4", nativeCompact: true, finalModel: "gpt-6-astra", wantUltrafast: true},
-		{name: "legacy_compact_chained_mapping_to_target", requestModel: "gpt-6-astra", normalModel: "gpt-5.4", compactKey: "gpt-5.4", compactModel: "gpt-6.1-sol", legacyCompact: true, finalModel: "gpt-6.1-sol", wantUltrafast: true},
+		{name: "native_compact_fallback_target", requestModel: "gpt-6-astra", compactModel: "gpt-6.1-sol", nativeCompact: true, retryCompact: true, finalModel: "gpt-6.1-sol"},
+		{name: "native_compact_keeps_initial_target", requestModel: "gpt-6-astra", normalModel: "gpt-6-astra", compactModel: "gpt-5.4", nativeCompact: true, finalModel: "gpt-6-astra"},
+		{name: "legacy_compact_chained_mapping_to_target", requestModel: "gpt-6-astra", normalModel: "gpt-5.4", compactKey: "gpt-5.4", compactModel: "gpt-6.1-sol", legacyCompact: true, finalModel: "gpt-6.1-sol"},
 		{name: "legacy_compact_chained_mapping_out_of_target", requestModel: "gpt-6-astra", normalModel: "gpt-6.1-sol", compactKey: "gpt-6.1-sol", compactModel: "gpt-5.4", legacyCompact: true, finalModel: "gpt-5.4"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -217,12 +216,10 @@ func TestInflightEstimate_GroupUltrafastUsesCompleteAccountCandidates(t *testing
 				OpenAICompactPath: tc.legacyCompact, OpenAICompactionFallback: tc.nativeCompact,
 			})
 			require.True(t, priced)
-			want := 0.15
-			if tc.wantUltrafast {
-				want *= 8
-			}
-			require.InDelta(t, want, estimate, 1e-12, "reservation must reflect complete route-aware model candidates")
+			want := 1.20
+			require.InDelta(t, want, estimate, 1e-12, "every text route must reserve Standard x8")
 			require.Zero(t, accountRepo.dbCalls.Load(), "candidate resolution must use the scheduler snapshot")
+			require.Zero(t, snap.reads.Load(), "priced text requests must not probe accounts to choose the group tier")
 
 			account := &accounts[0]
 			if tc.mixed {
@@ -265,12 +262,8 @@ func TestInflightEstimate_GroupUltrafastUsesCompleteAccountCandidates(t *testing
 				actualModel = result.Model
 			}
 			require.Equal(t, tc.finalModel, actualModel)
-			if tc.wantUltrafast {
-				require.NotNil(t, result.ServiceTier)
-				require.Equal(t, OpenAIFastTierUltrafast, *result.ServiceTier)
-			} else {
-				require.Nil(t, result.ServiceTier)
-			}
+			require.NotNil(t, result.ServiceTier)
+			require.Equal(t, OpenAIFastTierUltrafast, *result.ServiceTier)
 			require.NoError(t, forwarder.RecordUsage(ctx, &OpenAIRecordUsageInput{
 				APIKey: key, User: user, Account: account, Result: result,
 				OriginalModel: tc.requestModel, ChannelMappedModel: upstreamInput, BillingModelSource: BillingModelSourceRequested,
@@ -288,12 +281,77 @@ func TestInflightEstimate_GroupUltrafastUsesCompleteAccountCandidates(t *testing
 			if second != nil {
 				defer second.HandlerDone()
 			}
-			if tc.wantUltrafast {
-				require.ErrorIs(t, err, ErrInsufficientBalance)
-			} else {
-				require.NoError(t, err)
-				require.NotNil(t, second)
+			require.ErrorIs(t, err, ErrInsufficientBalance)
+		})
+	}
+}
+
+func TestInflightEstimate_GroupUltrafastPerRequestTextAndMediaBoundaries(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		kind     InflightEstimateKind
+		mode     BillingMode
+		platform string
+		enabled  bool
+		want     float64
+	}{
+		{"text_per_request", InflightEstimateToken, BillingModePerRequest, PlatformOpenAI, true, 8},
+		{"disabled", InflightEstimateToken, BillingModePerRequest, PlatformOpenAI, false, 1},
+		{"other_platform", InflightEstimateToken, BillingModePerRequest, PlatformAnthropic, true, 1},
+		{"image", InflightEstimateImage, BillingModePerRequest, PlatformOpenAI, true, 1},
+		{"video", InflightEstimateVideo, BillingModePerRequest, PlatformOpenAI, true, 1},
+		{"audio", InflightEstimateAudio, BillingModePerRequest, PlatformOpenAI, true, 1},
+		{"search", InflightEstimatePerRequest, BillingModePerRequest, PlatformOpenAI, true, 1},
+		{"image_pricing_on_token_route", InflightEstimateToken, BillingModeImage, PlatformOpenAI, true, 1},
+		{"video_pricing_on_token_route", InflightEstimateToken, BillingModeVideo, PlatformOpenAI, true, 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			price := 2.0
+			group := &Group{ID: 884, Platform: tc.platform, RateMultiplier: 0.5, ForceOpenAIUltrafast: tc.enabled,
+				ModelPricing: []ChannelModelPricing{{Models: []string{"custom-priced-model"}, BillingMode: tc.mode, PerRequestPrice: &price}},
 			}
+			billing := NewBillingService(&config.Config{}, nil)
+			deps := inflightEstimateDeps{billing: billing, resolver: NewModelPricingResolver(nil, billing)}
+			estimate, priced := deps.estimate(context.Background(), &APIKey{GroupID: &group.ID, Group: group, User: &User{ID: 2884}}, InflightEstimateRequest{
+				Model: "custom-priced-model", Kind: tc.kind, BodyBytes: 400, MaxTokens: 100, AudioUnits: 1,
+			})
+			require.True(t, priced)
+			require.InDelta(t, tc.want, estimate, 1e-12)
+		})
+	}
+}
+
+func TestInflightEstimate_GroupUltrafastStillResolvesUnpricedAlias(t *testing.T) {
+	group := &Group{ID: 885, Platform: PlatformOpenAI, RateMultiplier: 0.5, ForceOpenAIUltrafast: true}
+	billing := NewBillingService(&config.Config{}, nil)
+	calls := 0
+	deps := inflightEstimateDeps{billing: billing, accountMappedModels: func(context.Context, *APIKey, string) []string {
+		calls++
+		return []string{"gpt-5.4"}
+	}}
+	key := &APIKey{GroupID: &group.ID, Group: group, User: &User{ID: 2885}}
+	estimate, priced := deps.estimate(context.Background(), key, InflightEstimateRequest{Model: "unpriced-custom-alias", BodyBytes: 400, MaxTokens: 100})
+	require.True(t, priced)
+	require.Equal(t, 1, calls, "actual price resolution must retain account mapping fallback")
+	standard, ok := EstimateInflightReservationCost(billing, config.InflightReservationConfig{}, "gpt-5.4", 400, 100, 0.5)
+	require.True(t, ok)
+	require.InDelta(t, standard*8, estimate, 1e-12)
+}
+
+func TestInflightEstimate_GroupUltrafastDedicatedEndpointOptOut(t *testing.T) {
+	for _, mode := range []BillingMode{BillingModeToken, BillingModePerRequest} {
+		t.Run(string(mode), func(t *testing.T) {
+			inputPrice, outputPrice, requestPrice := 0.001, 0.002, 0.3
+			group := &Group{ID: 886, Platform: PlatformOpenAI, RateMultiplier: 0.5, ForceOpenAIUltrafast: true,
+				ModelPricing: []ChannelModelPricing{{Models: []string{"custom-embedding-or-search"}, BillingMode: mode, InputPrice: &inputPrice, OutputPrice: &outputPrice, PerRequestPrice: &requestPrice}},
+			}
+			billing := NewBillingService(&config.Config{}, nil)
+			deps := inflightEstimateDeps{billing: billing, resolver: NewModelPricingResolver(nil, billing)}
+			key := &APIKey{GroupID: &group.ID, Group: group, User: &User{ID: 2886}}
+			req := InflightEstimateRequest{Model: "custom-embedding-or-search", Kind: InflightEstimateToken, BodyBytes: 400, MaxTokens: 100, SkipGroupUltrafast: true}
+			estimate, priced := deps.estimate(context.Background(), key, req)
+			require.True(t, priced)
+			require.InDelta(t, 0.15, estimate, 1e-12, "dedicated embeddings/search keep their existing token or per-request estimate")
 		})
 	}
 }

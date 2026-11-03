@@ -70,4 +70,41 @@ describe("groupsOpenAIFast", () => {
       freeHint: expect.stringContaining("Standard"),
     });
   });
+
+  it.each([
+    {
+      locale: "zh",
+      hint: zh.groups.openaiFast.ultrafastHint,
+      expected: [
+        "所有文本/推理模型",
+        "service_tier=ultrafast",
+        "Standard 基价的 8 倍",
+        "原有倍率继续生效",
+        "图片、音频、视频的按张/次计费不受影响",
+        "与强制 Fast 互斥",
+        "免费 Fast 不适用于 Ultrafast",
+        "不做账号能力探测",
+      ],
+    },
+    {
+      locale: "en",
+      hint: en.groups.openaiFast.ultrafastHint,
+      expected: [
+        "all text/reasoning models",
+        "service_tier=ultrafast",
+        "8× the effective Standard price",
+        "Existing multipliers still apply",
+        "Image, audio, and video per-image/per-request billing is unchanged",
+        "Mutually exclusive with Force Fast",
+        "Free Fast does not apply to Ultrafast",
+        "No account capability probing",
+      ],
+    },
+  ])("describes the Ultrafast model scope and billing boundaries in $locale", ({ hint, expected }) => {
+    for (const text of expected) {
+      expect(hint).toContain(text);
+    }
+    expect(hint).not.toContain("GPT-6.1 Sol");
+    expect(hint).not.toContain("GPT-6 Astra");
+  });
 });

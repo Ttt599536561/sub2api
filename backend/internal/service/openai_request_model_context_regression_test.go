@@ -19,7 +19,7 @@ func TestRequestModelContextUltrafastReservation(t *testing.T) {
 		want                          float64
 	}{
 		{"messages-replacement", "gpt-5.5", "gpt-6.1-sol", "", true, true, 1.2},
-		{"chat-maps-target-out", "gpt-6-astra", "gpt-5.4", "", true, true, .15},
+		{"chat-maps-target-out", "gpt-6-astra", "gpt-5.4", "", true, true, 1.2},
 		{"native-ws-replacement", "gpt-5.5", "gpt-6.1-sol", OpenAIWSIngressModeCtxPool, true, false, 1.2},
 		{"passthrough-ws-keeps-target", "gpt-6-astra", "gpt-5.4", OpenAIWSIngressModePassthrough, false, false, 1.2},
 		{"http-passthrough-keeps-target", "gpt-6-astra", "gpt-5.4", "", true, false, 1.2},

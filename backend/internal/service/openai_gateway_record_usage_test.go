@@ -3160,6 +3160,9 @@ func TestOpenAIGatewayServiceRecordUsage_GroupUltrafastChargesEightTimesOnlyWhen
 	}{
 		{model: "gpt-6.1-sol"},
 		{model: "gpt-6-astra"},
+		{model: "gpt-5.4"},
+		{model: "custom-reasoner"},
+		{model: "deepseek-reasoner"},
 	} {
 		for _, enabled := range []bool{false, true} {
 			t.Run(modelCase.model+"/enabled="+map[bool]string{false: "false", true: "true"}[enabled], func(t *testing.T) {
@@ -3219,7 +3222,7 @@ func TestOpenAIGatewayServiceRecordUsage_GroupUltrafastChargesEightTimesOnlyWhen
 	}
 }
 
-func TestOpenAIGatewayServiceRecordUsage_GroupUltrafastDowngradeDoesNotChargeEightTimes(t *testing.T) {
+func TestOpenAIGatewayServiceRecordUsage_GroupUltrafastDowngradeStillChargesEightTimes(t *testing.T) {
 	usageRepo := &openAIRecordUsageLogRepoStub{inserted: true}
 	svc := newOpenAIRecordUsageServiceForTest(
 		usageRepo,
@@ -3246,10 +3249,10 @@ func TestOpenAIGatewayServiceRecordUsage_GroupUltrafastDowngradeDoesNotChargeEig
 	require.NoError(t, err)
 	require.NotNil(t, usageRepo.lastLog)
 	require.NotNil(t, usageRepo.lastLog.ServiceTier)
-	require.Equal(t, "default", *usageRepo.lastLog.ServiceTier)
+	require.Equal(t, "ultrafast", *usageRepo.lastLog.ServiceTier)
 	standard, calcErr := svc.billingService.CalculateCost("gpt-6-astra", tokens, 1)
 	require.NoError(t, calcErr)
-	require.InDelta(t, standard.ActualCost, usageRepo.lastLog.ActualCost, 1e-10)
+	require.InDelta(t, standard.ActualCost*8, usageRepo.lastLog.ActualCost, 1e-10)
 }
 
 func TestOpenAIGatewayServiceRecordUsage_FreeOpenAIFastChargesStandard(t *testing.T) {

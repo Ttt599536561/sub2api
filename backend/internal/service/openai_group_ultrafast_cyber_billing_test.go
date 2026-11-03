@@ -34,13 +34,13 @@ func TestOpenAIUltrafastCyberBillingPreservesActualRequest(t *testing.T) {
 		{name: "messages_stream", entry: "messages", requested: "gpt-6-astra", actual: "gpt-6-astra", stream: true, observedTier: "ultrafast", wantMultiplier: 8, wantTier: "ultrafast"},
 		{name: "responses_stream", entry: "responses", requested: "gpt-6-astra", actual: "gpt-6-astra", stream: true, observedTier: "ultrafast", wantMultiplier: 8, wantTier: "ultrafast"},
 		{name: "bare_error_then_failed", entry: "responses", requested: "gpt-6-astra", actual: "gpt-6-astra", stream: true, bareError: true, observedTier: "ultrafast", wantMultiplier: 8, wantTier: "ultrafast"},
-		{name: "public_api_downgrade", entry: "chat", requested: "gpt-6-astra", actual: "gpt-6-astra", apiKey: true, observedTier: "default", wantMultiplier: 1, wantTier: "default"},
+		{name: "public_api_downgrade", entry: "chat", requested: "gpt-6-astra", actual: "gpt-6-astra", apiKey: true, observedTier: "default", wantMultiplier: 8, wantTier: "ultrafast"},
 		{name: "oauth_default_not_authoritative", entry: "chat", requested: "gpt-6-astra", actual: "gpt-6-astra", observedTier: "default", wantMultiplier: 8, wantTier: "ultrafast"},
 		{name: "no_response_tier", entry: "chat", requested: "gpt-6-astra", actual: "gpt-6-astra", wantMultiplier: 8, wantTier: "ultrafast"},
 		{name: "disabled_group_explicit_ultra", entry: "chat", requested: "gpt-6-astra", actual: "gpt-6-astra", disabled: true, inputTier: "ultrafast", observedTier: "ultrafast", wantMultiplier: 6, wantTier: "ultrafast"},
-		{name: "non_target", entry: "chat", requested: "gpt-5.4", actual: "gpt-5.4", observedTier: "default", wantMultiplier: 1},
+		{name: "non_target", entry: "chat", requested: "gpt-5.4", actual: "gpt-5.4", observedTier: "default", wantMultiplier: 8, wantTier: "ultrafast"},
 		{name: "mapped_into_target", entry: "chat", requested: "client-alias", actual: "gpt-6-astra", observedTier: "ultrafast", wantMultiplier: 8, wantTier: "ultrafast"},
-		{name: "mapped_out_of_target", entry: "chat", requested: "gpt-6-astra", actual: "gpt-5.4", observedTier: "default", wantMultiplier: 1},
+		{name: "mapped_out_of_target", entry: "chat", requested: "gpt-6-astra", actual: "gpt-5.4", observedTier: "default", wantMultiplier: 8, wantTier: "ultrafast"},
 		{name: "requested_price_with_target_mapping", entry: "chat", requested: "gpt-5.4", actual: "gpt-6-astra", pricingModel: "gpt-5.4", billingSource: BillingModelSourceRequested, observedTier: "ultrafast", wantMultiplier: 8, wantTier: "ultrafast"},
 		{name: "channel_price_with_target_mapping", entry: "chat", requested: "client-alias", channelModel: "gpt-5.4", actual: "gpt-6-astra", pricingModel: "gpt-5.4", billingSource: BillingModelSourceChannelMapped, observedTier: "ultrafast", wantMultiplier: 8, wantTier: "ultrafast"},
 		{name: "zero_usage", entry: "chat", requested: "gpt-6-astra", actual: "gpt-6-astra", observedTier: "ultrafast", noUsage: true, wantMultiplier: 8, wantTier: "ultrafast"},
@@ -171,10 +171,10 @@ func TestOpenAIUltrafastCyberCompactKeepsOriginalBillingModel(t *testing.T) {
 	require.NotNil(t, mark)
 	require.Equal(t, "gpt-5.4", mark.Billing.UpstreamModel)
 	require.Equal(t, "gpt-6-astra", mark.Billing.BillingModel, "compact fallback changes upstream model, not the normal request's pricing source")
-	require.Empty(t, mark.Billing.ServiceTier)
+	require.Equal(t, OpenAIFastTierUltrafast, mark.Billing.ServiceTier)
 	svc.RecordCyberPolicyUsageLog(ctx, CyberPolicyUsageInput{APIKey: key, Account: account, RequestID: "cyber_compact", Model: "gpt-6-astra", InputTokens: mark.UpstreamInTok, OutputTokens: mark.UpstreamOutTok, Billing: mark.Billing})
 	require.Equal(t, 1, logs.calls)
 	standard, err := svc.billingService.CalculateCost("gpt-6-astra", UsageTokens{InputTokens: 100, OutputTokens: 50}, 1)
 	require.NoError(t, err)
-	require.InDelta(t, standard.ActualCost, users.lastAmount, 1e-12)
+	require.InDelta(t, standard.ActualCost*8, users.lastAmount, 1e-12)
 }

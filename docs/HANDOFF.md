@@ -1,5 +1,9 @@
 # Sub2API 二次开发交接
 
+## 2026-11-03 本地开发：Ultrafast 全文本模型
+
+基于本轮GitHub接口实时核实的最新main `1b156c8f3`，在 `codex/ultrafast-all-models-20261103` / `E:/sub2二次开发项目/.worktrees/ultrafast-all-models-20261103` 扩展分组Ultrafast至所有文本/推理模型，统一Standard×8，媒体计费保持。原主目录WIP保留；service/handler整包20,555条通过事件、0失败、12条件跳过，前端18项、lint/格式与独立复核通过。保存为本地功能分支提交，未合并主目录/推送/发布/部署。完成状态与验证见[变更记录](changes/2026-11-03-ultrafast-all-models.md)。下方公开发布状态保持。
+
 ## 当前代码和发布状态
 
 核对日期：2026-11-01（Asia/Shanghai）。**0.2.19-r1 Linux镜像已发布并核验；服务器由用户自行替换，本轮未部署服务器。**

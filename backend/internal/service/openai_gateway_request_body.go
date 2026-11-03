@@ -2049,19 +2049,16 @@ func openAIGroupForcesFast(ctx context.Context, account *Account) bool {
 	return IsGroupContextValid(group) && groupSupportsOpenAIFast(group.Platform) && group.ForceOpenAIFast
 }
 
-func openAIGroupForcesUltrafast(ctx context.Context, account *Account, model string) bool {
+func openAIGroupForcesUltrafast(ctx context.Context, account *Account) bool {
 	if ctx == nil || account == nil || account.Platform != PlatformOpenAI {
 		return false
 	}
 	group, _ := ctx.Value(ctxkey.Group).(*Group)
-	if !IsGroupContextValid(group) || group.Platform != PlatformOpenAI || !group.ForceOpenAIUltrafast {
-		return false
-	}
-	return openai.IsGPT61SolModelSpelling(model) || isOpenAIGPT6AstraModel(model)
+	return IsGroupContextValid(group) && group.Platform == PlatformOpenAI && group.ForceOpenAIUltrafast
 }
 
-func openAIGroupForcedServiceTier(ctx context.Context, account *Account, model string) string {
-	if openAIGroupForcesUltrafast(ctx, account, model) {
+func openAIGroupForcedServiceTier(ctx context.Context, account *Account, _ string) string {
+	if openAIGroupForcesUltrafast(ctx, account) {
 		return OpenAIFastTierUltrafast
 	}
 	if openAIGroupForcesFast(ctx, account) {
@@ -2076,7 +2073,7 @@ func openAIGroupForcedServiceTier(ctx context.Context, account *Account, model s
 // normalizes the service_tier value (e.g. client alias "fast" → "priority").
 // action=force_priority rewrites any matched known tier to "priority". Before
 // the global policy is evaluated, a trusted request Group with ForceOpenAIFast
-// or target-model ForceOpenAIUltrafast enabled sets the corresponding tier.
+// or ForceOpenAIUltrafast enabled sets the corresponding tier.
 // For the Ultrafast group mode, the global policy may block the request but
 // may not filter or rewrite the forced tier.
 //

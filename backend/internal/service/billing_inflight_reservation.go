@@ -390,6 +390,8 @@ type InflightEstimateRequest struct {
 	BodyBytes int
 	MaxTokens int
 	Kind      InflightEstimateKind
+	// SkipGroupUltrafast retains standard token estimates for dedicated non-generation endpoints.
+	SkipGroupUltrafast bool
 	// OpenAICompactPath selects the legacy compact route; native fallback keeps the normal first attempt.
 	OpenAICompactPath        bool
 	OpenAICompactionFallback bool
@@ -415,11 +417,9 @@ type inflightEstimateDeps struct {
 	// accountMappedModels 返回调度器可选账号对 model 的账号级映射结果（去重，不含 model 本身）。
 	// 准入时账号尚未选定，计费侧 billableModelWithFallback 会回退到实际转发模型（UpstreamModel，
 	// 即账号映射后的模型），因此这里取所有候选映射模型的最高估算。
-	// 在候选无法定价、composite 分组或强制 Ultrafast 需核对账号映射时调用；实现只读调度器快照，
+	// 在候选无法定价或 composite 分组时调用；实现只读调度器快照，
 	// 不在请求路径上直接查库，也不按模型名缓存（内存不随请求模型名增长）。
 	accountMappedModels func(ctx context.Context, apiKey *APIKey, model string) []string
-	// accountUltrafastTarget inspects complete final-model candidates; known=false means unavailable.
-	accountUltrafastTarget func(ctx context.Context, apiKey *APIKey, model string, req InflightEstimateRequest) (target, known bool)
 }
 
 // inflightSnapshotLister 调度器快照读取（与账号选择同源：Redis 快照，未命中时由快照服务自身回源并回填）。
@@ -445,53 +445,6 @@ func inflightAccountMappedModelsFromSnapshot(list inflightSnapshotLister, resolv
 			return nil
 		}
 		return accountMappedModelsFrom(accounts, model)
-	}
-}
-
-// inflightAccountUltrafastTargetFromSnapshot keeps identity mappings and snapshot
-// availability distinct. A complete snapshot can prove all accounts map out of
-// the target family; a list containing only changed mappings cannot prove that.
-func inflightAccountUltrafastTargetFromSnapshot(list inflightSnapshotLister, resolvePlatform func(context.Context, *APIKey, string) (string, bool, bool), cfg *config.Config) func(context.Context, *APIKey, string, InflightEstimateRequest) (bool, bool) {
-	if list == nil || resolvePlatform == nil {
-		return nil
-	}
-	return func(ctx context.Context, apiKey *APIKey, model string, req InflightEstimateRequest) (bool, bool) {
-		model = strings.TrimSpace(model)
-		if apiKey == nil || model == "" {
-			return false, false
-		}
-		platform, forced, ok := resolvePlatform(ctx, apiKey, model)
-		if !ok || platform == "" {
-			return false, false
-		}
-		accounts, err := list(ctx, apiKey.GroupID, platform, forced)
-		if err != nil {
-			return false, false
-		}
-		for i := range accounts {
-			account := &accounts[i]
-			if account.Platform != PlatformOpenAI {
-				continue
-			}
-			if !req.OpenAICompactPath && !req.OpenAICompactionFallback && !supportsOpenAIRequestModelWithContext(ctx, account, model, false) {
-				continue
-			}
-			actual := resolveOpenAIRequestModelWithContext(ctx, account, model, req.OpenAICompactPath)
-			if req.OpenAICompactPath {
-				// Legacy compact resolves its dedicated mapping/config before the first attempt.
-				if compact := resolveOpenAICompactFallbackModelWithConfig(cfg, account, model); compact != "" {
-					actual = compact
-				}
-			}
-			if isOpenAIGroupUltrafastTargetModel(actual) {
-				return true, true
-			}
-			// Native compact keeps the normal first attempt and can later use compact fallback.
-			if req.OpenAICompactionFallback && isOpenAIGroupUltrafastTargetModel(resolveOpenAICompactFallbackModelWithConfig(cfg, account, model)) {
-				return true, true
-			}
-		}
-		return false, true
 	}
 }
 
@@ -761,6 +714,9 @@ func (d inflightEstimateDeps) estimateOne(ctx context.Context, apiKey *APIKey, m
 				rate = imageRate
 			}
 			cost = maxPerRequestPrice(resolved) * float64(units) * rate
+			if forceGroupUltrafast && resolved.Mode == BillingModePerRequest {
+				cost *= 8
+			}
 		} else if req.Kind != InflightEstimatePerRequest {
 			cost = tokenCost()
 		}
@@ -793,43 +749,12 @@ func (d inflightEstimateDeps) estimate(ctx context.Context, apiKey *APIKey, req 
 		return 0, true
 	}
 	primary, fallbacks, upstreamInput := inflightBillingModelCandidates(ctx, d, apiKey, req.Model)
-	var accountModels []string
-	accountModelsLoaded := false
-	loadAccountModels := func() []string {
-		if !accountModelsLoaded {
-			accountModelsLoaded = true
-			if d.accountMappedModels != nil {
-				accountModels = d.accountMappedModels(ctx, apiKey, upstreamInput)
-			}
-		}
-		return accountModels
-	}
-	// The forced tier depends on the actual upstream model, not the pricing
-	// model: requested-model pricing may remain in use after channel/account
-	// mapping. Before account selection, reserve for a possible target model.
-	forceGroupUltrafast := false
-	if group := apiKey.Group; req.Kind == InflightEstimateToken && group != nil &&
-		group.Platform == PlatformOpenAI && group.ForceOpenAIUltrafast {
-		known := false
-		if d.accountUltrafastTarget != nil {
-			forceGroupUltrafast, known = d.accountUltrafastTarget(ctx, apiKey, upstreamInput, req)
-		}
-		if !known {
-			// Without a usable snapshot, retain the conservative known-model fallback.
-			forceGroupUltrafast = isOpenAIGroupUltrafastTargetModel(upstreamInput)
-			if d.cfg != nil && (req.OpenAICompactPath || req.OpenAICompactionFallback) && isOpenAIGroupUltrafastTargetModel(d.cfg.Gateway.OpenAICompactModel) {
-				forceGroupUltrafast = true
-			}
-			if !forceGroupUltrafast {
-				for _, mapped := range loadAccountModels() {
-					if isOpenAIGroupUltrafastTargetModel(mapped) {
-						forceGroupUltrafast = true
-						break
-					}
-				}
-			}
-		}
-	}
+	// Group-forced Ultrafast applies to every text model, independently of
+	// account routing and pricing aliases. Media keeps its existing rates.
+	group := apiKey.Group
+	forceGroupUltrafast := req.Kind == InflightEstimateToken && !req.SkipGroupUltrafast && group != nil &&
+		group.Platform == PlatformOpenAI && group.ForceOpenAIUltrafast
+
 	bestOf := func(models []string) (float64, bool) {
 		best := 0.0
 		priced := false
@@ -853,9 +778,9 @@ func (d inflightEstimateDeps) estimate(ctx context.Context, apiKey *APIKey, req 
 		if c > best {
 			best = c
 		}
-		// 复用已为强制 Ultrafast 读取的快照；其他分组仅在仍无法定价或 composite 时才查。
+		// 仅在仍无法定价或 composite 时读取账号映射，保留实际转发模型的价格回退。
 		if (!priced || composite) && d.accountMappedModels != nil {
-			c, ok := bestOf(loadAccountModels())
+			c, ok := bestOf(d.accountMappedModels(ctx, apiKey, upstreamInput))
 			priced = priced || ok
 			if c > best {
 				best = c
@@ -916,7 +841,6 @@ func (s *GatewayService) inflightEstimateDeps() inflightEstimateDeps {
 			return platform, forced, err == nil
 		}
 		d.accountMappedModels = inflightAccountMappedModelsFromSnapshot(list, resolvePlatform)
-		d.accountUltrafastTarget = inflightAccountUltrafastTargetFromSnapshot(list, resolvePlatform, d.cfg)
 	}
 	return d
 }
@@ -952,7 +876,6 @@ func (s *OpenAIGatewayService) inflightEstimateDeps() inflightEstimateDeps {
 			return NormalizeOpenAICompatiblePlatform(platform), false, true
 		}
 		d.accountMappedModels = inflightAccountMappedModelsFromSnapshot(list, resolvePlatform)
-		d.accountUltrafastTarget = inflightAccountUltrafastTargetFromSnapshot(list, resolvePlatform, d.cfg)
 	}
 	return d
 }

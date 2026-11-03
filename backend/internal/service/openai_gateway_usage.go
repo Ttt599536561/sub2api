@@ -187,7 +187,14 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 	if !isGrokVideoUsageResult(result, nil) {
 		ApplyOpenAIImageBillingResolution(result)
 	}
-	logServiceTierBillingDowngrade("service.openai_gateway", account, result.RequestID, ApplyOpenAIServiceTierBillingResolution(billingAccount, result))
+	if openAIGroupUltrafastMultiplier(apiKey, result, optionalStringValue(result.ServiceTier)) != nil {
+		// This group sells a fixed Ultrafast tier even when the upstream reports
+		// a lower tier. Keep UpstreamResponseServiceTier for the audit trail.
+		tier := OpenAIFastTierUltrafast
+		result.ServiceTier = &tier
+	} else {
+		logServiceTierBillingDowngrade("service.openai_gateway", account, result.RequestID, ApplyOpenAIServiceTierBillingResolution(billingAccount, result))
+	}
 
 	// OpenAI input_tokens 是总输入，包含缓存读取和缓存写入明细。
 	// 将三类 token 拆成互斥桶，避免缓存写入同时按普通输入和 cache_write 重复计费。
@@ -589,14 +596,12 @@ func openAISubscriptionLongContextExempt(account *Account, result *OpenAIForward
 
 func openAIGroupUltrafastMultiplier(apiKey *APIKey, result *OpenAIForwardResult, serviceTier string) *float64 {
 	if apiKey == nil || apiKey.Group == nil || apiKey.Group.Platform != PlatformOpenAI ||
-		!apiKey.Group.ForceOpenAIUltrafast || normalizeBillingServiceTier(serviceTier) != OpenAIFastTierUltrafast || result == nil {
+		!apiKey.Group.ForceOpenAIUltrafast || strings.TrimSpace(serviceTier) == "" || result == nil {
 		return nil
 	}
-	model := strings.TrimSpace(result.UpstreamModel)
-	if model == "" {
-		model = strings.TrimSpace(result.Model)
-	}
-	if !isOpenAIGroupUltrafastTargetModel(model) {
+	// Dedicated media and embeddings do not use the text gateway's forced tier.
+	// Embeddings carry no service tier; mixed text requests may still include images.
+	if result.ImageEndpoint || result.AudioUsage != nil || result.VideoCount > 0 || result.WebSearchCalls > 0 {
 		return nil
 	}
 	multiplier := 8.0
@@ -662,6 +667,9 @@ func (s *OpenAIGatewayService) calculateOpenAIRecordUsageCost(
 	var lastErr error
 	if len(billingModels) > 0 && billingModel != "" {
 		ultrafastMultiplierOverride := openAIGroupUltrafastMultiplier(apiKey, result, serviceTier)
+		if ultrafastMultiplierOverride != nil {
+			serviceTier = OpenAIFastTierUltrafast
+		}
 		for _, candidate := range billingModels {
 			candidate = strings.TrimSpace(candidate)
 			if candidate == "" {
@@ -681,6 +689,11 @@ func (s *OpenAIGatewayService) calculateOpenAIRecordUsageCost(
 				ultrafastMultiplierOverride,
 			)
 			if err == nil {
+				// Text models may use a per-request price instead of token prices.
+				// Media branches returned above; their fees and search surcharges stay unchanged.
+				if ultrafastMultiplierOverride != nil && cost != nil && cost.BillingMode == string(BillingModePerRequest) {
+					applyCostBreakdownMultiplier(cost, *ultrafastMultiplierOverride)
+				}
 				tokenCost = cost
 				break
 			}

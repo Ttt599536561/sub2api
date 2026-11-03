@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"net/http"
 	"strings"
@@ -15,7 +14,6 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
 	"github.com/gin-gonic/gin"
 	"github.com/tidwall/gjson"
-	"github.com/tidwall/sjson"
 )
 
 type openAICompactFallbackSignal struct {
@@ -251,16 +249,14 @@ func (s *OpenAIGatewayService) appendOpenAICompactFallbackRetryOps(
 	})
 }
 
-// applyOpenAICompactFallbackServiceTierPolicy recomputes group-forced Ultrafast
-// after a compact retry changes the upstream model. Restore the client's tier
-// first: a tier injected for the previous model is not client intent and must
-// not leak to a non-target fallback. Other groups retain their existing retry
-// behavior.
+// applyOpenAICompactFallbackServiceTierPolicy keeps group-forced Ultrafast
+// across model changes and reevaluates model-specific global block rules.
+// Other groups retain their existing retry behavior.
 func (s *OpenAIGatewayService) applyOpenAICompactFallbackServiceTierPolicy(
 	ctx context.Context,
 	c *gin.Context,
 	account *Account,
-	originalBody, retryBody []byte,
+	_ []byte, retryBody []byte,
 ) ([]byte, error) {
 	if ctx == nil || account == nil || account.Platform != PlatformOpenAI {
 		return retryBody, nil
@@ -270,16 +266,6 @@ func (s *OpenAIGatewayService) applyOpenAICompactFallbackServiceTierPolicy(
 		return retryBody, nil
 	}
 
-	originalTier := gjson.GetBytes(originalBody, "service_tier")
-	var err error
-	if originalTier.Exists() {
-		retryBody, err = sjson.SetRawBytes(retryBody, "service_tier", []byte(originalTier.Raw))
-	} else {
-		retryBody, err = sjson.DeleteBytes(retryBody, "service_tier")
-	}
-	if err != nil {
-		return nil, fmt.Errorf("restore service_tier for compact fallback: %w", err)
-	}
 	model := strings.TrimSpace(gjson.GetBytes(retryBody, "model").String())
 	updated, err := s.applyOpenAIFastPolicyToBody(ctx, account, model, retryBody)
 	if err != nil {
