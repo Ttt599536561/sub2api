@@ -6,6 +6,8 @@
 
 ## 2026-11-04
 
+- **0.2.19-r2 Linux 发布准备**。专用工作流锁定应用 `1e3ca5541`，在该 SHA 的 main/push CI 与 Security 成功后，分别构建并运行验证 amd64、arm64，再发布最终标签。升级影响及结果见[本版发布记录](deploy/CUSTOM_IMAGE_0.2.19-r2.md)。
+
 - **Ultrafast图片及强制平台预占修复（本地）**：修复e1c2e00a2复审发现的两处8倍过度预占；按张/按次图片按实际计费来源和图片倍率预占，实际非 OpenAI 路由按其平台预占。Token 计费沿用原规则。service 与 handler 整包均通过，20,744 条通过记录，0 失败，12 项条件跳过。详见[修复记录](docs/changes/2026-11-04-ultrafast-reservation-fixes.md)。
 
 ## 2026-11-03
