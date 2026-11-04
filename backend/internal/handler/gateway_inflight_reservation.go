@@ -34,6 +34,13 @@ func tokenInflightEstimate(model string, body []byte) service.InflightEstimateRe
 	}
 }
 
+// Only HTTP Responses uses the image-only model bridge inspected by the estimator.
+func responsesInflightEstimate(model string, body []byte) service.InflightEstimateRequest {
+	req := tokenInflightEstimate(model, body)
+	req.ImageOnlyRequest, req.ImageToolModel = service.OpenAIResponsesImageOnlyEstimate(model, body)
+	return req
+}
+
 func inflightNoop() {}
 
 // reserveInflightBalance 在 CheckBillingEligibility 之后为余额模式请求登记在途预留。

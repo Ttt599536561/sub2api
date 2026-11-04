@@ -392,6 +392,10 @@ type InflightEstimateRequest struct {
 	Kind      InflightEstimateKind
 	// SkipGroupUltrafast retains standard token estimates for dedicated non-generation endpoints.
 	SkipGroupUltrafast bool
+	// ImageOnlyRequest exempts flat image fees, not token prices, from forced Ultrafast.
+	ImageOnlyRequest bool
+	// ImageToolModel may survive the image bridge instead of the account-mapped model.
+	ImageToolModel string
 	// OpenAICompactPath selects the legacy compact route; native fallback keeps the normal first attempt.
 	OpenAICompactPath        bool
 	OpenAICompactionFallback bool
@@ -420,6 +424,8 @@ type inflightEstimateDeps struct {
 	// 在候选无法定价或 composite 分组时调用；实现只读调度器快照，
 	// 不在请求路径上直接查库，也不按模型名缓存（内存不随请求模型名增长）。
 	accountMappedModels func(ctx context.Context, apiKey *APIKey, model string) []string
+	// imageRouteModels lists the possible forwarded models only when every account retains an image route.
+	imageRouteModels func(ctx context.Context, apiKey *APIKey, model string) []string
 }
 
 // inflightSnapshotLister 调度器快照读取（与账号选择同源：Redis 快照，未命中时由快照服务自身回源并回填）。
@@ -445,6 +451,40 @@ func inflightAccountMappedModelsFromSnapshot(list inflightSnapshotLister, resolv
 			return nil
 		}
 		return accountMappedModelsFrom(accounts, model)
+	}
+}
+
+func inflightImageRouteModelsFromSnapshot(list inflightSnapshotLister, resolvePlatform func(context.Context, *APIKey, string) (string, bool, bool)) func(context.Context, *APIKey, string) []string {
+	return func(ctx context.Context, apiKey *APIKey, model string) []string {
+		if list == nil || resolvePlatform == nil || apiKey == nil || !isOpenAIImageGenerationModel(model) {
+			return nil
+		}
+		platform, forced, ok := resolvePlatform(ctx, apiKey, model)
+		if !ok || platform != PlatformOpenAI {
+			return nil
+		}
+		accounts, err := list(ctx, apiKey.GroupID, platform, forced)
+		if err != nil {
+			return nil
+		}
+		var models []string
+		seen := make(map[string]bool)
+		for i := range accounts {
+			account := &accounts[i]
+			if account.Platform != PlatformOpenAI || account.IsOpenAIPassthroughEnabled() {
+				return nil
+			}
+			upstream := resolveOpenAIAccountUpstreamModelForRequest(account, model, false)
+			// Only native Responses forwarding runs the image-only model bridge.
+			if !isOpenAIImageGenerationModel(upstream) || resolveUpstreamProtocol(account, APIProtocolResponses, upstream, nil) != APIProtocolResponses {
+				return nil
+			}
+			if !seen[upstream] {
+				models = append(models, upstream)
+				seen[upstream] = true
+			}
+		}
+		return models
 	}
 }
 
@@ -490,11 +530,11 @@ func logInflightUnpriced(model string, groupID *int64) {
 //   - channel_mapped（默认）→ 映射后模型（同时估算请求模型，取较高者）；
 //   - requested → 请求模型；
 //   - upstream / response_model 在准入时未知 → 取请求模型与映射模型两者较高估算。
-func inflightBillingModelCandidates(ctx context.Context, deps inflightEstimateDeps, apiKey *APIKey, model string) (primary, fallbacks []string, upstreamInput string) {
+func inflightBillingModelCandidates(ctx context.Context, deps inflightEstimateDeps, apiKey *APIKey, model string) (primary, fallbacks []string, upstreamInput, fixedBillingModel string) {
 	upstreamInput = model
 	primary = []string{model}
 	if apiKey == nil || apiKey.GroupID == nil {
-		return primary, nil, upstreamInput
+		return primary, nil, upstreamInput, fixedBillingModel
 	}
 	// Composite WebSocket ingress retains the public alias in the frame, while
 	// forwarding and billing use the already-resolved route before channel and
@@ -514,6 +554,16 @@ func inflightBillingModelCandidates(ctx context.Context, deps inflightEstimateDe
 	}
 	if deps.resolveMapping != nil {
 		m := deps.resolveMapping(ctx, *apiKey.GroupID, upstreamInput)
+		// RecordUsage pins requested pricing even for identity routes. Channel
+		// pricing pins a model only when the handler actually rewrites the name.
+		switch m.BillingModelSource {
+		case BillingModelSourceRequested:
+			fixedBillingModel = model
+		case BillingModelSourceChannelMapped:
+			if m.Mapped && m.MappedModel != model {
+				fixedBillingModel = m.MappedModel
+			}
+		}
 		if mapped := m.MappedModel; mapped != "" && mapped != upstreamInput {
 			upstreamInput = mapped
 			if m.BillingModelSource == BillingModelSourceRequested {
@@ -523,7 +573,7 @@ func inflightBillingModelCandidates(ctx context.Context, deps inflightEstimateDe
 			}
 		}
 	}
-	return primary, fallbacks, upstreamInput
+	return primary, fallbacks, upstreamInput, fixedBillingModel
 }
 
 func (d inflightEstimateDeps) rates(ctx context.Context, apiKey *APIKey) (text, image float64) {
@@ -607,6 +657,52 @@ func explicitlyFreeInflightMedia(apiKey *APIKey, model string, req InflightEstim
 		return req.SearchCalls > 0 && isZero(group.SearchPricePer1k)
 	}
 	return false
+}
+
+// flatImageEstimate follows calculateOpenAIImageCost's precedence for each size.
+// A configured token model, or an unknown image price, keeps the usual estimate.
+func (d inflightEstimateDeps) flatImageEstimate(ctx context.Context, apiKey *APIKey, model string, units int, imageRate float64) (float64, bool) {
+	if d.billing == nil || d.resolver == nil {
+		return 0, false
+	}
+	resolved := d.resolver.Resolve(ctx, PricingInput{Model: model, GroupID: apiKey.GroupID, Group: apiKey.Group})
+	configured := resolved.Source == PricingSourceGroup || resolved.Source == PricingSourceChannel
+	if configured && resolved.Mode == BillingModeToken {
+		return 0, false
+	}
+	flatRule := configured && (resolved.Mode == BillingModePerRequest || resolved.Mode == BillingModeImage)
+	effort := ""
+	if flatRule && resolved.channelPricing != nil {
+		// Account policy may change the forwarded effort. Reserve the highest configured rate.
+		multipliers := resolved.channelPricing.ReasoningEffortMultipliers
+		for candidate := range multipliers {
+			if reasoningEffortBillingMultiplier(candidate, multipliers) > reasoningEffortBillingMultiplier(effort, multipliers) {
+				effort = candidate
+			}
+		}
+	}
+	var best float64
+	confirmed := true
+	for _, size := range []string{ImageBillingSize1K, ImageBillingSize2K, ImageBillingSize4K} {
+		groupSize := apiKeyHasConfiguredImagePrice(apiKey, size)
+		if flatRule && (resolved.Source == PricingSourceGroup || !groupSize) {
+			quote, err := d.billing.CalculateCostUnified(CostInput{
+				Ctx: ctx, Model: model, GroupID: apiKey.GroupID, Group: apiKey.Group, RequestCount: units,
+				SizeTier: size, RateMultiplier: imageRate, ReasoningEffort: effort, Resolver: d.resolver, Resolved: resolved,
+			})
+			if err == nil {
+				best = math.Max(best, quote.ActualCost)
+				continue
+			}
+		}
+		if !groupSize {
+			// Keep the published/default image cost as a floor and also try the conservative text estimate.
+			confirmed = false
+		}
+		cost := d.billing.CalculateImageCost(model, size, units, imagePriceConfigFromAPIKey(apiKey), imageRate)
+		best = math.Max(best, cost.ActualCost)
+	}
+	return best, confirmed
 }
 
 // estimateOne 估算单个候选计费模型，返回含倍率的费用及是否已定价（显式零价也算已定价）。
@@ -721,17 +817,20 @@ func (d inflightEstimateDeps) estimateOne(ctx context.Context, apiKey *APIKey, m
 			cost = tokenCost()
 		}
 	}
-	if req.SearchCalls > 0 {
-		if d.billing != nil {
-			if b := d.billing.CalculateSearchCost(req.SearchCalls, groupSearchPricePer1kFromAPIKey(apiKey), textRate); b != nil && b.ActualCost > 0 {
-				cost += b.ActualCost
-			}
-		}
-	}
+	cost += d.searchCost(apiKey, req.SearchCalls, textRate)
 	if !validCost(cost) {
 		return 0, priced && cost == 0
 	}
 	return cost, true
+}
+
+func (d inflightEstimateDeps) searchCost(apiKey *APIKey, calls int, rate float64) float64 {
+	if calls > 0 && d.billing != nil {
+		if b := d.billing.CalculateSearchCost(calls, groupSearchPricePer1kFromAPIKey(apiKey), rate); b != nil && b.ActualCost > 0 {
+			return b.ActualCost
+		}
+	}
+	return 0
 }
 
 // estimate 返回保守的单请求费用（USD，已乘倍率）；无法定价返回 (0,false)。
@@ -748,12 +847,40 @@ func (d inflightEstimateDeps) estimate(ctx context.Context, apiKey *APIKey, req 
 		// 免费分组：不计费，也无需预留。
 		return 0, true
 	}
-	primary, fallbacks, upstreamInput := inflightBillingModelCandidates(ctx, d, apiKey, req.Model)
-	// Group-forced Ultrafast applies to every text model, independently of
-	// account routing and pricing aliases. Media keeps its existing rates.
+	primary, fallbacks, upstreamInput, fixedBillingModel := inflightBillingModelCandidates(ctx, d, apiKey, req.Model)
+	// Group-forced Ultrafast applies to every text model on the actual OpenAI
+	// platform, independently of pricing aliases. Forced/resolved routes to
+	// other platforms and media keep their existing rates.
 	group := apiKey.Group
 	forceGroupUltrafast := req.Kind == InflightEstimateToken && !req.SkipGroupUltrafast && group != nil &&
-		group.Platform == PlatformOpenAI && group.ForceOpenAIUltrafast
+		group.Platform == PlatformOpenAI && group.ForceOpenAIUltrafast && QuotaPlatform(ctx, apiKey) == PlatformOpenAI
+	// A price alias is not proof of an image route. The request must remain
+	// explicitly image-only after channel and every possible account mapping.
+	// Compact routes and unknown snapshots keep the conservative text estimate.
+	var routeModels []string
+	var imageFloor float64
+	if forceGroupUltrafast && req.ImageOnlyRequest && !req.OpenAICompactPath && !req.OpenAICompactionFallback &&
+		!isCodexSparkModel(openAIImagesResponsesMainModelValue()) && isOpenAIImageGenerationModel(upstreamInput) && d.imageRouteModels != nil {
+		routeModels = d.imageRouteModels(ctx, apiKey, upstreamInput)
+		if len(routeModels) > 0 {
+			billingModels := routeModels
+			if fixedBillingModel != "" {
+				billingModels = []string{fixedBillingModel}
+			} else if req.ImageToolModel != "" {
+				// Strip policies may remove the explicit tool and reinject the routed model.
+				billingModels = append(billingModels, req.ImageToolModel)
+			}
+			allConfirmed := true
+			for _, model := range billingModels {
+				cost, confirmed := d.flatImageEstimate(ctx, apiKey, model, max(1, req.Units), imageRate)
+				imageFloor = math.Max(imageFloor, cost)
+				allConfirmed = allConfirmed && confirmed
+			}
+			if allConfirmed {
+				return imageFloor + d.searchCost(apiKey, req.SearchCalls, textRate), true
+			}
+		}
+	}
 
 	bestOf := func(models []string) (float64, bool) {
 		best := 0.0
@@ -780,12 +907,19 @@ func (d inflightEstimateDeps) estimate(ctx context.Context, apiKey *APIKey, req 
 		}
 		// 仅在仍无法定价或 composite 时读取账号映射，保留实际转发模型的价格回退。
 		if (!priced || composite) && d.accountMappedModels != nil {
-			c, ok := bestOf(d.accountMappedModels(ctx, apiKey, upstreamInput))
+			if len(routeModels) == 0 {
+				routeModels = d.accountMappedModels(ctx, apiKey, upstreamInput)
+			}
+			c, ok := bestOf(routeModels)
 			priced = priced || ok
 			if c > best {
 				best = c
 			}
 		}
+	}
+	if imageFloor > 0 {
+		best = math.Max(best, imageFloor+d.searchCost(apiKey, req.SearchCalls, textRate))
+		priced = true
 	}
 	if !priced {
 		logInflightUnpriced(req.Model, apiKey.GroupID)
@@ -841,6 +975,7 @@ func (s *GatewayService) inflightEstimateDeps() inflightEstimateDeps {
 			return platform, forced, err == nil
 		}
 		d.accountMappedModels = inflightAccountMappedModelsFromSnapshot(list, resolvePlatform)
+		d.imageRouteModels = inflightImageRouteModelsFromSnapshot(list, resolvePlatform)
 	}
 	return d
 }
@@ -876,6 +1011,7 @@ func (s *OpenAIGatewayService) inflightEstimateDeps() inflightEstimateDeps {
 			return NormalizeOpenAICompatiblePlatform(platform), false, true
 		}
 		d.accountMappedModels = inflightAccountMappedModelsFromSnapshot(list, resolvePlatform)
+		d.imageRouteModels = inflightImageRouteModelsFromSnapshot(list, resolvePlatform)
 	}
 	return d
 }

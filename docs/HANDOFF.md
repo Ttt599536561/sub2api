@@ -1,5 +1,9 @@
 # Sub2API 二次开发交接
 
+## 2026-11-04 Ultrafast复审后预占修复（本地）
+
+在同一功能工作树基于e1c2e00a2修复图片按次及强制Antigravity路由预占错误。按张或按次的图片预占与实际图片价格一致，Token 计费沿用原规则。余额 0.50 的两笔图片请求均可准入。service 与 handler 整包均通过，20,744 条通过记录，0 失败，12 项条件跳过。本地功能分支已完成独立复核，详见[修复说明](changes/2026-11-04-ultrafast-reservation-fixes.md)。未合并/推送/发布/部署，下方为原功能提交的历史验证。
+
 ## 2026-11-03 本地开发：Ultrafast 全文本模型
 
 基于本轮GitHub接口实时核实的最新main `1b156c8f3`，在 `codex/ultrafast-all-models-20261103` / `E:/sub2二次开发项目/.worktrees/ultrafast-all-models-20261103` 扩展分组Ultrafast至所有文本/推理模型，统一Standard×8，媒体计费保持。原主目录WIP保留；service/handler整包20,555条通过事件、0失败、12条件跳过，前端18项、lint/格式与独立复核通过。保存为本地功能分支提交，未合并主目录/推送/发布/部署。完成状态与验证见[变更记录](changes/2026-11-03-ultrafast-all-models.md)。下方公开发布状态保持。
