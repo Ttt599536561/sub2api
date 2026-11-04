@@ -2,7 +2,9 @@
 
 ## 当前代码和发布状态
 
-2026-11-04（北京时间）。**0.2.19-r2 处于发布准备阶段。** 专用 Linux 工作流固定应用 `1e3ca55416d9117258fc906bd1891bc0c64c8644`，包含全文本 Ultrafast 和图片/实际路由平台的预占修复。待精确源码门禁、双架构冒烟与最终镜像验证完成后登记运行编号和 digest。服务器由用户自行替换。[0.2.19-r2 发布记录](../deploy/CUSTOM_IMAGE_0.2.19-r2.md)
+2026-11-04，0.2.19-r2 已发布并完成验证。GitHub 与本地主目录 main 已整合应用 `1e3ca55416d9117258fc906bd1891bc0c64c8644` 和控制 `e72ee5fd7f085b780d6126df2af30170a2a9a116`。主目录原有 23 项 tracked WIP、5 份其他未跟踪文件及 293 个 dist 文件均已保全。
+
+镜像 `ghcr.io/ttt599536561/sub2api-custom:0.2.19-r2`，digest `sha256:b129d2d7834fbc363d1b2f20cfd3596ad95d6190f5ba7b8cc1b0ee4215f64504`，支持 linux/amd64 和 linux/arm64。北京时间 2026-11-04 15:59:34 已完成 GHCR 匿名校验。升级由用户在服务器执行。[发布记录](../deploy/CUSTOM_IMAGE_0.2.19-r2.md) · [构建记录](https://github.com/Ttt599536561/sub2api/actions/runs/41795291208)
 
 ### 2026-11-04 Ultrafast 预占修复（历史开发记录）
 
