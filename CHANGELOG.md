@@ -6,6 +6,8 @@
 
 ## 2026-11-07
 
+- **隔离级别与导出恢复修复已同步main**：应用 `2f398e371e58ed7375f605b0d71f44d515fd6742` 已整合本地主目录和GitHub main，原WIP及293份前端产物保全。本地完整unit/integration、前端4,356项、Linux构建及独立终审通过，精确应用GitHub CI/安全检查均成功；证据与清理结果见[交接记录](docs/changes/2026-11-07-v0220-isolation-export-fixes.md)。
+
 - **02c68becd复审修复**：MCP全部撤销显式使用Read Committed，修复数据库默认Repeatable Read时漏撤销并发授权；用量导出在跨标签重登后显示重新加载入口，保留旧任务取消与账号隔离。真实PG及前端回归、整合结果见[修复记录](docs/changes/2026-11-07-v0220-isolation-export-fixes.md)。
 
 - **v0.2.20二审修复已整合本地/GitHub main**：应用 `02c68becd6c392eaa4eab48341c64fca2c6d5030`，保留原23项WIP/5份其他未跟踪文件/293份dist。完整本地unit、Docker integration、前端4,350项与Linux构建检查通过；云端结果、四项缺陷与清理边界见[交接记录](docs/changes/2026-11-07-v0220-reaudit.md)。没有镜像发布或服务器部署。
