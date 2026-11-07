@@ -6,6 +6,8 @@
 
 ## 2026-11-07
 
+- **0.2.20-r1 Linux镜像发布准备**：固定已验证应用 `2f398e371`，新增专用工作流，仅在GitHub原生Linux amd64/arm64构建和运行验证后发布不可覆盖版本标签。主目录WIP保留，服务器由用户更新；构建、匿名拉取和升级记录见[本版发布说明](deploy/CUSTOM_IMAGE_0.2.20-r1.md)。
+
 - **隔离级别与导出恢复修复已同步main**：应用 `2f398e371e58ed7375f605b0d71f44d515fd6742` 已整合本地主目录和GitHub main，原WIP及293份前端产物保全。本地完整unit/integration、前端4,356项、Linux构建及独立终审通过，精确应用GitHub CI/安全检查均成功；证据与清理结果见[交接记录](docs/changes/2026-11-07-v0220-isolation-export-fixes.md)。
 
 - **02c68becd复审修复**：MCP全部撤销显式使用Read Committed，修复数据库默认Repeatable Read时漏撤销并发授权；用量导出在跨标签重登后显示重新加载入口，保留旧任务取消与账号隔离。真实PG及前端回归、整合结果见[修复记录](docs/changes/2026-11-07-v0220-isolation-export-fixes.md)。

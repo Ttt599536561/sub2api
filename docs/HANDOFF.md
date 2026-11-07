@@ -1,5 +1,9 @@
 # Sub2API 二次开发交接
 
+## 2026-11-07 0.2.20-r1 Linux发布准备
+
+按用户要求固定应用 `2f398e371e58ed7375f605b0d71f44d515fd6742` 构建0.2.20-r1，仅linux/amd64和linux/arm64，无macOS。精确应用CI/安全检查已成功，发布工作流与升级说明见[发布记录](../deploy/CUSTOM_IMAGE_0.2.20-r1.md)。当前为准备阶段，未认定镜像已发布；服务器由用户自行切换。
+
 ## 2026-11-07 MCP隔离级别与导出恢复修复
 
 应用修复 `2f398e371e58ed7375f605b0d71f44d515fd6742` 已整合本地和GitHub main：MCP撤销显式Read Committed；导出在登录变化时提供安全的整页重载入口。完整unit/integration、前端4,356项、Linux构建及独立终审通过；原WIP和前端产物保全，精确应用GitHub CI与Security均已成功，证据见[本轮记录](changes/2026-11-07-v0220-isolation-export-fixes.md)。下方为历史修复记录，公开镜像仍为0.2.19-r2，本轮未发布或部署。
