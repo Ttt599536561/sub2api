@@ -366,6 +366,8 @@ export default {
     allApiKeys: '全部密钥',
     timeRange: '时间范围',
     exportCsv: '导出 CSV',
+    exportSessionChanged: '登录状态已变化，请重新加载页面后再导出用量数据。',
+    reloadPage: '重新加载页面',
     exportExcel: '导出 Excel',
     exportingProgress: '正在导出数据...',
     exportedCount: '已导出 {current}/{total} 条',

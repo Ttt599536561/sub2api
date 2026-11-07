@@ -7,7 +7,7 @@ import DateRangePicker from '@/components/common/DateRangePicker.vue'
 import UsageTable from '@/components/admin/usage/UsageTable.vue'
 import { apiClient } from '@/api/client'
 import { query as queryUsage } from '@/api/usage'
-import type { InternalAxiosRequestConfig } from 'axios'
+import axios, { type InternalAxiosRequestConfig } from 'axios'
 
 const {
   query,
@@ -75,6 +75,8 @@ const messages: Record<string, string> = {
   'usage.exportSuccess': 'Export success',
   'usage.exportFailed': 'Export failed',
   'usage.exportRateLimited': 'Rate limited',
+  'usage.exportSessionChanged': 'Your sign-in session has changed. Reload this page before exporting usage data.',
+  'usage.reloadPage': 'Reload page',
   'common.refresh': 'Refresh',
   'common.reset': 'Reset',
 }
@@ -172,6 +174,13 @@ function mountUsageView() {
       },
     },
   })
+}
+
+function expectExportReloadRequired(wrapper: ReturnType<typeof mountUsageView>) {
+  const alert = wrapper.find('[role="alert"]')
+  expect(alert.exists()).toBe(true)
+  expect(alert.text()).toContain(messages['usage.exportSessionChanged'])
+  expect(wrapper.findAll('button').find(button => button.text() === 'Export CSV')!.attributes('disabled')).toBeDefined()
 }
 
 describe('user UsageView', () => {
@@ -549,6 +558,86 @@ describe('user UsageView', () => {
     }
   })
 
+  it.each(['storage', 'focus', 'export-click'])('offers a full page reload after a same-user relogin detected by %s', async detection => {
+    localStorage.setItem('auth_session_id', 'old-login')
+    localStorage.setItem('auth_user', JSON.stringify({ id: 7 }))
+    localStorage.setItem('auth_token', 'old-token')
+    const wrapper = mountUsageView()
+    await flushPromises()
+    const originalAdapter = apiClient.defaults.adapter
+    const adapter = vi.fn(async (config: InternalAxiosRequestConfig) => ({
+      status: 200, statusText: 'OK', config, headers: {}, data: { code: 0, data: { items: [usageLog], total: 1, pages: 1 } },
+    }))
+    apiClient.defaults.adapter = adapter
+    query.mockImplementation(queryUsage)
+    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
+    const createURL = window.URL.createObjectURL
+    const revokeURL = window.URL.revokeObjectURL
+    window.URL.createObjectURL = vi.fn(() => 'blob:export')
+    window.URL.revokeObjectURL = vi.fn()
+    const reload = vi.fn()
+    let unmounted = false
+    try {
+      expect(wrapper.find('[role="alert"]').exists()).toBe(false)
+      localStorage.setItem('auth_session_id', 'new-login')
+      localStorage.setItem('auth_token', 'new-token')
+      const exportButton = wrapper.findAll('button').find(button => button.text() === 'Export CSV')!
+      if (detection === 'storage') window.dispatchEvent(new StorageEvent('storage', { key: 'auth_session_id' }))
+      else if (detection === 'focus') window.dispatchEvent(new Event('focus'))
+      else await exportButton.trigger('click')
+      await flushPromises()
+      expectExportReloadRequired(wrapper)
+      expect(exportButton.attributes('disabled')).toBeDefined()
+      expect(adapter).not.toHaveBeenCalled()
+
+      // Refresh updates the list under the new login but cannot rebind the old page's export owner.
+      await wrapper.findAll('button').find(button => button.text() === 'Refresh')!.trigger('click')
+      await flushPromises()
+      expect(adapter).toHaveBeenCalledOnce()
+      expect(adapter.mock.calls[0][0].headers.get('Authorization')).toBe('Bearer new-token')
+      expectExportReloadRequired(wrapper)
+      expect(exportButton.attributes('disabled')).toBeDefined()
+      await (wrapper.vm as any).exportToCSV()
+      expect(adapter).toHaveBeenCalledOnce()
+      expect(clickSpy).not.toHaveBeenCalled()
+      expect(showSuccess).not.toHaveBeenCalled()
+      expect(showError).not.toHaveBeenCalled()
+
+      const actualWindow = window
+      vi.stubGlobal('window', new Proxy(actualWindow, {
+        get(object, key) {
+          if (key === 'location') return { reload }
+          const value = Reflect.get(object, key, object)
+          return typeof value === 'function' ? value.bind(object) : value
+        },
+      }))
+      await wrapper.findAll('button').find(button => button.text() === 'Reload page')!.trigger('click')
+      expect(reload).toHaveBeenCalledOnce()
+      vi.unstubAllGlobals()
+      wrapper.unmount()
+      unmounted = true
+
+      // A full reload creates a fresh component and owner; only that new page can export again.
+      const remount = mountUsageView()
+      try {
+        await flushPromises()
+        expect(remount.find('[role="alert"]').exists()).toBe(false)
+        await (remount.vm as any).exportToCSV()
+        expect(clickSpy).toHaveBeenCalledOnce()
+        expect(showSuccess).toHaveBeenCalledWith('Export success')
+      } finally { remount.unmount() }
+    } finally {
+      vi.unstubAllGlobals()
+      if (!unmounted) wrapper.unmount()
+      apiClient.defaults.adapter = originalAdapter
+      query.mockResolvedValue({ items: [usageLog], total: 1, pages: 1 })
+      window.URL.createObjectURL = createURL
+      window.URL.revokeObjectURL = revokeURL
+      clickSpy.mockRestore()
+      localStorage.clear()
+    }
+  })
+
   it.each(['other-user', 'same-user', 'unmount', 'no-storage-event'])('cancels a rate-limited export after %s without dispatching under another login', async change => {
     localStorage.setItem('auth_session_id', 'export-session')
     localStorage.setItem('auth_user', JSON.stringify({ id: 7 }))
@@ -586,6 +675,12 @@ describe('user UsageView', () => {
       if (change !== 'no-storage-event') expect.soft(settled).toBe(true)
       await vi.advanceTimersByTimeAsync(60_000)
       await pending
+      await flushPromises()
+      expect(vi.getTimerCount()).toBe(0)
+      if (change !== 'unmount') {
+        expectExportReloadRequired(wrapper)
+        expect(wrapper.findAll('button').find(button => button.text() === 'Export CSV')!.attributes('disabled')).toBeDefined()
+      }
       expect(adapter).toHaveBeenCalledTimes(1)
       expect(clickSpy).not.toHaveBeenCalled()
       expect(showSuccess).not.toHaveBeenCalled()
@@ -621,6 +716,8 @@ describe('user UsageView', () => {
       localStorage.setItem('auth_session_id', 'replacement-session')
       finish({ items: [usageLog] })
       await pending
+      await flushPromises()
+      expectExportReloadRequired(wrapper)
       expect(query).toHaveBeenCalledTimes(1)
       expect(clickSpy).not.toHaveBeenCalled()
       expect(showSuccess).not.toHaveBeenCalled()
@@ -656,11 +753,14 @@ describe('user UsageView', () => {
       if (change === 'replace-login') localStorage.setItem('auth_session_id', 'replacement-session')
       localStorage.setItem('auth_token', 'new-token')
       await pending
+      await flushPromises()
       if (change === 'replace-login') {
+        expectExportReloadRequired(wrapper)
         expect(adapter).not.toHaveBeenCalled()
         expect(clickSpy).not.toHaveBeenCalled()
         expect(showSuccess).not.toHaveBeenCalled()
       } else {
+        expect(wrapper.find('[role="alert"]').exists()).toBe(false)
         expect(adapter).toHaveBeenCalledTimes(1)
         expect(adapter.mock.calls[0][0].headers.get('Authorization')).toBe('Bearer new-token')
         expect(clickSpy).toHaveBeenCalledOnce()
@@ -674,6 +774,77 @@ describe('user UsageView', () => {
       window.URL.revokeObjectURL = revokeURL
       clickSpy.mockRestore()
       wrapper.unmount()
+      localStorage.clear()
+    }
+  })
+
+  it.each(['normal', 'replacement', 'unmount'])('retains the export owner and signal through an actual 401-refresh retry: %s', async mode => {
+    localStorage.setItem('auth_session_id', 'refresh-login')
+    localStorage.setItem('auth_user', JSON.stringify({ id: 7 }))
+    localStorage.setItem('auth_token', 'expired-token')
+    localStorage.setItem('refresh_token', 'refresh-7')
+    localStorage.setItem('token_expires_at', '0')
+    const wrapper = mountUsageView()
+    await flushPromises()
+    let finishRefresh!: (value: unknown) => void
+    let startedRefresh!: () => void
+    const started = new Promise<void>(resolve => { startedRefresh = resolve })
+    const refreshSpy = vi.spyOn(axios, 'post').mockImplementationOnce(() => new Promise(resolve => {
+      finishRefresh = resolve
+      startedRefresh()
+    }))
+    const originalAdapter = apiClient.defaults.adapter
+    const adapter = vi.fn(async (config: InternalAxiosRequestConfig) => {
+      if (adapter.mock.calls.length === 1) throw {
+        config, response: { status: 401, data: { message: 'Expired' }, headers: {} },
+      }
+      return { status: 200, statusText: 'OK', config, headers: {}, data: { code: 0, data: { items: [usageLog], total: 1, pages: 1 } } }
+    })
+    apiClient.defaults.adapter = adapter
+    query.mockImplementation(queryUsage)
+    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
+    const createURL = window.URL.createObjectURL
+    const revokeURL = window.URL.revokeObjectURL
+    window.URL.createObjectURL = vi.fn(() => 'blob:export')
+    window.URL.revokeObjectURL = vi.fn()
+    try {
+      const pending = (wrapper.vm as any).exportToCSV()
+      await started
+      const first = adapter.mock.calls[0][0] as InternalAxiosRequestConfig & { authIdentity: unknown }
+      expect(first.authIdentity).toEqual({ sessionID: 'refresh-login', userID: 7 })
+      if (mode === 'replacement') {
+        localStorage.setItem('auth_session_id', 'replacement-login')
+        localStorage.setItem('auth_token', 'replacement-token')
+        localStorage.setItem('refresh_token', 'replacement-refresh')
+        window.dispatchEvent(new StorageEvent('storage', { key: 'auth_session_id' }))
+      }
+      if (mode === 'unmount') wrapper.unmount()
+      finishRefresh({ data: { code: 0, data: { access_token: 'rotated-token', refresh_token: 'rotated-refresh', expires_in: 3600 } } })
+      await pending
+      await flushPromises()
+      expect(showError).not.toHaveBeenCalled()
+      if (mode === 'normal') {
+        expect(adapter).toHaveBeenCalledTimes(2)
+        const retry = adapter.mock.calls[1][0] as InternalAxiosRequestConfig & { authIdentity: unknown }
+        expect(retry.authIdentity).toEqual(first.authIdentity)
+        expect(retry.signal).toBe(first.signal)
+        expect(retry.headers.get('Authorization')).toBe('Bearer rotated-token')
+        expect(clickSpy).toHaveBeenCalledOnce()
+        expect(wrapper.find('[role="alert"]').exists()).toBe(false)
+      } else {
+        expect(adapter).toHaveBeenCalledOnce()
+        expect(first.signal?.aborted).toBe(true)
+        expect(clickSpy).not.toHaveBeenCalled()
+        if (mode === 'replacement') expectExportReloadRequired(wrapper)
+      }
+    } finally {
+      if (mode !== 'unmount') wrapper.unmount()
+      refreshSpy.mockRestore()
+      apiClient.defaults.adapter = originalAdapter
+      query.mockResolvedValue({ items: [usageLog], total: 1, pages: 1 })
+      window.URL.createObjectURL = createURL
+      window.URL.revokeObjectURL = revokeURL
+      clickSpy.mockRestore()
       localStorage.clear()
     }
   })

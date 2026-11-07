@@ -15,6 +15,7 @@ import (
 	entsql "entgo.io/ent/dialect/sql"
 	dbent "github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/internal/service"
+	"github.com/lib/pq"
 	"github.com/stretchr/testify/require"
 )
 
@@ -220,6 +221,91 @@ VALUES ('racing','client','Client',$1,1,'https://platform.example/api/v1/mcp','u
 	current, err := NewUserRepository(client, db).GetByID(ctx, user.ID)
 	require.NoError(t, err)
 	require.True(t, current.UpdatedAt.After(user.UpdatedAt), "consent fence must advance even when the requested timestamp is older")
+}
+
+func TestMCPOAuthReauditRevokeAllUsesReadCommittedSnapshot(t *testing.T) {
+	for _, isolation := range []string{"read committed", "repeatable read"} {
+		t.Run(isolation, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+			defer cancel()
+			db, client, user := newMCPReauditRevocationFixture(t, ctx)
+			var database string
+			require.NoError(t, db.QueryRowContext(ctx, "SELECT current_database()").Scan(&database))
+			// Only this fixture's randomly named database is changed. Closing idle
+			// connections ensures every subsequent transaction inherits its default.
+			_, err := db.ExecContext(ctx, "ALTER DATABASE "+pq.QuoteIdentifier(database)+" SET default_transaction_isolation TO "+pq.QuoteLiteral(isolation))
+			require.NoError(t, err)
+			db.SetMaxIdleConns(0)
+			var actual string
+			require.NoError(t, db.QueryRowContext(ctx, "SHOW transaction_isolation").Scan(&actual))
+			require.Equal(t, isolation, actual)
+
+			repo := NewMCPOAuthRepository(client, db)
+			oauth := service.NewMCPOAuthService(repo, NewUserRepository(client, db))
+			const resource = "https://platform.example/api/v1/mcp"
+			const callback = "https://client.example/callback"
+			registered, err := oauth.Register(ctx, service.MCPOAuthRegisterInput{RedirectURIs: []string{callback}})
+			require.NoError(t, err)
+			verifier := strings.Repeat("v", 64)
+			challenge := sha256.Sum256([]byte(verifier))
+
+			// Pause the real consent transaction after it locks the owner and
+			// inserts the grant, but before its code insert and commit complete.
+			_, err = db.ExecContext(ctx, `CREATE FUNCTION pause_mcp_consent() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN PERFORM pg_advisory_xact_lock(5005431); RETURN NEW; END $$;
+CREATE TRIGGER pause_mcp_consent BEFORE INSERT ON mcp_oauth_codes FOR EACH ROW EXECUTE FUNCTION pause_mcp_consent()`)
+			require.NoError(t, err)
+			blocker, err := db.BeginTx(ctx, nil)
+			require.NoError(t, err)
+			defer func() { _ = blocker.Rollback() }()
+			_, err = blocker.ExecContext(ctx, "SELECT pg_advisory_xact_lock(5005431)")
+			require.NoError(t, err)
+			type decision struct {
+				redirect string
+				err      error
+			}
+			decided := make(chan decision, 1)
+			go func() {
+				redirect, err := oauth.Decide(ctx, user.ID, service.MCPOAuthConsentInput{Approved: true, Scope: service.MCPScopeUser,
+					Authorization: service.MCPOAuthAuthorizeInput{ResponseType: "code", ClientID: registered.ClientID,
+						RedirectURI: callback, Scope: "mcp", Resource: resource,
+						CodeChallenge: base64.RawURLEncoding.EncodeToString(challenge[:]), CodeChallengeMethod: "S256"}}, resource)
+				decided <- decision{redirect, err}
+			}()
+			require.Eventually(t, func() bool {
+				var waiting int
+				err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM pg_stat_activity WHERE datname=current_database() AND wait_event_type='Lock' AND query LIKE 'INSERT INTO mcp_oauth_codes%'`).Scan(&waiting)
+				return err == nil && waiting > 0
+			}, 10*time.Second, 10*time.Millisecond, "consent must hold the owner lock before revocation starts")
+
+			revoked := make(chan error, 1)
+			go func() { revoked <- oauth.RevokeAllGrants(ctx, user.ID) }()
+			require.Eventually(t, func() bool {
+				var waiting int
+				err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM pg_stat_activity WHERE datname=current_database() AND wait_event_type='Lock' AND query LIKE '%UPDATE users SET updated_at=GREATEST%'`).Scan(&waiting)
+				return err == nil && waiting > 0
+			}, 10*time.Second, 10*time.Millisecond, "revocation must wait on the consent's owner lock")
+			require.NoError(t, blocker.Rollback())
+			result := <-decided
+			require.NoError(t, result.err)
+			require.NoError(t, <-revoked)
+
+			parsed, err := url.Parse(result.redirect)
+			require.NoError(t, err)
+			tokens, err := oauth.Token(ctx, service.MCPOAuthTokenInput{GrantType: "authorization_code", ClientID: registered.ClientID,
+				Code: parsed.Query().Get("code"), RedirectURI: callback, Resource: resource, CodeVerifier: verifier}, resource)
+			var oauthErr *service.MCPOAuthError
+			require.ErrorAs(t, err, &oauthErr, "a grant committed while revoke waited must not issue usable credentials")
+			require.Equal(t, "invalid_grant", oauthErr.Code)
+			require.Nil(t, tokens)
+			grants, err := repo.ListGrants(ctx, user.ID)
+			require.NoError(t, err)
+			require.Len(t, grants, 3)
+			for _, grant := range grants {
+				require.NotNil(t, grant.RevokedAt, "revocation must include the newly committed authorization")
+			}
+		})
+	}
 }
 
 // RevokeAllGrants is called by /auth/revoke-all-sessions. An approval that

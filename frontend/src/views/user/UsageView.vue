@@ -67,6 +67,16 @@
       </div>
 
       <div class="card p-6">
+        <div
+          v-if="exportSessionChanged"
+          role="alert"
+          class="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-100"
+        >
+          <p>{{ t('usage.exportSessionChanged') }}</p>
+          <button type="button" class="btn btn-secondary shrink-0" @click="reloadUsagePage">
+            {{ t('usage.reloadPage') }}
+          </button>
+        </div>
         <div class="flex flex-wrap items-end justify-between gap-4">
           <div v-if="activeTab === 'errors'" class="flex flex-1 flex-wrap items-end gap-4">
             <div class="w-full sm:w-auto sm:min-w-[220px]">
@@ -160,7 +170,7 @@
                 </button>
               </div>
             </div>
-            <button v-if="activeTab !== 'errors'" type="button" @click="exportToCSV" :disabled="exporting" class="btn btn-primary">
+            <button v-if="activeTab !== 'errors'" type="button" @click="exportToCSV" :disabled="exporting || exportSessionChanged" class="btn btn-primary">
               {{ exporting ? t('usage.exporting') : t('usage.exportCsv') }}
             </button>
           </div>
@@ -639,17 +649,24 @@ const EXPORT_RATE_LIMIT_MAX_WAIT_SECONDS = 60
 // Keep an entire export on its original login, including pauses between pages.
 // Access-token rotation does not change this identity.
 const exportOwner = ownedAuthRequestConfig()
+const exportSessionChanged = ref(false)
 let exportController: AbortController | null = null
 let disposed = false
 
 const exportOwnerCurrent = () => {
   const current = ownedAuthRequestConfig().authIdentity
-  return !disposed && current.sessionID === exportOwner.authIdentity.sessionID &&
+  return !disposed && !exportSessionChanged.value && current.sessionID === exportOwner.authIdentity.sessionID &&
     current.userID === exportOwner.authIdentity.userID
 }
 const inspectExportSession = () => {
-  if (!exportOwnerCurrent()) exportController?.abort()
+  if (disposed) return
+  if (!exportOwnerCurrent()) {
+    // Keep this page invalidated even if its list is refreshed under a newer login.
+    exportSessionChanged.value = true
+    exportController?.abort()
+  }
 }
+const reloadUsagePage = () => window.location.reload()
 const assertExportCurrent = (signal: AbortSignal) => {
   inspectExportSession()
   if (signal.aborted || !exportOwnerCurrent()) throw new DOMException('Export cancelled', 'AbortError')
@@ -690,6 +707,7 @@ const queryExportPage = async (params: UsageQueryParams, signal: AbortSignal) =>
 }
 
 const exportToCSV = async () => {
+  inspectExportSession()
   if (exporting.value || !exportOwnerCurrent()) return
   if (pagination.total === 0) {
     appStore.showWarning(t('usage.noDataToExport'))
@@ -964,6 +982,7 @@ const switchToErrors = () => {
 onMounted(() => {
   window.addEventListener('storage', inspectExportSession)
   window.addEventListener('focus', inspectExportSession)
+  inspectExportSession()
   loadSavedColumns()
   loadSavedErrColumns()
   document.addEventListener('click', handleColumnClickOutside)

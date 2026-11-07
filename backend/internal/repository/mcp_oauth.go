@@ -211,7 +211,9 @@ func (r *mcpOAuthRepository) RevokeGrant(ctx context.Context, userID int64, id s
 }
 
 func (r *mcpOAuthRepository) RevokeUserGrants(ctx context.Context, userID int64, at time.Time) error {
-	tx, err := r.db.BeginTx(ctx, nil)
+	// Revocation needs a fresh snapshot after acquiring the owner lock, even
+	// when the database or role defaults to REPEATABLE READ.
+	tx, err := r.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelReadCommitted})
 	if err != nil {
 		return err
 	}

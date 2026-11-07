@@ -361,6 +361,8 @@ export default {
     allApiKeys: 'All API Keys',
     timeRange: 'Time Range',
     exportCsv: 'Export CSV',
+    exportSessionChanged: 'Your sign-in session has changed. Reload this page before exporting usage data.',
+    reloadPage: 'Reload page',
     exportExcel: 'Export Excel',
     exportingProgress: 'Exporting data...',
     exportedCount: 'Exported {current}/{total} records',
