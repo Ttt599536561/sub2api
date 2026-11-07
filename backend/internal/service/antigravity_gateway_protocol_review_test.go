@@ -198,7 +198,7 @@ func TestGeminiProtocolReview_CollectPreservesSeparateTerminalMetadata(t *testin
 				source.WriteString("\n\n")
 			}
 			source.WriteString("data: [DONE]\n\n")
-			got, usage, err := collectGeminiSSE(strings.NewReader(source.String()), oauth)
+			got, usage, err := collectGeminiSSE(nil, strings.NewReader(source.String()), oauth)
 			require.NoError(t, err)
 			assert.Equal(t, "MAX_TOKENS", extractGeminiFinishReason(got))
 			assert.Equal(t, "gemini-version", got["modelVersion"])
@@ -218,7 +218,7 @@ func TestGeminiProtocolReview_EmptyTerminalPartsPreserveToolCall(t *testing.T) {
 		t.Run(empty, func(t *testing.T) {
 			source := "data: " + `{"candidates":[{"content":{"role":"model","parts":[{"functionCall":{"name":"lookup","args":{"key":"x"}},"thoughtSignature":"tool-signature"}]}}]}` + "\n\n" +
 				"data: " + `{"candidates":[{"content":{"parts":` + empty + `},"finishReason":"STOP"}],"usageMetadata":{"promptTokenCount":10,"candidatesTokenCount":8}}` + "\n\n"
-			got, usage, err := collectGeminiSSE(strings.NewReader(source), false)
+			got, usage, err := collectGeminiSSE(nil, strings.NewReader(source), false)
 			require.NoError(t, err)
 			assert.Equal(t, "STOP", extractGeminiFinishReason(got))
 			parts := extractGeminiParts(got)

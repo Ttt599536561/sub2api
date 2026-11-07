@@ -225,6 +225,7 @@ const (
 	SettingKeyRegistrationEmailDomainQuotaEnabled = "registration_email_domain_quota_enabled"
 	SettingKeyQQBindingEnabled                    = "qq_binding_enabled"
 	SettingKeyQQImageEnabled                      = "qq_image_enabled"
+	SettingKeyRegistrationEmailBlacklist          = "registration_email_blacklist"     // 注册邮箱精确黑名单（JSON 数组，按收件箱身份匹配；不进 SystemSettings，由专用接口读写）
 	SettingKeyPromoCodeEnabled                    = "promo_code_enabled"               // 是否启用优惠码功能
 	SettingKeyPasswordResetEnabled                = "password_reset_enabled"           // 是否启用忘记密码功能（需要先开启邮件验证）
 	SettingKeyFrontendURL                         = "frontend_url"                     // 前端基础URL，用于生成邮件中的重置密码链接

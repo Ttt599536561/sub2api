@@ -139,7 +139,10 @@ docs/*
 !docs/UPSTREAM_MERGE_V0.2.7_2026-09-20.md
 !docs/UPSTREAM_MERGE_V0.2.8_2026-09-24.md
 !docs/upstream-v0.2.8-file-comparison.csv
+!docs/agent-resource-safety.md
+!docs/moego-json-batching.md
 !docs/admin-api-keys.md
+!docs/mcp.md
 !docs/PAYMENT.md
 !docs/PAYMENT_CN.md
 !docs/ADMIN_PAYMENT_INTEGRATION_API.md

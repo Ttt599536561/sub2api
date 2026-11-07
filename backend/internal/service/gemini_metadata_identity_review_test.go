@@ -21,7 +21,7 @@ func TestGeminiMetadataIdentityReview_PrimaryIndexIsStable(t *testing.T) {
 			source := "data: " + `{"candidates":[{"index":1,"finishReason":"STOP"}]}` + "\n\n" +
 				"data: " + `{"candidates":[{` + indexField + `"content":{"parts":[{"text":"primary answer"}]}}]}` + "\n\n" +
 				"data: " + `{"candidates":[{` + indexField + `"finishReason":"SAFETY"}]}` + "\n\n"
-			got, _, err := collectGeminiSSE(strings.NewReader(source), false)
+			got, _, err := collectGeminiSSE(nil, strings.NewReader(source), false)
 			require.NoError(t, err)
 			candidates, ok := got["candidates"].([]any)
 			require.True(t, ok)
@@ -59,7 +59,7 @@ func TestGeminiMetadataIdentityReview_PrimaryFinishAfterSecondaryMetadata(t *tes
 					}
 					source.WriteString(chunk + "\n\n")
 				}
-				got, _, err := collectGeminiSSE(strings.NewReader(source.String()), protocol == "public wrapped")
+				got, _, err := collectGeminiSSE(nil, strings.NewReader(source.String()), protocol == "public wrapped")
 				require.NoError(t, err)
 				raw, err := json.Marshal(got)
 				require.NoError(t, err)

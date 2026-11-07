@@ -37,10 +37,10 @@ func upstreamAC1B8F1Baseline(t *testing.T) fstest.MapFS {
 		if name > "250_qq_reply_templates.sql" || name == upstreamAC1B8F1Migration {
 			continue
 		}
-		// Upstream v0.2.19 reused prefixes already present in the custom
+		// Upstream v0.2.19/v0.2.20 reused prefixes already present in the custom
 		// release. Exclude its exact filenames without weakening the pinned
 		// count/digest or dropping our existing 247 and 248 migrations.
-		if name == "247_scoped_admin_api_keys.sql" || name == "248_group_image_count_billing.sql" {
+		if name == "247_scoped_admin_api_keys.sql" || name == "248_group_image_count_billing.sql" || name == "249_mcp_oauth.sql" {
 			continue
 		}
 		contents, readErr := migrations.FS.ReadFile(name)

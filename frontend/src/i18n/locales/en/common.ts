@@ -252,6 +252,7 @@ export default {
       AFFILIATE_RATE_LIMITED: 'Too many referral requests. Please wait a moment and retry.',
       AFFILIATE_DISABLED: 'Referral promotion is currently disabled. Please contact the site administrator.',
       USER_NOT_ACTIVE: 'Account has been disabled.',
+      EMAIL_BLOCKED: 'This email address is not allowed. Please use a different one.',
     },
     registrationFailed: 'Registration failed. Please try again.',
     emailDomainRegistrationLimit:

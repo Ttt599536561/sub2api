@@ -252,6 +252,7 @@ export default {
       AFFILIATE_RATE_LIMITED: '推广请求过于频繁，请稍候重试。',
       AFFILIATE_DISABLED: '邀请返利目前已关闭，请联系网站管理员。',
       USER_NOT_ACTIVE: '账号已被禁用',
+      EMAIL_BLOCKED: '该邮箱不允许注册，请更换其他邮箱。',
     },
     registrationFailed: '注册失败，请重试。',
     emailDomainRegistrationLimit:

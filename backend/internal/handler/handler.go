@@ -51,6 +51,7 @@ type Handlers struct {
 	Welfare          *WelfareHandler
 	Auth             *AuthHandler
 	User             *UserHandler
+	MCPOAuth         *MCPOAuthHandler
 	APIKey           *APIKeyHandler
 	Usage            *UsageHandler
 	Redeem           *RedeemHandler

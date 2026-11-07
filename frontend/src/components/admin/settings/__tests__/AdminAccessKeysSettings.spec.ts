@@ -7,14 +7,8 @@ import en from '@/i18n/locales/en/adminAccessKeys'
 enableAutoUnmount(afterEach)
 const authState = reactive({ user: { id: 7, role: 'admin' }, isAdmin: true, sessionRevision: 0 })
 vi.mock('@/stores/auth', () => ({ useAuthStore: () => authState }))
-const mountSettings = () => mount(AdminAccessKeysSettings)
-vi.mock('vue-i18n', async importOriginal => ({ ...await importOriginal<typeof import('vue-i18n')>(), useI18n: () => ({
-  t: (key: string, values: Record<string, unknown> = {}) => {
-    const message = zh[key.replace('adminAccessKeys.', '') as keyof typeof zh]
-    if (!message) throw new Error(`缺少翻译：${key}`)
-    return message.replace(/\{(\w+)\}/g, (_, name: string) => String(values[name]))
-  }
-}) }))
+import { createI18n } from 'vue-i18n'
+const mountSettings = () => mount(AdminAccessKeysSettings, { global: { plugins: [createI18n({ legacy: false, locale: 'zh', messages: { zh: { adminAccessKeys: zh }, en: { adminAccessKeys: en } } })], stubs: { teleport: true } } })
 import { getAllIncludingInactive } from '@/api/admin/groups'
 const mocks = vi.hoisted(() => ({ list: vi.fn(), create: vi.fn(), update: vi.fn(), rotate: vi.fn(), revoke: vi.fn(), deleteRecord: vi.fn(), cancelStepUp: vi.fn(), stepUp: vi.fn((fn: () => unknown) => fn()) }))
 vi.mock('@/api/admin/adminAccessKeys', () => mocks)
@@ -193,7 +187,7 @@ describe('管理员受限密钥配置', () => {
     expect(wrapper.text()).not.toContain('kiro')
     await wrapper.get('[data-test="save"]').trigger('click')
     await flushPromises()
-    expect(mocks.update).toHaveBeenCalledWith('key-2', expect.objectContaining({ name: '新名称', allowed_ips: [], policy: { rules, global_permissions: [] } }))
+    expect(mocks.update).toHaveBeenCalledWith('key-2', expect.objectContaining({ name: '新名称', allowed_ips: [], policy: { rules, global_permissions: [], full_access: false } }))
   })
   it('空数组返回 null 时仍可创建默认无权限密钥', async () => {
     mocks.list.mockResolvedValueOnce({ items: null, permissions: null })
@@ -257,8 +251,8 @@ describe('管理员受限密钥配置', () => {
 
 
 describe('管理员密钥刷新与修改的先后顺序', () => {
-  const original = { id: 'key-race', name: '原权限', description: '', enabled: true, key_prefix: 'race-prefix', expires_at: null, allowed_ips: [], policy: { rules: [], global_permissions: ['settings.write'] }, revoked_at: null }
-  const restricted = { ...original, policy: { rules: [], global_permissions: [] } }
+  const original = { id: 'key-race', name: '原权限', description: '', enabled: true, key_prefix: 'race-prefix', expires_at: null, allowed_ips: [], policy: { full_access: false, rules: [], global_permissions: ['settings.write'] }, revoked_at: null }
+  const restricted = { ...original, policy: { full_access: false, rules: [], global_permissions: [] } }
   const permissions = [{ id: 'settings.write', label: '修改设置', scope: 'global', category: '设置' }]
   const button = (wrapper: ReturnType<typeof mountSettings>, text: string) => wrapper.findAll('button').find(button => button.text() === text)!
   function deferred<T>() {
@@ -411,6 +405,22 @@ describe('管理员密钥页面登录身份隔离', () => {
     expect(wrapper.get('[data-test="create"]').attributes('disabled')).toBeDefined()
   })
 
+  it.each(['storage', 'before-storage-event'])('通过%s发现换登录时清除全权确认弹窗和确认文字', async change => {
+    const wrapper = mountSettings()
+    await flushPromises()
+    await wrapper.get('[data-test="create"]').trigger('click')
+    await wrapper.get('[data-test="full-access"]').setValue(true)
+    await wrapper.get('[data-test="full-access-phrase"]').setValue('开启全权访问')
+    replaceLogin(change === 'storage')
+    if (change === 'before-storage-event') await wrapper.get('[data-test="full-access-confirm"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('[data-test="full-access-phrase"]').exists()).toBe(false)
+    expect(wrapper.find('[data-test="save"]').exists()).toBe(false)
+    expect(wrapper.get('[data-test="create"]').attributes('disabled')).toBeDefined()
+    expect(mocks.create).not.toHaveBeenCalled()
+    expect(mocks.update).not.toHaveBeenCalled()
+  })
+
   it('迟到的加载成功不会恢复旧身份列表和权限', async () => {
     let resolve!: (value: unknown) => void
     mocks.list.mockReturnValueOnce(new Promise(done => { resolve = done }))
@@ -420,5 +430,80 @@ describe('管理员密钥页面登录身份隔离', () => {
     await flushPromises()
     expect(wrapper.text()).not.toContain('old-owner-key')
     expect(wrapper.get('[data-test="create"]').attributes('disabled')).toBeDefined()
+  })
+})
+
+describe('全权兼容模式', () => {
+  it('默认关闭，取消不会授权，输入确认文字后才允许保存全权', async () => {
+    mocks.create.mockResolvedValue({ key: 'once', item: { id: '1' } })
+    const wrapper = mountSettings()
+    await flushPromises()
+    await wrapper.get('[data-test="create"]').trigger('click')
+    await wrapper.get('[data-test="name"]').setValue('兼容工具')
+    const toggle = wrapper.get<HTMLInputElement>('[data-test="full-access"]')
+    expect(toggle.element.checked).toBe(false)
+    await toggle.setValue(true)
+    expect(wrapper.get('[data-test="full-access-confirm"]').attributes('disabled')).toBeDefined()
+    await wrapper.get('[data-test="full-access-cancel"]').trigger('click')
+    expect(toggle.element.checked).toBe(false)
+    await toggle.setValue(true)
+    await wrapper.get('[data-test="full-access-phrase"]').setValue('开启全权访问')
+    await wrapper.get('[data-test="full-access-confirm"]').trigger('click')
+    expect(wrapper.text()).toContain('资源规则已暂停')
+    await wrapper.get('[data-test="save"]').trigger('click')
+    await flushPromises()
+    expect(mocks.create.mock.calls[0]![0]).toMatchObject({ policy: { full_access: true }, confirm_full_access: true })
+  })
+
+  it('关闭后保留原规则，并清除确认状态', async () => {
+    const item = { id: 'key-1', name: '兼容', enabled: true, allowed_ips: [], policy: { full_access: true, rules: [{ permissions: ['accounts.read'], group_ids: [7], account_types: ['oauth'], platforms: ['openai'] }], global_permissions: [] } }
+    mocks.list.mockResolvedValueOnce({ items: [item], permissions: [] })
+    mocks.update.mockResolvedValueOnce(item)
+    const wrapper = mountSettings()
+    await flushPromises()
+    expect(wrapper.text()).toContain('全权访问')
+    await wrapper.findAll('button').find(b => b.text() === '编辑权限')!.trigger('click')
+    const toggle = wrapper.get<HTMLInputElement>('[data-test="full-access"]')
+    expect(toggle.element.checked).toBe(true)
+    await toggle.setValue(false)
+    await wrapper.get('[data-test="save"]').trigger('click')
+    await flushPromises()
+    const input = mocks.update.mock.calls[0]![1]
+    expect(input.policy.full_access).toBe(false)
+    expect(input.policy.rules[0].permissions).toEqual(['accounts.read'])
+    expect(input.confirm_full_access).not.toBe(true)
+  })
+})
+
+describe('全权确认失败与重复开启', () => {
+  it('取消确认仍可保存受限配置，不能借确认弹窗直接保存', async () => {
+    mocks.create.mockResolvedValue({ key: 'once', item: { id: '1' } })
+    const wrapper = mountSettings()
+    await flushPromises()
+    await wrapper.get('[data-test="create"]').trigger('click')
+    await wrapper.get('[data-test="name"]').setValue('受限工具')
+    await wrapper.get('[data-test="full-access"]').setValue(true)
+    expect(wrapper.get('[data-test="save"]').attributes('disabled')).toBeDefined()
+    await wrapper.get('[data-test="save"]').trigger('click')
+    expect(mocks.create).not.toHaveBeenCalled()
+    await wrapper.get('[data-test="full-access-cancel"]').trigger('click')
+    await wrapper.get('[data-test="save"]').trigger('click')
+    await flushPromises()
+    expect(mocks.create.mock.calls[0]![0].policy.full_access).not.toBe(true)
+    expect(mocks.create.mock.calls[0]![0].confirm_full_access).toBe(false)
+  })
+
+  it('关闭后再次开启需要重新输入确认文字', async () => {
+    const wrapper = mountSettings()
+    await flushPromises()
+    await wrapper.get('[data-test="create"]').trigger('click')
+    await wrapper.get('[data-test="full-access"]').setValue(true)
+    await wrapper.get('[data-test="full-access-phrase"]').setValue('开启全权访问')
+    await wrapper.get('[data-test="full-access-confirm"]').trigger('click')
+    expect(wrapper.get('input[value="accounts.read"]').element.closest('fieldset[disabled]')).not.toBeNull()
+    await wrapper.get('[data-test="full-access"]').setValue(false)
+    await wrapper.get('[data-test="full-access"]').setValue(true)
+    expect(wrapper.get<HTMLInputElement>('[data-test="full-access-phrase"]').element.value).toBe('')
+    expect(wrapper.get('[data-test="full-access-confirm"]').attributes('disabled')).toBeDefined()
   })
 })

@@ -1,6 +1,9 @@
 package service
 
-import "testing"
+import (
+	"fmt"
+	"testing"
+)
 
 func TestAPIKeyService_RejectsV10AuthSnapshotWithoutModelAllowlist(t *testing.T) {
 	groupID := int64(9)
@@ -72,5 +75,24 @@ func TestAPIKeyService_RejectsV25AuthSnapshotBeforeMergedGroupPolicies(t *testin
 	}
 	if used || key != nil {
 		t.Fatal("v25 snapshot must be reloaded to obtain both image billing and Ultrafast policies")
+	}
+}
+
+// v26 also existed independently upstream. v27 includes upstream privacy gates,
+// but neither upstream snapshot carries this fork's Ultrafast policy.
+func TestAPIKeyService_RejectsDivergentV26V27AuthSnapshots(t *testing.T) {
+	for _, version := range []int{26, 27} {
+		t.Run(fmt.Sprintf("v%d", version), func(t *testing.T) {
+			svc := &APIKeyService{}
+			key, used, err := svc.applyAuthCacheEntry("k-before-v0220-merge", &APIKeyAuthCacheEntry{
+				Snapshot: &APIKeyAuthSnapshot{Version: version, Group: &APIKeyAuthGroupSnapshot{ID: 1}},
+			})
+			if err != nil {
+				t.Fatalf("stale snapshot should be ignored without error: %v", err)
+			}
+			if used || key != nil {
+				t.Fatal("incomplete pre-merge policies must be reloaded")
+			}
+		})
 	}
 }

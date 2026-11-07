@@ -97,6 +97,7 @@ vi.mock("@/api", () => ({
       getStreamTimeoutSettings,
       getRectifierSettings,
       getBetaPolicySettings,
+      getRegistrationEmailBlacklist: vi.fn().mockResolvedValue({ emails: [], max: 20000 }),
     },
     accounts: {
       getUpstreamBillingProbeSettings,
@@ -564,6 +565,7 @@ function mountView() {
         ImageUpload: ImageUploadStub,
         BackupSettings: true,
         AdminAccessKeysSettings: true,
+        RegistrationEmailBlacklistEditor: true,
       },
     },
   });
@@ -1423,6 +1425,7 @@ describe("admin SettingsView payment visible method controls", () => {
           ImageUpload: ImageUploadStub,
           BackupSettings: true,
           AdminAccessKeysSettings: true,
+          RegistrationEmailBlacklistEditor: true,
         },
       },
     });
@@ -1770,6 +1773,7 @@ describe("admin SettingsView payment visible method controls", () => {
           ImageUpload: ImageUploadStub,
           BackupSettings: true,
           AdminAccessKeysSettings: true,
+          RegistrationEmailBlacklistEditor: true,
         },
       },
     });

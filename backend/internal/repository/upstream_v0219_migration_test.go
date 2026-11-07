@@ -40,6 +40,20 @@ func TestUpstreamV0219MigrationBaseline(t *testing.T) {
 	upstreamV0219Baseline(t)
 }
 
+// Pin the historical 308 -> 310 target. Newer upstream releases can add SQL
+// below the custom release's highest numerical prefix.
+func upstreamV0219Target(t *testing.T) fstest.MapFS {
+	t.Helper()
+	target := upstreamV0219Baseline(t)
+	for _, name := range []string{"247_scoped_admin_api_keys.sql", "248_group_image_count_billing.sql"} {
+		contents, err := migrations.FS.ReadFile(name)
+		require.NoError(t, err)
+		target[name] = &fstest.MapFile{Data: contents}
+	}
+	require.Len(t, target, 310)
+	return target
+}
+
 func upstreamV0219AssertHistory(t *testing.T, ctx context.Context, db *sql.DB) map[string]upstreamAC1B8F1HistoryEntry {
 	t.Helper()
 	history := upstreamAC1B8F1History(t, ctx, db)
@@ -125,7 +139,7 @@ func TestUpstreamV0219MigrationUpgradePreservesState(t *testing.T) {
 		require.NoError(t, err)
 	}
 	before := upstreamV0219Snapshot(t, ctx, db)
-	require.NoError(t, ApplyMigrations(ctx, db))
+	require.NoError(t, applyMigrationsFS(ctx, db, upstreamV0219Target(t)))
 	afterHistory := upstreamV0219AssertHistory(t, ctx, db)
 	for name, entry := range beforeHistory {
 		require.Equal(t, entry, afterHistory[name], "released checksum/application timestamp: %s", name)
@@ -145,7 +159,7 @@ func TestUpstreamV0219MigrationUpgradePreservesState(t *testing.T) {
 	require.NoError(t, err)
 	keySnapshot := upstreamAC1B8F1Snapshot(t, ctx, db, "SELECT jsonb_agg(to_jsonb(t) ORDER BY id)::text FROM scoped_admin_api_keys t")
 	for range 2 {
-		require.NoError(t, ApplyMigrations(ctx, db))
+		require.NoError(t, applyMigrationsFS(ctx, db, upstreamV0219Target(t)))
 		require.Equal(t, afterHistory, upstreamAC1B8F1History(t, ctx, db))
 		upstreamV0219AssertSnapshot(t, ctx, db, before)
 		require.JSONEq(t, keySnapshot, upstreamAC1B8F1Snapshot(t, ctx, db, "SELECT jsonb_agg(to_jsonb(t) ORDER BY id)::text FROM scoped_admin_api_keys t"))
@@ -159,7 +173,7 @@ func TestUpstreamV0219MigrationFreshInstall(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
 	db := upstreamAC1B8F1TestDatabase(t, ctx)
-	require.NoError(t, ApplyMigrations(ctx, db))
+	require.NoError(t, applyMigrationsFS(ctx, db, upstreamV0219Target(t)))
 	history := upstreamV0219AssertHistory(t, ctx, db)
 	welfareLotteryV4AssertSchema(t, ctx, db)
 	var nullable, defaultValue string
@@ -173,7 +187,7 @@ func TestUpstreamV0219MigrationFreshInstall(t *testing.T) {
 		require.True(t, exists, table)
 	}
 	before := upstreamV0219Snapshot(t, ctx, db)
-	require.NoError(t, ApplyMigrations(ctx, db))
+	require.NoError(t, applyMigrationsFS(ctx, db, upstreamV0219Target(t)))
 	require.Equal(t, history, upstreamAC1B8F1History(t, ctx, db))
 	upstreamV0219AssertSnapshot(t, ctx, db, before)
 }

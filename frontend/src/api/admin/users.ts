@@ -209,6 +209,37 @@ export async function batchUpdateLimits(
   return data
 }
 
+/** Active non-admin user whose inbox identity matches a blacklisted email. */
+export interface BlacklistedEmailUser {
+  id: number
+  email: string
+  username: string
+}
+
+/** Find active non-admin users whose email (or an alias of it) is in the given list. */
+export async function findBlacklistedEmailUsers(
+  emails: string[]
+): Promise<{ items: BlacklistedEmailUser[]; total: number }> {
+  const owner = ownedAuthRequestConfig()
+  const { data } = await apiClient.post<{ items: BlacklistedEmailUser[]; total: number }>(
+    '/admin/users/blacklist-matches',
+    { emails },
+    owner
+  )
+  assertAuthSessionCurrent(owner.authIdentity.sessionID)
+  return data
+}
+
+/** Disable multiple users; admins and already-disabled users are skipped. */
+export async function batchDisable(userIds: number[]): Promise<{ affected: number }> {
+  const owner = ownedAuthRequestConfig()
+  const { data } = await apiClient.post<{ affected: number }>('/admin/users/batch-disable', {
+    user_ids: userIds
+  }, owner)
+  assertAuthSessionCurrent(owner.authIdentity.sessionID)
+  return data
+}
+
 /**
  * Toggle user status
  * @param id - User ID
@@ -421,6 +452,8 @@ export const usersAPI = {
   updateBalance,
   updateConcurrency,
   batchUpdateLimits,
+  findBlacklistedEmailUsers,
+  batchDisable,
   toggleStatus,
   getUserApiKeys,
   getUserUsageStats,
