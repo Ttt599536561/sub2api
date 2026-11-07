@@ -134,9 +134,11 @@ func TestOpenAIResponsesOrphanPrecheckLargeEscapedContent(t *testing.T) {
 	// tests' background goroutines out without changing the workload or limit.
 	const childEnv = "SUB2API_ORPHAN_PRECHECK_ALLOC_TEST_CHILD"
 	if os.Getenv(childEnv) != "1" {
+		executable, err := os.Executable()
+		require.NoError(t, err)
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
-		cmd := exec.CommandContext(ctx, os.Args[0], "-test.run=^TestOpenAIResponsesOrphanPrecheckLargeEscapedContent$", "-test.count=1", "-test.timeout=25s")
+		cmd := exec.CommandContext(ctx, executable, "-test.run=^TestOpenAIResponsesOrphanPrecheckLargeEscapedContent$", "-test.count=1", "-test.timeout=25s")
 		cmd.Env = append(os.Environ(), childEnv+"=1")
 		output, err := cmd.CombinedOutput()
 		require.NoError(t, err, "isolated allocation assertion: %s", output)
