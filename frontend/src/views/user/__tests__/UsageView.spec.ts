@@ -5,6 +5,9 @@ import UsageView from '../UsageView.vue'
 import Select, { type SelectOption } from '@/components/common/Select.vue'
 import DateRangePicker from '@/components/common/DateRangePicker.vue'
 import UsageTable from '@/components/admin/usage/UsageTable.vue'
+import { apiClient } from '@/api/client'
+import { query as queryUsage } from '@/api/usage'
+import type { InternalAxiosRequestConfig } from 'axios'
 
 const {
   query,
@@ -395,7 +398,7 @@ describe('user UsageView', () => {
       sort_by: 'created_at',
       sort_order: 'desc',
       native_compaction_v2: true,
-    }))
+    }), expect.objectContaining({ authIdentity: expect.any(Object), signal: expect.any(AbortSignal) }))
     expect(clickSpy).toHaveBeenCalled()
     expect(showSuccess).toHaveBeenCalled()
     expect(csvContent.startsWith('\uFEFF')).toBe(true)
@@ -464,7 +467,7 @@ describe('user UsageView', () => {
     const firstPage = new Promise<typeof pageResponse>((resolve) => { resolveFirstPage = resolve })
     query.mockClear()
     query.mockImplementation((params, options) =>
-      !options && params.page === 1 ? firstPage : Promise.resolve(pageResponse)
+      options?.authIdentity && params.page === 1 ? firstPage : Promise.resolve(pageResponse)
     )
     const originalCreateObjectURL = window.URL.createObjectURL
     const originalRevokeObjectURL = window.URL.revokeObjectURL
@@ -499,8 +502,8 @@ describe('user UsageView', () => {
       resolveFirstPage(pageResponse)
       await flushPromises()
 
-      const exportCalls = query.mock.calls.filter((call) => call.length === 1)
-      expect.soft(exportCalls).toEqual([[initialParams], [{ ...initialParams, page: 2 }]])
+      const exportCalls = query.mock.calls.filter((call) => call[1]?.authIdentity).map(call => call[0])
+      expect.soft(exportCalls).toEqual([initialParams, { ...initialParams, page: 2 }])
       expect.soft(filename).toBe('usage_2026-03-01_to_2026-03-08.csv')
       expect(showSuccess).toHaveBeenCalledWith('Export success')
       expect(showError).not.toHaveBeenCalled()
@@ -543,6 +546,158 @@ describe('user UsageView', () => {
       window.URL.revokeObjectURL = originalRevokeObjectURL
       clickSpy.mockRestore()
       wrapper.unmount()
+    }
+  })
+
+  it.each(['other-user', 'same-user', 'unmount', 'no-storage-event'])('cancels a rate-limited export after %s without dispatching under another login', async change => {
+    localStorage.setItem('auth_session_id', 'export-session')
+    localStorage.setItem('auth_user', JSON.stringify({ id: 7 }))
+    localStorage.setItem('auth_token', 'export-token')
+    const wrapper = mountUsageView()
+    await flushPromises()
+    const originalAdapter = apiClient.defaults.adapter
+    const adapter = vi.fn(async (config: InternalAxiosRequestConfig) => {
+      if (adapter.mock.calls.length === 1) throw {
+        config, response: { status: 429, data: { message: 'Rate limited' }, headers: { 'retry-after': '60' } },
+      }
+      return { status: 200, statusText: 'OK', config, headers: {}, data: { code: 0, data: { items: [usageLog] } } }
+    })
+    apiClient.defaults.adapter = adapter
+    query.mockImplementation(queryUsage)
+    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
+    const createURL = window.URL.createObjectURL
+    const revokeURL = window.URL.revokeObjectURL
+    window.URL.createObjectURL = vi.fn(() => 'blob:export')
+    window.URL.revokeObjectURL = vi.fn()
+    vi.useFakeTimers()
+    try {
+      let settled = false
+      const pending = (wrapper.vm as any).exportToCSV().then(() => { settled = true })
+      await flushPromises()
+      expect(adapter).toHaveBeenCalledTimes(1)
+      if (change === 'unmount') wrapper.unmount()
+      else {
+        localStorage.setItem('auth_session_id', 'replacement-session')
+        localStorage.setItem('auth_user', JSON.stringify({ id: change === 'same-user' ? 7 : 8 }))
+        localStorage.setItem('auth_token', 'replacement-token')
+        if (change !== 'no-storage-event') window.dispatchEvent(new StorageEvent('storage', { key: 'auth_session_id' }))
+      }
+      await flushPromises()
+      if (change !== 'no-storage-event') expect.soft(settled).toBe(true)
+      await vi.advanceTimersByTimeAsync(60_000)
+      await pending
+      expect(adapter).toHaveBeenCalledTimes(1)
+      expect(clickSpy).not.toHaveBeenCalled()
+      expect(showSuccess).not.toHaveBeenCalled()
+      expect(showError).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+      apiClient.defaults.adapter = originalAdapter
+      query.mockResolvedValue({ items: [usageLog], total: 1, pages: 1 })
+      window.URL.createObjectURL = createURL
+      window.URL.revokeObjectURL = revokeURL
+      clickSpy.mockRestore()
+      if (change !== 'unmount') wrapper.unmount()
+      localStorage.clear()
+    }
+  })
+
+  it.each([1, 1001])('discards a delayed export response after login replacement (total %s)', async total => {
+    localStorage.setItem('auth_session_id', 'export-session')
+    localStorage.setItem('auth_user', JSON.stringify({ id: 7 }))
+    query.mockResolvedValue({ items: [usageLog], total, pages: 2 })
+    const wrapper = mountUsageView()
+    await flushPromises()
+    let finish!: (value: unknown) => void
+    query.mockClear()
+    query.mockImplementationOnce(() => new Promise(resolve => { finish = resolve }))
+    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
+    const createURL = window.URL.createObjectURL
+    const revokeURL = window.URL.revokeObjectURL
+    window.URL.createObjectURL = vi.fn(() => 'blob:export')
+    window.URL.revokeObjectURL = vi.fn()
+    try {
+      const pending = (wrapper.vm as any).exportToCSV()
+      localStorage.setItem('auth_session_id', 'replacement-session')
+      finish({ items: [usageLog] })
+      await pending
+      expect(query).toHaveBeenCalledTimes(1)
+      expect(clickSpy).not.toHaveBeenCalled()
+      expect(showSuccess).not.toHaveBeenCalled()
+      expect(showError).not.toHaveBeenCalled()
+    } finally {
+      window.URL.createObjectURL = createURL
+      window.URL.revokeObjectURL = revokeURL
+      clickSpy.mockRestore()
+      wrapper.unmount()
+      localStorage.clear()
+    }
+  })
+
+  it.each(['replace-login', 'token-refresh'])('checks export ownership in the Axios queue while allowing %s', async change => {
+    localStorage.setItem('auth_session_id', 'export-session')
+    localStorage.setItem('auth_user', JSON.stringify({ id: 7 }))
+    localStorage.setItem('auth_token', 'export-token')
+    const wrapper = mountUsageView()
+    await flushPromises()
+    const originalAdapter = apiClient.defaults.adapter
+    const adapter = vi.fn(async (config: InternalAxiosRequestConfig) => ({
+      status: 200, statusText: 'OK', config, headers: {}, data: { code: 0, data: { items: [usageLog] } },
+    }))
+    apiClient.defaults.adapter = adapter
+    query.mockImplementation(queryUsage)
+    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
+    const createURL = window.URL.createObjectURL
+    const revokeURL = window.URL.revokeObjectURL
+    window.URL.createObjectURL = vi.fn(() => 'blob:export')
+    window.URL.revokeObjectURL = vi.fn()
+    try {
+      const pending = (wrapper.vm as any).exportToCSV()
+      if (change === 'replace-login') localStorage.setItem('auth_session_id', 'replacement-session')
+      localStorage.setItem('auth_token', 'new-token')
+      await pending
+      if (change === 'replace-login') {
+        expect(adapter).not.toHaveBeenCalled()
+        expect(clickSpy).not.toHaveBeenCalled()
+        expect(showSuccess).not.toHaveBeenCalled()
+      } else {
+        expect(adapter).toHaveBeenCalledTimes(1)
+        expect(adapter.mock.calls[0][0].headers.get('Authorization')).toBe('Bearer new-token')
+        expect(clickSpy).toHaveBeenCalledOnce()
+        expect(showSuccess).toHaveBeenCalledWith('Export success')
+      }
+      expect(showError).not.toHaveBeenCalled()
+    } finally {
+      apiClient.defaults.adapter = originalAdapter
+      query.mockResolvedValue({ items: [usageLog], total: 1, pages: 1 })
+      window.URL.createObjectURL = createURL
+      window.URL.revokeObjectURL = revokeURL
+      clickSpy.mockRestore()
+      wrapper.unmount()
+      localStorage.clear()
+    }
+  })
+
+  it('aborts the in-flight export request on unmount and ignores a late success', async () => {
+    const wrapper = mountUsageView()
+    await flushPromises()
+    let finish!: (value: unknown) => void
+    query.mockClear()
+    query.mockImplementationOnce(() => new Promise(resolve => { finish = resolve }))
+    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
+    try {
+      const pending = (wrapper.vm as any).exportToCSV()
+      const signal = query.mock.calls[0][1]?.signal as AbortSignal
+      expect(signal.aborted).toBe(false)
+      wrapper.unmount()
+      expect(signal.aborted).toBe(true)
+      finish({ items: [usageLog] })
+      await pending
+      expect(clickSpy).not.toHaveBeenCalled()
+      expect(showSuccess).not.toHaveBeenCalled()
+      expect(showError).not.toHaveBeenCalled()
+    } finally {
+      clickSpy.mockRestore()
     }
   })
 

@@ -269,6 +269,11 @@ func (s *OpenAIGatewayService) handleResponsesBufferedFromNativeAnthropic(
 	if failure := streamStatus.failure(); failure != nil {
 		_ = resp.Body.Close()
 		writeResponsesError(c, http.StatusBadGateway, "server_error", failure.message)
+		// A partial result is settled even on error, including flat request fees.
+		// Preserve started or metered work, but do not charge an early rejection.
+		if finalResp == nil && usage == (ClaudeUsage{}) {
+			return nil, failure.err
+		}
 		return &OpenAIForwardResult{
 			RequestID: requestID, UpstreamHeaders: resp.Header, Usage: claudeUsageToOpenAIUsage(&usage),
 			Model: originalModel, BillingModel: billingModel, UpstreamModel: upstreamModel,

@@ -353,8 +353,11 @@ func (r *userRepository) Update(ctx context.Context, userIn *service.User, field
 		}
 	}
 	// 停用或降级时在同一事务内吊销 MCP 授权，恢复账号或角色后旧授权不会复活。
-	disabled := fields.Status && updated.Status != existing.Status && updated.Status != service.StatusActive
-	demoted := fields.Role && updated.Role != existing.Role && updated.Role != service.RoleAdmin
+	// existing was read before the write acquired the user row lock. A concurrent
+	// restoration may have issued new grants since that read, so every explicit
+	// disabling/demoting write must revoke, including an apparently unchanged one.
+	disabled := fields.Status && updated.Status != service.StatusActive
+	demoted := fields.Role && updated.Role != service.RoleAdmin
 	if disabled || demoted {
 		exec := txAwareSQLExecutor(txCtx, r.sql, r.client)
 		if exec == nil {

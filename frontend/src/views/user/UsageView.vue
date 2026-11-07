@@ -224,6 +224,7 @@ import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
 import { FeatureFlags, resolveFeatureFlag } from '@/utils/featureFlags'
 import { keysAPI, usageAPI, userGroupsAPI } from '@/api'
+import { ownedAuthRequestConfig } from '@/api/client'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import Pagination from '@/components/common/Pagination.vue'
 import Select, { type SelectOption } from '@/components/common/Select.vue'
@@ -635,37 +636,76 @@ const escapeCSVValue = (value: unknown): string => {
 const EXPORT_PAGE_SIZE = 1000
 const EXPORT_RATE_LIMIT_MAX_RETRIES = 3
 const EXPORT_RATE_LIMIT_MAX_WAIT_SECONDS = 60
+// Keep an entire export on its original login, including pauses between pages.
+// Access-token rotation does not change this identity.
+const exportOwner = ownedAuthRequestConfig()
+let exportController: AbortController | null = null
+let disposed = false
+
+const exportOwnerCurrent = () => {
+  const current = ownedAuthRequestConfig().authIdentity
+  return !disposed && current.sessionID === exportOwner.authIdentity.sessionID &&
+    current.userID === exportOwner.authIdentity.userID
+}
+const inspectExportSession = () => {
+  if (!exportOwnerCurrent()) exportController?.abort()
+}
+const assertExportCurrent = (signal: AbortSignal) => {
+  inspectExportSession()
+  if (signal.aborted || !exportOwnerCurrent()) throw new DOMException('Export cancelled', 'AbortError')
+}
+const waitForExportRetry = (milliseconds: number, signal: AbortSignal) => new Promise<void>((resolve, reject) => {
+  assertExportCurrent(signal)
+  const cancel = () => {
+    clearTimeout(timer)
+    signal.removeEventListener('abort', cancel)
+    reject(new DOMException('Export cancelled', 'AbortError'))
+  }
+  const timer = setTimeout(() => {
+    signal.removeEventListener('abort', cancel)
+    resolve()
+  }, milliseconds)
+  signal.addEventListener('abort', cancel, { once: true })
+})
 
 // 导出逐页请求计入按用户的重查询限流；429 时按 Retry-After 等待后重试同一页。
-const queryExportPage = async (params: UsageQueryParams) => {
+const queryExportPage = async (params: UsageQueryParams, signal: AbortSignal) => {
   for (let attempt = 0; ; attempt++) {
+    assertExportCurrent(signal)
     try {
-      return await usageAPI.query(params)
+      const response = await usageAPI.query(params, { ...exportOwner, signal })
+      assertExportCurrent(signal)
+      return response
     } catch (error: any) {
+      assertExportCurrent(signal)
       if (error?.status !== 429 || attempt >= EXPORT_RATE_LIMIT_MAX_RETRIES) throw error
       const waitSeconds = Math.min(
         Math.max(error.retry_after_seconds ?? EXPORT_RATE_LIMIT_MAX_WAIT_SECONDS, 1),
         EXPORT_RATE_LIMIT_MAX_WAIT_SECONDS
       )
       appStore.showInfo(t('usage.exportRateLimited', { seconds: waitSeconds }))
-      await new Promise((resolve) => setTimeout(resolve, waitSeconds * 1000))
+      await waitForExportRetry(waitSeconds * 1000, signal)
     }
   }
 }
 
 const exportToCSV = async () => {
+  if (exporting.value || !exportOwnerCurrent()) return
   if (pagination.total === 0) {
     appStore.showWarning(t('usage.noDataToExport'))
     return
   }
   exporting.value = true
+  const controller = new AbortController()
+  exportController = controller
   appStore.showInfo(t('usage.preparingExport'))
   try {
     const allLogs: UsageLog[] = []
     const exportParams = buildUsageListParams(1, EXPORT_PAGE_SIZE)
     const totalPages = Math.ceil(pagination.total / EXPORT_PAGE_SIZE)
     for (let page = 1; page <= totalPages; page++) {
-      const response = await queryExportPage({ ...exportParams, page })
+      const response = await queryExportPage({ ...exportParams, page }, controller.signal)
+      assertExportCurrent(controller.signal)
       allLogs.push(...response.items)
     }
     if (allLogs.length === 0) {
@@ -714,6 +754,7 @@ const exportToCSV = async () => {
       headers.map(escapeCSVValue).join(','),
       ...rows.map((row) => row.join(',')),
     ].join('\n')
+    assertExportCurrent(controller.signal)
     const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' })
     const url = window.URL.createObjectURL(blob)
     const link = document.createElement('a')
@@ -723,9 +764,11 @@ const exportToCSV = async () => {
     window.URL.revokeObjectURL(url)
     appStore.showSuccess(t('usage.exportSuccess'))
   } catch (error) {
+    if (controller.signal.aborted || !exportOwnerCurrent()) return
     console.error('CSV Export failed:', error)
     appStore.showError(t('usage.exportFailed'))
   } finally {
+    if (exportController === controller) exportController = null
     exporting.value = false
   }
 }
@@ -919,6 +962,8 @@ const switchToErrors = () => {
 }
 
 onMounted(() => {
+  window.addEventListener('storage', inspectExportSession)
+  window.addEventListener('focus', inspectExportSession)
   loadSavedColumns()
   loadSavedErrColumns()
   document.addEventListener('click', handleColumnClickOutside)
@@ -927,6 +972,10 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  disposed = true
+  exportController?.abort()
+  window.removeEventListener('storage', inspectExportSession)
+  window.removeEventListener('focus', inspectExportSession)
   abortController?.abort()
   document.removeEventListener('click', handleColumnClickOutside)
 })

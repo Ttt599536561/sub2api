@@ -211,7 +211,23 @@ func (r *mcpOAuthRepository) RevokeGrant(ctx context.Context, userID int64, id s
 }
 
 func (r *mcpOAuthRepository) RevokeUserGrants(ctx context.Context, userID int64, at time.Time) error {
-	return revokeMCPGrants(ctx, r.db, userID, false, at)
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	// Serialize with consent on the owner row and invalidate consent snapshots
+	// read before this revocation. PostgreSQL stores microseconds; advance even
+	// when both operations share a timestamp or the supplied time is older.
+	if _, err := tx.ExecContext(ctx, `UPDATE users SET updated_at=GREATEST(updated_at + INTERVAL '1 microsecond',$2) WHERE id=$1`, userID, at); err != nil {
+		return err
+	}
+	// Keep this a separate statement: after waiting for a consent transaction's
+	// user lock, a fresh READ COMMITTED snapshot must see its newly inserted grant.
+	if err := revokeMCPGrants(ctx, tx, userID, false, at); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 // revokeMCPGrants persists revocation instead of relying on per-request user

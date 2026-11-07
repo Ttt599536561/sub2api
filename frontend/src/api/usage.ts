@@ -3,7 +3,7 @@
  * Handles usage logs and statistics retrieval
  */
 
-import { apiClient } from './client'
+import { apiClient, type ownedAuthRequestConfig } from './client'
 import type {
   UsageLog,
   UsageQueryParams,
@@ -152,7 +152,7 @@ export async function list(
  */
 export async function query(
   params: UsageQueryParams & { sort_by?: string; sort_order?: 'asc' | 'desc' },
-  config: { signal?: AbortSignal } = {}
+  config: { signal?: AbortSignal; authIdentity?: ReturnType<typeof ownedAuthRequestConfig>['authIdentity'] } = {}
 ): Promise<PaginatedResponse<UsageLog>> {
   const { data } = await apiClient.get<PaginatedResponse<UsageLog>>('/usage', {
     ...config,
