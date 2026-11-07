@@ -2,7 +2,7 @@
 
 ## 2026-11-07 0.2.20-r1 Linux镜像已发布
 
-镜像 `ghcr.io/ttt599536561/sub2api-custom:0.2.20-r1` 已发布，固定digest `sha256:9b924439538ee43b183cbfddf7b729f65f79476c71879b69bda199e133dde583`，仅linux/amd64与linux/arm64。应用源码 `2f398e371e58ed7375f605b0d71f44d515fd6742`，发布控制 `13b832682ca69247703510187b7d413f0e993758`；两架构实际运行、5份artifact、匿名全部运行层及独立终审均通过。原WIP保全，服务器由用户自行替换；完整镜像地址、控制CI重试说明和升级要求见[发布记录](../deploy/CUSTOM_IMAGE_0.2.20-r1.md)。
+镜像 `ghcr.io/ttt599536561/sub2api-custom:0.2.20-r1` 已发布，固定digest `sha256:9b924439538ee43b183cbfddf7b729f65f79476c71879b69bda199e133dde583`，仅linux/amd64与linux/arm64。应用源码 `2f398e371e58ed7375f605b0d71f44d515fd6742`，发布控制 `13b832682ca69247703510187b7d413f0e993758`；两架构实际运行、5份artifact、匿名全部运行层及独立终审均通过。测试维护 `4ff02d1d4` 的最终CI/Security全部成功，业务代码与镜像未改变。原WIP保全，服务器由用户自行替换；完整镜像地址、历史控制CI失败/修正说明和升级要求见[发布记录](../deploy/CUSTOM_IMAGE_0.2.20-r1.md)。
 
 ## 2026-11-07 MCP隔离级别与导出恢复修复
 

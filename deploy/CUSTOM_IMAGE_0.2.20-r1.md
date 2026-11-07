@@ -25,7 +25,7 @@ ghcr.io/ttt599536561/sub2api-custom@sha256:9b924439538ee43b183cbfddf7b729f65f794
 | 验证产物 | 5份必须artifact ZIP的大小、SHA256和内容与GitHub元数据一致，二进制源码与版本绑定通过。 |
 | 匿名拉取 | 北京时间2026-11-07 20:40:14，最终index、运行manifest/config及全部23个去重运行层/92,222,580字节完成匿名摘要与大小校验，tag前后稳定。 |
 | 独立终审 | 验证artifact、运行记录及匿名实时manifest/config均一致，仅Linux两个架构，无确认缺陷；没有重复下载运行层。 |
-| 发布控制检查 | [Security 42372840186](https://github.com/Ttt599536561/sub2api/actions/runs/42372840186)成功；[CI 42372840227](https://github.com/Ttt599536561/sub2api/actions/runs/42372840227)两轮分别在unit/integration中的同一分配计数测试失败（29/52）；已停止重试并实施下述测试隔离修正，新的CI结果待补齐。 |
+| 发布控制检查 | [Security 42372840186](https://github.com/Ttt599536561/sub2api/actions/runs/42372840186)成功；[CI 42372840227](https://github.com/Ttt599536561/sub2api/actions/runs/42372840227)两轮分别在unit/integration中的同一分配计数测试失败（29/52）；已停止重试并实施下述测试隔离修正，最终测试维护 `4ff02d1d4fae06e61e6379593933c8b5df07d72e` 的[CI 42376322283](https://github.com/Ttt599536561/sub2api/actions/runs/42376322283)与[Security 42376322331](https://github.com/Ttt599536561/sub2api/actions/runs/42376322331)均已成功。 |
 
 | 平台 | Runtime manifest |
 | --- | --- |
@@ -44,7 +44,7 @@ ghcr.io/ttt599536561/sub2api-custom@sha256:9b924439538ee43b183cbfddf7b729f65f794
 
 此维护不修改任何生产源码、依赖、镜像工作流或已发布标签；运行镜像仍严格绑定已通过应用门禁的2f398e371。完整service复验通过：unit 19,483个PASS事件、10个条件跳过；integration 9,631个PASS事件、3个条件跳过，均0失败。
 
-首个测试维护提交 `0ebc863f33dcc97231dc5656091dcb85eb344ad1` 的[CI 42375396772](https://github.com/Ttt599536561/sub2api/actions/runs/42375396772)发现G702：`os.Args[0]`作为子进程路径被视为不可信输入。最小修正改用`os.Executable()`并检查错误，未添加扫描豁免。Windows宿主上的Linux目标service完整lint明确RED 1 issue→GREEN 0 issues，目标5次和独立复验通过。最终GitHub全仓结果将在完成后记录；不把旧控制CI失败写成成功。
+首个测试维护提交 `0ebc863f33dcc97231dc5656091dcb85eb344ad1` 的[CI 42375396772](https://github.com/Ttt599536561/sub2api/actions/runs/42375396772)发现G702：`os.Args[0]`作为子进程路径被视为不可信输入。最小修正改用`os.Executable()`并检查错误，未添加扫描豁免。Windows宿主上的Linux目标service完整lint明确RED 1 issue→GREEN 0 issues，目标5次和独立复验通过。该修正提交 `4ff02d1d4fae06e61e6379593933c8b5df07d72e` 的GitHub全仓CI和Security均成功，包含Linux完整unit/integration、frontend、lint和发布辅助检查。旧0eb的完整测试任务本身也已通过，G702失败保留为历史。不能把旧控制13的两次失败写成成功；此处记录的是修正后的新提交通过。
 
 ## 从0.2.19-r2升级
 
@@ -61,3 +61,5 @@ ghcr.io/ttt599536561/sub2api-custom@sha256:9b924439538ee43b183cbfddf7b729f65f794
 关键结论保存在本文件。原始记录位于 `.cache/publish-v0220-r1-20261107`，已验证产物与registry摘要位于 `output/publish-v0.2.20-r1`；共享依赖/镜像缓存与主目录恢复备份保留。发布和验证没有触发真实QQ/邮件/收费模型调用。
 
 本轮Linux隔离诊断容器已自动删除；临时 `alloc-linux.test` 删除命令在执行前被自动审批以 `blocked by policy` 拒绝，未提供具体原因，未重试。该二进制留在本轮E盘缓存，证据日志和共享编译缓存保留；不影响已发布镜像。
+
+最终交付前于北京时间2026-11-07 21:32:26再次匿名检查版本tag，HTTP200且digest仍为`sha256:9b924439538ee43b183cbfddf7b729f65f79476c71879b69bda199e133dde583`。仅测试与文档维护没有覆盖或重新发布镜像。
