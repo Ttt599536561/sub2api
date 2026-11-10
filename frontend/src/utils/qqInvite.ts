@@ -22,6 +22,7 @@ export function validateInviteTemplates(value: InviteTemplates): string {
 export function inviteError(error: unknown) {
   const detail = error as { code?: unknown; status?: number; response?: { status?: number; data?: { code?: unknown } } } | null
   const code = detail?.response?.data?.code ?? detail?.code
+  if (code === 'QQ_INVITE_CAMPAIGN_GROUP_LOCKED') return 'campaignGroupLocked'
   const errors: Record<string, string> = {
     NAPCAT_NOT_CONFIGURED: 'notConfigured', NAPCAT_UNAVAILABLE: 'unavailable',
     NAPCAT_UNAUTHORIZED: 'unauthorized', NAPCAT_TWO_FACTOR: 'twoFactor',

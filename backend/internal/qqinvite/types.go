@@ -10,6 +10,7 @@ import (
 var (
 	ErrInvalid               = errors.New("qq_invite_invalid")
 	ErrConflict              = errors.New("qq_invite_conflict")
+	ErrCampaignGroupLocked   = errors.New("qq_invite_campaign_group_locked")
 	ErrNotFound              = errors.New("qq_invite_not_found")
 	ErrDisabled              = errors.New("qq_invite_disabled")
 	ErrEncryptionUnavailable = errors.New("qq_invite_encryption_unavailable")

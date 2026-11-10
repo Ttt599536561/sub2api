@@ -89,7 +89,22 @@ func (s *Store) SaveCampaign(ctx context.Context, c Campaign, actor int64) (Camp
 			return Campaign{}, ErrConflict
 		}
 		if old.SubscriptionGroupID != c.SubscriptionGroupID {
-			return Campaign{}, ErrConflict
+			if old.Enabled || c.Enabled {
+				return Campaign{}, ErrCampaignGroupLocked
+			}
+			// Keep historical snapshots and all inventory tied to their original
+			// subscription group, including paused campaigns awaiting late events.
+			var locked bool
+			if e = tx.QueryRowContext(ctx, `SELECT
+				EXISTS(SELECT 1 FROM qq_invite_code_pool WHERE campaign_id=$1)
+				OR EXISTS(SELECT 1 FROM qq_invite_records WHERE campaign_id=$1)
+				OR EXISTS(SELECT 1 FROM qq_invite_joins WHERE campaign_id=$1)
+				OR EXISTS(SELECT 1 FROM qq_invite_campaign_versions WHERE campaign_id=$1 AND (payload->>'enabled')::boolean)`, c.ID).Scan(&locked); e != nil {
+				return Campaign{}, e
+			}
+			if locked {
+				return Campaign{}, ErrCampaignGroupLocked
+			}
 		}
 		if e = tx.QueryRowContext(ctx, `SELECT baseline_at FROM qq_invite_campaigns WHERE id=$1`, c.ID).Scan(&baseline); e != nil {
 			return Campaign{}, e

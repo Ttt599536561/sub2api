@@ -21,6 +21,8 @@ export default {
     loginHint: '以 QQ 登录状态为准；服务运行不代表 QQ 在线。二维码仅在当前页面显示，请使用机器人账号扫码。', saveFirst: '配置有未保存修改，请先保存，再查询连接或获取二维码。', refreshStatus: '刷新在线状态', qrcode: '获取登录二维码', refreshQR: '刷新二维码', restart: '重启登录流程', confirmRestart: '确认重启', restartWarning: '此操作会中断当前 NapCat 登录流程。确认需要重新登录后再继续。', restarting: '登录流程正在重启，请稍后刷新状态或获取二维码。', qrUnavailable: '目前没有可用二维码，请刷新在线状态后重试。', qrAlt: 'NapCat QQ登录二维码', scanHint: '扫码后点击“刷新在线状态”确认登录。二维码失效时请手动刷新。',
     createCampaign: '创建活动', selectCampaign: '选择活动', newCampaign: '新活动', noCampaigns: '暂无活动，填写下方内容即可创建。', active: '已启用', paused: '已暂停', edit: '活动设置', inventory: '月卡库存', records: '资格与发奖记录',
     rules: '每位符合条件的新成员（QQ等级大于10）可为邀请者带来一张本站30天月卡。已有成员先建立基线；不能可靠确认邀请归属时进入待审核，审核通过后才继续核验。',
+    subscriptionGroupHint: '仅从未启用、无月卡库存且无邀请历史的草稿活动可修改订阅分组；其他活动如需更换分组，请创建新活动。',
+    campaignGroupLocked: '此活动已启用过，或已有月卡库存或邀请历史，不能修改订阅分组。如需更换分组，请创建新活动。',
     baseline: '同步现有成员基线', baselineRequired: '启用前须同步全部活动群的现有成员基线。现有成员不会产生邀请奖励。', baselineReady: '现有成员基线已建立。修改群范围后须重新同步；启用期间请先暂停再同步。', baselineSaved: '成员基线已同步。', pauseCampaign: '暂停活动', enableCampaign: '启用活动', name: '活动名称', subscriptionGroup: '月卡订阅分组（30天）', selectGroup: '选择订阅分组', noGroups: '没有可用的订阅分组，请先在分组管理中创建订阅类型的分组。', groupIDs: '活动QQ群号（每行一个，可填写多个群）', startsAt: '开始时间', endsAt: '结束时间', localTime: '时间按当前浏览器所在时区填写，保存时会转换为统一时间。',
     templateHint: '可用变量：', privateOnly: '仅私信允许', welcome_template: '入群欢迎文案（群内）', congratulation_template: '奖励成功文案（群内）', pending_template: '待核验文案（群内）', private_template: '月卡发放文案（私信）',
     validation: { groupCode: '群文案不能包含兑换码变量。', privateRequired: '私信文案必须同时包含兑换码和兑换地址变量。', templateLength: '文案不能为空，最多2000个字符。', unknownVariable: '文案包含未知变量或不完整的大括号。', campaignFields: '请填写活动名称、有效QQ群号并选择订阅分组。', dates: '请填写有效起止时间，结束时间必须晚于开始时间。' },

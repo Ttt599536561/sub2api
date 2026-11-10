@@ -21,7 +21,12 @@ func previewCodes(ctx context.Context, tx *sql.Tx, id int64, codes []string, loc
 	if len(codes) == 0 || len(codes) > 500 {
 		return out, ErrInvalid
 	}
-	c, e := scanCampaign(tx.QueryRowContext(ctx, `SELECT id,version,payload,baseline_at,created_at FROM qq_invite_campaigns WHERE id=$1`, id))
+	query := `SELECT id,version,payload,baseline_at,created_at FROM qq_invite_campaigns WHERE id=$1`
+	if lock {
+		// Serialize imports with group edits before reading the group to validate.
+		query += " FOR UPDATE"
+	}
+	c, e := scanCampaign(tx.QueryRowContext(ctx, query, id))
 	if e != nil {
 		return out, e
 	}

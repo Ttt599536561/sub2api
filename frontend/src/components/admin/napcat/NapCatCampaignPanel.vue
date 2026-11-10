@@ -62,8 +62,17 @@ function validate() {
 async function save() {
   if (blocked.value || !session.current() || !validate()) return
   let result: InviteCampaign | undefined
-  await run(async () => { result = await qqInviteAPI.saveCampaign(selected.value, { ...form, name: form.name.trim(), enabled: selected.value ? form.enabled : false }, session.signal); if (!session.current()) return; await fetchCampaigns(result.id) })
-  if (result && session.current() && !error.value) { choose(result.id); notice.value = 'saved' }
+  await run(async () => { result = await qqInviteAPI.saveCampaign(selected.value, { ...form, name: form.name.trim(), enabled: selected.value ? form.enabled : false }, session.signal) })
+  acceptSavedCampaign(result)
+}
+function acceptSavedCampaign(result: InviteCampaign | undefined) {
+  if (!result || !session.current() || error.value) return
+  // The mutation returns the saved version; a second list request must not discard it.
+  const index = campaigns.value.findIndex(campaign => campaign.id === result.id)
+  if (index >= 0) campaigns.value.splice(index, 1, result)
+  else campaigns.value.push(result)
+  // Apply the selection and form after run has released its busy state.
+  choose(result.id); notice.value = 'saved'
 }
 async function baseline() {
   if (!current.value) return
@@ -74,8 +83,9 @@ async function baseline() {
 async function toggle() {
   if (!current.value || (!current.value.enabled && !current.value.baseline_ready)) return
   const campaign = current.value, id = campaign.id
-  await run(async () => { await qqInviteAPI.saveCampaign(id, { version: campaign.version, name: campaign.name, enabled: !campaign.enabled, group_ids: campaign.group_ids, subscription_group_id: campaign.subscription_group_id, starts_at: campaign.starts_at, ends_at: campaign.ends_at, welcome_template: campaign.welcome_template, congratulation_template: campaign.congratulation_template, pending_template: campaign.pending_template, delivery_pending_template: campaign.delivery_pending_template, private_template: campaign.private_template }, session.signal); if (session.current()) await fetchCampaigns(id) })
-  if (session.current() && !error.value) { choose(id); notice.value = 'saved' }
+  let result: InviteCampaign | undefined
+  await run(async () => { result = await qqInviteAPI.saveCampaign(id, { version: campaign.version, name: campaign.name, enabled: !campaign.enabled, group_ids: campaign.group_ids, subscription_group_id: campaign.subscription_group_id, starts_at: campaign.starts_at, ends_at: campaign.ends_at, welcome_template: campaign.welcome_template, congratulation_template: campaign.congratulation_template, pending_template: campaign.pending_template, delivery_pending_template: campaign.delivery_pending_template, private_template: campaign.private_template }, session.signal) })
+  acceptSavedCampaign(result)
 }
 onMounted(reload)
 </script>
@@ -94,6 +104,7 @@ onMounted(reload)
         <div v-if="current" class="space-y-3"><div class="flex flex-wrap items-center gap-2"><span class="text-xs text-gray-500">{{ t('qqInvite.version') }} {{ current.version }}</span><button data-test="baseline" class="btn btn-secondary" :disabled="controlsBlocked || current.enabled" @click="baseline">{{ t('qqInvite.baseline') }}</button><button data-test="campaign-toggle" class="btn btn-secondary" :disabled="controlsBlocked || (!current.enabled && !current.baseline_ready)" @click="toggle">{{ t(current.enabled ? 'qqInvite.pauseCampaign' : 'qqInvite.enableCampaign') }}</button></div><p class="text-sm text-gray-500">{{ t(current.baseline_ready ? 'qqInvite.baselineReady' : 'qqInvite.baselineRequired') }}</p></div>
         <form data-test="campaign-form" @submit.prevent="save"><fieldset :disabled="controlsBlocked" class="space-y-4">
           <div class="grid gap-4 md:grid-cols-2"><label class="text-sm">{{ t('qqInvite.name') }}<input v-model="form.name" name="campaign_name" maxlength="120" required class="input mt-1 w-full" /></label><label class="text-sm">{{ t('qqInvite.subscriptionGroup') }}<select v-model="form.subscription_group_id" class="input mt-1 w-full" required><option :value="0" disabled>{{ t('qqInvite.selectGroup') }}</option><option v-for="group in subscriptionGroups" :key="group.id" :value="group.id">{{ group.name }} (#{{ group.id }})</option></select></label></div>
+          <p class="text-sm text-gray-500">{{ t('qqInvite.subscriptionGroupHint') }}</p>
           <p v-if="!subscriptionGroups.length" class="text-sm text-amber-700 dark:text-amber-400">{{ t('qqInvite.noGroups') }}</p>
           <label class="block text-sm">{{ t('qqInvite.groupIDs') }}<textarea v-model="groupText" name="group_ids" rows="2" required class="input mt-1 w-full" /></label>
           <div class="grid gap-4 md:grid-cols-2"><label class="text-sm">{{ t('qqInvite.startsAt') }}<input v-model="starts" name="starts_at" type="datetime-local" required class="input mt-1 w-full" /></label><label class="text-sm">{{ t('qqInvite.endsAt') }}<input v-model="ends" name="ends_at" type="datetime-local" required class="input mt-1 w-full" /></label></div>

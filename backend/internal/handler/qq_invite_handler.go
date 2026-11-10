@@ -79,6 +79,8 @@ func qqInviteResult(c *gin.Context, value any, err error) {
 		status, code, message = 400, "QQ_INVITE_INVALID", "Invalid invitation reward settings or request"
 	case errors.Is(err, qqinvite.ErrConflict):
 		status, code, message = 409, "QQ_INVITE_CONFLICT", "The record changed or conflicts with current activity"
+	case errors.Is(err, qqinvite.ErrCampaignGroupLocked):
+		status, code, message = 409, "QQ_INVITE_CAMPAIGN_GROUP_LOCKED", "The subscription group can only be changed for a disabled campaign that has never been enabled and has no code inventory or invitation history"
 	case errors.Is(err, qqinvite.ErrNotFound):
 		status, code, message = 404, "QQ_INVITE_NOT_FOUND", "Invitation reward record not found"
 	case errors.Is(err, qqinvite.ErrDisabled):

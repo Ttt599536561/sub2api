@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { validateInviteTemplates, parseInviteCodes, connectionState, inviteError } from '../qqInvite'
+import zh from '@/i18n/locales/zh/qqInvite'
+import en from '@/i18n/locales/en/qqInvite'
 describe('NapCat invitation safety', () => {
   it('never equates process readiness with QQ online', () => {
     expect(connectionState({ online: false, core_ready: true })).toBe('offline')
@@ -40,6 +42,18 @@ describe('NapCat invitation safety', () => {
     expect(inviteError({ response: { status: 409, data: {} } })).toBe('conflict')
     expect(inviteError({ code: 'PRIVATE', message: 'PRIVATE TOKEN' })).toBe('failed')
     expect(inviteError(null)).toBe('failed')
+  })
+  it('maps a locked subscription group to a business error instead of a generic conflict or connection error', () => {
+    const code = 'QQ_INVITE_CAMPAIGN_GROUP_LOCKED'
+    expect(inviteError({ status: 409, code })).toBe('campaignGroupLocked')
+    expect(inviteError({ response: { status: 409, data: { code } } })).toBe('campaignGroupLocked')
+    expect(inviteError({ code: 'ERR_BAD_RESPONSE', response: { status: 409, data: { code } } })).toBe('campaignGroupLocked')
+  })
+  it('provides accurate draft eligibility and create-new-campaign guidance in both languages', () => {
+    expect(zh.qqInvite.subscriptionGroupHint).toBe('仅从未启用、无月卡库存且无邀请历史的草稿活动可修改订阅分组；其他活动如需更换分组，请创建新活动。')
+    expect(zh.qqInvite.campaignGroupLocked).toBe('此活动已启用过，或已有月卡库存或邀请历史，不能修改订阅分组。如需更换分组，请创建新活动。')
+    expect(en.qqInvite.subscriptionGroupHint).toBe('Only drafts that have never been enabled and have no pass inventory or invitation history can change subscription groups. Otherwise, create a new campaign for a different group.')
+    expect(en.qqInvite.campaignGroupLocked).toBe('This campaign has been enabled before, or has pass inventory or invitation history, so its subscription group cannot be changed. Create a new campaign for a different group.')
   })
   it('rejects redeem codes in any group template and requires private code and URL', () => {
     const base = { welcome_template: 'Welcome {invitee}', congratulation_template: 'Thanks {inviter}', pending_template: 'Pending', delivery_pending_template: 'Please add the bot as a friend', private_template: '{code} {url}' }
