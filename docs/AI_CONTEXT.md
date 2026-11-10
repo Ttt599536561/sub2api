@@ -44,3 +44,7 @@
 ## Read next
 
 读取 [HANDOFF](HANDOFF.md) 接手摘要、[CHANGELOG](../CHANGELOG.md) 最新条目与 [DEV_GUIDE](../DEV_GUIDE.md) 更新记录规范；只按任务追加 [统一菜单契约](changes/2026-10-23-qq-unified-menu.md)、[模板同步](changes/2026-10-24-qq-reply-templates.md)、[r5审查](changes/2026-10-25-qq-release-review.md)。历史规格中的“未合并/未部署”不能覆盖后续完成记录。索引不保存或授权使用实际凭据，不以真实QQ发送或收费生成作为常规测试。
+
+## NapCat邀请月卡（2026-11-10新增）
+
+`qq-invite` 是本仓内独立福利模块，另接同服务器NapCat Docker服务与普通福利QQ账号；不复用官方机器人OpenID，不替换生图/智商处理。后台在福利中心“QQ邀请奖励”。源码 `backend/internal/napcat/`、`backend/internal/qqinvite/`、`backend/internal/handler/qq_invite*.go`、`frontend/src/components/admin/NapCatWelfarePanel.vue`。独立 `QQ_INVITE_ENCRYPTION_KEY`，未发布/部署状态见[本轮记录](changes/2026-11-10-napcat-invite.md)，首次部署与扫码见[部署指引](../deploy/NAPCAT_SETUP.md)。普通approve不能证明邀请者，未知归属/等级不自动发奖；未知投递仅原码显式重发。源码完成、镜像发布、真实QQ在线分别验证。

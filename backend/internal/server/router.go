@@ -135,6 +135,7 @@ func registerRoutes(
 
 	// 注册各模块路由
 	routes.RegisterQQImagePublicRoutes(v1, h)
+	routes.RegisterQQInvitePublicRoutes(v1, h)
 	routes.RegisterAuthRoutes(v1, h, jwtAuth, auditLog, redisClient, settingService, panelRateLimiter)
 	routes.RegisterUserRoutes(v1, h, jwtAuth, auditLog, settingService, panelRateLimiter)
 	routes.RegisterModelPlazaRoutes(v1, h, optionalJWTAuth, settingService, panelRateLimiter)

@@ -76,6 +76,7 @@ func RegisterAdminRoutes(
 		registerPromoCodeRoutes(admin, h)
 
 		registerQQImageAdminRoutes(admin, h.QQImage)
+		registerQQInviteAdminRoutes(admin, h.QQInvite)
 
 		// 系统设置
 		registerSettingsRoutes(admin, h, stepUpAuth)

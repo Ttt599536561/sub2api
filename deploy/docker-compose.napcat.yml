@@ -1,0 +1,53 @@
+# Overlay the SAME existing production Compose project; see NAPCAT_SETUP.md.
+# No application image, database, Redis, or existing encryption key is replaced.
+services:
+  sub2api:
+    env_file:
+      - ./napcat/sub2api.env
+    networks:
+      - napcat-network
+
+  napcat:
+    # Verified Docker Hub multiarch index on 2026-11-10; do not use latest.
+    image: mlikiowa/napcat-docker:v4.18.42@sha256:696e9574a0f6fb2f86cbecba8a32048f2a5823117dc9b13c6c02637ad890fa8b
+    restart: unless-stopped
+    init: true
+    hostname: qq-bridge
+    environment:
+      TZ: Asia/Shanghai
+      NAPCAT_UID: "1000"
+      NAPCAT_GID: "1000"
+      NAPCAT_ENABLE_COREDUMP: "0"
+    # The official entrypoint needs root for its initial chown/usermod, then
+    # runs QQ via gosu as UID 1000. It receives no Docker socket or privileges.
+    security_opt:
+      - no-new-privileges:true
+    ulimits:
+      core: 0
+    shm_size: 256mb
+    # No ports: WebUI/OneBot are accessible only to Sub2 on this private bridge.
+    expose:
+      - "3000"
+      - "6099"
+    volumes:
+      - ./napcat/config:/app/napcat/config
+      - ./napcat/qq:/app/.config/QQ
+      - ./napcat/plugins:/app/napcat/plugins
+    networks:
+      - napcat-network
+    # Upstream prints a WebUI credential at startup. Config also disables
+    # console/file logging; disabling the driver prevents accidental retention.
+    logging:
+      driver: none
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "--output", "/dev/null", "http://127.0.0.1:6099/webui/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 90s
+
+networks:
+  # Egress remains available for QQ; no host port is published. Sub2 keeps its
+  # existing database network when Compose merges this additional network.
+  napcat-network:
+    driver: bridge

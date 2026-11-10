@@ -6,7 +6,7 @@
         <p class="mt-2 text-sm text-gray-500 dark:text-dark-400">{{ t('welfare.admin.description') }}</p>
       </div>
       <div role="tablist" :aria-label="t('welfare.admin.title')" class="flex gap-1 border-b border-gray-200 dark:border-dark-700">
-        <button v-for="tab in ['statistics', 'settings', 'qq'] as const" :id="`welfare-tab-${tab}`" :key="tab" type="button" role="tab" :data-test="`tab-${tab}`" :aria-selected="activeTab === tab" :aria-controls="`welfare-panel-${tab}`" class="border-b-2 px-5 py-3 text-sm font-medium" :class="activeTab === tab ? 'border-primary-500 text-primary-600 dark:text-primary-400' : 'border-transparent text-gray-500 hover:text-gray-800 dark:text-dark-400 dark:hover:text-white'" :disabled="qqBusy" @click="activeTab = tab">{{ tab === 'qq' ? t('qqImage.title') : t(`welfare.admin.${tab}Tab`) }}</button>
+        <button v-for="tab in ['statistics', 'settings', 'qq', 'invite'] as const" :id="`welfare-tab-${tab}`" :key="tab" type="button" role="tab" :data-test="`tab-${tab}`" :aria-selected="activeTab === tab" :aria-controls="`welfare-panel-${tab}`" class="border-b-2 px-5 py-3 text-sm font-medium" :class="activeTab === tab ? 'border-primary-500 text-primary-600 dark:text-primary-400' : 'border-transparent text-gray-500 hover:text-gray-800 dark:text-dark-400 dark:hover:text-white'" :disabled="qqBusy || inviteBusy" @click="activeTab = tab">{{ tab === 'qq' ? t('qqImage.title') : tab === 'invite' ? t('qqInvite.title') : t(`welfare.admin.${tab}Tab`) }}</button>
       </div>
       <section id="welfare-panel-statistics" v-show="activeTab === 'statistics'" role="tabpanel" aria-labelledby="welfare-tab-statistics"><WelfareStatisticsPanel /></section>
       <section id="welfare-panel-settings" v-show="activeTab === 'settings'" role="tabpanel" aria-labelledby="welfare-tab-settings" class="mx-auto max-w-3xl">
@@ -33,12 +33,13 @@
       </form>
       </section>
       <section v-if="qqVisited" id="welfare-panel-qq" v-show="activeTab === 'qq'" role="tabpanel" aria-labelledby="welfare-tab-qq"><QQImagePanel @busy="qqBusy = $event" /></section>
+      <section v-if="activeTab === 'invite'" id="welfare-panel-invite" role="tabpanel" aria-labelledby="welfare-tab-invite"><NapCatWelfarePanel @busy="inviteBusy = $event" /></section>
     </div>
   </AppLayout>
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import WelfareStatisticsPanel from '@/components/admin/welfare/WelfareStatisticsPanel.vue'
@@ -47,9 +48,10 @@ import { adminWelfareAPI, type WelfareAdminSettings } from '@/api/admin/welfare'
 import { useAppStore } from '@/stores/app'
 
 const { t } = useI18n()
+const NapCatWelfarePanel = defineAsyncComponent(() => import('@/components/admin/NapCatWelfarePanel.vue'))
 const appStore = useAppStore()
-const activeTab = ref<'statistics' | 'settings' | 'qq'>('statistics')
-const qqVisited = ref(false), qqBusy = ref(false)
+const activeTab = ref<'statistics' | 'settings' | 'qq' | 'invite'>('statistics')
+const qqVisited = ref(false), qqBusy = ref(false), inviteBusy = ref(false)
 watch(activeTab, tab => { if (tab === 'qq') qqVisited.value = true })
 const settings = ref<WelfareAdminSettings | null>(null)
 const enabled = ref(false)

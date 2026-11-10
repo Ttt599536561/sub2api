@@ -1,0 +1,37 @@
+export default {
+  qqInvite: {
+    title: 'QQ邀请奖励', description: '通过 NapCat 管理群邀请月卡福利、私信发码和机器人登录。',
+    connection: '连接与扫码登录', campaigns: '活动与奖励', reload: '重新加载', enabled: '启用邀请奖励接收', version: '配置版本',
+    onebot_url: 'OneBot 服务地址', webui_url: 'NapCat WebUI 服务地址', bot_qq: '机器人 QQ 号', public_base_url: '本站公开地址',
+    onebot_token: 'OneBot 访问令牌', webui_token: 'WebUI 令牌', event_secret: '事件签名密钥', configured: '已配置', notConfigured: '未配置', keepSecret: '留空保留现有密钥',
+    serverURLs: '填写 Sub2 服务器可访问的 NapCat 内网地址；地址不能含令牌、用户名、密码或查询参数。',
+    encryptionRequired: '服务器尚未配置凭据加密，暂不能启用或写入密钥。',
+    sessionChanged: '登录或管理员权限已变化，敏感内容已清空。请重新打开此页面。', failed: '操作失败，请检查配置与服务连接后重试。', conflict: '配置已被更新或当前状态不允许此操作。请重新加载后核对。', saved: '已保存。',
+    states: { online: 'QQ已在线', offline: 'QQ离线', unknown: 'QQ状态未知', waiting_scan: '等待扫码', waiting_confirmation: '等待手机确认', initializing: '正在初始化登录', reconnecting: '正在重新连接' }, coreReady: 'NapCat核心已就绪',
+    connectionErrors: {
+      notConfigured: '尚未配置 NapCat 连接，请填写服务地址和访问令牌后保存。',
+      unavailable: '无法连接 NapCat，请检查容器是否运行及 Sub2 到 NapCat 的网络连接。',
+      unauthorized: 'NapCat 认证失败，请核对 OneBot 和 WebUI 令牌后重新保存。',
+      twoFactor: 'NapCat WebUI 已启用双重验证，当前后台登录不支持验证码；请由管理员在 NapCat 中调整认证配置后重试。',
+      protocol: 'NapCat 返回了不兼容的数据，请核对部署版本与接口配置后重试。',
+      encryption: '邀请奖励加密密钥尚未配置，请在服务器配置 QQ_INVITE_ENCRYPTION_KEY 后重启 Sub2；不要替换已在使用的密钥。',
+      offline: 'QQ 账号离线或与配置不符，请核对机器人 QQ 号并重新扫码登录。',
+      rateLimited: 'NapCat 请求过于频繁，请稍后重试，避免连续刷新或重启。'
+    },
+    loginHint: '以 QQ 登录状态为准；服务运行不代表 QQ 在线。二维码仅在当前页面显示，请使用机器人账号扫码。', saveFirst: '配置有未保存修改，请先保存，再查询连接或获取二维码。', refreshStatus: '刷新在线状态', qrcode: '获取登录二维码', refreshQR: '刷新二维码', restart: '重启登录流程', confirmRestart: '确认重启', restartWarning: '此操作会中断当前 NapCat 登录流程。确认需要重新登录后再继续。', restarting: '登录流程正在重启，请稍后刷新状态或获取二维码。', qrUnavailable: '目前没有可用二维码，请刷新在线状态后重试。', qrAlt: 'NapCat QQ登录二维码', scanHint: '扫码后点击“刷新在线状态”确认登录。二维码失效时请手动刷新。',
+    createCampaign: '创建活动', selectCampaign: '选择活动', newCampaign: '新活动', noCampaigns: '暂无活动，填写下方内容即可创建。', active: '已启用', paused: '已暂停', edit: '活动设置', inventory: '月卡库存', records: '资格与发奖记录',
+    rules: '每位符合条件的新成员（QQ等级大于10）可为邀请者带来一张本站30天月卡。已有成员先建立基线；不能可靠确认邀请归属时进入待审核，审核通过后才继续核验。',
+    baseline: '同步现有成员基线', baselineRequired: '启用前须同步全部活动群的现有成员基线。现有成员不会产生邀请奖励。', baselineReady: '现有成员基线已建立。修改群范围后须重新同步；启用期间请先暂停再同步。', baselineSaved: '成员基线已同步。', pauseCampaign: '暂停活动', enableCampaign: '启用活动', name: '活动名称', subscriptionGroup: '月卡订阅分组（30天）', selectGroup: '选择订阅分组', noGroups: '没有可用的订阅分组，请先在分组管理中创建订阅类型的分组。', groupIDs: '活动QQ群号（每行一个，可填写多个群）', startsAt: '开始时间', endsAt: '结束时间', localTime: '时间按当前浏览器所在时区填写，保存时会转换为统一时间。',
+    templateHint: '可用变量：', privateOnly: '仅私信允许', welcome_template: '入群欢迎文案（群内）', congratulation_template: '奖励成功文案（群内）', pending_template: '待核验文案（群内）', private_template: '月卡发放文案（私信）',
+    validation: { groupCode: '群文案不能包含兑换码变量。', privateRequired: '私信文案必须同时包含兑换码和兑换地址变量。', templateLength: '文案不能为空，最多2000个字符。', unknownVariable: '文案包含未知变量或不完整的大括号。', campaignFields: '请填写活动名称、有效QQ群号并选择订阅分组。', dates: '请填写有效起止时间，结束时间必须晚于开始时间。' },
+    stockHint: '仅接收本站对应订阅分组的未使用30天月卡码。入池前会预检归属、有效期、重复及使用状态；列表只显示掩码。生成的新码直接进入活动库存。', pasteCodes: '批量粘贴月卡码（空格或换行分隔）', preview: '预检兑换码', import: '将预检通过的码入池', batchLimit: '每批最多500个；修改内容后需重新预检。', valid: '通过', invalid: '未通过', invalidCodeHint: '不可入池：请核对本站、分组、天数、使用状态或重复码', generateCount: '生成数量', generate: '生成30天月卡并入池', imported: '月卡码已入池。', importChanged: '入池时部分码状态已变化，请重新预检剩余码。', generated: '月卡已生成并入池。', available: '可用库存', assigned: '已分配', total: '合计', noCodes: '暂无库存。可粘贴已有本站月卡码，或生成新月卡。', maskedCode: '兑换码（掩码）', status: '状态', createdAt: '创建时间', previous: '上一页', next: '下一页',
+    codeStates: { available: '可用', assigned: '已分配', used: '已兑换', invalid: '不可用', expired: '已过期', unknown: '未知' },
+    codeReasons: { duplicate: '本批次重复', not_found: '本站找不到此码', not_monthly_subscription: '非该分组的30天月卡', not_unused: '已使用或不可用', expired: '已过期', already_in_pool: '已在奖励库存中', unknown: '不可入池，请核对兑换码' },
+    allStatuses: '全部资格状态', attributionHint: '暂无可靠邀请归属的成员会保持待审核。入群审批者不等于邀请者，管理员须核实真实邀请者QQ并填写依据。', review: '审核邀请归属', inviter: '真实邀请者QQ', reviewReason: '审核依据与理由', reviewRequired: '请填写有效邀请者QQ和审核理由。', confirmReview: '确认归属并核验', reviewed: '邀请归属审核已提交。', recheck: '重查资格', rechecked: '资格已重新核验。', redeliver: '重发原码', confirmRedeliver: '确认重发原码', redeliverHint: '将向原邀请者重新发送同一张月卡码，也会重试尚未确认的群通知，不会领取新码。上次可能已送达，可能收到重复通知，请确认后继续。', redelivered: '原码重发操作已完成，请核对投递状态。', unknownDeliveryHint: '上次投递结果不确定。请先核对聊天记录；明确重发会发送原码，可能重复通知，不会新增奖励。', noRecords: '暂无资格或发奖记录。', member: '入群成员', group: '群', level: 'QQ等级', unverified: '待核实', delivery: '投递状态', actions: '操作', privateDelivery: '私信', groupDelivery: '群通知',
+    recordStates: { pending_attribution: '待审核邀请归属', pending_level: '等级待查询', ineligible: '等级不符合', baseline: '已有成员', queued_inventory: '等待库存', awarded: '已分配月卡', unknown: '未知' },
+    delivery_pending_template: '私信未完成提示（群内）',
+    qrAccepted: '扫码登录已受理，仍需确认在线状态',
+    loginPhases: { waiting_qrcode: '等待二维码', generating_qrcode: '正在生成二维码', qrcode_scanned: '已扫码，等待登录完成', initializing: '正在初始化登录', ready: '登录流程已就绪', offline: '当前离线', reconnecting: '正在重新连接', unknown: '登录阶段未知' },
+    deliveryStates: { pending: '待投递', sending: '投递中', sent: '已发送', failed: '发送失败', unknown: '结果不确定', blocked: '多次失败，需人工重试' }
+  }
+}

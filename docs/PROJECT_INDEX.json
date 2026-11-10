@@ -28,7 +28,8 @@
       ],
       "services": [
         "sub2-web",
-        "qq-image"
+        "qq-image",
+        "qq-invite"
       ],
       "source_selection": "默认主目录；QQ功能已合入main。已有工作树只是同仓checkout，不因名称含QQ就切回旧工作树。",
       "known_checkouts": [
@@ -231,6 +232,31 @@
         "GET /admin/status (QQ_ADMIN_TOKEN)"
       ],
       "not": "绑定、余额或订单服务；不代理/转发生图请求到Go"
+    },
+    "qq-invite": {
+      "repository": "sub2api",
+      "kind": "embedded_business_module_with_sidecar",
+      "source": [
+        "backend/internal/napcat",
+        "backend/internal/qqinvite",
+        "backend/internal/handler/qq_invite_handler.go",
+        "frontend/src/components/admin/NapCatWelfarePanel.vue"
+      ],
+      "owns": [
+        "NapCat普通福利QQ账号接入",
+        "QQ账号等级核验",
+        "活动内跨群邀请奖励去重",
+        "月卡码池及消息投递",
+        "管理员扫码登录"
+      ],
+      "deployment_unit": "Sub2 application plus separate NapCat Docker service on the same server",
+      "data": "Sub2 PostgreSQL; NapCat independent QQ session/config volumes",
+      "evidence": [
+        "docs/changes/2026-11-10-napcat-invite.md",
+        "deploy/NAPCAT_SETUP.md"
+      ],
+      "status_note": "Local implementation; publication and live login must be verified separately",
+      "not": "Does not replace the official qq-image or qq-menu-iq bot; ordinary QQ identity is a separate namespace"
     }
   },
   "sub2_environments": {

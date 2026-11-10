@@ -10,6 +10,7 @@ import misc from './misc'
 import welfare from './welfare'
 import qqImage from './qqImage'
 import qqGallery from './qqGallery'
+import qqInvite from './qqInvite'
 
 export default {
   adminAccessKeys,
@@ -24,4 +25,5 @@ export default {
   ...welfare,
   ...qqImage,
   ...qqGallery,
+  ...qqInvite,
 }

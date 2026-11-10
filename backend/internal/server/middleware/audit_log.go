@@ -150,7 +150,10 @@ var auditActionOverrides = map[string]string{
 // auditBodyOmittedRoutes 请求体几乎整体由凭证构成的路由（如整块粘贴 auth JSON 的导入接口）。
 // 这类 body 的凭证内嵌在普通字符串值里，键级脱敏无法覆盖，整体不入库。
 var auditBodyOmittedRoutes = map[string]struct{}{
-	"PUT /api/v1/admin/qq-image/config": {},
+	"PUT /api/v1/admin/qq-invite/config":                       {},
+	"POST /api/v1/admin/qq-invite/campaigns/:id/codes/preview": {},
+	"POST /api/v1/admin/qq-invite/campaigns/:id/codes/import":  {},
+	"PUT /api/v1/admin/qq-image/config":                        {},
 	// A preview is an unsaved draft. Omit it even when the handler rejects the request.
 	"POST /api/v1/admin/qq-image/reply-templates/preview":       {},
 	"POST /api/v1/user/qq-image/email/verify":                   {},

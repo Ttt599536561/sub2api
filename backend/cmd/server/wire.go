@@ -82,6 +82,7 @@ func providePluginHostInfo(buildInfo handler.BuildInfo) service.PluginHostInfo {
 }
 
 func provideCleanup(
+	qqInviteRuntime *handler.QQInviteRuntime,
 	qqImageRuntime *handler.QQImageRuntime,
 	welfareBalanceOutbox *service.WelfareBalanceOutboxWorker,
 	entClient *ent.Client,
@@ -147,6 +148,12 @@ func provideCleanup(
 
 		// 应用层清理步骤可并行执行，基础设施资源（Redis/Ent）最后按顺序关闭。
 		parallelSteps := []cleanupStep{
+			{"QQInviteRuntime", func() error {
+				if qqInviteRuntime != nil {
+					return qqInviteRuntime.Stop(ctx)
+				}
+				return nil
+			}},
 			{"QQImageRuntime", func() error {
 				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 				defer cancel()

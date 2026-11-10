@@ -3,13 +3,16 @@ package service
 import (
 	"context"
 	"crypto/rand"
+	"database/sql"
 	"encoding/hex"
 	"errors"
 	"fmt"
 	"strings"
 	"time"
 
+	entsql "entgo.io/ent/dialect/sql"
 	dbent "github.com/Wei-Shaw/sub2api/ent"
+	"github.com/Wei-Shaw/sub2api/ent/user"
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
@@ -484,7 +487,14 @@ func (s *RedeemService) redeem(ctx context.Context, userID int64, code string, r
 	}
 
 	// 使用数据库事务保证兑换码标记与权益发放的原子性
-	tx, err := s.entClient.Tx(ctx)
+	var tx *dbent.Tx
+	if redeemCode.Type == RedeemTypeSubscription {
+		// A waiting user-row lock must be followed by a fresh subscription read,
+		// even if the database's default isolation is Repeatable Read.
+		tx, err = s.entClient.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelReadCommitted})
+	} else {
+		tx, err = s.entClient.Tx(ctx)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("begin transaction: %w", err)
 	}
@@ -531,23 +541,34 @@ func (s *RedeemService) redeem(ctx context.Context, userID int64, code string, r
 		}
 
 	case RedeemTypeSubscription:
+		// Different unused codes do not share the code lock. Serialize them on
+		// the durable user row before checking whether the subscription exists;
+		// an absent subscription has no row that could be locked yet. Keep the
+		// common code -> user -> subscription lock order within this transaction.
+		// Use already acquired FK KEY SHARE on this user. NO KEY UPDATE serializes
+		// redemptions without deadlocking when two such FK locks are upgraded.
+		if _, err := tx.User.Query().Where(user.IDEQ(userID)).Select(user.FieldID).ForUpdate(func(options *entsql.LockOptions) {
+			options.Strength = entsql.LockNoKeyUpdate
+		}).Only(txCtx); err != nil {
+			return nil, fmt.Errorf("lock user for subscription redemption: %w", err)
+		}
 		validityDays := redeemCode.ValidityDays
 		if validityDays < 0 {
 			// 负数天数：缩短订阅，减到 0 则取消订阅
-			if err := s.reduceOrCancelSubscription(txCtx, userID, *redeemCode.GroupID, -validityDays, redeemCode.Code); err != nil {
+			if err := s.reduceOrCancelSubscription(txCtx, userID, *redeemCode.GroupID, -validityDays, fmt.Sprintf("#%d", redeemCode.ID)); err != nil {
 				return nil, fmt.Errorf("reduce or cancel subscription: %w", err)
 			}
 		} else {
 			if validityDays == 0 {
 				validityDays = 30
 			}
-			_, _, err := s.subscriptionService.AssignOrExtendSubscription(txCtx, &AssignSubscriptionInput{
+			_, _, err := s.subscriptionService.assignOrExtendSubscription(txCtx, &AssignSubscriptionInput{
 				UserID:       userID,
 				GroupID:      *redeemCode.GroupID,
 				ValidityDays: validityDays,
 				AssignedBy:   0, // 系统分配
-				Notes:        fmt.Sprintf("通过兑换码 %s 兑换", redeemCode.Code),
-			})
+				Notes:        fmt.Sprintf("通过兑换码 #%d 兑换", redeemCode.ID),
+			}, true)
 			if err != nil {
 				return nil, fmt.Errorf("assign or extend subscription: %w", err)
 			}
@@ -602,19 +623,23 @@ func (s *RedeemService) invalidateRedeemCaches(ctx context.Context, userID int64
 			return
 		}
 	case RedeemTypeSubscription:
-		if s.authCacheInvalidator != nil {
-			s.authCacheInvalidator.InvalidateAuthCacheByUserID(ctx, userID)
-		}
-		if s.billingCacheService == nil {
-			return
-		}
 		if redeemCode.GroupID != nil {
 			groupID := *redeemCode.GroupID
-			go func() {
+			if s.subscriptionService != nil {
+				if err := s.subscriptionService.invalidateSubscriptionCaches(userID, groupID); err != nil {
+					logger.LegacyPrintf("service.redeem", "Warning: invalidate committed subscription cache for user %d group %d: %v", userID, groupID, err)
+				}
+			} else if s.billingCacheService != nil {
 				cacheCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 				defer cancel()
 				_ = s.billingCacheService.InvalidateSubscription(cacheCtx, userID, groupID)
-			}()
+			}
+		}
+		if s.authCacheInvalidator != nil {
+			// The entitlement is already committed even if the browser has left.
+			cacheCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			s.authCacheInvalidator.InvalidateAuthCacheByUserID(cacheCtx, userID)
 		}
 	}
 }
@@ -761,8 +786,11 @@ func (s *RedeemService) reduceOrCancelSubscription(ctx context.Context, userID, 
 		return fmt.Errorf("update subscription notes: %w", err)
 	}
 
-	// 失效缓存
-	s.subscriptionService.InvalidateSubCache(userID, groupID)
+	// The redemption owner invalidates synchronously after its commit. Keep the
+	// helper's standalone behavior for callers that do not hold a transaction.
+	if dbent.TxFromContext(ctx) == nil {
+		s.subscriptionService.InvalidateSubCache(userID, groupID)
+	}
 
 	return nil
 }
