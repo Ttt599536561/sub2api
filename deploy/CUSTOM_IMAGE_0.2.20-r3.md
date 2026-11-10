@@ -1,5 +1,19 @@
 # Sub2API 0.2.20-r3 草稿活动月卡分组修复
 
+## 已发布并完成生产更新（2026-11-11，Asia/Shanghai）
+
+镜像`ghcr.io/ttt599536561/sub2api-custom:0.2.20-r3`，固定内容`ghcr.io/ttt599536561/sub2api-custom@sha256:24451524ff6e31be5a2705d2e08fdd77dd997826f07e5f568a4b1bb762d0e066`。应用源码`33961e3b57f94535c71aa57e99d81f329aa976e9`、发布控制`ed7d5bfe77205537af76effc175abf9f96b4a0dc`；文档收尾不改变镜像内容。
+
+- 精确应用[CI 42879495475](https://github.com/Ttt599536561/sub2api/actions/runs/42879495475)与[Security 42879495228](https://github.com/Ttt599536561/sub2api/actions/runs/42879495228)全部成功；控制[CI 42879679939](https://github.com/Ttt599536561/sub2api/actions/runs/42879679939)与[Security 42879679934](https://github.com/Ttt599536561/sub2api/actions/runs/42879679934)全部成功。
+- [发布42882348334](https://github.com/Ttt599536561/sub2api/actions/runs/42882348334)成功，linux/amd64和linux/arm64均实际运行验证，包含原NapCat和新增草稿换组标记。
+- 03:14:49完成5份ZIP产物的大小、SHA256、CRC、文件集合及run/control/source/arch绑定验证。03:15:19完成匿名镜像验证：24个唯一运行层、92,415,703字节，其中10层新下载、14层复用并重验。独立终核无阻断。
+- 03:16:44已按用户授权通过SSH更新生产，只替换Sub2镜像。Sub2、PostgreSQL、Redis、NapCat均健康；本机及公开HTTPS健康检查均200，Sub2内部OneBot认证调用成功且指定QQ仍在线。数据库、Redis、NapCat容器ID及原环境、密钥、端口、数据挂载、网络网关保持。
+- 升级前数据库custom备份882,913,813字节，应用/新配置归档80,135,231字节；pg_restore目录及完整解码通过，未进行恢复演练。未修改活动、库存或邀请记录；验收时原活动仍未启用、库存/记录/奖励为0，全局接收维持用户已开启状态。
+
+本次无需重新扫码；管理员刷新后台后可修改符合条件的空草稿分组。已启用过或有库存/邀请历史的活动仍锁定套餐，并通过真实reason字段显示明确原因。没有数据库迁移，没有发送QQ测试消息或发放月卡。原主目录24项未提交改动保留，不纳入镜像。
+
+原始证据在主项目`.cache/napcat-campaign-fix-20261111/`；服务器备份及含连接身份的回执保持私有。下文保留候选准备及取消记录，不代表当前版本尚未发布。
+
 ## 修正候选准备（2026-11-11，Asia/Shanghai）
 
 固定最终应用源码`33961e3b57f94535c71aa57e99d81f329aa976e9`，包括草稿换组、库存互斥、保存版本接纳及真实API reason字段修复。最终本地6文件89项前端测试、真实客户端链路、类型检查、lint、构建、后端JSON响应专项和独立复核均通过。已推送main，等待该SHA完整CI/Security后重新构建；不复用首次候选的云端检查。此阶段r3尚未发布或部署，生产仍为r2。
