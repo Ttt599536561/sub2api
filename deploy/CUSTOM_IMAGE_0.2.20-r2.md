@@ -2,7 +2,7 @@
 
 ## 发布准备（2026-11-10）
 
-本版本包含NapCat普通福利QQ账号接入、后台扫码重登和邀请月卡全流程；实现见[功能记录](../docs/changes/2026-11-10-napcat-invite.md)。应用固定源码 `42e6baebd7b33869b227876ee7a4c5bfbce67b37`，包含功能提交 `896adb3bf`、CI覆盖补齐及cleanup测试夹具修复。
+本版本包含NapCat普通福利QQ账号接入、后台扫码重登和邀请月卡全流程；实现见[功能记录](../docs/changes/2026-11-10-napcat-invite.md)。应用固定源码 `70eff14512739bc83a631ff39b55e45ffdd3f6d9`，包含功能提交 `896adb3bf`、CI覆盖补齐及cleanup测试夹具修复。
 
 **当前尚未完成发布验证，不应以本准备记录认定镜像已存在。** 计划发布 `ghcr.io/ttt599536561/sub2api-custom:0.2.20-r2`，仅Linux amd64/arm64。专用[发布工作流](../.github/workflows/publish-custom-v0220-r2.yml)固定源码，要求该SHA的main/push CI和Security成功；双原生runner验证运行及provenance后才创建不可覆盖最终tag。
 
@@ -27,3 +27,7 @@
 ## 首轮CI迁移夹具修正
 
 原应用f3817b57e的[CI 42841786296](https://github.com/Ttt599536561/sub2api/actions/runs/42841786296)仅旧v0.2.20升级/新装夹具失败：它们应用了新增253后的312项迁移，却仍按历史311项断言。原NapCat/邀请/服务测试、前端、lint和Security通过，生产迁移实际成功。修正固定原310→311历史目标，保持原断言，新增完整311→312新装/升级/数据保全与码保护测试；没有修改生产SQL或放宽断言。五项真实PG专项在unit/integration及独立复核通过，repository默认lint通过。发布SOURCE已转向包含该修复的42e6baebd，等待新精确CI复验，不重跑错误历史SHA来代替修复。
+
+## PostgreSQL 18测试兼容
+
+42e6baebd的[CI 42844605361](https://github.com/Ttt599536561/sub2api/actions/runs/42844605361)仅新保护测试的错误码断言失败：同一RESTRICT删除保护在本地PG16报告23503，云端PG18报告23001，实际都阻止了删除。修正仅接受这两种明确完整性SQLSTATE，核对真实FK名称，并新增码仍unused与池引用仍完整的断言；原SQL不变。PG16的五项unit/integration专项与lint通过，CI新增PG18迁移专项前置。当前固定SOURCE已更新为70eff145，重新等待完整门禁，尚未执行镜像发布。
