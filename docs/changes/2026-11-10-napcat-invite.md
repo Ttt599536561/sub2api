@@ -92,3 +92,7 @@ OneBot HTTP 回调 `POST /api/v1/qq-invite/events` 校验原始请求体的 HMAC
 原始日志在主项目 `.cache/napcat-integration-20261110`，部署包在 `output/napcat-integration-20261110/napcat-deployment.zip`。仅打包Compose、部署说明和初始化代码，不含生成密钥或QQ会话。
 
 未执行：Docker QQ 镜像实际启动、真实扫码、真实入群/私信/群通知、线上发布部署。自动审批拒绝了本地浏览器预览服务的启动，返回“blocked by policy”，未重试；因此浏览器交互验收未完成。代码依靠组件测试、类型/生产构建及真实数据库/协议 mock 验证，不能称为已在真实 QQ 上线。
+
+### 2026-11-11验证记录更正
+
+本机早期Docker daemon不可用时，repository的integration TestMain会在m.Run前以0退出，原“integration专项通过”记录应视为跳过；当时真实执行的证据为PG16 unit模式迁移专项，以及service包直接连接真实PG的并发月卡测试。之后重新核对Docker Desktop设置、WSL注册与实际VHDX，确认数据在E盘且daemon已可用；修正旧负数订阅夹具后，已实际运行Docker PG18两项测试并逐项观察RUN/PASS，全仓integration正在补验。最终CI和运行验证以发布记录为准，不以0退出码代替测试执行。

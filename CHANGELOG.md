@@ -4,11 +4,15 @@
 
 最新公开发布代码基线为 **`2f398e371` / `0.2.20-r1`**。这是已发布镜像的来源提交；后续发布记录文档不改变该基线。
 
+## 2026-11-11
+
+- **订阅扣减集成夹具同步**：旧备注断言改验实际码ID且禁明文，将双并发屏障移到真实Use之后、用户串行锁之前；保留外部续期不覆盖、累计扣两天、两码已使用及锁读取断言。生产逻辑不改；真实PG16与Docker PG18两项专项已执行通过，CI增加此专项前置。更正此前本机repository integration因Docker不可用而整包跳过的记录，退出码0不等于实际通过。
+
 ## 2026-11-10
 
-- **PG18迁移保护测试兼容**：云端PG18对RESTRICT删除保护返回23001，本地PG16为23503；测试仅接受两种明确完整性SQLSTATE，并核对实际FK名称、码仍unused和池引用完整。保留原SQL与删除保护，增加PG18迁移专项前置检查，unit/integration专项及repository lint通过。
+- **PG18迁移保护测试兼容**：云端PG18对RESTRICT删除保护返回23001，本地PG16为23503；测试仅接受两种明确完整性SQLSTATE，并核对实际FK名称、码仍unused和池引用完整。保留原SQL与删除保护，增加PG18迁移专项前置检查，本地unit真实PG专项及repository lint通过；当时本机repository integration因Docker不可用跳过，后续由云端及实际Docker验证。
 
-- **NapCat迁移验收补齐**：CI发现历史v0.2.20夹具把当前312项迁移当作历史311项验证；固定原310→311目标且不改变旧断言，新增311→312新装/升级回归，验证旧账户、福利、QQ、MCP与兑换码数据/旧checksum和applied_at保全及新码池保护。unit/integration专项和repository默认lint通过；生产SQL不改，发布门禁待新SHA复验。
+- **NapCat迁移验收补齐**：CI发现历史v0.2.20夹具把当前312项迁移当作历史311项验证；固定原310→311目标且不改变旧断言，新增311→312新装/升级回归，验证旧账户、福利、QQ、MCP与兑换码数据/旧checksum和applied_at保全及新码池保护。本地unit真实PG专项和repository默认lint通过；当时本机repository integration跳过，生产SQL不改，发布门禁待新SHA复验。
 
 - **0.2.20-r2 Linux发布准备**：固定应用 `f3817b57e`，专用工作流保留精确CI/Security门禁、原生amd64/arm64构建、不可覆盖tag及五份验证产物，并新增NapCat模块/迁移/后台打包检查；尚未完成镜像发布，部署需额外NapCat容器与扫码，见[发布记录](deploy/CUSTOM_IMAGE_0.2.20-r2.md)。
 

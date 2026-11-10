@@ -80,6 +80,9 @@ jobs:
             done
             docker image inspect "$image" --format '{{.Id}}'
           done
+      - name: Subscription redemption lock and redaction regression
+        working-directory: backend
+        run: go test -tags=integration ./internal/repository -run 'TestRedeem(ReductionPreservesRenewal|ConcurrentReductionsBothApply)' -count=1
       - name: Integration tests
         working-directory: backend
         run: make test-integration
