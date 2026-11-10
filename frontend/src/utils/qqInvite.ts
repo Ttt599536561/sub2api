@@ -20,16 +20,20 @@ export function validateInviteTemplates(value: InviteTemplates): string {
   return ''
 }
 export function inviteError(error: unknown) {
-  const detail = error as { code?: unknown; status?: number; response?: { status?: number; data?: { code?: unknown } } } | null
+  const detail = error as { code?: unknown; reason?: unknown; status?: number; response?: { status?: number; data?: { code?: unknown; reason?: unknown } } } | null
+  const reason = detail?.response?.data?.reason ?? detail?.reason
   const code = detail?.response?.data?.code ?? detail?.code
-  if (code === 'QQ_INVITE_CAMPAIGN_GROUP_LOCKED') return 'campaignGroupLocked'
   const errors: Record<string, string> = {
     NAPCAT_NOT_CONFIGURED: 'notConfigured', NAPCAT_UNAVAILABLE: 'unavailable',
     NAPCAT_UNAUTHORIZED: 'unauthorized', NAPCAT_TWO_FACTOR: 'twoFactor',
     NAPCAT_PROTOCOL_ERROR: 'protocol', QQ_INVITE_ENCRYPTION_UNAVAILABLE: 'encryption',
     NAPCAT_OFFLINE: 'offline', NAPCAT_RATE_LIMITED: 'rateLimited'
   }
-  if (typeof code === 'string' && Object.prototype.hasOwnProperty.call(errors, code)) return `connectionErrors.${errors[code]}`
+  // Structured API errors use reason; retain string code compatibility for older callers.
+  for (const key of [reason, code]) {
+    if (key === 'QQ_INVITE_CAMPAIGN_GROUP_LOCKED') return 'campaignGroupLocked'
+    if (typeof key === 'string' && Object.prototype.hasOwnProperty.call(errors, key)) return `connectionErrors.${errors[key]}`
+  }
   const status = detail?.response?.status ?? detail?.status
   return status === 409 ? 'conflict' : 'failed'
 }

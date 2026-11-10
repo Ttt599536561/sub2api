@@ -62,13 +62,14 @@ describe('NapCat campaign editing', () => {
   })
 
   it('shows the specific group lock without a connection or reload suggestion and preserves edits', async () => {
-    vi.mocked(qqInviteAPI.saveCampaign).mockRejectedValueOnce({ status: 409, code: 'QQ_INVITE_CAMPAIGN_GROUP_LOCKED' })
+    vi.mocked(qqInviteAPI.saveCampaign).mockRejectedValueOnce({ status: 409, code: 409, reason: 'QQ_INVITE_CAMPAIGN_GROUP_LOCKED', message: 'PRIVATE TOKEN' })
     wrapper = mount(NapCatCampaignPanel)
     await flushPromises()
     await subscriptionGroup().setValue('8')
     await nameInput().setValue('Unsaved draft')
     await save()
     expect(wrapper.get('[role="alert"]').text()).toBe('此活动已启用过，或已有月卡库存或邀请历史，不能修改订阅分组。如需更换分组，请创建新活动。')
+    expect(wrapper.text()).not.toContain('PRIVATE TOKEN')
     expect((subscriptionGroup().element as HTMLSelectElement).value).toBe('8')
     expect((nameInput().element as HTMLInputElement).value).toBe('Unsaved draft')
     expect(qqInviteAPI.saveCampaign).toHaveBeenCalledTimes(1)
@@ -77,7 +78,7 @@ describe('NapCat campaign editing', () => {
   })
 
   it('still presents stale versions as a reloadable conflict without retrying the mutation', async () => {
-    vi.mocked(qqInviteAPI.saveCampaign).mockRejectedValueOnce({ status: 409, code: 'QQ_INVITE_CONFLICT' })
+    vi.mocked(qqInviteAPI.saveCampaign).mockRejectedValueOnce({ status: 409, code: 409, reason: 'QQ_INVITE_CONFLICT' })
     wrapper = mount(NapCatCampaignPanel)
     await flushPromises()
     await nameInput().setValue('Unsaved draft')

@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -28,8 +29,15 @@ func TestQQInviteCampaignGroupLockedError(t *testing.T) {
 			c, _ := gin.CreateTestContext(w)
 			qqInviteResult(c, nil, tc.err)
 			require.Equal(t, http.StatusConflict, w.Code, w.Body.String())
-			require.Contains(t, w.Body.String(), tc.code)
-			require.Contains(t, w.Body.String(), tc.message)
+			var body struct {
+				Code    int    `json:"code"`
+				Reason  string `json:"reason"`
+				Message string `json:"message"`
+			}
+			require.NoError(t, json.Unmarshal(w.Body.Bytes(), &body))
+			require.Equal(t, http.StatusConflict, body.Code)
+			require.Equal(t, tc.code, body.Reason)
+			require.Equal(t, tc.message, body.Message)
 		})
 	}
 }

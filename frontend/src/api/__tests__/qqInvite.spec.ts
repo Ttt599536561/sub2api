@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import axios, { type InternalAxiosRequestConfig } from 'axios'
 import { apiClient } from '../client'
 import { qqInviteAPI } from '../qqInvite'
+import { inviteError } from '@/utils/qqInvite'
 vi.mock('@/i18n', () => ({ getLocale: () => 'en' }))
 const adapter = apiClient.defaults.adapter
 let requests: InternalAxiosRequestConfig[] = []
@@ -16,6 +17,27 @@ beforeEach(() => {
 })
 afterEach(() => { apiClient.defaults.adapter = adapter })
 describe('NapCat authenticated requests', () => {
+  it('maps a campaign group lock through the real Axios error normalization and invitation request', async () => {
+    const reason = 'QQ_INVITE_CAMPAIGN_GROUP_LOCKED'
+    apiClient.defaults.adapter = async config => {
+      requests.push(config)
+      throw new axios.AxiosError('Request failed with status code 409', 'ERR_BAD_REQUEST', config, undefined, {
+        data: { code: 409, reason, message: 'PRIVATE SERVER DETAILS' },
+        status: 409, statusText: 'Conflict', headers: {}, config
+      })
+    }
+    const pending = qqInviteAPI.saveCampaign(1, {
+      version: 2, name: 'Draft', enabled: false, group_ids: ['123456'], subscription_group_id: 8,
+      starts_at: '2026-11-01T00:00:00Z', ends_at: '2026-12-01T00:00:00Z',
+      welcome_template: 'Welcome {invitee}', congratulation_template: 'Thanks {inviter}',
+      pending_template: 'Pending', delivery_pending_template: 'Please add the bot as a friend', private_template: '{code} {url}'
+    })
+    await expect(pending).rejects.toMatchObject({ status: 409, code: 409, reason })
+    const error: unknown = await pending.catch(cause => cause)
+    expect(inviteError(error)).toBe('campaignGroupLocked')
+    expect(requests).toHaveLength(1)
+    expect(requests[0]).toMatchObject({ method: 'put', url: '/admin/qq-invite/campaigns/1' })
+  })
   const flows = [() => qqInviteAPI.config(), () => qqInviteAPI.connection(), () => qqInviteAPI.login('qrcode'), () => qqInviteAPI.login('refresh'), () => qqInviteAPI.login('restart'), () => qqInviteAPI.campaigns(), () => qqInviteAPI.baseline('1'), () => qqInviteAPI.codes('1', 1), () => qqInviteAPI.previewCodes('1', ['private']), () => qqInviteAPI.importCodes('1', ['private']), () => qqInviteAPI.generateCodes('1', 2), () => qqInviteAPI.records('1', '', 1), () => qqInviteAPI.review('1', '12345', 'verified'), () => qqInviteAPI.recheck('1'), () => qqInviteAPI.redeliver('1')]
   it.each(flows.map((start, i) => ({ start, i })))('rejects operation $i before dispatch after account switch', async ({ start }) => {
     const pending = start(); const rejected = expect(pending).rejects.toSatisfy(axios.isCancel)
