@@ -1,10 +1,47 @@
 # Sub2API 二开 0.2.20-r2 Linux 镜像
 
-## 发布准备（2026-11-10）
+## 已发布与核验（2026-11-11，Asia/Shanghai）
+
+可用于现有 Sub2 服务的镜像：
+
+```text
+ghcr.io/ttt599536561/sub2api-custom:0.2.20-r2
+```
+
+固定内容地址：
+
+```text
+ghcr.io/ttt599536561/sub2api-custom@sha256:cd135778bf914193b3b4405af8f2b09388bd7e6945913ad43a576c43b514a754
+```
+
+应用/OCI源码：`1eadf763b01fb19a3875530ce4cd5aa31bf2512b`；发布控制：`39345af12728d84d290a4148bde8451867b92352`。镜像仅含 **linux/amd64、linux/arm64** 两种运行平台。文档收尾不改变上述固定源码或镜像内容。
+
+| 验证 | 结果 |
+| --- | --- |
+| 精确应用门禁 | [CI 42853073550](https://github.com/Ttt599536561/sub2api/actions/runs/42853073550)与[Security 42853074772](https://github.com/Ttt599536561/sub2api/actions/runs/42853074772)全部成功，包含PG18迁移、Unit、订阅锁/脱敏专项及完整Integration。 |
+| 发布控制门禁 | [CI 42855244532](https://github.com/Ttt599536561/sub2api/actions/runs/42855244532)与[Security 42855244543](https://github.com/Ttt599536561/sub2api/actions/runs/42855244543)全部成功。 |
+| 镜像运行 | [发布42855849393](https://github.com/Ttt599536561/sub2api/actions/runs/42855849393)全部成功；两架构在各自原生Linux runner实际拉取/运行，校验版本、源码、Go1.27.3、pg_dump/psql、资源及安装状态/前端。 |
+| 新功能打包 | 两架构的奖励账本、迁移253、NapCat后台三个二进制标记均验证通过，保存独立provenance文件。 |
+| 五份验证产物 | ZIP大小、SHA256、CRC、必需文件和源码/架构/运行记录绑定均通过；两个provenance必须含NapCat标记。 |
+| 匿名拉取 | 北京时间2026-11-11 00:43:11，index、运行manifest/config以及全部24个运行层、92,412,032字节已完成匿名读取和摘要/大小核验。无需GitHub登录。 |
+| 独立终审 | 重新核对五ZIP、CI状态、7个匿名清单/配置小对象及全部层描述；没有重复下载运行层，无阻断问题。 |
+
+| 平台 | Runtime manifest |
+| --- | --- |
+| linux/amd64 | `sha256:090fca4a11d53c9c81bd37b016b10ebf4852d37e73b940028b4c9c665f08dcb3` |
+| linux/arm64 | `sha256:656122766f7bae0355810d9a7e60d4320ffbd241a6d91c5b832ca7ac9173eaef` |
+
+本地与GitHub main已整合；原有23项未提交WIP保全，不属于镜像。用户自行更新服务器：**首次启用还需新增NapCat服务并扫码**，见[简明部署步骤](NAPCAT_QUICKSTART.md)与[完整说明](NAPCAT_SETUP.md)。本轮未部署用户服务器、登录真实QQ或发送群/私信；发布成功不等于线上已启用。
+
+原始证据：主项目 `.cache/napcat-integration-20261110/publish/verification`；部署交付包：`output/napcat-integration-20261110`。下面保留准备过程与失败修正记录，不代表当前发布仍未完成。
+
+
+
+## 发布准备（历史记录，2026-11-10）
 
 本版本包含NapCat普通福利QQ账号接入、后台扫码重登和邀请月卡全流程；实现见[功能记录](../docs/changes/2026-11-10-napcat-invite.md)。应用固定源码 `1eadf763b01fb19a3875530ce4cd5aa31bf2512b`，包含功能提交 `896adb3bf`、CI覆盖补齐及cleanup测试夹具修复。
 
-**当前尚未完成发布验证，不应以本准备记录认定镜像已存在。** 计划发布 `ghcr.io/ttt599536561/sub2api-custom:0.2.20-r2`，仅Linux amd64/arm64。专用[发布工作流](../.github/workflows/publish-custom-v0220-r2.yml)固定源码，要求该SHA的main/push CI和Security成功；双原生runner验证运行及provenance后才创建不可覆盖最终tag。
+**该准备阶段尚未完成发布验证；当前已发布结论见上方。** 计划发布 `ghcr.io/ttt599536561/sub2api-custom:0.2.20-r2`，仅Linux amd64/arm64。专用[发布工作流](../.github/workflows/publish-custom-v0220-r2.yml)固定源码，要求该SHA的main/push CI和Security成功；双原生runner验证运行及provenance后才创建不可覆盖最终tag。
 
 ## 首次部署变化
 
@@ -40,3 +77,8 @@
 
 
 活动创建后奖励订阅分组固定；更换月卡种类需新建活动。若QQ要求好友验证，需在QQ端处理后私信领取；本版不自动审批好友申请。真实QQ扫码、各入群路径与私信可达性仍需部署后验收。
+
+
+## 本机验证与清理边界
+
+自动审批拒绝了本地浏览器预览服务启动，返回blocked by policy，未重试，因此未完成浏览器交互验收。后端/前端自动测试与实际Linux镜像运行不替代真实QQ扫码验收。任务专用PostgreSQL已停止，55471端口关闭；随后清理测试pgdata、临时跨平台二进制和两个临时目录联接的命令也被自动审批在执行前拒绝（同样仅返回blocked by policy），没有重试，文件保留在本轮E盘.cache。共享依赖/镜像层缓存与原用户文件保留。

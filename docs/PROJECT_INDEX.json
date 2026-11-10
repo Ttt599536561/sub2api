@@ -255,7 +255,7 @@
         "docs/changes/2026-11-10-napcat-invite.md",
         "deploy/NAPCAT_SETUP.md"
       ],
-      "status_note": "Local implementation; publication and live login must be verified separately",
+      "status_note": "Implemented in Sub2; publication and live login must be verified separately from HANDOFF and release evidence",
       "not": "Does not replace the official qq-image or qq-menu-iq bot; ordinary QQ identity is a separate namespace"
     }
   },
