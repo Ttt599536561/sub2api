@@ -1,5 +1,9 @@
 # Sub2API 0.2.20-r3 草稿活动月卡分组修复
 
+## 修正候选准备（2026-11-11，Asia/Shanghai）
+
+固定最终应用源码`33961e3b57f94535c71aa57e99d81f329aa976e9`，包括草稿换组、库存互斥、保存版本接纳及真实API reason字段修复。最终本地6文件89项前端测试、真实客户端链路、类型检查、lint、构建、后端JSON响应专项和独立复核均通过。已推送main，等待该SHA完整CI/Security后重新构建；不复用首次候选的云端检查。此阶段r3尚未发布或部署，生产仍为r2。
+
 ## 首次候选准备（已在发布前取消）
 
 首次候选源码 `1fb194e877c288c1a1beffac0e5bed7e6d11ea8f`；目标镜像 `ghcr.io/ttt599536561/sub2api-custom:0.2.20-r3`，仅Linux amd64/arm64。此阶段尚未发布或部署r3；服务器仍为r2。功能范围与本地实测见[修复记录](../docs/changes/2026-11-11-napcat-campaign-group.md)。
