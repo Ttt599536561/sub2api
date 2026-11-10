@@ -139,10 +139,24 @@ func qqInviteMigrationAssertGuard(t *testing.T, ctx context.Context, db *sql.DB,
 	require.ErrorContains(t, err, "qq_invite_pool_unallocated")
 	_, err = db.ExecContext(ctx, `UPDATE redeem_codes SET validity_days=365 WHERE id=$1`, codeID)
 	require.ErrorContains(t, err, "qq_invite_pool_metadata_locked")
+	var poolCodeConstraint string
+	require.NoError(t, db.QueryRowContext(ctx, `SELECT conname FROM pg_constraint
+		WHERE conrelid='public.qq_invite_code_pool'::regclass
+		AND confrelid='public.redeem_codes'::regclass AND contype='f' AND confdeltype='r'`).Scan(&poolCodeConstraint))
 	_, err = db.ExecContext(ctx, `DELETE FROM redeem_codes WHERE id=$1`, codeID)
 	var foreignKeyError *pq.Error
 	require.ErrorAs(t, err, &foreignKeyError)
-	require.Equal(t, pq.ErrorCode("23503"), foreignKeyError.Code)
+	// PostgreSQL 16 reports this RESTRICT rejection as foreign_key_violation;
+	// PostgreSQL 18 reports restrict_violation. Both must name our actual FK.
+	require.Contains(t, []pq.ErrorCode{"23001", "23503"}, foreignKeyError.Code)
+	require.Equal(t, poolCodeConstraint, foreignKeyError.Constraint)
+	var preservedStatus string
+	require.NoError(t, db.QueryRowContext(ctx, `SELECT status FROM redeem_codes WHERE id=$1`, codeID).Scan(&preservedStatus))
+	require.Equal(t, "unused", preservedStatus, "failed deletion must retain the unused code")
+	var poolReferences int
+	require.NoError(t, db.QueryRowContext(ctx, `SELECT count(*) FROM qq_invite_code_pool
+		WHERE campaign_id=$1 AND redeem_code_id=$2 AND record_id IS NULL`, campaignID, codeID).Scan(&poolReferences))
+	require.Equal(t, 1, poolReferences, "failed deletion must retain the unallocated pool reference")
 	require.NoError(t, db.QueryRowContext(ctx, `INSERT INTO qq_invite_records(campaign_id,campaign_version,snapshot,self_id,group_id,invitee_qq,inviter_qq,event_time)
 		VALUES ($1,1,'{}','123456','100','33333','44444',now()) RETURNING id`, campaignID).Scan(&recordID))
 	_, err = db.ExecContext(ctx, `UPDATE qq_invite_code_pool SET record_id=$2 WHERE redeem_code_id=$1`, codeID, recordID)

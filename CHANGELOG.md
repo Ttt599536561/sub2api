@@ -6,6 +6,8 @@
 
 ## 2026-11-10
 
+- **PG18迁移保护测试兼容**：云端PG18对RESTRICT删除保护返回23001，本地PG16为23503；测试仅接受两种明确完整性SQLSTATE，并核对实际FK名称、码仍unused和池引用完整。保留原SQL与删除保护，增加PG18迁移专项前置检查，unit/integration专项及repository lint通过。
+
 - **NapCat迁移验收补齐**：CI发现历史v0.2.20夹具把当前312项迁移当作历史311项验证；固定原310→311目标且不改变旧断言，新增311→312新装/升级回归，验证旧账户、福利、QQ、MCP与兑换码数据/旧checksum和applied_at保全及新码池保护。unit/integration专项和repository默认lint通过；生产SQL不改，发布门禁待新SHA复验。
 
 - **0.2.20-r2 Linux发布准备**：固定应用 `f3817b57e`，专用工作流保留精确CI/Security门禁、原生amd64/arm64构建、不可覆盖tag及五份验证产物，并新增NapCat模块/迁移/后台打包检查；尚未完成镜像发布，部署需额外NapCat容器与扫码，见[发布记录](deploy/CUSTOM_IMAGE_0.2.20-r2.md)。
