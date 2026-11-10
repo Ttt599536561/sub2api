@@ -39,6 +39,19 @@ func TestUpstreamV0220MigrationBaseline(t *testing.T) {
 	upstreamV0220Baseline(t)
 }
 
+// Keep the released 310 -> 311 regression independent of later custom SQL.
+// As with v0.2.19, the full filename (not its reused numeric prefix) pins the
+// target; NapCat's later 311 -> 312 transition has its own regression fixture.
+func upstreamV0220Target(t *testing.T) fstest.MapFS {
+	t.Helper()
+	target := upstreamV0220Baseline(t)
+	contents, err := migrations.FS.ReadFile(upstreamV0220Migration)
+	require.NoError(t, err)
+	target[upstreamV0220Migration] = &fstest.MapFile{Data: contents}
+	require.Len(t, target, 311)
+	return target
+}
+
 func upstreamV0220Snapshot(t *testing.T, ctx context.Context, db *sql.DB) map[string]string {
 	t.Helper()
 	snapshot := upstreamV0219Snapshot(t, ctx, db)
@@ -97,14 +110,14 @@ func TestUpstreamV0220MigrationUpgradePreservesState(t *testing.T) {
 		VALUES ('v0220-group','openai',true,true,true,'{"zh":{"name":"保留分组"}}',true)`)
 	require.NoError(t, err)
 	before := upstreamV0220Snapshot(t, ctx, db)
-	require.NoError(t, ApplyMigrations(ctx, db))
+	require.NoError(t, applyMigrationsFS(ctx, db, upstreamV0220Target(t)))
 	afterHistory := upstreamV0220AssertHistory(t, ctx, db)
 	for name, entry := range beforeHistory {
 		require.Equal(t, entry, afterHistory[name], "released checksum and application timestamp: %s", name)
 	}
 	upstreamV0220AssertEmptyOAuth(t, ctx, db)
 	for range 2 {
-		require.NoError(t, ApplyMigrations(ctx, db))
+		require.NoError(t, applyMigrationsFS(ctx, db, upstreamV0220Target(t)))
 		require.Equal(t, afterHistory, upstreamAC1B8F1History(t, ctx, db))
 		for name, rows := range upstreamV0220Snapshot(t, ctx, db) {
 			require.JSONEq(t, before[name], rows, "preserve %s across upgrade and repeated startup", name)
@@ -116,12 +129,12 @@ func TestUpstreamV0220MigrationFreshInstall(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
 	db := upstreamAC1B8F1TestDatabase(t, ctx)
-	require.NoError(t, ApplyMigrations(ctx, db))
+	require.NoError(t, applyMigrationsFS(ctx, db, upstreamV0220Target(t)))
 	history := upstreamV0220AssertHistory(t, ctx, db)
 	upstreamV0220AssertEmptyOAuth(t, ctx, db)
 	welfareLotteryV4AssertSchema(t, ctx, db)
 	before := upstreamV0220Snapshot(t, ctx, db)
-	require.NoError(t, ApplyMigrations(ctx, db))
+	require.NoError(t, applyMigrationsFS(ctx, db, upstreamV0220Target(t)))
 	require.Equal(t, history, upstreamAC1B8F1History(t, ctx, db))
 	for name, rows := range upstreamV0220Snapshot(t, ctx, db) {
 		require.JSONEq(t, before[name], rows, name)
