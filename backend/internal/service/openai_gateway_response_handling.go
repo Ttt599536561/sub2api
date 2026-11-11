@@ -1628,18 +1628,22 @@ func openAICacheCreationTTLTokensFromUsage(value gjson.Result, aggregate int) (i
 		if !details.Exists() {
 			continue
 		}
-		short, long := details.Get("ttl_30m_tokens"), details.Get("ttl_12h_tokens")
-		if short.Type != gjson.Number || long.Type != gjson.Number {
-			return 0, 0
-		}
-		a, b := short.Int(), long.Int()
-		if a < 0 || b < 0 || float64(a) != short.Float() || float64(b) != long.Float() ||
-			a > int64(aggregate) || b != int64(aggregate)-a {
-			return 0, 0
-		}
-		return int(a), int(b)
+		return openAICacheCreationTTLTokensFromDetails(details, aggregate)
 	}
 	return 0, 0
+}
+
+func openAICacheCreationTTLTokensFromDetails(details gjson.Result, aggregate int) (int, int) {
+	short, long := details.Get("ttl_30m_tokens"), details.Get("ttl_12h_tokens")
+	if short.Type != gjson.Number || long.Type != gjson.Number {
+		return 0, 0
+	}
+	a, b := short.Int(), long.Int()
+	if a < 0 || b < 0 || float64(a) != short.Float() || float64(b) != long.Float() ||
+		a > int64(aggregate) || b != int64(aggregate)-a {
+		return 0, 0
+	}
+	return int(a), int(b)
 }
 
 func (s *OpenAIGatewayService) handleNonStreamingResponse(ctx context.Context, resp *http.Response, c *gin.Context, account *Account, originalModel, mappedModel string) (*openaiNonStreamingResult, error) {

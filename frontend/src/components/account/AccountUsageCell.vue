@@ -1628,6 +1628,7 @@ const loadActiveUsage = async () => {
   activeQueryLoading.value = true
   try {
     usageInfo.value = await adminAPI.accounts.getUsage(props.account.id, 'active', true)
+    error.value = null
   } catch (e: any) {
     console.error('Failed to load active usage:', e)
   } finally {

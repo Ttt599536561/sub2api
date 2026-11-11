@@ -13,6 +13,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Wei-Shaw/sub2api/internal/pkg/apicompat"
+
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -27,12 +29,37 @@ func TestOpenAICacheWriteTTLRecordUsage(t *testing.T) {
 	for _, tc := range []struct {
 		name        string
 		short, long int
+		details     string
+		sequence    string
 	}{
-		{"30m", 2399, 0},
-		{"12h", 0, 2399},
-		{"mixed", 9, 2390},
+		{"30m", 2399, 0, "", ""},
+		{"12h", 0, 2399, "", ""},
+		{"mixed", 9, 2390, "", ""},
+		{"missing", 0, 0, "omit", ""},
+		{"mixed_detail_aliases", 0, 2399, "", ""},
+		{"input_null_blocks_prompt", 0, 0, "null", ""},
+		{"input_invalid_blocks_prompt", 0, 0, "{}", ""},
+		{"explicit_zero_aggregate", 0, 0, "", ""},
+		{"empty_details", 0, 0, `{}`, ""},
+		{"non_object", 0, 0, `[]`, ""},
+		{"out_of_range", 0, 0, `{"ttl_30m_tokens":0,"ttl_12h_tokens":1e100}`, ""},
+		{"null", 0, 0, "null", ""},
+		{"partial", 0, 0, `{"ttl_12h_tokens":2399}`, ""},
+		{"inconsistent", 0, 0, `{"ttl_30m_tokens":0,"ttl_12h_tokens":2398}`, ""},
+		{"negative", 0, 0, `{"ttl_30m_tokens":-1,"ttl_12h_tokens":2400}`, ""},
+		{"fractional", 0, 0, `{"ttl_30m_tokens":0.5,"ttl_12h_tokens":2398.5}`, ""},
+		{"string", 0, 0, `{"ttl_30m_tokens":"0","ttl_12h_tokens":"2399"}`, ""},
+		{"progressive_then_empty_terminal", 9, 2390, "", "empty"},
+		{"progressive_then_missing_terminal_usage", 9, 2390, "", "missing"},
+		{"progressive_then_aggregate_terminal", 0, 0, "omit", "aggregate"},
+		{"conflicting_terminal_usage_sources", 9, 2390, "", "both"},
+		{"top_level_terminal_usage", 9, 2390, "", "top"},
 	} {
-		for _, route := range []string{"json", "sse", "passthrough_json", "passthrough_sse"} {
+		for _, route := range []string{"json", "sse", "passthrough_json", "passthrough_sse", "messages_sse", "messages_buffered_sse", "chat_sse", "chat_buffered_sse", "typed_json", "typed_chat_json", "typed_copy"} {
+			stream := strings.HasSuffix(route, "sse")
+			if tc.sequence != "" && !stream {
+				continue // These cases exercise successive SSE usage observations.
+			}
 			t.Run(tc.name+"/"+route, func(t *testing.T) {
 				const groupID int64 = 777
 				usageRepo := &openAIRecordUsageLogRepoStub{inserted: true}
@@ -46,22 +73,99 @@ func TestOpenAICacheWriteTTLRecordUsage(t *testing.T) {
 				svc.resolver = NewModelPricingResolver(svc.channelService, svc.billingService)
 				svc.cfg.Gateway.MaxLineSize = defaultMaxLineSize
 				account := &Account{ID: 1, Platform: PlatformOpenAI, Type: AccountTypeAPIKey}
-				response := fmt.Sprintf(`{"id":"resp_ttl","object":"response","model":"gpt-6-luna","status":"completed","output":[],"usage":{"input_tokens":2402,"input_tokens_details":{"cached_tokens":0,"cache_write_tokens":2399,"cache_write_tokens_details":{"ttl_30m_tokens":%d,"ttl_12h_tokens":%d}},"output_tokens":5,"total_tokens":2407}}`, tc.short, tc.long)
-				stream := strings.HasSuffix(route, "sse")
+				details := tc.details
+				if details == "" {
+					details = fmt.Sprintf(`{"ttl_30m_tokens":%d,"ttl_12h_tokens":%d}`, tc.short, tc.long)
+				}
+				detailField := `,"cache_write_tokens_details":` + details
+				if details == "omit" {
+					detailField = ""
+				}
+				aggregate := 2399
+				if tc.name == "explicit_zero_aggregate" {
+					aggregate = 0
+				}
+				// The stale top-level alias must not override an explicit nested zero.
+				usageJSON := fmt.Sprintf(`{"input_tokens":2402,"cache_creation_input_tokens":2399,"input_tokens_details":{"cached_tokens":0,"cache_write_tokens":%d%s},"output_tokens":5,"total_tokens":2407}`, aggregate, detailField)
+				cacheRead := 0
+				if tc.name == "mixed_detail_aliases" || strings.HasSuffix(tc.name, "blocks_prompt") {
+					cacheRead = 1
+					inputField := detailField
+					if tc.name == "mixed_detail_aliases" {
+						inputField = ""
+					}
+					usageJSON = `{"input_tokens":2402,"output_tokens":5,"input_tokens_details":{"cached_tokens":1` + inputField + `},"prompt_tokens_details":{"cache_write_tokens":2399,"cache_write_tokens_details":{"ttl_30m_tokens":0,"ttl_12h_tokens":2399}}}`
+				}
+				response := `{"id":"resp_ttl","object":"response","model":"gpt-6-luna","status":"completed","output":[],"usage":` + usageJSON + `}`
 				contentType := "application/json"
 				if stream {
-					response = `data: {"type":"response.completed","response":` + response + "}\n\n"
+					terminal := `{"type":"response.completed","response":` + response + `}`
+					progressiveUsage := `{"input_tokens":2402,"input_tokens_details":{"cache_write_tokens":2399,"cache_write_tokens_details":{"ttl_30m_tokens":9,"ttl_12h_tokens":2390}},"output_tokens":5}`
+					prefix := ""
+					switch tc.sequence {
+					case "empty":
+						prefix = "data: " + `{"type":"response.in_progress","response":{"usage":` + progressiveUsage + `}}` + "\n\n"
+						terminal = strings.Replace(terminal, usageJSON, `{"input_tokens":0,"output_tokens":0}`, 1)
+					case "missing":
+						prefix = "data: " + `{"type":"response.in_progress","response":{"usage":` + progressiveUsage + `}}` + "\n\n"
+						terminal = strings.Replace(terminal, `,"usage":`+usageJSON, "", 1)
+					case "aggregate":
+						prefix = "data: " + `{"type":"response.in_progress","response":{"usage":` + progressiveUsage + `}}` + "\n\n"
+					case "both":
+						terminal = strings.TrimSuffix(terminal, "}") + `,"usage":{"input_tokens":2402,"output_tokens":5,"input_tokens_details":{"cache_write_tokens":2399,"cache_write_tokens_details":{"ttl_30m_tokens":2399,"ttl_12h_tokens":0}}}}`
+					case "top":
+						terminal = strings.Replace(terminal, `,"usage":`+usageJSON, "", 1)
+						terminal = strings.TrimSuffix(terminal, "}") + `,"usage":` + usageJSON + `}`
+					}
+					response = prefix + "data: " + terminal + "\n\n"
 					contentType = "text/event-stream"
+				}
+				if route == "typed_json" || route == "typed_chat_json" {
+					var typed apicompat.ResponsesResponse
+					require.NoError(t, json.Unmarshal([]byte(response), &typed))
+					if route == "typed_chat_json" {
+						chat := apicompat.ResponsesToChatCompletions(&typed, "gpt-6-luna")
+						body, err := json.Marshal(chat)
+						require.NoError(t, err)
+						var decoded apicompat.ChatCompletionsResponse
+						require.NoError(t, json.Unmarshal(body, &decoded))
+						typed.Usage = apicompat.ChatUsageToResponsesUsage(decoded.Usage)
+					}
+					body, err := json.Marshal(typed)
+					require.NoError(t, err)
+					response = string(body)
 				}
 				resp := &http.Response{StatusCode: 200, Header: http.Header{"Content-Type": {contentType}}, Body: io.NopCloser(strings.NewReader(response))}
 				c, _ := gin.CreateTestContext(httptest.NewRecorder())
-				c.Request = httptest.NewRequest(http.MethodPost, "/v1/responses", nil)
+				// Requested retention is not evidence of a billed 12h write.
+				c.Request = httptest.NewRequest(http.MethodPost, "/v1/responses", strings.NewReader(`{"prompt_cache_retention":"12h"}`))
 				var usage *OpenAIUsage
 				switch route {
-				case "json":
+				case "json", "typed_json", "typed_chat_json":
 					result, err := svc.handleNonStreamingResponse(context.Background(), resp, c, account, "gpt-6-luna", "gpt-6-luna")
 					require.NoError(t, err)
 					usage = result.usage
+				case "typed_copy":
+					var typed apicompat.ResponsesResponse
+					require.NoError(t, json.Unmarshal([]byte(response), &typed))
+					copied := copyOpenAIUsageFromResponsesUsage(typed.Usage)
+					usage = &copied
+				case "messages_sse":
+					result, err := svc.handleAnthropicStreamingResponse(resp, c, account, "gpt-6-luna", "gpt-6-luna", "gpt-6-luna", time.Now())
+					require.NoError(t, err)
+					usage = &result.Usage
+				case "messages_buffered_sse":
+					result, err := svc.handleAnthropicBufferedStreamingResponse(resp, c, account, "gpt-6-luna", "gpt-6-luna", "gpt-6-luna", time.Now())
+					require.NoError(t, err)
+					usage = &result.Usage
+				case "chat_sse":
+					result, err := svc.handleChatStreamingResponse(resp, c, account, "gpt-6-luna", "gpt-6-luna", "gpt-6-luna", time.Now(), 0)
+					require.NoError(t, err)
+					usage = &result.Usage
+				case "chat_buffered_sse":
+					result, err := svc.handleChatBufferedStreamingResponse(resp, c, account, "gpt-6-luna", "gpt-6-luna", "gpt-6-luna", time.Now())
+					require.NoError(t, err)
+					usage = &result.Usage
 				case "sse":
 					result, err := svc.handleStreamingResponse(context.Background(), resp, c, account, time.Now(), "gpt-6-luna", "gpt-6-luna")
 					require.NoError(t, err)
@@ -85,14 +189,20 @@ func TestOpenAICacheWriteTTLRecordUsage(t *testing.T) {
 				require.NoError(t, err)
 				log := usageRepo.lastLog
 				require.NotNil(t, log)
-				assert.Equal(t, 3, log.InputTokens)
-				assert.Equal(t, 2399, log.CacheCreationTokens)
-				assert.Equal(t, tc.short, log.CacheCreation30mTokens)
-				assert.Equal(t, tc.long, log.CacheCreation12hTokens)
+				assert.Equal(t, 2402-aggregate-cacheRead, log.InputTokens)
+				assert.Equal(t, cacheRead, log.CacheReadTokens)
+				assert.Equal(t, aggregate, log.CacheCreationTokens)
+				short, long := tc.short, tc.long
+				// Retain each route's existing precedence when both usage sources exist.
+				if tc.sequence == "both" && (route == "sse" || route == "passthrough_sse" || route == "messages_sse") {
+					short, long = 2399, 0
+				}
+				assert.Equal(t, short, log.CacheCreation30mTokens)
+				assert.Equal(t, long, log.CacheCreation12hTokens)
 				assert.Zero(t, log.CacheCreation5mTokens)
 				assert.Zero(t, log.CacheCreation1hTokens)
-				cacheCost := (float64(tc.short)*0.8125 + float64(tc.long)*1.625) / 1e6
-				totalCost := cacheCost + 3*0.65/1e6 + 5*3.25/1e6
+				cacheCost := (float64(aggregate-long)*0.8125 + float64(long)*1.625) / 1e6
+				totalCost := cacheCost + float64(2402-aggregate-cacheRead)*0.65/1e6 + float64(cacheRead)*0.065/1e6 + 5*3.25/1e6
 				assert.InDelta(t, cacheCost, log.CacheCreationCost, 1e-12)
 				assert.InDelta(t, totalCost, log.TotalCost, 1e-12)
 				assert.InDelta(t, totalCost*0.5, log.ActualCost, 1e-12)

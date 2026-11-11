@@ -571,6 +571,104 @@ describe('AccountUsageCell', () => {
     expect(wrapper.find('.usage-bar').text()).toContain('|0|2026-11-14T21:22:49Z')
   })
 
+  it('Antigravity active query clears an initial network error when quota loads successfully', async () => {
+    const networkError = new Error('initial usage request failed')
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+    let resolveQuery!: (usage: unknown) => void
+    getUsage.mockRejectedValueOnce(networkError).mockImplementationOnce(() => new Promise((resolve) => {
+      resolveQuery = resolve
+    }))
+
+    const wrapper = mount(AccountUsageCell, {
+      props: { account: makeAccount({ id: 1007 }) },
+      global: {
+        stubs: {
+          UsageProgressBar: {
+            props: ['label', 'utilization'],
+            template: '<div class="usage-bar">{{ label }}|{{ utilization }}</div>'
+          },
+          AccountQuotaInfo: true
+        }
+      }
+    })
+
+    try {
+      await flushPromises()
+      expect(wrapper.text()).toContain('common.error')
+      expect(wrapper.find('.usage-bar').exists()).toBe(false)
+      expect(consoleError).toHaveBeenCalledWith('Failed to load usage:', networkError)
+
+      const button = wrapper.get('[data-testid="antigravity-active-query"]')
+      await button.trigger('click')
+      expect(getUsage).toHaveBeenLastCalledWith(1007, 'active', true)
+      expect(button.attributes('disabled')).toBeDefined()
+      expect(wrapper.text()).toContain('common.error')
+
+      resolveQuery({
+        antigravity_quota_groups: [
+          { key: '3p', name: 'Claude and GPT models', windows: [{ window: 'weekly', utilization: 25 }] }
+        ]
+      })
+      await flushPromises()
+
+      expect(wrapper.text()).toContain('admin.accounts.usageWindow.antigravityOtherWeekly|25')
+      expect(wrapper.text()).not.toContain('common.error')
+      expect(button.attributes('disabled')).toBeUndefined()
+      expect(getUsage).toHaveBeenCalledTimes(2)
+    } finally {
+      wrapper.unmount()
+      consoleError.mockRestore()
+    }
+  })
+
+  it('Antigravity active query preserves the last quota when the request fails', async () => {
+    const networkError = new Error('active usage request failed')
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+    let rejectQuery!: (reason: Error) => void
+    getUsage.mockResolvedValueOnce({
+      antigravity_quota_groups: [
+        { key: '3p', name: 'Claude and GPT models', windows: [{ window: 'weekly', utilization: 40 }] }
+      ]
+    }).mockImplementationOnce(() => new Promise((_resolve, reject) => {
+      rejectQuery = reject
+    }))
+
+    const wrapper = mount(AccountUsageCell, {
+      props: { account: makeAccount({ id: 1008 }) },
+      global: {
+        stubs: {
+          UsageProgressBar: {
+            props: ['utilization'],
+            template: '<div class="usage-bar">{{ utilization }}</div>'
+          },
+          AccountQuotaInfo: true
+        }
+      }
+    })
+
+    try {
+      await flushPromises()
+      const quota = wrapper.get('.usage-bar').element
+      const button = wrapper.get('[data-testid="antigravity-active-query"]')
+      await button.trigger('click')
+      expect(button.attributes('disabled')).toBeDefined()
+      expect(wrapper.get('.usage-bar').text()).toBe('40')
+
+      rejectQuery(networkError)
+      await flushPromises()
+
+      expect(wrapper.get('.usage-bar').text()).toBe('40')
+      expect(wrapper.get('.usage-bar').element).toBe(quota)
+      expect(wrapper.text()).not.toContain('common.error')
+      expect(button.attributes('disabled')).toBeUndefined()
+      expect(consoleError).toHaveBeenCalledWith('Failed to load active usage:', networkError)
+      expect(getUsage).toHaveBeenCalledTimes(2)
+    } finally {
+      wrapper.unmount()
+      consoleError.mockRestore()
+    }
+  })
+
   it('Antigravity 会显示 AI Credits 余额信息', async () => {
     getUsage.mockResolvedValue({
       ai_credits: [

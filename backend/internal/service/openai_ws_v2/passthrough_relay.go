@@ -25,12 +25,14 @@ type FrameConn interface {
 }
 
 type Usage struct {
-	InputTokens              int
-	ImageInputTokens         int
-	OutputTokens             int
-	CacheCreationInputTokens int
-	CacheReadInputTokens     int
-	ImageOutputTokens        int
+	InputTokens                 int
+	ImageInputTokens            int
+	OutputTokens                int
+	CacheCreationInputTokens    int
+	CacheCreation30mInputTokens int
+	CacheCreation12hInputTokens int
+	CacheReadInputTokens        int
+	ImageOutputTokens           int
 }
 
 type RelayResult struct {
@@ -1155,13 +1157,17 @@ func parseUsageAndAccumulate(
 			int64(inputTokens), int64(outputTokens), usageResult.Get("total_tokens").Int(), reasoningTokens,
 		))
 	}
+	cacheCreationTokens := openAICacheCreationTokensFromUsage(usageResult)
+	cache30m, cache12h := openAICacheCreationTTLTokensFromUsage(usageResult, cacheCreationTokens)
 	parsedUsage := Usage{
-		InputTokens:              inputTokens,
-		ImageInputTokens:         int(imageInputTokens),
-		OutputTokens:             outputTokens,
-		CacheCreationInputTokens: openAICacheCreationTokensFromUsage(usageResult),
-		CacheReadInputTokens:     cachedTokens,
-		ImageOutputTokens:        int(imageTokens),
+		InputTokens:                 inputTokens,
+		ImageInputTokens:            int(imageInputTokens),
+		OutputTokens:                outputTokens,
+		CacheCreationInputTokens:    cacheCreationTokens,
+		CacheCreation30mInputTokens: cache30m,
+		CacheCreation12hInputTokens: cache12h,
+		CacheReadInputTokens:        cachedTokens,
+		ImageOutputTokens:           int(imageTokens),
 	}
 
 	if isTerminalEvent(strings.TrimSpace(eventType)) {
@@ -1193,6 +1199,10 @@ func mergeRelayUsageNonZero(dst *Usage, src Usage) {
 	}
 	if src.CacheCreationInputTokens > 0 {
 		dst.CacheCreationInputTokens = src.CacheCreationInputTokens
+		// Details belong to the same snapshot as the aggregate, including when
+		// the new snapshot has no valid split and must clear earlier details.
+		dst.CacheCreation30mInputTokens = src.CacheCreation30mInputTokens
+		dst.CacheCreation12hInputTokens = src.CacheCreation12hInputTokens
 	}
 	if src.CacheReadInputTokens > 0 {
 		dst.CacheReadInputTokens = src.CacheReadInputTokens
@@ -1210,6 +1220,17 @@ func finalizeRelayTurnUsage(state *relayState) Usage {
 		return Usage{}
 	}
 	turnUsage := state.turnUsage
+	// A session split is complete only if every cache-writing turn supplied a
+	// valid split. Never label unknown tokens as 30m or recover a partial split
+	// after a later known turn; each individual turn still keeps its own detail.
+	if state.usage.CacheCreation30mInputTokens+state.usage.CacheCreation12hInputTokens == state.usage.CacheCreationInputTokens &&
+		turnUsage.CacheCreation30mInputTokens+turnUsage.CacheCreation12hInputTokens == turnUsage.CacheCreationInputTokens {
+		state.usage.CacheCreation30mInputTokens += turnUsage.CacheCreation30mInputTokens
+		state.usage.CacheCreation12hInputTokens += turnUsage.CacheCreation12hInputTokens
+	} else {
+		state.usage.CacheCreation30mInputTokens = 0
+		state.usage.CacheCreation12hInputTokens = 0
+	}
 	state.usage.InputTokens += turnUsage.InputTokens
 	state.usage.ImageInputTokens += turnUsage.ImageInputTokens
 	state.usage.OutputTokens += turnUsage.OutputTokens
@@ -1253,6 +1274,26 @@ func openAICacheCreationTokensFromUsage(value gjson.Result) int {
 		}
 	}
 	return 0
+}
+
+func openAICacheCreationTTLTokensFromUsage(value gjson.Result, aggregate int) (int, int) {
+	for _, path := range []string{"input_tokens_details", "prompt_tokens_details"} {
+		details := value.Get(path + ".cache_write_tokens_details")
+		if !details.Exists() {
+			continue
+		}
+		short, long := details.Get("ttl_30m_tokens"), details.Get("ttl_12h_tokens")
+		if short.Type != gjson.Number || long.Type != gjson.Number {
+			return 0, 0
+		}
+		a, b := short.Int(), long.Int()
+		if a < 0 || b < 0 || float64(a) != short.Float() || float64(b) != long.Float() ||
+			a > int64(aggregate) || b != int64(aggregate)-a {
+			return 0, 0
+		}
+		return int(a), int(b)
+	}
+	return 0, 0
 }
 
 func enrichResult(result *RelayResult, state *relayState, duration time.Duration) {

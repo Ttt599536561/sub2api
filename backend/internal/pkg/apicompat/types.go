@@ -558,6 +558,12 @@ func (u *ResponsesUsage) UnmarshalJSON(data []byte) error {
 	if u.InputTokensDetails == nil && aux.PromptTokensDetails != nil {
 		u.InputTokensDetails = aux.PromptTokensDetails
 	}
+	// The two detail aliases can coexist (for example, cached tokens in input
+	// details and writes in prompt details). Only an absent TTL field falls
+	// back; explicit null or invalid metadata remains authoritative.
+	if u.InputTokensDetails != nil && aux.PromptTokensDetails != nil && len(u.InputTokensDetails.CacheWriteTokensDetails) == 0 {
+		u.InputTokensDetails.CacheWriteTokensDetails = aux.PromptTokensDetails.CacheWriteTokensDetails
+	}
 	if u.OutputTokensDetails == nil && aux.CompletionTokensDetails != nil {
 		u.OutputTokensDetails = aux.CompletionTokensDetails
 	}
@@ -587,6 +593,9 @@ type ResponsesInputTokensDetails struct {
 	AudioTokens         int `json:"audio_tokens,omitempty"`
 	CacheCreationTokens int `json:"cache_creation_tokens,omitempty"`
 	CacheWriteTokens    int `json:"cache_write_tokens,omitempty"`
+	// Preserve upstream metadata without rejecting a response for malformed TTL
+	// details. Billing validates both buckets against the aggregate before use.
+	CacheWriteTokensDetails json.RawMessage `json:"cache_write_tokens_details,omitempty"`
 }
 
 // ResponsesOutputTokensDetails breaks down output token usage.
@@ -795,13 +804,14 @@ type ChatUsage struct {
 //   - completion_tokens_details: reasoning_tokens, audio_tokens,
 //     accepted_prediction_tokens, rejected_prediction_tokens
 type ChatTokenDetails struct {
-	CachedTokens             int `json:"cached_tokens,omitempty"`
-	AudioTokens              int `json:"audio_tokens,omitempty"`
-	CacheCreationTokens      int `json:"cache_creation_tokens,omitempty"`
-	CacheWriteTokens         int `json:"cache_write_tokens,omitempty"`
-	ReasoningTokens          int `json:"reasoning_tokens,omitempty"`
-	AcceptedPredictionTokens int `json:"accepted_prediction_tokens,omitempty"`
-	RejectedPredictionTokens int `json:"rejected_prediction_tokens,omitempty"`
+	CachedTokens             int             `json:"cached_tokens,omitempty"`
+	AudioTokens              int             `json:"audio_tokens,omitempty"`
+	CacheCreationTokens      int             `json:"cache_creation_tokens,omitempty"`
+	CacheWriteTokens         int             `json:"cache_write_tokens,omitempty"`
+	CacheWriteTokensDetails  json.RawMessage `json:"cache_write_tokens_details,omitempty"`
+	ReasoningTokens          int             `json:"reasoning_tokens,omitempty"`
+	AcceptedPredictionTokens int             `json:"accepted_prediction_tokens,omitempty"`
+	RejectedPredictionTokens int             `json:"rejected_prediction_tokens,omitempty"`
 }
 
 // ChatCompletionsChunk is a single streaming chunk from POST /v1/chat/completions.

@@ -944,10 +944,10 @@ func (s *OpenAIGatewayService) handleChatStreamingResponse(
 		if isTerminalEvent {
 			terminalEventType = strings.TrimSpace(event.Type)
 			if event.Usage != nil {
-				usage = copyOpenAIUsageFromResponsesUsage(event.Usage)
+				updateOpenAICompatTerminalUsage(&usage, gjson.Get(payload, "usage"))
 			}
 			if event.Response != nil && event.Response.Usage != nil {
-				usage = copyOpenAIUsageFromResponsesUsage(event.Response.Usage)
+				updateOpenAICompatTerminalUsage(&usage, gjson.Get(payload, "response.usage"))
 			}
 		}
 		if GetOpsCyberPolicy(c) != nil {

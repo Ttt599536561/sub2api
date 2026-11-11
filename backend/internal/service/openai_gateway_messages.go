@@ -945,13 +945,13 @@ func (s *OpenAIGatewayService) readOpenAICompatBufferedTerminal(
 			return nil
 		}
 		if event.Usage != nil {
-			usage = copyOpenAIUsageFromResponsesUsage(event.Usage)
+			updateOpenAICompatTerminalUsage(&usage, gjson.GetBytes(payload, "usage"))
 			if response.Usage == nil {
 				response.Usage = event.Usage
 			}
 		}
 		if response.Usage != nil {
-			usage = copyOpenAIUsageFromResponsesUsage(response.Usage)
+			updateOpenAICompatTerminalUsage(&usage, gjson.GetBytes(payload, "response.usage"))
 		}
 		if pendingCyberResponse != nil {
 			markOpenAICyberPolicyEvent(c, []byte(rawPayload), http.StatusOK, &usage)
@@ -1124,11 +1124,11 @@ func (s *OpenAIGatewayService) handleAnthropicStreamingResponse(
 					responseID = id
 				}
 				if event.Response.Usage != nil {
-					usage = copyOpenAIUsageFromResponsesUsage(event.Response.Usage)
+					updateOpenAICompatTerminalUsage(&usage, gjson.Get(payload, "response.usage"))
 				}
 			}
 			if event.Usage != nil {
-				usage = copyOpenAIUsageFromResponsesUsage(event.Usage)
+				updateOpenAICompatTerminalUsage(&usage, gjson.Get(payload, "usage"))
 			}
 			if GetOpsCyberPolicy(c) != nil {
 				if isUpstreamResponseModelTerminalEvent(eventType) {
@@ -1490,6 +1490,20 @@ func copyOpenAIUsageFromResponsesUsage(usage *apicompat.ResponsesUsage) OpenAIUs
 	}
 	if usage.InputTokensDetails != nil {
 		result.CacheReadInputTokens = usage.InputTokensDetails.CachedTokens
+		result.CacheCreation30mInputTokens, result.CacheCreation12hInputTokens = openAICacheCreationTTLTokensFromDetails(
+			gjson.ParseBytes(usage.InputTokensDetails.CacheWriteTokensDetails), result.CacheCreationInputTokens,
+		)
 	}
 	return result
+}
+
+// Keep the selected terminal usage source in raw form so TTL and other billing
+// details survive protocol conversion. Call order preserves each route's usage
+// precedence. As in native Responses, an empty terminal cannot erase observed usage.
+func updateOpenAICompatTerminalUsage(dst *OpenAIUsage, value gjson.Result) {
+	parsed, ok := openAIUsageFromGJSON(value)
+	if !ok || (!openAIUsageHasTokens(&parsed) && openAIUsageHasTokens(dst)) {
+		return
+	}
+	*dst = parsed
 }
