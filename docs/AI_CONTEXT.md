@@ -49,6 +49,8 @@
 
 ## NapCat邀请月卡（2026-11-11指引更新）
 
+2026-11-11最新规则：QQ福利码兑换为独立 `welfare` 订阅，同周期累加额度且固定首张到期；购买/普通码为 `standard` 继续原续期规则，两者期限及用量隔离。历史纯福利已迁移，详情与短版本r2部署见[当前交接](HANDOFF.md#当前代码和发布状态)和[额度记录](changes/2026-11-11-welfare-subscription-quota.md)。版本命名遵守DEV_GUIDE，不再追加功能名或SHA。
+
 `qq-invite` 是本仓内独立福利模块，另接同服务器NapCat Docker服务与普通福利QQ账号；不复用官方机器人OpenID，不替换生图/智商处理。管理员入口是“福利管理 → QQ邀请奖励”（`/admin/welfare`），包含“连接与扫码登录”和“活动与奖励”。源码 `backend/internal/napcat/`、`backend/internal/qqinvite/`、`backend/internal/handler/qq_invite*.go`、`frontend/src/components/admin/NapCatWelfarePanel.vue`。
 
 最新发布与生产部署以 [HANDOFF当前摘要](HANDOFF.md#当前代码和发布状态)及其带日期记录为准；实现背景见[首次开发记录](changes/2026-11-10-napcat-invite.md)，首次接入、已有部署升级与扫码见[部署指引](../deploy/NAPCAT_SETUP.md)。已有部署沿用原Compose项目及生产overlay、独立 `QQ_INVITE_ENCRYPTION_KEY` 和QQ会话；应用更新无需重新初始化。
