@@ -2983,14 +2983,19 @@ func runOpenAIResponsesWebSocketUsageLogCase(t *testing.T, tc openAIResponsesWSU
 	t.Helper()
 	gin.SetMode(gin.TestMode)
 
-	turnCount := 1
+	// A session update is an upstream frame, not a generated response or usage log.
+	frameCount, turnCount := 1, 1
 	if strings.TrimSpace(tc.midPayload) != "" {
-		turnCount++
+		frameCount++
+		if gjson.Get(tc.midPayload, "type").String() == "response.create" {
+			turnCount++
+		}
 	}
 	if strings.TrimSpace(tc.secondPayload) != "" {
+		frameCount++
 		turnCount++
 	}
-	upstreamPayloadCh := make(chan []byte, turnCount)
+	upstreamPayloadCh := make(chan []byte, frameCount)
 	upstreamErrCh := make(chan error, 1)
 	var channelSvc *service.ChannelService
 	upstreamServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -3016,7 +3021,8 @@ func runOpenAIResponsesWebSocketUsageLogCase(t *testing.T, tc openAIResponsesWSU
 			_ = conn.CloseNow()
 		}()
 
-		for turn := 1; turn <= turnCount; turn++ {
+		responseTurn := 0
+		for frame := 1; frame <= frameCount; frame++ {
 			readCtx, cancelRead := context.WithTimeout(r.Context(), 3*time.Second)
 			msgType, payload, readErr := conn.Read(readCtx)
 			cancelRead()
@@ -3029,23 +3035,27 @@ func runOpenAIResponsesWebSocketUsageLogCase(t *testing.T, tc openAIResponsesWSU
 				return
 			}
 			upstreamPayloadCh <- payload
-			if turn == 1 && tc.afterFirstUpstreamRequest != nil {
+			if frame == 1 && tc.afterFirstUpstreamRequest != nil {
 				if callbackErr := tc.afterFirstUpstreamRequest(channelSvc); callbackErr != nil {
 					upstreamErrCh <- callbackErr
 					return
 				}
 			}
 
-			response := fmt.Sprintf(
-				`{"type":"response.completed","response":{"id":"resp_usage_e2e_%d","model":%q,"usage":{"input_tokens":2,"output_tokens":1}}}`,
-				turn,
-				gjson.GetBytes(payload, "model").String(),
-			)
-			if turn == tc.cyberTurn {
+			response := `{"type":"session.updated"}`
+			if gjson.GetBytes(payload, "type").String() == "response.create" {
+				responseTurn++
 				response = fmt.Sprintf(
-					`{"type":"response.failed","response":{"id":"resp_usage_e2e_%d","model":%q,"status":"failed","error":{"code":"cyber_policy","message":"blocked by upstream policy"},"usage":{"input_tokens":2,"output_tokens":1}}}`,
-					turn, gjson.GetBytes(payload, "model").String(),
+					`{"type":"response.completed","response":{"id":"resp_usage_e2e_%d","model":%q,"usage":{"input_tokens":2,"output_tokens":1}}}`,
+					responseTurn,
+					gjson.GetBytes(payload, "model").String(),
 				)
+				if responseTurn == tc.cyberTurn {
+					response = fmt.Sprintf(
+						`{"type":"response.failed","response":{"id":"resp_usage_e2e_%d","model":%q,"status":"failed","error":{"code":"cyber_policy","message":"blocked by upstream policy"},"usage":{"input_tokens":2,"output_tokens":1}}}`,
+						responseTurn, gjson.GetBytes(payload, "model").String(),
+					)
+				}
 			}
 			writeCtx, cancelWrite := context.WithTimeout(r.Context(), 3*time.Second)
 			writeErr := conn.Write(writeCtx, coderws.MessageText, []byte(response))
@@ -3203,7 +3213,7 @@ func runOpenAIResponsesWebSocketUsageLogCase(t *testing.T, tc openAIResponsesWSU
 		c.Next()
 	})
 	var handlerDone chan struct{}
-	if tc.cyberTurn > 0 {
+	if tc.cyberTurn > 0 || strings.TrimSpace(tc.midPayload) != "" {
 		handlerDone = make(chan struct{})
 		router.GET("/openai/v1/responses", func(c *gin.Context) {
 			defer close(handlerDone)
@@ -3296,7 +3306,15 @@ func runOpenAIResponsesWebSocketUsageLogCase(t *testing.T, tc openAIResponsesWSU
 			_ = clientConn.CloseNow()
 			return openAIResponsesWSUsageLogResult{}
 		}
-		readCompleted()
+		if gjson.Get(tc.midPayload, "type").String() == "response.create" {
+			readCompleted()
+		} else {
+			readCtx, cancelRead := context.WithTimeout(context.Background(), 3*time.Second)
+			_, event, readErr := clientConn.Read(readCtx)
+			cancelRead()
+			require.NoError(t, readErr)
+			require.Equal(t, "session.updated", gjson.GetBytes(event, "type").String())
+		}
 	}
 	if strings.TrimSpace(tc.secondPayload) != "" && (turnCount >= 2) {
 		writeCtx, cancelWrite = context.WithTimeout(context.Background(), 3*time.Second)
@@ -3320,7 +3338,7 @@ func runOpenAIResponsesWebSocketUsageLogCase(t *testing.T, tc openAIResponsesWSU
 				reason = "not available for this group"
 			}
 			require.Contains(t, closeErr.Reason, reason)
-			require.Len(t, upstreamPayloadCh, turnCount-1, "rejected turn must not reach upstream")
+			require.Len(t, upstreamPayloadCh, frameCount-1, "rejected turn must not reach upstream")
 			_ = clientConn.CloseNow()
 			return openAIResponsesWSUsageLogResult{}
 		}
@@ -3339,8 +3357,8 @@ func runOpenAIResponsesWebSocketUsageLogCase(t *testing.T, tc openAIResponsesWSU
 		}
 	}
 
-	upstreamPayloads := make([][]byte, 0, turnCount)
-	for len(upstreamPayloads) < turnCount {
+	upstreamPayloads := make([][]byte, 0, frameCount)
+	for len(upstreamPayloads) < frameCount {
 		select {
 		case payload := <-upstreamPayloadCh:
 			upstreamPayloads = append(upstreamPayloads, payload)
@@ -3363,9 +3381,9 @@ func runOpenAIResponsesWebSocketUsageLogCase(t *testing.T, tc openAIResponsesWSU
 		select {
 		case <-handlerDone:
 		case <-time.After(3 * time.Second):
-			t.Fatal("websocket handler did not exit after the cyber turn")
+			t.Fatal("websocket handler did not exit after the completed turns")
 		}
-		require.Empty(t, usageRepo.created, "the failed turn must not also produce a normal usage record")
+		require.Empty(t, usageRepo.created, "only accepted response.create turns may produce usage records")
 	}
 
 	return openAIResponsesWSUsageLogResult{

@@ -3,6 +3,7 @@ package openai_ws_v2
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"net"
 	"sync/atomic"
@@ -13,6 +14,45 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/tidwall/gjson"
 )
+
+func TestObserveAnonymousTurnsFollowAcceptedRequests(t *testing.T) {
+	for _, ids := range [][2]string{{"", ""}, {"resp_created", ""}, {"", "resp_terminal"}, {"resp_same", "resp_same"}} {
+		t.Run(ids[0]+"/"+ids[1], func(t *testing.T) {
+			now := time.Unix(500, 0)
+			state := &relayState{requestModel: "gpt-6-luna"}
+			state.setPendingTurnStartedAt(now.Add(-time.Second))
+			observe := func(frame string) observedUpstreamEvent {
+				return observeUpstreamMessage(state, []byte(frame), now, func() time.Time { return now }, nil)
+			}
+			observe(fmt.Sprintf(`{"type":"response.created","response":{"id":%q,"model":"gpt-6-luna"}}`, ids[0]))
+			terminal := fmt.Sprintf(`{"type":"response.completed","response":{"id":%q,"model":"gpt-6-luna","service_tier":"priority","usage":{"input_tokens":1000000,"output_tokens":0,"input_tokens_details":{"cache_write_tokens":1000000,"cache_write_tokens_details":{"ttl_30m_tokens":0,"ttl_12h_tokens":1000000}}}}}`, ids[1])
+			first := observe(terminal)
+			var turns []RelayTurnResult
+			emitTurnComplete(func(turn RelayTurnResult) { turns = append(turns, turn) }, state, first)
+			require.Len(t, turns, 1)
+			require.Equal(t, now.Add(-time.Second), first.startedAt)
+			require.Equal(t, "gpt-6-luna", first.responseModel)
+			require.Equal(t, "priority", first.responseServiceTier)
+			expectedID := ids[1]
+			if expectedID == "" {
+				expectedID = ids[0]
+			}
+			require.Equal(t, expectedID, first.responseID)
+			require.False(t, observe(terminal).terminal, "duplicate cannot settle twice")
+			require.False(t, observe(`{"type":"response.completed","response":{"id":"late_id","usage":{"input_tokens":1000000,"output_tokens":0}}}`).terminal, "late ID cannot create an unaccepted turn")
+			require.Equal(t, 1000000, state.usage.InputTokens)
+			state.setPendingTurnStartedAt(now)
+			if ids[1] != "" {
+				require.False(t, observe(terminal).terminal, "old real-ID terminal cannot consume next accepted turn")
+			}
+			second := observe(`{"type":"response.failed","response":{"usage":{"input_tokens":1000000,"output_tokens":0,"input_tokens_details":{"cache_write_tokens":1000000}}}}`)
+			require.True(t, second.terminal)
+			require.Equal(t, 1000000, second.usage.CacheCreationInputTokens)
+			require.Zero(t, second.usage.CacheCreation12hInputTokens)
+			require.Equal(t, 2000000, state.usage.InputTokens)
+		})
+	}
+}
 
 func TestRunEntry_DelegatesRelay(t *testing.T) {
 	t.Parallel()
@@ -489,6 +529,7 @@ func TestObserveUpstreamMessageBareErrorBeforeNextCompletedKeepsBothTurns(t *tes
 	require.True(t, bare.terminal)
 	require.Equal(t, Usage{InputTokens: 5, OutputTokens: 1}, bare.usage)
 
+	state.setPendingTurnStartedAt(now)
 	completed := observeUpstreamMessage(
 		state,
 		[]byte(`{"type":"response.completed","response":{"id":"resp_next","usage":{"input_tokens":3,"output_tokens":2}}}`),
@@ -523,14 +564,14 @@ func TestEmitTurnCompleteCoverage(t *testing.T) {
 	})
 	require.Equal(t, 0, called)
 
-	// 非 error 终态缺少 response_id 时不应触发。
+	// Accepted terminal events settle even when the upstream omits response.id.
 	emitTurnComplete(func(turn RelayTurnResult) {
 		called++
 	}, &relayState{requestModel: "gpt-5"}, observedUpstreamEvent{
 		terminal:  true,
 		eventType: "response.completed",
 	})
-	require.Equal(t, 0, called)
+	require.Equal(t, 1, called)
 
 	// Bare error legitimately has no response_id; it must still settle the turn
 	// or a later completed turn would suppress the adapter's aggregate fallback.
@@ -543,7 +584,7 @@ func TestEmitTurnCompleteCoverage(t *testing.T) {
 		eventType: "error",
 		usage:     Usage{InputTokens: 4, OutputTokens: 1},
 	})
-	require.Equal(t, 1, called)
+	require.Equal(t, 2, called)
 	require.Empty(t, bareError.RequestID)
 	require.Equal(t, "error", bareError.TerminalEventType)
 	require.Equal(t, Usage{InputTokens: 4, OutputTokens: 1}, bareError.Usage)
@@ -559,7 +600,7 @@ func TestEmitTurnCompleteCoverage(t *testing.T) {
 		responseID: "resp_emit",
 		usage:      Usage{InputTokens: 2, OutputTokens: 3},
 	})
-	require.Equal(t, 2, called)
+	require.Equal(t, 3, called)
 	require.Equal(t, "resp_emit", got.RequestID)
 	require.Equal(t, "response.completed", got.TerminalEventType)
 	require.Equal(t, 2, got.Usage.InputTokens)
@@ -693,6 +734,7 @@ func TestObserveUpstreamMessage_ResponseModelIsTurnLocalAndTerminalWins(t *testi
 	require.Equal(t, "gpt-5.4", firstTurn.ResponseModel)
 	require.True(t, firstTurn.ResponseModelConflict)
 
+	state.setPendingTurnStartedAt(now)
 	observeUpstreamMessage(
 		state,
 		[]byte(`{"type":"response.created","response":{"id":"resp_2","model":"gpt-5.3"}}`),
@@ -785,6 +827,7 @@ func TestObserveUpstreamMessage_ResponseServiceTierOnlyFromTerminalEvents(t *tes
 	require.Equal(t, "default", result.ResponseServiceTier)
 
 	// A later turn without any declaration must not inherit the previous one.
+	state.setPendingTurnStartedAt(now)
 	observeUpstreamMessage(state, []byte(`{"type":"response.created","response":{"id":"resp_2","model":"gpt-5.6-sol"}}`), startAt, nowFn, nil)
 	second := observeUpstreamMessage(
 		state,

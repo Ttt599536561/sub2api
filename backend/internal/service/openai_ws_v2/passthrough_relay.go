@@ -120,6 +120,8 @@ type relayState struct {
 	firstTokenMs            *int
 	turnTimingByID          map[string]*relayTurnTiming
 	activeTurn              *relayTurnTiming
+	turnSettled             bool
+	settledResponseIDs      map[string]struct{}
 	pendingBareError        *observedUpstreamEvent
 	isFirstTokenEvent       func(eventType string, message []byte) bool
 }
@@ -132,6 +134,7 @@ type relayExitSignal struct {
 }
 
 type observedUpstreamEvent struct {
+	requestModel        string
 	terminal            bool
 	eventType           string
 	responseID          string
@@ -145,6 +148,7 @@ type observedUpstreamEvent struct {
 }
 
 type relayTurnTiming struct {
+	requestModel          string
 	startAt               time.Time
 	firstTokenMs          *int
 	firstResponseModel    string
@@ -772,6 +776,9 @@ func observeUpstreamMessage(
 	if responseID == "" && isTerminalEvent(eventType) {
 		responseID = strings.TrimSpace(values[3].String())
 	}
+	if _, settled := state.settledResponseIDs[responseID]; responseID != "" && settled {
+		return observedUpstreamEvent{}
+	}
 	now := nowFn()
 
 	if state.firstTokenMs == nil && state.startsFirstToken(eventType, message) {
@@ -780,18 +787,18 @@ func observeUpstreamMessage(
 			state.firstTokenMs = &ms
 		}
 	}
+	// An upstream terminal cannot create another billable turn after settlement.
+	// In particular, a repeated anonymous terminal (or one gaining an ID later)
+	// must not enter usage accumulation before another response.create is accepted.
+	if state.turnSettled && !state.hasUnfinishedTurn() {
+		return observedUpstreamEvent{}
+	}
+	turnTiming := openAIWSRelayGetOrInitTurnTiming(state, responseID, now)
 	parsedUsage := parseUsageAndAccumulate(state, message, eventType, onUsageParseFailure)
 	observed := observedUpstreamEvent{
 		eventType:  eventType,
 		responseID: responseID,
 		usage:      parsedUsage,
-	}
-	var turnTiming *relayTurnTiming
-	if responseID != "" {
-		turnTiming = openAIWSRelayGetOrInitTurnTiming(state, responseID, now)
-	} else {
-		// delta 等 token 事件不携带 response.id，归属当前活跃 turn。
-		turnTiming = state.activeTurn
 	}
 	// 每个 turn 独立记录首 token；连接级 firstTokenMs 只反映整条连接的第一个 token。
 	if turnTiming != nil && turnTiming.firstTokenMs == nil && state.startsFirstToken(eventType, message) {
@@ -858,27 +865,35 @@ func finalizeObservedRelayTerminal(state *relayState, observed observedUpstreamE
 	observed.usage = finalizeRelayTurnUsage(state)
 	observed.terminal = true
 	responseID := strings.TrimSpace(observed.responseID)
+	if responseID == "" {
+		responseID = openAIWSRelayActiveTurnID(state)
+		observed.responseID = responseID
+	}
 	if responseID != "" {
 		state.lastResponseID = responseID
-		if turnTiming, ok := openAIWSRelayDeleteTurnTiming(state, responseID); ok {
-			observed.responseModel = relayTurnResponseModel(&turnTiming)
-			observed.responseConflict = turnTiming.responseModelConflict
-			observed.responseServiceTier = turnTiming.terminalResponseServiceTier
-			state.lastResponseModel = observed.responseModel
-			state.responseConflict = observed.responseConflict
-			state.lastResponseServiceTier = observed.responseServiceTier
-			duration := now.Sub(turnTiming.startAt)
-			if duration < 0 {
-				duration = 0
-			}
-			observed.startedAt = turnTiming.startAt
-			observed.duration = duration
-			observed.firstToken = openAIWSRelayCloneIntPtr(turnTiming.firstTokenMs)
+	}
+	if turnTiming := state.activeTurn; turnTiming != nil {
+		observed.requestModel = turnTiming.requestModel
+		observed.responseModel = relayTurnResponseModel(turnTiming)
+		observed.responseConflict = turnTiming.responseModelConflict
+		observed.responseServiceTier = turnTiming.terminalResponseServiceTier
+		state.lastResponseModel = observed.responseModel
+		state.responseConflict = observed.responseConflict
+		state.lastResponseServiceTier = observed.responseServiceTier
+		observed.startedAt = turnTiming.startAt
+		observed.duration = max(now.Sub(turnTiming.startAt), 0)
+		observed.firstToken = openAIWSRelayCloneIntPtr(turnTiming.firstTokenMs)
+		if state.settledResponseIDs == nil {
+			state.settledResponseIDs = make(map[string]struct{})
 		}
-	} else {
-		state.consumePendingTurnStartedAt()
+		for id, timing := range state.turnTimingByID {
+			if timing == turnTiming {
+				state.settledResponseIDs[id] = struct{}{}
+			}
+		}
 		openAIWSRelayDiscardActiveTurnTiming(state)
 	}
+	state.turnSettled = true
 	return observed
 }
 
@@ -891,11 +906,8 @@ func emitTurnComplete(
 		return
 	}
 	responseID := strings.TrimSpace(observed.responseID)
-	if responseID == "" && strings.TrimSpace(observed.eventType) != "error" {
-		return
-	}
-	requestModel := ""
-	if state != nil {
+	requestModel := observed.requestModel
+	if requestModel == "" && state != nil {
 		requestModel = state.currentRequestModel()
 	}
 	onTurnComplete(RelayTurnResult{
@@ -991,17 +1003,26 @@ func openAIWSRelayGetOrInitTurnTiming(state *relayState, responseID string, now 
 	if state.turnTimingByID == nil {
 		state.turnTimingByID = make(map[string]*relayTurnTiming, 8)
 	}
-	timing, ok := state.turnTimingByID[responseID]
-	if !ok || timing == nil || timing.startAt.IsZero() {
-		startAt := state.consumePendingTurnStartedAt()
-		if startAt.IsZero() {
-			startAt = now
-		}
-		timing = &relayTurnTiming{startAt: startAt}
-		state.turnTimingByID[responseID] = timing
-		state.activeTurn = timing
+	if timing := state.turnTimingByID[responseID]; timing != nil {
 		return timing
 	}
+	// response.created and terminal events may independently omit response.id.
+	// Bind a later real ID to the same accepted request's timing and metadata.
+	if state.activeTurn != nil {
+		if responseID != "" {
+			state.turnTimingByID[responseID] = state.activeTurn
+		}
+		return state.activeTurn
+	}
+	startAt := state.consumePendingTurnStartedAt()
+	if startAt.IsZero() {
+		startAt = now
+	}
+	timing := &relayTurnTiming{startAt: startAt, requestModel: state.currentRequestModel()}
+	if responseID != "" {
+		state.turnTimingByID[responseID] = timing
+	}
+	state.activeTurn = timing
 	return timing
 }
 

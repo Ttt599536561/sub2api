@@ -752,6 +752,7 @@ import { useI18n } from 'vue-i18n'
 import { adminAPI } from '@/api/admin'
 import type { Account, AccountUsageInfo, GeminiCredentials, WindowStats } from '@/types'
 import { buildOpenAIUsageRefreshKey } from '@/utils/accountUsageRefresh'
+import { ownedAuthRequestConfig } from '@/api/client'
 import { enqueueUsageRequest } from '@/utils/usageLoadQueue'
 import { formatCompactNumber } from '@/utils/format'
 import { isOfficialGeminiBaseUrl } from '@/utils/geminiExplicitCache'
@@ -771,8 +772,8 @@ import {
 } from './credentialsBuilder'
 import OpenCodeGoUsageCell from './OpenCodeGoUsageCell.vue'
 
-// Module-level cache shared across all AccountUsageCell instances
-const _usageCache = new Map<number, { data: AccountUsageInfo; ts: number }>()
+// Instance cache: ownership includes the browser login and account kind.
+const _usageCache = new Map<string, { data: AccountUsageInfo; ts: number }>()
 const USAGE_CACHE_TTL = 5 * 60 * 1000 // 5 minutes
 
 const props = withDefaults(
@@ -812,9 +813,6 @@ const loading = ref(false)
 const activeQueryLoading = ref(false)
 const error = ref<string | null>(null)
 const usageInfo = ref<AccountUsageInfo | null>(null)
-watch(usageInfo, (usage) => {
-  if (usage) emit('usage-loaded', usage)
-})
 const rootRef = ref<HTMLElement | null>(null)
 const isDesktopViewport = ref(
   typeof window === 'undefined' ? true : window.matchMedia(desktopViewportQuery).matches
@@ -1535,6 +1533,44 @@ const syncManagedUsageState = () => {
   loading.value = props.batchedUsageLoading === true
 }
 
+let usageRequestSequence = 0
+const usageCacheKey = () => JSON.stringify([
+  ownedAuthRequestConfig().authIdentity, props.account.id, props.account.platform, props.account.type
+])
+const captureUsageRequest = () => {
+  activeQueryLoading.value = false
+  return {
+    sequence: ++usageRequestSequence,
+    cacheKey: usageCacheKey(),
+    batchSource: props.requestBatchedUsage
+  }
+}
+const isLatestUsageRequest = (request: ReturnType<typeof captureUsageRequest>) =>
+  !unmounted.value && request.sequence === usageRequestSequence
+const isCurrentUsageRequest = (request: ReturnType<typeof captureUsageRequest>) =>
+  isLatestUsageRequest(request) &&
+  request.cacheKey === usageCacheKey() && request.batchSource === props.requestBatchedUsage
+
+watch(
+  () => [props.account.id, props.account.platform, props.account.type, props.requestBatchedUsage] as const,
+  (next, previous) => {
+    if (next.every((value, index) => value === previous[index])) return
+    usageRequestSequence++
+    activeQueryLoading.value = false
+    loading.value = false
+  },
+  { flush: 'sync' }
+)
+
+// Only accepted network responses notify the parent; prop/cache replays must not renew its TTL.
+const acceptUsageResult = (result: AccountUsageInfo, cacheKey: string) => {
+  _usageCache.set(cacheKey, { data: result, ts: Date.now() })
+  usageInfo.value = result
+  error.value = null
+  loading.value = false
+  emit('usage-loaded', result)
+}
+
 const loadUsage = async (options?: { source?: 'passive' | 'active'; bypassCache?: boolean }) => {
   if (!shouldFetchUsage.value) return
   if (isBatchManaged.value) {
@@ -1542,9 +1578,11 @@ const loadUsage = async (options?: { source?: 'passive' | 'active'; bypassCache?
     return
   }
 
+  const request = captureUsageRequest()
+
   // Check cache
   if (!options?.bypassCache) {
-    const cached = _usageCache.get(props.account.id)
+    const cached = _usageCache.get(request.cacheKey)
     if (cached && Date.now() - cached.ts < USAGE_CACHE_TTL) {
       usageInfo.value = cached.data
       loading.value = false
@@ -1560,17 +1598,14 @@ const loadUsage = async (options?: { source?: 'passive' | 'active'; bypassCache?
 			? adminAPI.accounts.getUsage(props.account.id, options.source, options.bypassCache === true)
 			: adminAPI.accounts.getUsage(props.account.id)
     const result = await enqueueUsageRequest(props.account, fetchFn)
-    if (!unmounted.value) {
-      usageInfo.value = result
-      _usageCache.set(props.account.id, { data: result, ts: Date.now() })
-    }
+    if (isCurrentUsageRequest(request)) acceptUsageResult(result, request.cacheKey)
   } catch (e: any) {
-    if (!unmounted.value) {
+    if (isCurrentUsageRequest(request)) {
       error.value = t('common.error')
       console.error('Failed to load usage:', e)
     }
   } finally {
-    if (!unmounted.value) loading.value = false
+    if (isLatestUsageRequest(request)) loading.value = false
   }
 }
 
@@ -1625,14 +1660,15 @@ const attachVisibilityObserver = () => {
 }
 
 const loadActiveUsage = async () => {
+  const request = captureUsageRequest()
   activeQueryLoading.value = true
   try {
-    usageInfo.value = await adminAPI.accounts.getUsage(props.account.id, 'active', true)
-    error.value = null
+    const result = await adminAPI.accounts.getUsage(props.account.id, 'active', true)
+    if (isCurrentUsageRequest(request)) acceptUsageResult(result, request.cacheKey)
   } catch (e: any) {
-    console.error('Failed to load active usage:', e)
+    if (isCurrentUsageRequest(request)) console.error('Failed to load active usage:', e)
   } finally {
-    activeQueryLoading.value = false
+    if (isLatestUsageRequest(request)) activeQueryLoading.value = false
   }
 }
 
@@ -1807,7 +1843,7 @@ watch(openAIUsageRefreshKey, (nextKey, prevKey) => {
     return
   }
 
-  _usageCache.delete(props.account.id)
+  _usageCache.delete(usageCacheKey())
   requestAutoLoad()
 })
 
@@ -1823,7 +1859,7 @@ watch(
     }
 
     const source = isAnthropicOAuthOrSetupToken.value ? 'passive' : undefined
-    _usageCache.delete(props.account.id)
+    _usageCache.delete(usageCacheKey())
     loadUsage({ source, bypassCache: true }).catch((e) => {
       console.error('Failed to refresh usage after manual refresh:', e)
     })

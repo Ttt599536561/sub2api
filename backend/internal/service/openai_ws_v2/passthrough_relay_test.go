@@ -611,8 +611,7 @@ func TestRelay_MultipleUpstreamMessages(t *testing.T) {
 func TestRelay_OnTurnComplete_PerTerminalEvent(t *testing.T) {
 	t.Parallel()
 
-	clientConn := newPassthroughTestFrameConn(nil, false)
-	upstreamConn := newPassthroughTestFrameConn([]passthroughTestFrame{
+	clientConn, upstreamConn := newAcceptedTurnTestConns([]passthroughTestFrame{
 		{
 			msgType: coderws.MessageText,
 			payload: []byte(`{"type":"response.completed","response":{"id":"resp_turn_1","usage":{"input_tokens":2,"output_tokens":1}}}`),
@@ -621,7 +620,7 @@ func TestRelay_OnTurnComplete_PerTerminalEvent(t *testing.T) {
 			msgType: coderws.MessageText,
 			payload: []byte(`{"type":"response.failed","response":{"id":"resp_turn_2","usage":{"input_tokens":3,"output_tokens":4}}}`),
 		},
-	}, true)
+	}, "gpt-5.4")
 
 	firstPayload := []byte(`{"type":"response.create","model":"gpt-5.3-codex","input":[]}`)
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
@@ -650,8 +649,7 @@ func TestRelay_OnTurnComplete_PerTerminalEvent(t *testing.T) {
 func TestRelay_OnTurnComplete_BareErrorWithoutIDBeforeLaterCompleted(t *testing.T) {
 	t.Parallel()
 
-	clientConn := newPassthroughTestFrameConn(nil, false)
-	upstreamConn := newPassthroughTestFrameConn([]passthroughTestFrame{
+	clientConn, upstreamConn := newAcceptedTurnTestConns([]passthroughTestFrame{
 		{
 			msgType: coderws.MessageText,
 			payload: []byte(`{"type":"error","usage":{"input_tokens":5,"output_tokens":1},"error":{"message":"first turn failed"}}`),
@@ -660,7 +658,7 @@ func TestRelay_OnTurnComplete_BareErrorWithoutIDBeforeLaterCompleted(t *testing.
 			msgType: coderws.MessageText,
 			payload: []byte(`{"type":"response.completed","response":{"id":"resp_next","usage":{"input_tokens":3,"output_tokens":2}}}`),
 		},
-	}, true)
+	}, "gpt-5.4")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()

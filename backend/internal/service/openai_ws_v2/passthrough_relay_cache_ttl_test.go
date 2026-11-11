@@ -102,7 +102,8 @@ func TestRelay_CacheTTLMultiTurnAggregation(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 			defer cancel()
 			var turns []RelayTurnResult
-			result, exit := Relay(ctx, newPassthroughTestFrameConn(nil, false), newPassthroughTestFrameConn(frames, true),
+			client, upstream := newAcceptedTurnTestConns(frames, "gpt-6-luna")
+			result, exit := Relay(ctx, client, upstream,
 				[]byte(`{"type":"response.create","model":"gpt-6-luna"}`), RelayOptions{OnTurnComplete: func(turn RelayTurnResult) { turns = append(turns, turn) }})
 			require.Nil(t, exit)
 			require.Len(t, turns, 3)

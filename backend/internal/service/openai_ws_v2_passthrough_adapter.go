@@ -16,6 +16,7 @@ import (
 	openaiwsv2 "github.com/Wei-Shaw/sub2api/internal/service/openai_ws_v2"
 	coderws "github.com/coder/websocket"
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"github.com/tidwall/gjson"
 )
 
@@ -1179,6 +1180,14 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 	if hooks != nil {
 		firstTurnStartedAt = hooks.InitialTurnStartedAt
 	}
+	// An anonymous response still needs a per-turn billing idempotency key.
+	// This identifier is internal only; response frames and real upstream IDs
+	// remain unchanged. A fresh connection gets a fresh namespace.
+	anonymousBillingPrefix := "ws_turn_" + uuid.NewString()
+	// Only a terminal accepted by the relay may reopen request admission.
+	// Raw duplicate terminal frames still go to the client, but cannot unlock
+	// the following request while its response is still in flight.
+	settledTerminalWrite := false
 	failureAccountSideEffectsApplied := false
 	relayResult, relayExit := openaiwsv2.RunEntry(openaiwsv2.EntryInput{
 		Ctx:                ctx,
@@ -1212,13 +1221,18 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 				)
 			},
 			OnTurnComplete: func(turn openaiwsv2.RelayTurnResult) {
+				settledTerminalWrite = turn.TerminalEventType != "error"
 				turnNo := int(completedTurns.Add(1))
 				if hooks != nil && hooks.TurnStarted != nil && !turn.StartedAt.IsZero() {
 					hooks.TurnStarted(turnNo, turn.StartedAt)
 				}
+				requestID := turn.RequestID
+				if requestID == "" {
+					requestID = fmt.Sprintf("%s_%d", anonymousBillingPrefix, turnNo)
+				}
 				turnRequestModel, turnUpstreamModel := usageMeta.turnModels(turn.RequestModel)
 				turnResult := &OpenAIForwardResult{
-					RequestID: turn.RequestID,
+					RequestID: requestID,
 					Usage: OpenAIUsage{
 						InputTokens:                 turn.Usage.InputTokens,
 						ImageInputTokens:            turn.Usage.ImageInputTokens,
@@ -1263,7 +1277,7 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 				}
 			},
 			BeforeClientWrite: func(msgType coderws.MessageType, payload []byte) {
-				if msgType == coderws.MessageText && openAIWSPassthroughIsTerminalOutput(payload) {
+				if msgType == coderws.MessageText && settledTerminalWrite && openAIWSPassthroughIsTerminalOutput(payload) {
 					turnLifecycle.beginTerminalWrite()
 				}
 			},
@@ -1272,8 +1286,9 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 					eventType, _, _ := parseOpenAIWSEventEnvelope(payload)
 					markOpenAIWSClientVisibleFailure(c, eventType, payload)
 				}
-				if msgType == coderws.MessageText && openAIWSPassthroughIsTerminalOutput(payload) {
+				if msgType == coderws.MessageText && settledTerminalWrite && openAIWSPassthroughIsTerminalOutput(payload) {
 					turnLifecycle.finishTerminalWrite(writeErr == nil, clientFrameConn.markTurnCompleted)
+					settledTerminalWrite = false
 				}
 			},
 			BeforeRelayCancel: func(exit openaiwsv2.RelayExit) {

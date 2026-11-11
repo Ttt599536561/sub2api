@@ -323,7 +323,7 @@
               :batched-usage-loading="usageBatchLoadingByAccountId[String(row.id)] === true"
               :request-batched-usage="isDesktopViewport ? queueBatchedUsage : null"
               @account-updated="handleAccountUpdated"
-              @usage-loaded="handleAccountUsageLoaded(row.id, $event)"
+              @usage-loaded="handleAccountUsageLoaded(row, $event)"
             />
           </template>
           <template #cell-proxy="{ row }">
@@ -495,6 +495,7 @@ import { useIntervalFn } from '@vueuse/core'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
 import { useAuthStore } from '@/stores/auth'
+import { ownedAuthRequestConfig } from '@/api/client'
 import { adminAPI } from '@/api/admin'
 import { CONCRETE_PLATFORM_OPTIONS } from '@/constants/platforms'
 import { useTableLoader } from '@/composables/useTableLoader'
@@ -747,7 +748,7 @@ const usageBatchByAccountId = ref<Record<string, AccountUsageInfo | null>>({})
 const usageBatchErrorByAccountId = ref<Record<string, string | null>>({})
 const usageBatchLoadingByAccountId = ref<Record<string, boolean>>({})
 const usageBatchRequestTokenByAccountId = ref<Record<string, number>>({})
-const usageBatchCache = new Map<number, { data: AccountUsageInfo; ts: number }>()
+const usageBatchCache = new Map<number, { data: AccountUsageInfo; ts: number; owner: string }>()
 const USAGE_BATCH_CACHE_TTL = 5 * 60 * 1000
 const pendingUsageBatchIds = new Set<number>()
 let usageBatchFlushTimer: ReturnType<typeof setTimeout> | null = null
@@ -792,9 +793,18 @@ const setUsageBatchState = (accountID: number, usage: AccountUsageInfo | null, e
   }
 }
 
-const handleAccountUsageLoaded = (accountID: number, usage: AccountUsageInfo) => {
-  if (usageBatchByAccountId.value[String(accountID)] === usage) return
+const usageBatchOwner = (account: Account) => JSON.stringify([
+  ownedAuthRequestConfig().authIdentity, account.id, account.platform, account.type
+])
+
+const handleAccountUsageLoaded = (account: Account, usage: AccountUsageInfo) => {
+  const accountID = account.id
+  // A direct query has accepted a fresh result. Retire earlier queued/in-flight batches.
+  pendingUsageBatchIds.delete(accountID)
+  usageBatchRequestTokenByAccountId.value[String(accountID)] = ++usageBatchRequestToken
+  usageBatchCache.set(accountID, { data: usage, ts: Date.now(), owner: usageBatchOwner(account) })
   setUsageBatchState(accountID, usage, null)
+  setUsageBatchLoading(accountID, false)
 }
 
 const flushQueuedUsageBatch = async () => {
@@ -811,6 +821,14 @@ const flushQueuedUsageBatch = async () => {
     return acc
   }, {})
 
+  const ownersByAccount = new Map(accounts.value
+    .filter(account => accountIDs.includes(account.id))
+    .map(account => [account.id, usageBatchOwner(account)]))
+  const ownsAccount = (accountID: number) => {
+    const account = accounts.value.find(account => account.id === accountID)
+    return !!account && ownersByAccount.get(accountID) === usageBatchOwner(account)
+  }
+
   try {
     const result = await adminAPI.accounts.getBatchUsage(accountIDs, force)
 
@@ -823,7 +841,7 @@ const flushQueuedUsageBatch = async () => {
 
     for (const accountID of accountIDs) {
       const key = String(accountID)
-      if ((usageBatchRequestTokenByAccountId.value[key] ?? 0) !== requestTokensByAccount[key]) {
+      if (!ownsAccount(accountID) || (usageBatchRequestTokenByAccountId.value[key] ?? 0) !== requestTokensByAccount[key]) {
         continue
       }
       const usage = usageMap[key] ?? null
@@ -831,7 +849,7 @@ const flushQueuedUsageBatch = async () => {
       nextErrors[key] = errorMap[key] ?? null
       nextLoading[key] = false
       if (usage) {
-        usageBatchCache.set(accountID, { data: usage, ts: now })
+        usageBatchCache.set(accountID, { data: usage, ts: now, owner: ownersByAccount.get(accountID)! })
       } else {
         usageBatchCache.delete(accountID)
       }
@@ -845,7 +863,7 @@ const flushQueuedUsageBatch = async () => {
     const nextLoading = { ...usageBatchLoadingByAccountId.value }
     for (const accountID of accountIDs) {
       const key = String(accountID)
-      if ((usageBatchRequestTokenByAccountId.value[key] ?? 0) !== requestTokensByAccount[key]) {
+      if (!ownsAccount(accountID) || (usageBatchRequestTokenByAccountId.value[key] ?? 0) !== requestTokensByAccount[key]) {
         continue
       }
       nextErrors[key] = 'Failed'
@@ -869,7 +887,7 @@ const queueBatchedUsage = (account: Account, options?: { force?: boolean }) => {
     usageBatchCache.delete(cacheKey)
   } else {
     const cached = usageBatchCache.get(cacheKey)
-    if (cached && Date.now() - cached.ts < USAGE_BATCH_CACHE_TTL) {
+    if (cached && cached.owner === usageBatchOwner(account) && Date.now() - cached.ts < USAGE_BATCH_CACHE_TTL) {
       setUsageBatchState(cacheKey, cached.data, null)
       setUsageBatchLoading(cacheKey, false)
       return

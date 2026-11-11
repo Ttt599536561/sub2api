@@ -15,13 +15,12 @@ import (
 func TestRelay_ImageUsageMatchesHTTPResponsesAccounting(t *testing.T) {
 	t.Parallel()
 
-	clientConn := newPassthroughTestFrameConn(nil, false)
-	upstreamConn := newPassthroughTestFrameConn([]passthroughTestFrame{
+	clientConn, upstreamConn := newAcceptedTurnTestConns([]passthroughTestFrame{
 		{msgType: coderws.MessageText, payload: []byte(`{"type":"response.completed","response":{"id":"resp_tool_image","usage":{"input_tokens":100,"output_tokens":60},"tool_usage":{"image_gen":{"input_tokens_details":{"image_tokens":80},"output_tokens_details":{"image_tokens":50}}}}}`)},
 		{msgType: coderws.MessageText, payload: []byte(`{"type":"response.completed","response":{"id":"resp_explicit_image","usage":{"input_tokens":30,"output_tokens":15,"input_tokens_details":{"image_tokens":20},"output_tokens_details":{"image_tokens":10}},"tool_usage":{"image_gen":{"input_tokens_details":{"image_tokens":800},"output_tokens_details":{"image_tokens":500}}}}}`)},
 		{msgType: coderws.MessageText, payload: []byte(`{"type":"response.completed","response":{"id":"resp_prompt_details","usage":{"prompt_tokens":12,"completion_tokens":2,"prompt_tokens_details":{"image_tokens":7}}}}`)},
 		{msgType: coderws.MessageText, payload: []byte(`{"type":"response.completed","response":{"id":"resp_text","usage":{"input_tokens":3,"output_tokens":4}}}`)},
-	}, true)
+	}, "gpt-5.4")
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
