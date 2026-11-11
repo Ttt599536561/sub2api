@@ -4,6 +4,10 @@
 
 2026-11-11：0.2.20-r3 Linux镜像已发布并通过SSH部署生产，固定应用33961e3b、控制ed7d5bfe、digest24451524…；完整CI/Security、两架构运行、五产物及24层匿名验证通过。03:16线上健康与指定QQ在线复核通过，原数据库/Redis/NapCat及密钥、数据保留。允许未启用、从未启用且无库存/邀请历史的草稿改月卡分组；真实reason错误提示和保存后的版本接纳已修复。见[最新发布记录](../deploy/CUSTOM_IMAGE_0.2.20-r3.md)和[修复验收](changes/2026-11-11-napcat-campaign-group.md)。下方条目保留各自历史时点。
 
+## 2026-11-11 操作指引与清理核对
+
+已同步r3操作指引、已有实例升级路径和草稿换组规则，并纳入[首次部署历史](changes/2026-11-11-napcat-deployment.md)。用户请求的本地临时文件清理已完成路径/占用/摘要核对，但自动审批返回blocked by policy，约467 MiB目标仍全部保留，实际删除0字节。不要误记为已清理；范围、保全及限制见[本轮记录](changes/2026-11-11-napcat-docs-cleanup.md)。本轮未改动生产。
+
 ## 2026-11-11 0.2.20-r2 NapCat邀请月卡镜像已发布
 
 应用源码 `1eadf763b01fb19a3875530ce4cd5aa31bf2512b`、发布控制 `39345af12728d84d290a4148bde8451867b92352`，公开镜像 `ghcr.io/ttt599536561/sub2api-custom:0.2.20-r2`，固定digest `sha256:cd135778bf914193b3b4405af8f2b09388bd7e6945913ad43a576c43b514a754`。应用及控制CI/Security、原生linux/amd64与arm64实际运行、五份产物、全部24层匿名校验和独立终审通过。源码已整合本地/GitHub main，原23项WIP保全，不纳入镜像。服务器由用户自行更新；新邀请后台需要同机独立NapCat容器、指定普通QQ号扫码、群成员基线和库存后才启用。具体地址、失败修正、验证及回退见[发布记录](../deploy/CUSTOM_IMAGE_0.2.20-r2.md)，操作见[简明部署](../deploy/NAPCAT_QUICKSTART.md)。尚未部署用户服务器、登录QQ或发送真实消息。
