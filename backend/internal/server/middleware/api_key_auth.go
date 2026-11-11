@@ -203,7 +203,7 @@ func apiKeyAuthWithSubscription(apiKeyService *service.APIKeyService, subscripti
 
 		// 倍率自省不需要订阅数据；/v1/usage 仍保留原有订阅读取行为。
 		if isSubscriptionType && subscriptionService != nil && !billingInfoRequest && skipBilling {
-			sub, subErr := subscriptionService.GetActiveSubscription(
+			sub, subErr := subscriptionService.GetSubscriptionForUsage(
 				c.Request.Context(),
 				apiKey.User.ID,
 				apiKey.Group.ID,
@@ -216,6 +216,7 @@ func apiKeyAuthWithSubscription(apiKeyService *service.APIKeyService, subscripti
 				// skipBilling: 订阅不存在也放行，handler 会返回可用的数据
 			} else {
 				subscription = sub
+				apiKey.Group = sub.EffectiveGroup(apiKey.Group)
 			}
 		}
 

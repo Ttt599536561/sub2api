@@ -57427,6 +57427,16 @@ type UserSubscriptionMutation struct {
 	created_at                    *time.Time
 	updated_at                    *time.Time
 	deleted_at                    *time.Time
+	entitlement_kind              *string
+	welfare_daily_limit_usd       *float64
+	addwelfare_daily_limit_usd    *float64
+	welfare_weekly_limit_usd      *float64
+	addwelfare_weekly_limit_usd   *float64
+	welfare_monthly_limit_usd     *float64
+	addwelfare_monthly_limit_usd  *float64
+	welfare_grant_count           *int64
+	addwelfare_grant_count        *int64
+	welfare_cycle_closed          *bool
 	starts_at                     *time.Time
 	expires_at                    *time.Time
 	status                        *string
@@ -57749,6 +57759,344 @@ func (m *UserSubscriptionMutation) OldGroupID(ctx context.Context) (v int64, err
 // ResetGroupID resets all changes to the "group_id" field.
 func (m *UserSubscriptionMutation) ResetGroupID() {
 	m.group = nil
+}
+
+// SetEntitlementKind sets the "entitlement_kind" field.
+func (m *UserSubscriptionMutation) SetEntitlementKind(s string) {
+	m.entitlement_kind = &s
+}
+
+// EntitlementKind returns the value of the "entitlement_kind" field in the mutation.
+func (m *UserSubscriptionMutation) EntitlementKind() (r string, exists bool) {
+	v := m.entitlement_kind
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldEntitlementKind returns the old "entitlement_kind" field's value of the UserSubscription entity.
+// If the UserSubscription object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UserSubscriptionMutation) OldEntitlementKind(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldEntitlementKind is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldEntitlementKind requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldEntitlementKind: %w", err)
+	}
+	return oldValue.EntitlementKind, nil
+}
+
+// ResetEntitlementKind resets all changes to the "entitlement_kind" field.
+func (m *UserSubscriptionMutation) ResetEntitlementKind() {
+	m.entitlement_kind = nil
+}
+
+// SetWelfareDailyLimitUsd sets the "welfare_daily_limit_usd" field.
+func (m *UserSubscriptionMutation) SetWelfareDailyLimitUsd(f float64) {
+	m.welfare_daily_limit_usd = &f
+	m.addwelfare_daily_limit_usd = nil
+}
+
+// WelfareDailyLimitUsd returns the value of the "welfare_daily_limit_usd" field in the mutation.
+func (m *UserSubscriptionMutation) WelfareDailyLimitUsd() (r float64, exists bool) {
+	v := m.welfare_daily_limit_usd
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldWelfareDailyLimitUsd returns the old "welfare_daily_limit_usd" field's value of the UserSubscription entity.
+// If the UserSubscription object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UserSubscriptionMutation) OldWelfareDailyLimitUsd(ctx context.Context) (v *float64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldWelfareDailyLimitUsd is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldWelfareDailyLimitUsd requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldWelfareDailyLimitUsd: %w", err)
+	}
+	return oldValue.WelfareDailyLimitUsd, nil
+}
+
+// AddWelfareDailyLimitUsd adds f to the "welfare_daily_limit_usd" field.
+func (m *UserSubscriptionMutation) AddWelfareDailyLimitUsd(f float64) {
+	if m.addwelfare_daily_limit_usd != nil {
+		*m.addwelfare_daily_limit_usd += f
+	} else {
+		m.addwelfare_daily_limit_usd = &f
+	}
+}
+
+// AddedWelfareDailyLimitUsd returns the value that was added to the "welfare_daily_limit_usd" field in this mutation.
+func (m *UserSubscriptionMutation) AddedWelfareDailyLimitUsd() (r float64, exists bool) {
+	v := m.addwelfare_daily_limit_usd
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearWelfareDailyLimitUsd clears the value of the "welfare_daily_limit_usd" field.
+func (m *UserSubscriptionMutation) ClearWelfareDailyLimitUsd() {
+	m.welfare_daily_limit_usd = nil
+	m.addwelfare_daily_limit_usd = nil
+	m.clearedFields[usersubscription.FieldWelfareDailyLimitUsd] = struct{}{}
+}
+
+// WelfareDailyLimitUsdCleared returns if the "welfare_daily_limit_usd" field was cleared in this mutation.
+func (m *UserSubscriptionMutation) WelfareDailyLimitUsdCleared() bool {
+	_, ok := m.clearedFields[usersubscription.FieldWelfareDailyLimitUsd]
+	return ok
+}
+
+// ResetWelfareDailyLimitUsd resets all changes to the "welfare_daily_limit_usd" field.
+func (m *UserSubscriptionMutation) ResetWelfareDailyLimitUsd() {
+	m.welfare_daily_limit_usd = nil
+	m.addwelfare_daily_limit_usd = nil
+	delete(m.clearedFields, usersubscription.FieldWelfareDailyLimitUsd)
+}
+
+// SetWelfareWeeklyLimitUsd sets the "welfare_weekly_limit_usd" field.
+func (m *UserSubscriptionMutation) SetWelfareWeeklyLimitUsd(f float64) {
+	m.welfare_weekly_limit_usd = &f
+	m.addwelfare_weekly_limit_usd = nil
+}
+
+// WelfareWeeklyLimitUsd returns the value of the "welfare_weekly_limit_usd" field in the mutation.
+func (m *UserSubscriptionMutation) WelfareWeeklyLimitUsd() (r float64, exists bool) {
+	v := m.welfare_weekly_limit_usd
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldWelfareWeeklyLimitUsd returns the old "welfare_weekly_limit_usd" field's value of the UserSubscription entity.
+// If the UserSubscription object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UserSubscriptionMutation) OldWelfareWeeklyLimitUsd(ctx context.Context) (v *float64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldWelfareWeeklyLimitUsd is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldWelfareWeeklyLimitUsd requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldWelfareWeeklyLimitUsd: %w", err)
+	}
+	return oldValue.WelfareWeeklyLimitUsd, nil
+}
+
+// AddWelfareWeeklyLimitUsd adds f to the "welfare_weekly_limit_usd" field.
+func (m *UserSubscriptionMutation) AddWelfareWeeklyLimitUsd(f float64) {
+	if m.addwelfare_weekly_limit_usd != nil {
+		*m.addwelfare_weekly_limit_usd += f
+	} else {
+		m.addwelfare_weekly_limit_usd = &f
+	}
+}
+
+// AddedWelfareWeeklyLimitUsd returns the value that was added to the "welfare_weekly_limit_usd" field in this mutation.
+func (m *UserSubscriptionMutation) AddedWelfareWeeklyLimitUsd() (r float64, exists bool) {
+	v := m.addwelfare_weekly_limit_usd
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearWelfareWeeklyLimitUsd clears the value of the "welfare_weekly_limit_usd" field.
+func (m *UserSubscriptionMutation) ClearWelfareWeeklyLimitUsd() {
+	m.welfare_weekly_limit_usd = nil
+	m.addwelfare_weekly_limit_usd = nil
+	m.clearedFields[usersubscription.FieldWelfareWeeklyLimitUsd] = struct{}{}
+}
+
+// WelfareWeeklyLimitUsdCleared returns if the "welfare_weekly_limit_usd" field was cleared in this mutation.
+func (m *UserSubscriptionMutation) WelfareWeeklyLimitUsdCleared() bool {
+	_, ok := m.clearedFields[usersubscription.FieldWelfareWeeklyLimitUsd]
+	return ok
+}
+
+// ResetWelfareWeeklyLimitUsd resets all changes to the "welfare_weekly_limit_usd" field.
+func (m *UserSubscriptionMutation) ResetWelfareWeeklyLimitUsd() {
+	m.welfare_weekly_limit_usd = nil
+	m.addwelfare_weekly_limit_usd = nil
+	delete(m.clearedFields, usersubscription.FieldWelfareWeeklyLimitUsd)
+}
+
+// SetWelfareMonthlyLimitUsd sets the "welfare_monthly_limit_usd" field.
+func (m *UserSubscriptionMutation) SetWelfareMonthlyLimitUsd(f float64) {
+	m.welfare_monthly_limit_usd = &f
+	m.addwelfare_monthly_limit_usd = nil
+}
+
+// WelfareMonthlyLimitUsd returns the value of the "welfare_monthly_limit_usd" field in the mutation.
+func (m *UserSubscriptionMutation) WelfareMonthlyLimitUsd() (r float64, exists bool) {
+	v := m.welfare_monthly_limit_usd
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldWelfareMonthlyLimitUsd returns the old "welfare_monthly_limit_usd" field's value of the UserSubscription entity.
+// If the UserSubscription object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UserSubscriptionMutation) OldWelfareMonthlyLimitUsd(ctx context.Context) (v *float64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldWelfareMonthlyLimitUsd is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldWelfareMonthlyLimitUsd requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldWelfareMonthlyLimitUsd: %w", err)
+	}
+	return oldValue.WelfareMonthlyLimitUsd, nil
+}
+
+// AddWelfareMonthlyLimitUsd adds f to the "welfare_monthly_limit_usd" field.
+func (m *UserSubscriptionMutation) AddWelfareMonthlyLimitUsd(f float64) {
+	if m.addwelfare_monthly_limit_usd != nil {
+		*m.addwelfare_monthly_limit_usd += f
+	} else {
+		m.addwelfare_monthly_limit_usd = &f
+	}
+}
+
+// AddedWelfareMonthlyLimitUsd returns the value that was added to the "welfare_monthly_limit_usd" field in this mutation.
+func (m *UserSubscriptionMutation) AddedWelfareMonthlyLimitUsd() (r float64, exists bool) {
+	v := m.addwelfare_monthly_limit_usd
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearWelfareMonthlyLimitUsd clears the value of the "welfare_monthly_limit_usd" field.
+func (m *UserSubscriptionMutation) ClearWelfareMonthlyLimitUsd() {
+	m.welfare_monthly_limit_usd = nil
+	m.addwelfare_monthly_limit_usd = nil
+	m.clearedFields[usersubscription.FieldWelfareMonthlyLimitUsd] = struct{}{}
+}
+
+// WelfareMonthlyLimitUsdCleared returns if the "welfare_monthly_limit_usd" field was cleared in this mutation.
+func (m *UserSubscriptionMutation) WelfareMonthlyLimitUsdCleared() bool {
+	_, ok := m.clearedFields[usersubscription.FieldWelfareMonthlyLimitUsd]
+	return ok
+}
+
+// ResetWelfareMonthlyLimitUsd resets all changes to the "welfare_monthly_limit_usd" field.
+func (m *UserSubscriptionMutation) ResetWelfareMonthlyLimitUsd() {
+	m.welfare_monthly_limit_usd = nil
+	m.addwelfare_monthly_limit_usd = nil
+	delete(m.clearedFields, usersubscription.FieldWelfareMonthlyLimitUsd)
+}
+
+// SetWelfareGrantCount sets the "welfare_grant_count" field.
+func (m *UserSubscriptionMutation) SetWelfareGrantCount(i int64) {
+	m.welfare_grant_count = &i
+	m.addwelfare_grant_count = nil
+}
+
+// WelfareGrantCount returns the value of the "welfare_grant_count" field in the mutation.
+func (m *UserSubscriptionMutation) WelfareGrantCount() (r int64, exists bool) {
+	v := m.welfare_grant_count
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldWelfareGrantCount returns the old "welfare_grant_count" field's value of the UserSubscription entity.
+// If the UserSubscription object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UserSubscriptionMutation) OldWelfareGrantCount(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldWelfareGrantCount is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldWelfareGrantCount requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldWelfareGrantCount: %w", err)
+	}
+	return oldValue.WelfareGrantCount, nil
+}
+
+// AddWelfareGrantCount adds i to the "welfare_grant_count" field.
+func (m *UserSubscriptionMutation) AddWelfareGrantCount(i int64) {
+	if m.addwelfare_grant_count != nil {
+		*m.addwelfare_grant_count += i
+	} else {
+		m.addwelfare_grant_count = &i
+	}
+}
+
+// AddedWelfareGrantCount returns the value that was added to the "welfare_grant_count" field in this mutation.
+func (m *UserSubscriptionMutation) AddedWelfareGrantCount() (r int64, exists bool) {
+	v := m.addwelfare_grant_count
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetWelfareGrantCount resets all changes to the "welfare_grant_count" field.
+func (m *UserSubscriptionMutation) ResetWelfareGrantCount() {
+	m.welfare_grant_count = nil
+	m.addwelfare_grant_count = nil
+}
+
+// SetWelfareCycleClosed sets the "welfare_cycle_closed" field.
+func (m *UserSubscriptionMutation) SetWelfareCycleClosed(b bool) {
+	m.welfare_cycle_closed = &b
+}
+
+// WelfareCycleClosed returns the value of the "welfare_cycle_closed" field in the mutation.
+func (m *UserSubscriptionMutation) WelfareCycleClosed() (r bool, exists bool) {
+	v := m.welfare_cycle_closed
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldWelfareCycleClosed returns the old "welfare_cycle_closed" field's value of the UserSubscription entity.
+// If the UserSubscription object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UserSubscriptionMutation) OldWelfareCycleClosed(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldWelfareCycleClosed is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldWelfareCycleClosed requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldWelfareCycleClosed: %w", err)
+	}
+	return oldValue.WelfareCycleClosed, nil
+}
+
+// ResetWelfareCycleClosed resets all changes to the "welfare_cycle_closed" field.
+func (m *UserSubscriptionMutation) ResetWelfareCycleClosed() {
+	m.welfare_cycle_closed = nil
 }
 
 // SetStartsAt sets the "starts_at" field.
@@ -58618,7 +58966,7 @@ func (m *UserSubscriptionMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *UserSubscriptionMutation) Fields() []string {
-	fields := make([]string, 0, 20)
+	fields := make([]string, 0, 26)
 	if m.created_at != nil {
 		fields = append(fields, usersubscription.FieldCreatedAt)
 	}
@@ -58633,6 +58981,24 @@ func (m *UserSubscriptionMutation) Fields() []string {
 	}
 	if m.group != nil {
 		fields = append(fields, usersubscription.FieldGroupID)
+	}
+	if m.entitlement_kind != nil {
+		fields = append(fields, usersubscription.FieldEntitlementKind)
+	}
+	if m.welfare_daily_limit_usd != nil {
+		fields = append(fields, usersubscription.FieldWelfareDailyLimitUsd)
+	}
+	if m.welfare_weekly_limit_usd != nil {
+		fields = append(fields, usersubscription.FieldWelfareWeeklyLimitUsd)
+	}
+	if m.welfare_monthly_limit_usd != nil {
+		fields = append(fields, usersubscription.FieldWelfareMonthlyLimitUsd)
+	}
+	if m.welfare_grant_count != nil {
+		fields = append(fields, usersubscription.FieldWelfareGrantCount)
+	}
+	if m.welfare_cycle_closed != nil {
+		fields = append(fields, usersubscription.FieldWelfareCycleClosed)
 	}
 	if m.starts_at != nil {
 		fields = append(fields, usersubscription.FieldStartsAt)
@@ -58697,6 +59063,18 @@ func (m *UserSubscriptionMutation) Field(name string) (ent.Value, bool) {
 		return m.UserID()
 	case usersubscription.FieldGroupID:
 		return m.GroupID()
+	case usersubscription.FieldEntitlementKind:
+		return m.EntitlementKind()
+	case usersubscription.FieldWelfareDailyLimitUsd:
+		return m.WelfareDailyLimitUsd()
+	case usersubscription.FieldWelfareWeeklyLimitUsd:
+		return m.WelfareWeeklyLimitUsd()
+	case usersubscription.FieldWelfareMonthlyLimitUsd:
+		return m.WelfareMonthlyLimitUsd()
+	case usersubscription.FieldWelfareGrantCount:
+		return m.WelfareGrantCount()
+	case usersubscription.FieldWelfareCycleClosed:
+		return m.WelfareCycleClosed()
 	case usersubscription.FieldStartsAt:
 		return m.StartsAt()
 	case usersubscription.FieldExpiresAt:
@@ -58746,6 +59124,18 @@ func (m *UserSubscriptionMutation) OldField(ctx context.Context, name string) (e
 		return m.OldUserID(ctx)
 	case usersubscription.FieldGroupID:
 		return m.OldGroupID(ctx)
+	case usersubscription.FieldEntitlementKind:
+		return m.OldEntitlementKind(ctx)
+	case usersubscription.FieldWelfareDailyLimitUsd:
+		return m.OldWelfareDailyLimitUsd(ctx)
+	case usersubscription.FieldWelfareWeeklyLimitUsd:
+		return m.OldWelfareWeeklyLimitUsd(ctx)
+	case usersubscription.FieldWelfareMonthlyLimitUsd:
+		return m.OldWelfareMonthlyLimitUsd(ctx)
+	case usersubscription.FieldWelfareGrantCount:
+		return m.OldWelfareGrantCount(ctx)
+	case usersubscription.FieldWelfareCycleClosed:
+		return m.OldWelfareCycleClosed(ctx)
 	case usersubscription.FieldStartsAt:
 		return m.OldStartsAt(ctx)
 	case usersubscription.FieldExpiresAt:
@@ -58819,6 +59209,48 @@ func (m *UserSubscriptionMutation) SetField(name string, value ent.Value) error 
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetGroupID(v)
+		return nil
+	case usersubscription.FieldEntitlementKind:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetEntitlementKind(v)
+		return nil
+	case usersubscription.FieldWelfareDailyLimitUsd:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetWelfareDailyLimitUsd(v)
+		return nil
+	case usersubscription.FieldWelfareWeeklyLimitUsd:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetWelfareWeeklyLimitUsd(v)
+		return nil
+	case usersubscription.FieldWelfareMonthlyLimitUsd:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetWelfareMonthlyLimitUsd(v)
+		return nil
+	case usersubscription.FieldWelfareGrantCount:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetWelfareGrantCount(v)
+		return nil
+	case usersubscription.FieldWelfareCycleClosed:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetWelfareCycleClosed(v)
 		return nil
 	case usersubscription.FieldStartsAt:
 		v, ok := value.(time.Time)
@@ -58933,6 +59365,18 @@ func (m *UserSubscriptionMutation) SetField(name string, value ent.Value) error 
 // this mutation.
 func (m *UserSubscriptionMutation) AddedFields() []string {
 	var fields []string
+	if m.addwelfare_daily_limit_usd != nil {
+		fields = append(fields, usersubscription.FieldWelfareDailyLimitUsd)
+	}
+	if m.addwelfare_weekly_limit_usd != nil {
+		fields = append(fields, usersubscription.FieldWelfareWeeklyLimitUsd)
+	}
+	if m.addwelfare_monthly_limit_usd != nil {
+		fields = append(fields, usersubscription.FieldWelfareMonthlyLimitUsd)
+	}
+	if m.addwelfare_grant_count != nil {
+		fields = append(fields, usersubscription.FieldWelfareGrantCount)
+	}
 	if m.adddaily_reset_version != nil {
 		fields = append(fields, usersubscription.FieldDailyResetVersion)
 	}
@@ -58953,6 +59397,14 @@ func (m *UserSubscriptionMutation) AddedFields() []string {
 // was not set, or was not defined in the schema.
 func (m *UserSubscriptionMutation) AddedField(name string) (ent.Value, bool) {
 	switch name {
+	case usersubscription.FieldWelfareDailyLimitUsd:
+		return m.AddedWelfareDailyLimitUsd()
+	case usersubscription.FieldWelfareWeeklyLimitUsd:
+		return m.AddedWelfareWeeklyLimitUsd()
+	case usersubscription.FieldWelfareMonthlyLimitUsd:
+		return m.AddedWelfareMonthlyLimitUsd()
+	case usersubscription.FieldWelfareGrantCount:
+		return m.AddedWelfareGrantCount()
 	case usersubscription.FieldDailyResetVersion:
 		return m.AddedDailyResetVersion()
 	case usersubscription.FieldDailyUsageUsd:
@@ -58970,6 +59422,34 @@ func (m *UserSubscriptionMutation) AddedField(name string) (ent.Value, bool) {
 // type.
 func (m *UserSubscriptionMutation) AddField(name string, value ent.Value) error {
 	switch name {
+	case usersubscription.FieldWelfareDailyLimitUsd:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddWelfareDailyLimitUsd(v)
+		return nil
+	case usersubscription.FieldWelfareWeeklyLimitUsd:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddWelfareWeeklyLimitUsd(v)
+		return nil
+	case usersubscription.FieldWelfareMonthlyLimitUsd:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddWelfareMonthlyLimitUsd(v)
+		return nil
+	case usersubscription.FieldWelfareGrantCount:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddWelfareGrantCount(v)
+		return nil
 	case usersubscription.FieldDailyResetVersion:
 		v, ok := value.(int64)
 		if !ok {
@@ -59009,6 +59489,15 @@ func (m *UserSubscriptionMutation) ClearedFields() []string {
 	if m.FieldCleared(usersubscription.FieldDeletedAt) {
 		fields = append(fields, usersubscription.FieldDeletedAt)
 	}
+	if m.FieldCleared(usersubscription.FieldWelfareDailyLimitUsd) {
+		fields = append(fields, usersubscription.FieldWelfareDailyLimitUsd)
+	}
+	if m.FieldCleared(usersubscription.FieldWelfareWeeklyLimitUsd) {
+		fields = append(fields, usersubscription.FieldWelfareWeeklyLimitUsd)
+	}
+	if m.FieldCleared(usersubscription.FieldWelfareMonthlyLimitUsd) {
+		fields = append(fields, usersubscription.FieldWelfareMonthlyLimitUsd)
+	}
 	if m.FieldCleared(usersubscription.FieldDailyWindowStart) {
 		fields = append(fields, usersubscription.FieldDailyWindowStart)
 	}
@@ -59040,6 +59529,15 @@ func (m *UserSubscriptionMutation) ClearField(name string) error {
 	switch name {
 	case usersubscription.FieldDeletedAt:
 		m.ClearDeletedAt()
+		return nil
+	case usersubscription.FieldWelfareDailyLimitUsd:
+		m.ClearWelfareDailyLimitUsd()
+		return nil
+	case usersubscription.FieldWelfareWeeklyLimitUsd:
+		m.ClearWelfareWeeklyLimitUsd()
+		return nil
+	case usersubscription.FieldWelfareMonthlyLimitUsd:
+		m.ClearWelfareMonthlyLimitUsd()
 		return nil
 	case usersubscription.FieldDailyWindowStart:
 		m.ClearDailyWindowStart()
@@ -59078,6 +59576,24 @@ func (m *UserSubscriptionMutation) ResetField(name string) error {
 		return nil
 	case usersubscription.FieldGroupID:
 		m.ResetGroupID()
+		return nil
+	case usersubscription.FieldEntitlementKind:
+		m.ResetEntitlementKind()
+		return nil
+	case usersubscription.FieldWelfareDailyLimitUsd:
+		m.ResetWelfareDailyLimitUsd()
+		return nil
+	case usersubscription.FieldWelfareWeeklyLimitUsd:
+		m.ResetWelfareWeeklyLimitUsd()
+		return nil
+	case usersubscription.FieldWelfareMonthlyLimitUsd:
+		m.ResetWelfareMonthlyLimitUsd()
+		return nil
+	case usersubscription.FieldWelfareGrantCount:
+		m.ResetWelfareGrantCount()
+		return nil
+	case usersubscription.FieldWelfareCycleClosed:
+		m.ResetWelfareCycleClosed()
 		return nil
 	case usersubscription.FieldStartsAt:
 		m.ResetStartsAt()

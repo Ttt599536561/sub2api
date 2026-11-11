@@ -11,8 +11,8 @@
         <!-- Combined progress indicator -->
         <div class="flex items-center gap-0.5">
           <div
-            v-for="(sub, index) in displaySubscriptions.slice(0, 3)"
-            :key="index"
+            v-for="sub in displaySubscriptions.slice(0, 3)"
+            :key="sub.id"
             class="h-2 w-2 rounded-full"
             :class="getProgressDotClass(sub)"
           ></div>
@@ -47,6 +47,9 @@
             <div class="mb-2 flex items-center justify-between">
               <span class="text-sm font-medium text-gray-900 dark:text-white">
                 {{ subscription.group?.name || `Group #${subscription.group_id}` }}
+                <span v-if="subscription.entitlement_kind === 'welfare'" class="ml-1 rounded bg-violet-100 px-1.5 py-0.5 text-[10px] text-violet-700 dark:bg-violet-900/40 dark:text-violet-300">
+                  {{ t('userSubscriptions.welfare') }}
+                </span>
               </span>
               <span
                 v-if="subscription.expires_at"
@@ -58,6 +61,9 @@
             </div>
 
             <!-- Progress bars or Unlimited badge -->
+            <p v-if="subscription.entitlement_kind === 'welfare'" class="mb-2 text-[11px] text-violet-600 dark:text-violet-300" :title="t('userSubscriptions.welfareQuotaRule')">
+              {{ t('userSubscriptions.welfareGrantCount', { count: subscription.welfare_grant_count || 0 }) }} · {{ t('userSubscriptions.welfareFixedExpiry') }}
+            </p>
             <div class="space-y-1.5">
               <!-- Unlimited subscription badge -->
               <div

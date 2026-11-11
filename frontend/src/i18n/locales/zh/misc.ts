@@ -111,6 +111,10 @@ export default {
 
   // User Subscriptions Page
   userSubscriptions: {
+    welfare: '福利订阅',
+    welfareGrantCount: '已叠加 {count} 张福利卡',
+    welfareFixedExpiry: '沿用首张到期时间',
+    welfareQuotaRule: '同一有效期内再次兑换只叠加额度，全部额度沿用首张卡的到期时间，不延长天数；到期后再兑换开始新一期。付费订阅独立计算。',
     resetDaily: '重置',
     autoDailyReset: '自动重置日额度',
     dailyResetCount: '今日已重置 {count}/{limit} 次',

@@ -8,10 +8,22 @@ import (
 
 const subscriptionDayDuration = 24 * time.Hour
 
+const (
+	SubscriptionEntitlementStandard = "standard"
+	SubscriptionEntitlementWelfare  = "welfare"
+)
+
 type UserSubscription struct {
 	ID      int64
 	UserID  int64
 	GroupID int64
+
+	EntitlementKind        string
+	WelfareDailyLimitUSD   *float64
+	WelfareWeeklyLimitUSD  *float64
+	WelfareMonthlyLimitUSD *float64
+	WelfareGrantCount      int64
+	WelfareCycleClosed     bool
 
 	StartsAt  time.Time
 	ExpiresAt time.Time
@@ -41,6 +53,23 @@ type UserSubscription struct {
 	User           *User
 	Group          *Group
 	AssignedByUser *User
+}
+
+func (s *UserSubscription) IsWelfare() bool {
+	return s != nil && s.EntitlementKind == SubscriptionEntitlementWelfare
+}
+
+// EffectiveGroup keeps welfare quota snapshots local to this entitlement;
+// callers must never replace limits on the shared group or a paid entitlement.
+func (s *UserSubscription) EffectiveGroup(group *Group) *Group {
+	if !s.IsWelfare() || group == nil {
+		return group
+	}
+	effective := *group
+	effective.DailyLimitUSD = s.WelfareDailyLimitUSD
+	effective.WeeklyLimitUSD = s.WelfareWeeklyLimitUSD
+	effective.MonthlyLimitUSD = s.WelfareMonthlyLimitUSD
+	return &effective
 }
 
 func (s *UserSubscription) IsActive() bool {
@@ -210,6 +239,7 @@ func (s *UserSubscription) MonthlyResetTime() *time.Time {
 }
 
 func (s *UserSubscription) CheckDailyLimit(group *Group, additionalCost float64) bool {
+	group = s.EffectiveGroup(group)
 	if !group.HasDailyLimit() {
 		return true
 	}
@@ -217,6 +247,7 @@ func (s *UserSubscription) CheckDailyLimit(group *Group, additionalCost float64)
 }
 
 func (s *UserSubscription) CheckWeeklyLimit(group *Group, additionalCost float64) bool {
+	group = s.EffectiveGroup(group)
 	if !group.HasWeeklyLimit() {
 		return true
 	}
@@ -224,6 +255,7 @@ func (s *UserSubscription) CheckWeeklyLimit(group *Group, additionalCost float64
 }
 
 func (s *UserSubscription) CheckMonthlyLimit(group *Group, additionalCost float64) bool {
+	group = s.EffectiveGroup(group)
 	if !group.HasMonthlyLimit() {
 		return true
 	}

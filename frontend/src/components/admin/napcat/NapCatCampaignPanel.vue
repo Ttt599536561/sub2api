@@ -27,7 +27,14 @@ const { session, busy, blocked, error, notice, run } = useInviteAdmin(() => { ca
 const controlsBlocked = computed(() => blocked.value || childBusy.value)
 useInviteBusy(computed(() => busy.value || childBusy.value), value => emit('busy', value))
 const current = computed(() => campaigns.value.find(item => item.id === selected.value))
-const subscriptionGroups = computed(() => groups.value.filter(group => group.subscription_type === 'subscription'))
+const isOptionalWelfareLimit = (limit: number | null) =>
+  limit === null || (Number.isFinite(limit) && limit >= 0 && limit < 1e10)
+const subscriptionGroups = computed(() => groups.value.filter(group =>
+  group.status === 'active' && group.subscription_type === 'subscription' &&
+  group.monthly_limit_usd !== null && Number.isFinite(group.monthly_limit_usd) &&
+  group.monthly_limit_usd > 0 && group.monthly_limit_usd < 1e10 &&
+  isOptionalWelfareLimit(group.daily_limit_usd) && isOptionalWelfareLimit(group.weekly_limit_usd)
+))
 const templates = ['welcome_template', 'congratulation_template', 'pending_template', 'delivery_pending_template', 'private_template'] as const
 function choose(id: InviteID | null) {
   if (controlsBlocked.value || !session.current()) return
@@ -97,6 +104,7 @@ onMounted(reload)
     <p v-if="session.invalidated.value" role="alert">{{ t('qqInvite.sessionChanged') }}</p>
     <template v-else>
       <p class="rounded-lg bg-primary-50 p-4 text-sm leading-relaxed text-primary-800 dark:bg-primary-900/20 dark:text-primary-200">{{ t('qqInvite.rules') }}</p>
+      <p class="rounded-lg bg-violet-50 p-4 text-sm leading-relaxed text-violet-800 dark:bg-violet-900/20 dark:text-violet-200">{{ t('qqInvite.quotaStackingRule') }}</p>
       <label class="block text-sm">{{ t('qqInvite.selectCampaign') }}<select :value="selected ?? ''" class="input mt-1 w-full" :disabled="controlsBlocked" @change="choose(($event.target as HTMLSelectElement).value ? campaigns.find(item => String(item.id) === ($event.target as HTMLSelectElement).value)?.id ?? null : null)"><option value="">{{ t('qqInvite.newCampaign') }}</option><option v-for="campaign in campaigns" :key="campaign.id" :value="campaign.id">{{ campaign.name }} · {{ t(campaign.enabled ? 'qqInvite.active' : 'qqInvite.paused') }}</option></select></label>
       <p v-if="!busy && !campaigns.length" class="text-sm text-gray-500">{{ t('qqInvite.noCampaigns') }}</p>
       <div v-if="current" class="flex flex-wrap items-center gap-2"><button v-for="item in ['edit', 'inventory', 'records'] as const" :key="item" class="btn" :class="tab === item ? 'btn-primary' : 'btn-secondary'" :disabled="controlsBlocked" @click="tab = item">{{ t(`qqInvite.${item}`) }}</button></div>
@@ -105,6 +113,7 @@ onMounted(reload)
         <form data-test="campaign-form" @submit.prevent="save"><fieldset :disabled="controlsBlocked" class="space-y-4">
           <div class="grid gap-4 md:grid-cols-2"><label class="text-sm">{{ t('qqInvite.name') }}<input v-model="form.name" name="campaign_name" maxlength="120" required class="input mt-1 w-full" /></label><label class="text-sm">{{ t('qqInvite.subscriptionGroup') }}<select v-model="form.subscription_group_id" class="input mt-1 w-full" required><option :value="0" disabled>{{ t('qqInvite.selectGroup') }}</option><option v-for="group in subscriptionGroups" :key="group.id" :value="group.id">{{ group.name }} (#{{ group.id }})</option></select></label></div>
           <p class="text-sm text-gray-500">{{ t('qqInvite.subscriptionGroupHint') }}</p>
+          <p class="text-sm text-gray-500">{{ t('qqInvite.quotaGroupHint') }}</p>
           <p v-if="!subscriptionGroups.length" class="text-sm text-amber-700 dark:text-amber-400">{{ t('qqInvite.noGroups') }}</p>
           <label class="block text-sm">{{ t('qqInvite.groupIDs') }}<textarea v-model="groupText" name="group_ids" rows="2" required class="input mt-1 w-full" /></label>
           <div class="grid gap-4 md:grid-cols-2"><label class="text-sm">{{ t('qqInvite.startsAt') }}<input v-model="starts" name="starts_at" type="datetime-local" required class="input mt-1 w-full" /></label><label class="text-sm">{{ t('qqInvite.endsAt') }}<input v-model="ends" name="ends_at" type="datetime-local" required class="input mt-1 w-full" /></label></div>

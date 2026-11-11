@@ -115,7 +115,7 @@ func (s *UserSubscription) MaintainUsageWindowsAt(now time.Time) bool {
 }
 
 func ValidateDailyReset(s *UserSubscription, now time.Time, count int, automatic bool) error {
-	if s == nil || s.Group == nil || s.User == nil || s.DeletedAt != nil || s.User.DeletedAt != nil || s.User.Status != StatusActive ||
+	if s == nil || s.IsWelfare() || s.Group == nil || s.User == nil || s.DeletedAt != nil || s.User.DeletedAt != nil || s.User.Status != StatusActive ||
 		s.Group.Status != StatusActive || s.Status != SubscriptionStatusActive || now.Before(s.StartsAt) ||
 		!s.ExpiresAt.After(now) || !s.Group.IsSubscriptionType() || !s.Group.AllowSubscriptionDayReset {
 		return ErrResetNotAllowed
@@ -159,7 +159,7 @@ func (s *SubscriptionDailyResetState) View() *DailyResetState {
 	}
 	sub := s.Subscription
 	view := &DailyResetState{
-		Eligible:              sub.Group != nil && sub.Group.IsSubscriptionType() && sub.Group.AllowSubscriptionDayReset,
+		Eligible:              !sub.IsWelfare() && sub.Group != nil && sub.Group.IsSubscriptionType() && sub.Group.AllowSubscriptionDayReset,
 		AutoDailyResetEnabled: sub.AutoDailyResetEnabled, DailyResetCount: s.TodayCount,
 		DailyResetLimit: DailyResetLimit, DailyResetVersion: sub.DailyResetVersion,
 		CountDate: timezone.StartOfDay(s.ServerTime).Format("2006-01-02"), ServerTime: s.ServerTime,

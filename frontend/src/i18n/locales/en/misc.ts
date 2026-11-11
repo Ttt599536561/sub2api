@@ -113,6 +113,10 @@ export default {
 
   // User Subscriptions Page
   userSubscriptions: {
+    welfare: 'Welfare subscription',
+    welfareGrantCount: '{count} welfare passes stacked',
+    welfareFixedExpiry: 'First pass expiry applies',
+    welfareQuotaRule: 'Additional redemptions in the current term add quota and keep the first pass expiry. Redeeming after expiry starts a new term. Paid subscriptions remain separate.',
     resetDaily: 'Reset',
     autoDailyReset: 'Auto-reset daily quota',
     dailyResetCount: 'Today: {count}/{limit} resets',

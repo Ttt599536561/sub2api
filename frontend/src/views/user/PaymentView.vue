@@ -334,7 +334,9 @@ const subscriptionStore = useSubscriptionStore()
 const appStore = useAppStore()
 
 const user = computed(() => authStore.user)
-const activeSubscriptions = computed(() => subscriptionStore.activeSubscriptions)
+const activeSubscriptions = computed(() =>
+  subscriptionStore.activeSubscriptions.filter(subscription => subscription.entitlement_kind !== 'welfare')
+)
 
 function getDaysRemaining(expiresAt: string): number {
   const diff = new Date(expiresAt).getTime() - Date.now()

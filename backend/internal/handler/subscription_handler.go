@@ -11,17 +11,19 @@ import (
 
 // SubscriptionSummaryItem represents a subscription item in summary
 type SubscriptionSummaryItem struct {
-	ID              int64   `json:"id"`
-	GroupID         int64   `json:"group_id"`
-	GroupName       string  `json:"group_name"`
-	Status          string  `json:"status"`
-	DailyUsedUSD    float64 `json:"daily_used_usd,omitempty"`
-	DailyLimitUSD   float64 `json:"daily_limit_usd,omitempty"`
-	WeeklyUsedUSD   float64 `json:"weekly_used_usd,omitempty"`
-	WeeklyLimitUSD  float64 `json:"weekly_limit_usd,omitempty"`
-	MonthlyUsedUSD  float64 `json:"monthly_used_usd,omitempty"`
-	MonthlyLimitUSD float64 `json:"monthly_limit_usd,omitempty"`
-	ExpiresAt       *string `json:"expires_at,omitempty"`
+	ID                int64   `json:"id"`
+	GroupID           int64   `json:"group_id"`
+	GroupName         string  `json:"group_name"`
+	Status            string  `json:"status"`
+	EntitlementKind   string  `json:"entitlement_kind"`
+	WelfareGrantCount int64   `json:"welfare_grant_count"`
+	DailyUsedUSD      float64 `json:"daily_used_usd,omitempty"`
+	DailyLimitUSD     float64 `json:"daily_limit_usd,omitempty"`
+	WeeklyUsedUSD     float64 `json:"weekly_used_usd,omitempty"`
+	WeeklyLimitUSD    float64 `json:"weekly_limit_usd,omitempty"`
+	MonthlyUsedUSD    float64 `json:"monthly_used_usd,omitempty"`
+	MonthlyLimitUSD   float64 `json:"monthly_limit_usd,omitempty"`
+	ExpiresAt         *string `json:"expires_at,omitempty"`
 }
 
 // SubscriptionProgressInfo represents subscription with progress info
@@ -143,25 +145,30 @@ func (h *SubscriptionHandler) GetSummary(c *gin.Context) {
 
 	for _, sub := range subscriptions {
 		item := SubscriptionSummaryItem{
-			ID:             sub.ID,
-			GroupID:        sub.GroupID,
-			Status:         sub.Status,
-			DailyUsedUSD:   sub.DailyUsageUSD,
-			WeeklyUsedUSD:  sub.WeeklyUsageUSD,
-			MonthlyUsedUSD: sub.MonthlyUsageUSD,
+			ID:                sub.ID,
+			GroupID:           sub.GroupID,
+			Status:            sub.Status,
+			EntitlementKind:   service.SubscriptionEntitlementStandard,
+			WelfareGrantCount: sub.WelfareGrantCount,
+			DailyUsedUSD:      sub.DailyUsageUSD,
+			WeeklyUsedUSD:     sub.WeeklyUsageUSD,
+			MonthlyUsedUSD:    sub.MonthlyUsageUSD,
 		}
 
 		// Add group info if preloaded
-		if sub.Group != nil {
-			item.GroupName = sub.Group.I18n.LocalizeName(c.GetHeader("Accept-Language"), sub.Group.Name)
-			if sub.Group.DailyLimitUSD != nil {
-				item.DailyLimitUSD = *sub.Group.DailyLimitUSD
+		if sub.IsWelfare() {
+			item.EntitlementKind = service.SubscriptionEntitlementWelfare
+		}
+		if group := sub.EffectiveGroup(sub.Group); group != nil {
+			item.GroupName = group.I18n.LocalizeName(c.GetHeader("Accept-Language"), group.Name)
+			if group.DailyLimitUSD != nil {
+				item.DailyLimitUSD = *group.DailyLimitUSD
 			}
-			if sub.Group.WeeklyLimitUSD != nil {
-				item.WeeklyLimitUSD = *sub.Group.WeeklyLimitUSD
+			if group.WeeklyLimitUSD != nil {
+				item.WeeklyLimitUSD = *group.WeeklyLimitUSD
 			}
-			if sub.Group.MonthlyLimitUSD != nil {
-				item.MonthlyLimitUSD = *sub.Group.MonthlyLimitUSD
+			if group.MonthlyLimitUSD != nil {
+				item.MonthlyLimitUSD = *group.MonthlyLimitUSD
 			}
 		}
 

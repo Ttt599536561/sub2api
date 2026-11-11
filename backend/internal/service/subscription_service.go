@@ -40,6 +40,7 @@ var (
 	ErrWeeklyLimitExceeded         = infraerrors.TooManyRequests("WEEKLY_LIMIT_EXCEEDED", "weekly usage limit exceeded")
 	ErrMonthlyLimitExceeded        = infraerrors.TooManyRequests("MONTHLY_LIMIT_EXCEEDED", "monthly usage limit exceeded")
 	ErrSubscriptionNilInput        = infraerrors.BadRequest("SUBSCRIPTION_NIL_INPUT", "subscription input cannot be nil")
+	ErrWelfareSubscriptionFixed    = infraerrors.Forbidden("WELFARE_SUBSCRIPTION_FIXED", "welfare subscription expiry and granted quota cannot be adjusted")
 	ErrAdjustWouldExpire           = infraerrors.BadRequest("ADJUST_WOULD_EXPIRE", "adjustment would result in expired subscription (remaining days must be > 0)")
 )
 
@@ -309,6 +310,9 @@ func (s *SubscriptionService) updateExistingSubscriptionTerm(
 		existingSub, err := s.userSubRepo.GetByIDForUpdate(txCtx, subscriptionID)
 		if err != nil {
 			return fmt.Errorf("lock subscription for renewal: %w", err)
+		}
+		if existingSub.IsWelfare() {
+			return ErrWelfareSubscriptionFixed
 		}
 		if assignmentSemantics && existingSub.Status == SubscriptionStatusSuspended {
 			return nil
@@ -634,6 +638,9 @@ func (s *SubscriptionService) RestoreSubscription(ctx context.Context, subscript
 	if err != nil {
 		return nil, err
 	}
+	if sub.IsWelfare() {
+		return nil, ErrWelfareSubscriptionFixed
+	}
 	if sub.DeletedAt == nil {
 		return nil, ErrSubscriptionNotRevoked
 	}
@@ -680,6 +687,9 @@ func (s *SubscriptionService) ExtendSubscription(ctx context.Context, subscripti
 		sub, err = s.userSubRepo.GetByIDForUpdate(txCtx, subscriptionID)
 		if err != nil {
 			return ErrSubscriptionNotFound
+		}
+		if sub.IsWelfare() {
+			return ErrWelfareSubscriptionFixed
 		}
 		now := time.Now()
 		if s.now != nil {
@@ -756,6 +766,9 @@ func (s *SubscriptionService) restoreSubscriptionDaysAfterRefund(ctx context.Con
 		sub, err = s.userSubRepo.GetByIDForUpdate(txCtx, subscriptionID)
 		if err != nil {
 			return err
+		}
+		if sub.IsWelfare() {
+			return ErrWelfareSubscriptionFixed
 		}
 		newExpiresAt := sub.ExpiresAt.AddDate(0, 0, days)
 		if newExpiresAt.After(MaxExpiresAt) {
@@ -956,6 +969,9 @@ func (s *SubscriptionService) AdminResetQuota(ctx context.Context, subscriptionI
 	if err != nil {
 		return nil, err
 	}
+	if sub.IsWelfare() {
+		return nil, ErrWelfareSubscriptionFixed
+	}
 	now := s.now()
 	// 日窗口锚点取当天 0 点：手动重置只清空用量，不改变“每天 0 点刷新”的节奏。
 	// 周/月窗口保持锚定重置时刻（期限对齐滚动窗口语义）。
@@ -1051,6 +1067,7 @@ func (s *SubscriptionService) EnsureWindowMaintenance(ctx context.Context, sub *
 // CheckUsageLimits 检查使用限额（返回错误如果超限）
 // 用于中间件的快速预检查，additionalCost 通常为 0
 func (s *SubscriptionService) CheckUsageLimits(ctx context.Context, sub *UserSubscription, group *Group, additionalCost float64) error {
+	group = sub.EffectiveGroup(group)
 	if !sub.CheckDailyLimit(group, additionalCost) {
 		return ErrDailyLimitExceeded
 	}
@@ -1067,6 +1084,10 @@ func (s *SubscriptionService) CheckUsageLimits(ctx context.Context, sub *UserSub
 // 仅做内存检查，不触发 DB 写入。调用方必须在放行请求前同步完成窗口维护。
 // 返回 needsMaintenance 表示是否需要执行窗口维护并回读数据库快照。
 func (s *SubscriptionService) ValidateAndCheckLimits(sub *UserSubscription, group *Group) (needsMaintenance bool, err error) {
+	if sub == nil || sub.WelfareCycleClosed {
+		return false, ErrSubscriptionInvalid
+	}
+	group = sub.EffectiveGroup(group)
 	now := s.now()
 	// 1. 验证订阅状态
 	if sub.Status == SubscriptionStatusExpired {
@@ -1200,6 +1221,7 @@ func (s *SubscriptionService) GetSubscriptionProgress(ctx context.Context, subsc
 
 // calculateProgress 根据已加载的订阅和分组数据计算使用进度（纯内存计算，无 DB 查询）
 func (s *SubscriptionService) calculateProgress(sub *UserSubscription, group *Group) *SubscriptionProgress {
+	group = sub.EffectiveGroup(group)
 	progress := &SubscriptionProgress{
 		ID:            sub.ID,
 		GroupName:     group.Name,

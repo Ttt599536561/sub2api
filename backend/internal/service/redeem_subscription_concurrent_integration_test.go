@@ -70,9 +70,11 @@ func TestConcurrentFirstSubscriptionRedemptionsStackSixtyDays(t *testing.T) {
 			client := dbent.NewClient(dbent.Driver(entsql.OpenDB(dialect.Postgres, db)))
 			t.Cleanup(func() { _ = client.Close(); _, _ = admin.Exec("DROP SCHEMA " + schema + " CASCADE"); _ = admin.Close() })
 			require.NoError(t, client.Schema.Create(ctx))
-			// Match production's partial unique index, which is intentionally absent
-			// from Ent's generic schema. The trigger makes the initial insert overlap.
-			_, err = db.ExecContext(ctx, `CREATE UNIQUE INDEX uq_active_user_group ON user_subscriptions(user_id,group_id) WHERE deleted_at IS NULL;
+			// Ent now creates the per-kind partial unique index. Raw invitation
+			// provenance tables are outside Ent and remain empty for ordinary codes.
+			// The trigger makes the initial subscription insert overlap.
+			_, err = db.ExecContext(ctx, `CREATE TABLE qq_invite_code_pool(id BIGSERIAL PRIMARY KEY,redeem_code_id BIGINT UNIQUE NOT NULL REFERENCES redeem_codes(id),record_id BIGINT UNIQUE);
+CREATE TABLE qq_invite_rewards(id BIGSERIAL PRIMARY KEY,record_id BIGINT UNIQUE NOT NULL,pool_id BIGINT UNIQUE NOT NULL REFERENCES qq_invite_code_pool(id));
 CREATE FUNCTION slow_first_subscription() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN PERFORM pg_sleep(0.2); RETURN NEW; END $$;
 CREATE TRIGGER slow_first_subscription BEFORE INSERT ON user_subscriptions FOR EACH ROW EXECUTE FUNCTION slow_first_subscription();`)
 			require.NoError(t, err)

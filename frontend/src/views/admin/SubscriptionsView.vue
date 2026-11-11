@@ -243,6 +243,10 @@
               :show-rate="false"
             />
             <span v-else class="text-sm text-gray-400 dark:text-dark-500">-</span>
+            <div v-if="row.entitlement_kind === 'welfare'" class="mt-1 space-y-1 text-xs text-violet-700 dark:text-violet-300">
+              <span class="inline-block rounded bg-violet-100 px-1.5 py-0.5 dark:bg-violet-900/40">{{ t('userSubscriptions.welfare') }} · {{ t('userSubscriptions.welfareGrantCount', { count: row.welfare_grant_count || 0 }) }}</span>
+              <p :title="t('userSubscriptions.welfareQuotaRule')">{{ t('userSubscriptions.welfareFixedExpiry') }}</p>
+            </div>
           </template>
 
           <template #cell-usage="{ row }">
@@ -419,7 +423,7 @@
           <template #cell-actions="{ row }">
             <div class="flex items-center gap-1">
               <button
-                v-if="row.status === 'active' || row.status === 'expired'"
+                v-if="row.entitlement_kind !== 'welfare' && (row.status === 'active' || row.status === 'expired')"
                 @click="handleExtend(row)"
                 class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-blue-50 hover:text-blue-600 dark:hover:bg-blue-900/20 dark:hover:text-blue-400"
               >
@@ -427,7 +431,7 @@
                 <span class="text-xs">{{ t('admin.subscriptions.adjust') }}</span>
               </button>
               <button
-                v-if="row.status === 'active'"
+                v-if="row.entitlement_kind !== 'welfare' && row.status === 'active'"
                 @click="handleResetQuota(row)"
                 :disabled="resettingQuota && resettingSubscription?.id === row.id"
                 class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-orange-50 hover:text-orange-600 dark:hover:bg-orange-900/20 dark:hover:text-orange-400 disabled:cursor-not-allowed disabled:opacity-50"
@@ -444,7 +448,7 @@
                 <span class="text-xs">{{ t('admin.subscriptions.revoke') }}</span>
               </button>
               <button
-                v-if="row.status === 'revoked'"
+                v-if="row.entitlement_kind !== 'welfare' && row.status === 'revoked'"
                 @click="handleRestore(row)"
                 class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-green-50 hover:text-green-600 dark:hover:bg-green-900/20 dark:hover:text-green-400"
               >
@@ -1020,10 +1024,10 @@ const bulkSubscriptions = ref<UserSubscription[]>([])
 const bulkTargets = computed(() => {
   const selected = subscriptions.value.filter((subscription) => selectedIds.value.includes(subscription.id))
   return {
-    extend: selected.filter((subscription) => ['active', 'expired'].includes(subscription.status)),
-    reset_quota: selected.filter((subscription) => subscription.status === 'active'),
+    extend: selected.filter((subscription) => subscription.entitlement_kind !== 'welfare' && ['active', 'expired'].includes(subscription.status)),
+    reset_quota: selected.filter((subscription) => subscription.entitlement_kind !== 'welfare' && subscription.status === 'active'),
     revoke: selected.filter((subscription) => subscription.status === 'active'),
-    restore: selected.filter((subscription) => subscription.status === 'revoked')
+    restore: selected.filter((subscription) => subscription.entitlement_kind !== 'welfare' && subscription.status === 'revoked')
   }
 })
 const getSubscriptionSelectionLabel = (subscription: UserSubscription) =>
@@ -1390,6 +1394,7 @@ const handleAssignSubscription = async () => {
 }
 
 const handleExtend = (subscription: UserSubscription) => {
+  if (subscription.entitlement_kind === 'welfare') return
   extendingSubscription.value = subscription
   extendForm.days = 30
   showExtendModal.value = true
@@ -1401,7 +1406,7 @@ const closeExtendModal = () => {
 }
 
 const handleExtendSubscription = async () => {
-  if (!extendingSubscription.value) return
+  if (!extendingSubscription.value || extendingSubscription.value.entitlement_kind === 'welfare') return
 
   // 前端验证：调整后的过期时间必须在未来
   if (extendingSubscription.value.expires_at) {
@@ -1450,12 +1455,13 @@ const confirmRevoke = async () => {
 }
 
 const handleRestore = (subscription: UserSubscription) => {
+  if (subscription.entitlement_kind === 'welfare') return
   restoringSubscription.value = subscription
   showRestoreDialog.value = true
 }
 
 const confirmRestore = async () => {
-  if (!restoringSubscription.value) return
+  if (!restoringSubscription.value || restoringSubscription.value.entitlement_kind === 'welfare') return
 
   try {
     await adminAPI.subscriptions.restore(restoringSubscription.value.id)
@@ -1470,12 +1476,13 @@ const confirmRestore = async () => {
 }
 
 const handleResetQuota = (subscription: UserSubscription) => {
+  if (subscription.entitlement_kind === 'welfare') return
   resettingSubscription.value = subscription
   showResetQuotaConfirm.value = true
 }
 
 const confirmResetQuota = async () => {
-  if (!resettingSubscription.value) return
+  if (!resettingSubscription.value || resettingSubscription.value.entitlement_kind === 'welfare') return
   if (resettingQuota.value) return
   resettingQuota.value = true
   try {

@@ -42,6 +42,9 @@
                   <h3 class="break-words font-semibold text-gray-900 dark:text-white">
                     {{ subscription.group?.name || `Group #${subscription.group_id}` }}
                   </h3>
+                  <span v-if="subscription.entitlement_kind === 'welfare'" class="rounded-md bg-violet-100 px-2 py-0.5 text-[11px] font-medium text-violet-700 dark:bg-violet-900/40 dark:text-violet-300">
+                    {{ t('userSubscriptions.welfare') }}
+                  </span>
                   <span :class="['rounded-md border px-2 py-0.5 text-[11px] font-medium', platformBadgeClass(subscription.group?.platform || '')]">
                     {{ platformLabel(subscription.group?.platform || '') }}
                   </span>
@@ -71,7 +74,7 @@
                 {{ t(`userSubscriptions.status.${subscription.status}`) }}
               </span>
               <button
-                v-if="subscription.status === 'active'"
+                v-if="subscription.status === 'active' && subscription.entitlement_kind !== 'welfare'"
                 :class="['rounded-lg px-3 py-1.5 text-xs font-semibold text-white transition-colors', platformButtonClass(subscription.group?.platform || '')]"
                 @click="router.push({ path: '/purchase', query: { tab: 'subscription', group: String(subscription.group_id) } })"
               >
@@ -82,6 +85,10 @@
 
           <!-- Usage Progress -->
           <div class="space-y-4 p-4">
+            <div v-if="subscription.entitlement_kind === 'welfare'" class="space-y-1 rounded-lg bg-violet-50 p-3 text-xs text-violet-700 dark:bg-violet-900/20 dark:text-violet-300">
+              <p class="font-medium">{{ t('userSubscriptions.welfareGrantCount', { count: subscription.welfare_grant_count || 0 }) }}</p>
+              <p>{{ t('userSubscriptions.welfareQuotaRule') }}</p>
+            </div>
             <!-- Expiration Info -->
             <div v-if="subscription.expires_at" class="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-sm">
               <span class="text-gray-500 dark:text-dark-400">{{
@@ -113,7 +120,7 @@
                     }}
                   </span>
                   <button
-                    v-if="subscription.daily_reset?.eligible"
+                    v-if="subscription.entitlement_kind !== 'welfare' && subscription.daily_reset?.eligible"
                     type="button"
                     data-testid="reset-daily"
                     :disabled="!subscription.daily_reset.can_reset || !!pendingDailyResets[subscription.id]"
@@ -255,7 +262,7 @@
             </div>
 
             <div
-              v-if="subscription.daily_reset && (subscription.daily_reset.eligible || subscription.daily_reset.auto_daily_reset_enabled || pendingDailyResets[subscription.id])"
+              v-if="subscription.entitlement_kind !== 'welfare' && subscription.daily_reset && (subscription.daily_reset.eligible || subscription.daily_reset.auto_daily_reset_enabled || pendingDailyResets[subscription.id])"
               class="space-y-2 border-t border-gray-100 pt-4 dark:border-dark-700"
             >
               <div class="flex items-center justify-between gap-3">
@@ -364,6 +371,7 @@ function showResetError(error: unknown) {
 }
 
 async function resetDaily(subscription: UserSubscription) {
+  if (subscription.entitlement_kind === 'welfare') return
   try {
     const result = await subscriptionStore.resetDailyQuota(subscription)
     if (result?.reset_performed) appStore.showSuccess(t('userSubscriptions.dailyResetSuccess'))
@@ -373,6 +381,7 @@ async function resetDaily(subscription: UserSubscription) {
 }
 
 async function setAutoDailyReset(subscription: UserSubscription, enabled: boolean) {
+  if (subscription.entitlement_kind === 'welfare') return
   try {
     const result = await subscriptionStore.setAutoDailyReset(subscription, enabled)
     if (result?.preference_saved) {

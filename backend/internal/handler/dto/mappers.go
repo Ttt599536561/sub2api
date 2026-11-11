@@ -894,10 +894,16 @@ func UserSubscriptionFromServiceAdmin(sub *service.UserSubscription) *AdminUserS
 }
 
 func userSubscriptionFromServiceBase(sub *service.UserSubscription) UserSubscription {
+	entitlementKind := service.SubscriptionEntitlementStandard
+	if sub.IsWelfare() {
+		entitlementKind = service.SubscriptionEntitlementWelfare
+	}
 	return UserSubscription{
 		ID:                         sub.ID,
 		UserID:                     sub.UserID,
 		GroupID:                    sub.GroupID,
+		EntitlementKind:            entitlementKind,
+		WelfareGrantCount:          sub.WelfareGrantCount,
 		StartsAt:                   sub.StartsAt,
 		ExpiresAt:                  sub.ExpiresAt,
 		Status:                     sub.Status,
@@ -913,7 +919,7 @@ func userSubscriptionFromServiceBase(sub *service.UserSubscription) UserSubscrip
 		UpdatedAt:                  sub.UpdatedAt,
 		RevokedAt:                  sub.DeletedAt,
 		User:                       UserFromServiceShallow(sub.User),
-		Group:                      GroupFromServiceShallow(sub.Group),
+		Group:                      GroupFromServiceShallow(sub.EffectiveGroup(sub.Group)),
 	}
 }
 

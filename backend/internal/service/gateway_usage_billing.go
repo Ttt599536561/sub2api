@@ -157,7 +157,7 @@ func postUsageBilling(ctx context.Context, p *postUsageBillingParams, deps *bill
 		if cost.ActualCost > 0 {
 			if err := deps.userSubRepo.IncrementUsage(billingCtx, p.Subscription.ID, cost.ActualCost); err != nil {
 				slog.Error("increment subscription usage failed", "subscription_id", p.Subscription.ID, "error", err)
-			} else {
+			} else if !p.Subscription.IsWelfare() {
 				deps.billingCacheService.triggerSubscriptionAutoDailyReset(billingCtx, p.Subscription.UserID, p.Subscription.ID)
 			}
 		}
@@ -422,10 +422,10 @@ func finalizePostUsageBilling(ctx context.Context, p *postUsageBillingParams, de
 	}
 
 	if p.IsSubscriptionBill {
-		if p.Cost.ActualCost > 0 && p.Subscription != nil {
+		if p.Cost.ActualCost > 0 && p.Subscription != nil && !p.Subscription.IsWelfare() {
 			deps.billingCacheService.triggerSubscriptionAutoDailyReset(ctx, p.Subscription.UserID, p.Subscription.ID)
 		}
-		if p.Cost.ActualCost > 0 && p.User != nil && p.APIKey != nil && p.APIKey.GroupID != nil && deps.billingCacheService != nil && deps.billingCacheService.subscriptionService == nil {
+		if p.Cost.ActualCost > 0 && p.Subscription != nil && !p.Subscription.IsWelfare() && p.User != nil && p.APIKey != nil && p.APIKey.GroupID != nil && deps.billingCacheService != nil && deps.billingCacheService.subscriptionService == nil {
 			deps.billingCacheService.QueueUpdateSubscriptionUsage(p.User.ID, *p.APIKey.GroupID, p.Cost.ActualCost)
 		}
 	} else if p.Cost.ActualCost > 0 && p.User != nil {

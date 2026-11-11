@@ -484,7 +484,7 @@ func (s *APIKeyService) incrementAPIKeyErrorCount(ctx context.Context, userID in
 func (s *APIKeyService) canUserBindGroup(ctx context.Context, user *User, group *Group) bool {
 	// 订阅类型分组：需要有效订阅
 	if group.IsSubscriptionType() {
-		_, err := s.userSubRepo.GetActiveByUserIDAndGroupID(ctx, user.ID, group.ID)
+		_, err := activeSubscriptionForGroupAccess(ctx, s.userSubRepo, user.ID, group.ID)
 		return err == nil // 有有效订阅则允许
 	}
 	// 标准类型分组：使用原有逻辑

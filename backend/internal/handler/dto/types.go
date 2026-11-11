@@ -761,9 +761,11 @@ type Setting struct {
 }
 
 type UserSubscription struct {
-	ID      int64 `json:"id"`
-	UserID  int64 `json:"user_id"`
-	GroupID int64 `json:"group_id"`
+	ID                int64  `json:"id"`
+	UserID            int64  `json:"user_id"`
+	GroupID           int64  `json:"group_id"`
+	EntitlementKind   string `json:"entitlement_kind"`
+	WelfareGrantCount int64  `json:"welfare_grant_count"`
 
 	StartsAt  time.Time `json:"starts_at"`
 	ExpiresAt time.Time `json:"expires_at"`

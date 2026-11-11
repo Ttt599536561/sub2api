@@ -37,6 +37,15 @@ func (UserSubscription) Fields() []ent.Field {
 	return []ent.Field{
 		field.Int64("user_id"),
 		field.Int64("group_id"),
+		field.String("entitlement_kind").MaxLen(20).Default("standard"),
+		field.Float("welfare_daily_limit_usd").Optional().Nillable().
+			SchemaType(map[string]string{dialect.Postgres: "decimal(20,10)"}),
+		field.Float("welfare_weekly_limit_usd").Optional().Nillable().
+			SchemaType(map[string]string{dialect.Postgres: "decimal(20,10)"}),
+		field.Float("welfare_monthly_limit_usd").Optional().Nillable().
+			SchemaType(map[string]string{dialect.Postgres: "decimal(20,10)"}),
+		field.Int64("welfare_grant_count").Default(0),
+		field.Bool("welfare_cycle_closed").Default(false),
 
 		field.Time("starts_at").
 			SchemaType(map[string]string{dialect.Postgres: "timestamptz"}),
@@ -114,9 +123,11 @@ func (UserSubscription) Indexes() []ent.Index {
 		// 活跃订阅查询复合索引（线上由 SQL 迁移创建部分索引，schema 仅用于模型可读性对齐）
 		index.Fields("user_id", "status", "expires_at"),
 		index.Fields("assigned_by"),
-		// 唯一约束通过部分索引实现（WHERE deleted_at IS NULL），支持软删除后重新订阅
-		// 见迁移文件 016_soft_delete_partial_unique_indexes.sql
-		index.Fields("user_id", "group_id"),
+		// Welfare and standard entitlements keep independent terms and usage.
+		// Closed welfare terms remain addressable for late usage settlement.
+		index.Fields("user_id", "group_id", "entitlement_kind").Unique().
+			StorageKey("user_subscriptions_user_group_kind_unique_active").
+			Annotations(entsql.IndexWhere("deleted_at IS NULL AND welfare_cycle_closed = false")),
 		index.Fields("deleted_at"),
 	}
 }

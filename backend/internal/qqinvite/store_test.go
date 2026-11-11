@@ -45,7 +45,7 @@ func testStore(t *testing.T) *Store {
 			t.Error(e)
 		}
 	})
-	_, e = scoped.Exec(`CREATE TABLE groups(id BIGSERIAL PRIMARY KEY,name TEXT,subscription_type TEXT DEFAULT 'subscription',status TEXT DEFAULT 'active',deleted_at TIMESTAMPTZ); INSERT INTO groups(name) VALUES('monthly'); CREATE TABLE redeem_codes(id BIGSERIAL PRIMARY KEY,code VARCHAR(32) UNIQUE NOT NULL,type VARCHAR(20) NOT NULL DEFAULT 'balance',value NUMERIC(20,8) NOT NULL DEFAULT 0,status VARCHAR(20) NOT NULL DEFAULT 'unused',used_by BIGINT,used_at TIMESTAMPTZ,notes TEXT,created_at TIMESTAMPTZ NOT NULL DEFAULT now(),expires_at TIMESTAMPTZ,group_id BIGINT REFERENCES groups(id),validity_days INT NOT NULL DEFAULT 30)`)
+	_, e = scoped.Exec(`CREATE TABLE groups(id BIGSERIAL PRIMARY KEY,name TEXT,subscription_type TEXT DEFAULT 'subscription',status TEXT DEFAULT 'active',deleted_at TIMESTAMPTZ,daily_limit_usd NUMERIC,weekly_limit_usd NUMERIC,monthly_limit_usd NUMERIC DEFAULT 100); INSERT INTO groups(name) VALUES('monthly'); CREATE TABLE redeem_codes(id BIGSERIAL PRIMARY KEY,code VARCHAR(32) UNIQUE NOT NULL,type VARCHAR(20) NOT NULL DEFAULT 'balance',value NUMERIC(20,8) NOT NULL DEFAULT 0,status VARCHAR(20) NOT NULL DEFAULT 'unused',used_by BIGINT,used_at TIMESTAMPTZ,notes TEXT,created_at TIMESTAMPTZ NOT NULL DEFAULT now(),expires_at TIMESTAMPTZ,group_id BIGINT REFERENCES groups(id),validity_days INT NOT NULL DEFAULT 30)`)
 	if e != nil {
 		t.Fatal(e)
 	}

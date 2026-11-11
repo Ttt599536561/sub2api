@@ -1851,15 +1851,22 @@ func (h *GatewayHandler) usageUnrestricted(c *gin.Context, ctx context.Context, 
 		// 订阅信息可能不在 context 中（/v1/usage 路径跳过了中间件的计费检查）
 		subscription, ok := middleware2.GetSubscriptionFromContext(c)
 		if ok {
+			group := subscription.EffectiveGroup(apiKey.Group)
+			entitlementKind := service.SubscriptionEntitlementStandard
+			if subscription.IsWelfare() {
+				entitlementKind = service.SubscriptionEntitlementWelfare
+			}
 			remaining := h.calculateSubscriptionRemaining(apiKey.Group, subscription)
 			resp["remaining"] = remaining
 			resp["subscription"] = gin.H{
 				"daily_usage_usd":     subscription.DailyUsageUSD,
 				"weekly_usage_usd":    subscription.WeeklyUsageUSD,
 				"monthly_usage_usd":   subscription.MonthlyUsageUSD,
-				"daily_limit_usd":     apiKey.Group.DailyLimitUSD,
-				"weekly_limit_usd":    apiKey.Group.WeeklyLimitUSD,
-				"monthly_limit_usd":   apiKey.Group.MonthlyLimitUSD,
+				"daily_limit_usd":     group.DailyLimitUSD,
+				"weekly_limit_usd":    group.WeeklyLimitUSD,
+				"monthly_limit_usd":   group.MonthlyLimitUSD,
+				"entitlement_kind":    entitlementKind,
+				"welfare_grant_count": subscription.WelfareGrantCount,
 				"weekly_window_start": subscription.WeeklyWindowStart,
 				"expires_at":          subscription.ExpiresAt,
 			}
@@ -1910,6 +1917,7 @@ func (h *GatewayHandler) usageUnrestricted(c *gin.Context, ctx context.Context, 
 // 1. 如果日/周/月任一限额达到100%，返回0
 // 2. 否则返回所有已配置周期中剩余额度的最小值
 func (h *GatewayHandler) calculateSubscriptionRemaining(group *service.Group, sub *service.UserSubscription) float64 {
+	group = sub.EffectiveGroup(group)
 	var remainingValues []float64
 
 	// 检查日限额

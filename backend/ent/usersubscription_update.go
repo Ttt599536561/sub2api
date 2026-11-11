@@ -85,6 +85,136 @@ func (_u *UserSubscriptionUpdate) SetNillableGroupID(v *int64) *UserSubscription
 	return _u
 }
 
+// SetEntitlementKind sets the "entitlement_kind" field.
+func (_u *UserSubscriptionUpdate) SetEntitlementKind(v string) *UserSubscriptionUpdate {
+	_u.mutation.SetEntitlementKind(v)
+	return _u
+}
+
+// SetNillableEntitlementKind sets the "entitlement_kind" field if the given value is not nil.
+func (_u *UserSubscriptionUpdate) SetNillableEntitlementKind(v *string) *UserSubscriptionUpdate {
+	if v != nil {
+		_u.SetEntitlementKind(*v)
+	}
+	return _u
+}
+
+// SetWelfareDailyLimitUsd sets the "welfare_daily_limit_usd" field.
+func (_u *UserSubscriptionUpdate) SetWelfareDailyLimitUsd(v float64) *UserSubscriptionUpdate {
+	_u.mutation.ResetWelfareDailyLimitUsd()
+	_u.mutation.SetWelfareDailyLimitUsd(v)
+	return _u
+}
+
+// SetNillableWelfareDailyLimitUsd sets the "welfare_daily_limit_usd" field if the given value is not nil.
+func (_u *UserSubscriptionUpdate) SetNillableWelfareDailyLimitUsd(v *float64) *UserSubscriptionUpdate {
+	if v != nil {
+		_u.SetWelfareDailyLimitUsd(*v)
+	}
+	return _u
+}
+
+// AddWelfareDailyLimitUsd adds value to the "welfare_daily_limit_usd" field.
+func (_u *UserSubscriptionUpdate) AddWelfareDailyLimitUsd(v float64) *UserSubscriptionUpdate {
+	_u.mutation.AddWelfareDailyLimitUsd(v)
+	return _u
+}
+
+// ClearWelfareDailyLimitUsd clears the value of the "welfare_daily_limit_usd" field.
+func (_u *UserSubscriptionUpdate) ClearWelfareDailyLimitUsd() *UserSubscriptionUpdate {
+	_u.mutation.ClearWelfareDailyLimitUsd()
+	return _u
+}
+
+// SetWelfareWeeklyLimitUsd sets the "welfare_weekly_limit_usd" field.
+func (_u *UserSubscriptionUpdate) SetWelfareWeeklyLimitUsd(v float64) *UserSubscriptionUpdate {
+	_u.mutation.ResetWelfareWeeklyLimitUsd()
+	_u.mutation.SetWelfareWeeklyLimitUsd(v)
+	return _u
+}
+
+// SetNillableWelfareWeeklyLimitUsd sets the "welfare_weekly_limit_usd" field if the given value is not nil.
+func (_u *UserSubscriptionUpdate) SetNillableWelfareWeeklyLimitUsd(v *float64) *UserSubscriptionUpdate {
+	if v != nil {
+		_u.SetWelfareWeeklyLimitUsd(*v)
+	}
+	return _u
+}
+
+// AddWelfareWeeklyLimitUsd adds value to the "welfare_weekly_limit_usd" field.
+func (_u *UserSubscriptionUpdate) AddWelfareWeeklyLimitUsd(v float64) *UserSubscriptionUpdate {
+	_u.mutation.AddWelfareWeeklyLimitUsd(v)
+	return _u
+}
+
+// ClearWelfareWeeklyLimitUsd clears the value of the "welfare_weekly_limit_usd" field.
+func (_u *UserSubscriptionUpdate) ClearWelfareWeeklyLimitUsd() *UserSubscriptionUpdate {
+	_u.mutation.ClearWelfareWeeklyLimitUsd()
+	return _u
+}
+
+// SetWelfareMonthlyLimitUsd sets the "welfare_monthly_limit_usd" field.
+func (_u *UserSubscriptionUpdate) SetWelfareMonthlyLimitUsd(v float64) *UserSubscriptionUpdate {
+	_u.mutation.ResetWelfareMonthlyLimitUsd()
+	_u.mutation.SetWelfareMonthlyLimitUsd(v)
+	return _u
+}
+
+// SetNillableWelfareMonthlyLimitUsd sets the "welfare_monthly_limit_usd" field if the given value is not nil.
+func (_u *UserSubscriptionUpdate) SetNillableWelfareMonthlyLimitUsd(v *float64) *UserSubscriptionUpdate {
+	if v != nil {
+		_u.SetWelfareMonthlyLimitUsd(*v)
+	}
+	return _u
+}
+
+// AddWelfareMonthlyLimitUsd adds value to the "welfare_monthly_limit_usd" field.
+func (_u *UserSubscriptionUpdate) AddWelfareMonthlyLimitUsd(v float64) *UserSubscriptionUpdate {
+	_u.mutation.AddWelfareMonthlyLimitUsd(v)
+	return _u
+}
+
+// ClearWelfareMonthlyLimitUsd clears the value of the "welfare_monthly_limit_usd" field.
+func (_u *UserSubscriptionUpdate) ClearWelfareMonthlyLimitUsd() *UserSubscriptionUpdate {
+	_u.mutation.ClearWelfareMonthlyLimitUsd()
+	return _u
+}
+
+// SetWelfareGrantCount sets the "welfare_grant_count" field.
+func (_u *UserSubscriptionUpdate) SetWelfareGrantCount(v int64) *UserSubscriptionUpdate {
+	_u.mutation.ResetWelfareGrantCount()
+	_u.mutation.SetWelfareGrantCount(v)
+	return _u
+}
+
+// SetNillableWelfareGrantCount sets the "welfare_grant_count" field if the given value is not nil.
+func (_u *UserSubscriptionUpdate) SetNillableWelfareGrantCount(v *int64) *UserSubscriptionUpdate {
+	if v != nil {
+		_u.SetWelfareGrantCount(*v)
+	}
+	return _u
+}
+
+// AddWelfareGrantCount adds value to the "welfare_grant_count" field.
+func (_u *UserSubscriptionUpdate) AddWelfareGrantCount(v int64) *UserSubscriptionUpdate {
+	_u.mutation.AddWelfareGrantCount(v)
+	return _u
+}
+
+// SetWelfareCycleClosed sets the "welfare_cycle_closed" field.
+func (_u *UserSubscriptionUpdate) SetWelfareCycleClosed(v bool) *UserSubscriptionUpdate {
+	_u.mutation.SetWelfareCycleClosed(v)
+	return _u
+}
+
+// SetNillableWelfareCycleClosed sets the "welfare_cycle_closed" field if the given value is not nil.
+func (_u *UserSubscriptionUpdate) SetNillableWelfareCycleClosed(v *bool) *UserSubscriptionUpdate {
+	if v != nil {
+		_u.SetWelfareCycleClosed(*v)
+	}
+	return _u
+}
+
 // SetStartsAt sets the "starts_at" field.
 func (_u *UserSubscriptionUpdate) SetStartsAt(v time.Time) *UserSubscriptionUpdate {
 	_u.mutation.SetStartsAt(v)
@@ -485,6 +615,11 @@ func (_u *UserSubscriptionUpdate) defaults() error {
 
 // check runs all checks and user-defined validators on the builder.
 func (_u *UserSubscriptionUpdate) check() error {
+	if v, ok := _u.mutation.EntitlementKind(); ok {
+		if err := usersubscription.EntitlementKindValidator(v); err != nil {
+			return &ValidationError{Name: "entitlement_kind", err: fmt.Errorf(`ent: validator failed for field "UserSubscription.entitlement_kind": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.Status(); ok {
 		if err := usersubscription.StatusValidator(v); err != nil {
 			return &ValidationError{Name: "status", err: fmt.Errorf(`ent: validator failed for field "UserSubscription.status": %w`, err)}
@@ -524,6 +659,45 @@ func (_u *UserSubscriptionUpdate) sqlSave(ctx context.Context) (_node int, err e
 	}
 	if _u.mutation.DeletedAtCleared() {
 		_spec.ClearField(usersubscription.FieldDeletedAt, field.TypeTime)
+	}
+	if value, ok := _u.mutation.EntitlementKind(); ok {
+		_spec.SetField(usersubscription.FieldEntitlementKind, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.WelfareDailyLimitUsd(); ok {
+		_spec.SetField(usersubscription.FieldWelfareDailyLimitUsd, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedWelfareDailyLimitUsd(); ok {
+		_spec.AddField(usersubscription.FieldWelfareDailyLimitUsd, field.TypeFloat64, value)
+	}
+	if _u.mutation.WelfareDailyLimitUsdCleared() {
+		_spec.ClearField(usersubscription.FieldWelfareDailyLimitUsd, field.TypeFloat64)
+	}
+	if value, ok := _u.mutation.WelfareWeeklyLimitUsd(); ok {
+		_spec.SetField(usersubscription.FieldWelfareWeeklyLimitUsd, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedWelfareWeeklyLimitUsd(); ok {
+		_spec.AddField(usersubscription.FieldWelfareWeeklyLimitUsd, field.TypeFloat64, value)
+	}
+	if _u.mutation.WelfareWeeklyLimitUsdCleared() {
+		_spec.ClearField(usersubscription.FieldWelfareWeeklyLimitUsd, field.TypeFloat64)
+	}
+	if value, ok := _u.mutation.WelfareMonthlyLimitUsd(); ok {
+		_spec.SetField(usersubscription.FieldWelfareMonthlyLimitUsd, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedWelfareMonthlyLimitUsd(); ok {
+		_spec.AddField(usersubscription.FieldWelfareMonthlyLimitUsd, field.TypeFloat64, value)
+	}
+	if _u.mutation.WelfareMonthlyLimitUsdCleared() {
+		_spec.ClearField(usersubscription.FieldWelfareMonthlyLimitUsd, field.TypeFloat64)
+	}
+	if value, ok := _u.mutation.WelfareGrantCount(); ok {
+		_spec.SetField(usersubscription.FieldWelfareGrantCount, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedWelfareGrantCount(); ok {
+		_spec.AddField(usersubscription.FieldWelfareGrantCount, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.WelfareCycleClosed(); ok {
+		_spec.SetField(usersubscription.FieldWelfareCycleClosed, field.TypeBool, value)
 	}
 	if value, ok := _u.mutation.StartsAt(); ok {
 		_spec.SetField(usersubscription.FieldStartsAt, field.TypeTime, value)
@@ -793,6 +967,136 @@ func (_u *UserSubscriptionUpdateOne) SetGroupID(v int64) *UserSubscriptionUpdate
 func (_u *UserSubscriptionUpdateOne) SetNillableGroupID(v *int64) *UserSubscriptionUpdateOne {
 	if v != nil {
 		_u.SetGroupID(*v)
+	}
+	return _u
+}
+
+// SetEntitlementKind sets the "entitlement_kind" field.
+func (_u *UserSubscriptionUpdateOne) SetEntitlementKind(v string) *UserSubscriptionUpdateOne {
+	_u.mutation.SetEntitlementKind(v)
+	return _u
+}
+
+// SetNillableEntitlementKind sets the "entitlement_kind" field if the given value is not nil.
+func (_u *UserSubscriptionUpdateOne) SetNillableEntitlementKind(v *string) *UserSubscriptionUpdateOne {
+	if v != nil {
+		_u.SetEntitlementKind(*v)
+	}
+	return _u
+}
+
+// SetWelfareDailyLimitUsd sets the "welfare_daily_limit_usd" field.
+func (_u *UserSubscriptionUpdateOne) SetWelfareDailyLimitUsd(v float64) *UserSubscriptionUpdateOne {
+	_u.mutation.ResetWelfareDailyLimitUsd()
+	_u.mutation.SetWelfareDailyLimitUsd(v)
+	return _u
+}
+
+// SetNillableWelfareDailyLimitUsd sets the "welfare_daily_limit_usd" field if the given value is not nil.
+func (_u *UserSubscriptionUpdateOne) SetNillableWelfareDailyLimitUsd(v *float64) *UserSubscriptionUpdateOne {
+	if v != nil {
+		_u.SetWelfareDailyLimitUsd(*v)
+	}
+	return _u
+}
+
+// AddWelfareDailyLimitUsd adds value to the "welfare_daily_limit_usd" field.
+func (_u *UserSubscriptionUpdateOne) AddWelfareDailyLimitUsd(v float64) *UserSubscriptionUpdateOne {
+	_u.mutation.AddWelfareDailyLimitUsd(v)
+	return _u
+}
+
+// ClearWelfareDailyLimitUsd clears the value of the "welfare_daily_limit_usd" field.
+func (_u *UserSubscriptionUpdateOne) ClearWelfareDailyLimitUsd() *UserSubscriptionUpdateOne {
+	_u.mutation.ClearWelfareDailyLimitUsd()
+	return _u
+}
+
+// SetWelfareWeeklyLimitUsd sets the "welfare_weekly_limit_usd" field.
+func (_u *UserSubscriptionUpdateOne) SetWelfareWeeklyLimitUsd(v float64) *UserSubscriptionUpdateOne {
+	_u.mutation.ResetWelfareWeeklyLimitUsd()
+	_u.mutation.SetWelfareWeeklyLimitUsd(v)
+	return _u
+}
+
+// SetNillableWelfareWeeklyLimitUsd sets the "welfare_weekly_limit_usd" field if the given value is not nil.
+func (_u *UserSubscriptionUpdateOne) SetNillableWelfareWeeklyLimitUsd(v *float64) *UserSubscriptionUpdateOne {
+	if v != nil {
+		_u.SetWelfareWeeklyLimitUsd(*v)
+	}
+	return _u
+}
+
+// AddWelfareWeeklyLimitUsd adds value to the "welfare_weekly_limit_usd" field.
+func (_u *UserSubscriptionUpdateOne) AddWelfareWeeklyLimitUsd(v float64) *UserSubscriptionUpdateOne {
+	_u.mutation.AddWelfareWeeklyLimitUsd(v)
+	return _u
+}
+
+// ClearWelfareWeeklyLimitUsd clears the value of the "welfare_weekly_limit_usd" field.
+func (_u *UserSubscriptionUpdateOne) ClearWelfareWeeklyLimitUsd() *UserSubscriptionUpdateOne {
+	_u.mutation.ClearWelfareWeeklyLimitUsd()
+	return _u
+}
+
+// SetWelfareMonthlyLimitUsd sets the "welfare_monthly_limit_usd" field.
+func (_u *UserSubscriptionUpdateOne) SetWelfareMonthlyLimitUsd(v float64) *UserSubscriptionUpdateOne {
+	_u.mutation.ResetWelfareMonthlyLimitUsd()
+	_u.mutation.SetWelfareMonthlyLimitUsd(v)
+	return _u
+}
+
+// SetNillableWelfareMonthlyLimitUsd sets the "welfare_monthly_limit_usd" field if the given value is not nil.
+func (_u *UserSubscriptionUpdateOne) SetNillableWelfareMonthlyLimitUsd(v *float64) *UserSubscriptionUpdateOne {
+	if v != nil {
+		_u.SetWelfareMonthlyLimitUsd(*v)
+	}
+	return _u
+}
+
+// AddWelfareMonthlyLimitUsd adds value to the "welfare_monthly_limit_usd" field.
+func (_u *UserSubscriptionUpdateOne) AddWelfareMonthlyLimitUsd(v float64) *UserSubscriptionUpdateOne {
+	_u.mutation.AddWelfareMonthlyLimitUsd(v)
+	return _u
+}
+
+// ClearWelfareMonthlyLimitUsd clears the value of the "welfare_monthly_limit_usd" field.
+func (_u *UserSubscriptionUpdateOne) ClearWelfareMonthlyLimitUsd() *UserSubscriptionUpdateOne {
+	_u.mutation.ClearWelfareMonthlyLimitUsd()
+	return _u
+}
+
+// SetWelfareGrantCount sets the "welfare_grant_count" field.
+func (_u *UserSubscriptionUpdateOne) SetWelfareGrantCount(v int64) *UserSubscriptionUpdateOne {
+	_u.mutation.ResetWelfareGrantCount()
+	_u.mutation.SetWelfareGrantCount(v)
+	return _u
+}
+
+// SetNillableWelfareGrantCount sets the "welfare_grant_count" field if the given value is not nil.
+func (_u *UserSubscriptionUpdateOne) SetNillableWelfareGrantCount(v *int64) *UserSubscriptionUpdateOne {
+	if v != nil {
+		_u.SetWelfareGrantCount(*v)
+	}
+	return _u
+}
+
+// AddWelfareGrantCount adds value to the "welfare_grant_count" field.
+func (_u *UserSubscriptionUpdateOne) AddWelfareGrantCount(v int64) *UserSubscriptionUpdateOne {
+	_u.mutation.AddWelfareGrantCount(v)
+	return _u
+}
+
+// SetWelfareCycleClosed sets the "welfare_cycle_closed" field.
+func (_u *UserSubscriptionUpdateOne) SetWelfareCycleClosed(v bool) *UserSubscriptionUpdateOne {
+	_u.mutation.SetWelfareCycleClosed(v)
+	return _u
+}
+
+// SetNillableWelfareCycleClosed sets the "welfare_cycle_closed" field if the given value is not nil.
+func (_u *UserSubscriptionUpdateOne) SetNillableWelfareCycleClosed(v *bool) *UserSubscriptionUpdateOne {
+	if v != nil {
+		_u.SetWelfareCycleClosed(*v)
 	}
 	return _u
 }
@@ -1210,6 +1514,11 @@ func (_u *UserSubscriptionUpdateOne) defaults() error {
 
 // check runs all checks and user-defined validators on the builder.
 func (_u *UserSubscriptionUpdateOne) check() error {
+	if v, ok := _u.mutation.EntitlementKind(); ok {
+		if err := usersubscription.EntitlementKindValidator(v); err != nil {
+			return &ValidationError{Name: "entitlement_kind", err: fmt.Errorf(`ent: validator failed for field "UserSubscription.entitlement_kind": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.Status(); ok {
 		if err := usersubscription.StatusValidator(v); err != nil {
 			return &ValidationError{Name: "status", err: fmt.Errorf(`ent: validator failed for field "UserSubscription.status": %w`, err)}
@@ -1266,6 +1575,45 @@ func (_u *UserSubscriptionUpdateOne) sqlSave(ctx context.Context) (_node *UserSu
 	}
 	if _u.mutation.DeletedAtCleared() {
 		_spec.ClearField(usersubscription.FieldDeletedAt, field.TypeTime)
+	}
+	if value, ok := _u.mutation.EntitlementKind(); ok {
+		_spec.SetField(usersubscription.FieldEntitlementKind, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.WelfareDailyLimitUsd(); ok {
+		_spec.SetField(usersubscription.FieldWelfareDailyLimitUsd, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedWelfareDailyLimitUsd(); ok {
+		_spec.AddField(usersubscription.FieldWelfareDailyLimitUsd, field.TypeFloat64, value)
+	}
+	if _u.mutation.WelfareDailyLimitUsdCleared() {
+		_spec.ClearField(usersubscription.FieldWelfareDailyLimitUsd, field.TypeFloat64)
+	}
+	if value, ok := _u.mutation.WelfareWeeklyLimitUsd(); ok {
+		_spec.SetField(usersubscription.FieldWelfareWeeklyLimitUsd, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedWelfareWeeklyLimitUsd(); ok {
+		_spec.AddField(usersubscription.FieldWelfareWeeklyLimitUsd, field.TypeFloat64, value)
+	}
+	if _u.mutation.WelfareWeeklyLimitUsdCleared() {
+		_spec.ClearField(usersubscription.FieldWelfareWeeklyLimitUsd, field.TypeFloat64)
+	}
+	if value, ok := _u.mutation.WelfareMonthlyLimitUsd(); ok {
+		_spec.SetField(usersubscription.FieldWelfareMonthlyLimitUsd, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedWelfareMonthlyLimitUsd(); ok {
+		_spec.AddField(usersubscription.FieldWelfareMonthlyLimitUsd, field.TypeFloat64, value)
+	}
+	if _u.mutation.WelfareMonthlyLimitUsdCleared() {
+		_spec.ClearField(usersubscription.FieldWelfareMonthlyLimitUsd, field.TypeFloat64)
+	}
+	if value, ok := _u.mutation.WelfareGrantCount(); ok {
+		_spec.SetField(usersubscription.FieldWelfareGrantCount, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedWelfareGrantCount(); ok {
+		_spec.AddField(usersubscription.FieldWelfareGrantCount, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.WelfareCycleClosed(); ok {
+		_spec.SetField(usersubscription.FieldWelfareCycleClosed, field.TypeBool, value)
 	}
 	if value, ok := _u.mutation.StartsAt(); ok {
 		_spec.SetField(usersubscription.FieldStartsAt, field.TypeTime, value)

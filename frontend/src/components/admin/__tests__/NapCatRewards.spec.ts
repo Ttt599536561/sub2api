@@ -6,7 +6,7 @@ import NapCatInventoryPanel from '../napcat/NapCatInventoryPanel.vue'
 import NapCatRecordsPanel from '../napcat/NapCatRecordsPanel.vue'
 import { qqInviteAPI } from '@/api/qqInvite'
 vi.mock('vue-i18n', () => ({ useI18n: () => ({ t: (key: string) => key, locale: { value: 'zh' } }) }))
-vi.mock('@/api/admin/groups', () => ({ getAll: vi.fn(async () => [{ id: 7, name: 'Monthly', subscription_type: 'subscription' }]) }))
+vi.mock('@/api/admin/groups', () => ({ getAll: vi.fn(async () => [{ id: 7, name: 'Monthly', status: 'active', subscription_type: 'subscription', daily_limit_usd: null, weekly_limit_usd: null, monthly_limit_usd: 100 }]) }))
 vi.mock('@/api/qqInvite', () => ({ qqInviteAPI: { campaigns: vi.fn(), saveCampaign: vi.fn(), baseline: vi.fn(), codes: vi.fn(), previewCodes: vi.fn(), importCodes: vi.fn(), generateCodes: vi.fn(), records: vi.fn(), review: vi.fn(), recheck: vi.fn(), redeliver: vi.fn() } }))
 const auth = reactive({ user: { id: 1, role: 'admin', email: 'admin@example.test' }, sessionRevision: 'A', isAuthenticated: true })
 vi.mock('@/stores/auth', () => ({ useAuthStore: () => auth }))

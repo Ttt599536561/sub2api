@@ -28,9 +28,19 @@ func (r *userSubscriptionRepository) Create(ctx context.Context, sub *service.Us
 	}
 
 	client := clientFromContext(ctx, r.client)
+	kind := sub.EntitlementKind
+	if kind == "" {
+		kind = service.SubscriptionEntitlementStandard
+	}
 	builder := client.UserSubscription.Create().
 		SetUserID(sub.UserID).
 		SetGroupID(sub.GroupID).
+		SetEntitlementKind(kind).
+		SetNillableWelfareDailyLimitUsd(sub.WelfareDailyLimitUSD).
+		SetNillableWelfareWeeklyLimitUsd(sub.WelfareWeeklyLimitUSD).
+		SetNillableWelfareMonthlyLimitUsd(sub.WelfareMonthlyLimitUSD).
+		SetWelfareGrantCount(sub.WelfareGrantCount).
+		SetWelfareCycleClosed(sub.WelfareCycleClosed).
 		SetExpiresAt(sub.ExpiresAt).
 		SetNillableDailyWindowStart(sub.DailyWindowStart).
 		SetNillableWeeklyWindowStart(sub.WeeklyWindowStart).
@@ -105,7 +115,8 @@ func (r *userSubscriptionRepository) GetByIDIncludeDeleted(ctx context.Context, 
 func (r *userSubscriptionRepository) GetByUserIDAndGroupID(ctx context.Context, userID, groupID int64) (*service.UserSubscription, error) {
 	client := clientFromContext(ctx, r.client)
 	m, err := client.UserSubscription.Query().
-		Where(usersubscription.UserIDEQ(userID), usersubscription.GroupIDEQ(groupID)).
+		Where(usersubscription.UserIDEQ(userID), usersubscription.GroupIDEQ(groupID),
+			usersubscription.EntitlementKindEQ(service.SubscriptionEntitlementStandard)).
 		WithGroup().
 		Only(ctx)
 	if err != nil {
@@ -120,6 +131,7 @@ func (r *userSubscriptionRepository) GetActiveByUserIDAndGroupID(ctx context.Con
 		Where(
 			usersubscription.UserIDEQ(userID),
 			usersubscription.GroupIDEQ(groupID),
+			usersubscription.EntitlementKindEQ(service.SubscriptionEntitlementStandard),
 			usersubscription.StatusEQ(service.SubscriptionStatusActive),
 			usersubscription.ExpiresAtGT(time.Now()),
 		).
@@ -137,9 +149,16 @@ func (r *userSubscriptionRepository) Update(ctx context.Context, sub *service.Us
 	}
 
 	client := clientFromContext(ctx, r.client)
+	kind := sub.EntitlementKind
+	if kind == "" {
+		kind = service.SubscriptionEntitlementStandard
+	}
 	builder := client.UserSubscription.UpdateOneID(sub.ID).
 		SetUserID(sub.UserID).
 		SetGroupID(sub.GroupID).
+		SetEntitlementKind(kind).
+		SetWelfareGrantCount(sub.WelfareGrantCount).
+		SetWelfareCycleClosed(sub.WelfareCycleClosed).
 		SetStartsAt(sub.StartsAt).
 		SetExpiresAt(sub.ExpiresAt).
 		SetStatus(sub.Status).
@@ -155,6 +174,21 @@ func (r *userSubscriptionRepository) Update(ctx context.Context, sub *service.Us
 		SetNillableAssignedBy(sub.AssignedBy).
 		SetAssignedAt(sub.AssignedAt).
 		SetNotes(sub.Notes)
+	if sub.WelfareDailyLimitUSD == nil {
+		builder.ClearWelfareDailyLimitUsd()
+	} else {
+		builder.SetWelfareDailyLimitUsd(*sub.WelfareDailyLimitUSD)
+	}
+	if sub.WelfareWeeklyLimitUSD == nil {
+		builder.ClearWelfareWeeklyLimitUsd()
+	} else {
+		builder.SetWelfareWeeklyLimitUsd(*sub.WelfareWeeklyLimitUSD)
+	}
+	if sub.WelfareMonthlyLimitUSD == nil {
+		builder.ClearWelfareMonthlyLimitUsd()
+	} else {
+		builder.SetWelfareMonthlyLimitUsd(*sub.WelfareMonthlyLimitUSD)
+	}
 
 	updated, err := builder.Save(ctx)
 	if err == nil {
@@ -340,7 +374,8 @@ func (r *userSubscriptionRepository) List(ctx context.Context, params pagination
 func (r *userSubscriptionRepository) ExistsByUserIDAndGroupID(ctx context.Context, userID, groupID int64) (bool, error) {
 	client := clientFromContext(ctx, r.client)
 	return client.UserSubscription.Query().
-		Where(usersubscription.UserIDEQ(userID), usersubscription.GroupIDEQ(groupID)).
+		Where(usersubscription.UserIDEQ(userID), usersubscription.GroupIDEQ(groupID),
+			usersubscription.EntitlementKindEQ(service.SubscriptionEntitlementStandard)).
 		Exist(ctx)
 }
 
@@ -658,6 +693,12 @@ func userSubscriptionEntityToServiceWithStatusMapping(m *dbent.UserSubscription,
 		ID:                         m.ID,
 		UserID:                     m.UserID,
 		GroupID:                    m.GroupID,
+		EntitlementKind:            m.EntitlementKind,
+		WelfareDailyLimitUSD:       m.WelfareDailyLimitUsd,
+		WelfareWeeklyLimitUSD:      m.WelfareWeeklyLimitUsd,
+		WelfareMonthlyLimitUSD:     m.WelfareMonthlyLimitUsd,
+		WelfareGrantCount:          m.WelfareGrantCount,
+		WelfareCycleClosed:         m.WelfareCycleClosed,
 		StartsAt:                   m.StartsAt,
 		ExpiresAt:                  m.ExpiresAt,
 		Status:                     status,
@@ -707,4 +748,10 @@ func applyUserSubscriptionEntityToService(dst *service.UserSubscription, src *db
 	dst.CreatedAt = src.CreatedAt
 	dst.UpdatedAt = src.UpdatedAt
 	dst.DailyResetVersion = src.DailyResetVersion
+	dst.EntitlementKind = src.EntitlementKind
+	dst.WelfareDailyLimitUSD = src.WelfareDailyLimitUsd
+	dst.WelfareWeeklyLimitUSD = src.WelfareWeeklyLimitUsd
+	dst.WelfareMonthlyLimitUSD = src.WelfareMonthlyLimitUsd
+	dst.WelfareGrantCount = src.WelfareGrantCount
+	dst.WelfareCycleClosed = src.WelfareCycleClosed
 }

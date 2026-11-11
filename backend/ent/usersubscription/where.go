@@ -80,6 +80,36 @@ func GroupID(v int64) predicate.UserSubscription {
 	return predicate.UserSubscription(sql.FieldEQ(FieldGroupID, v))
 }
 
+// EntitlementKind applies equality check predicate on the "entitlement_kind" field. It's identical to EntitlementKindEQ.
+func EntitlementKind(v string) predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldEQ(FieldEntitlementKind, v))
+}
+
+// WelfareDailyLimitUsd applies equality check predicate on the "welfare_daily_limit_usd" field. It's identical to WelfareDailyLimitUsdEQ.
+func WelfareDailyLimitUsd(v float64) predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldEQ(FieldWelfareDailyLimitUsd, v))
+}
+
+// WelfareWeeklyLimitUsd applies equality check predicate on the "welfare_weekly_limit_usd" field. It's identical to WelfareWeeklyLimitUsdEQ.
+func WelfareWeeklyLimitUsd(v float64) predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldEQ(FieldWelfareWeeklyLimitUsd, v))
+}
+
+// WelfareMonthlyLimitUsd applies equality check predicate on the "welfare_monthly_limit_usd" field. It's identical to WelfareMonthlyLimitUsdEQ.
+func WelfareMonthlyLimitUsd(v float64) predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldEQ(FieldWelfareMonthlyLimitUsd, v))
+}
+
+// WelfareGrantCount applies equality check predicate on the "welfare_grant_count" field. It's identical to WelfareGrantCountEQ.
+func WelfareGrantCount(v int64) predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldEQ(FieldWelfareGrantCount, v))
+}
+
+// WelfareCycleClosed applies equality check predicate on the "welfare_cycle_closed" field. It's identical to WelfareCycleClosedEQ.
+func WelfareCycleClosed(v bool) predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldEQ(FieldWelfareCycleClosed, v))
+}
+
 // StartsAt applies equality check predicate on the "starts_at" field. It's identical to StartsAtEQ.
 func StartsAt(v time.Time) predicate.UserSubscription {
 	return predicate.UserSubscription(sql.FieldEQ(FieldStartsAt, v))
@@ -323,6 +353,271 @@ func GroupIDIn(vs ...int64) predicate.UserSubscription {
 // GroupIDNotIn applies the NotIn predicate on the "group_id" field.
 func GroupIDNotIn(vs ...int64) predicate.UserSubscription {
 	return predicate.UserSubscription(sql.FieldNotIn(FieldGroupID, vs...))
+}
+
+// EntitlementKindEQ applies the EQ predicate on the "entitlement_kind" field.
+func EntitlementKindEQ(v string) predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldEQ(FieldEntitlementKind, v))
+}
+
+// EntitlementKindNEQ applies the NEQ predicate on the "entitlement_kind" field.
+func EntitlementKindNEQ(v string) predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldNEQ(FieldEntitlementKind, v))
+}
+
+// EntitlementKindIn applies the In predicate on the "entitlement_kind" field.
+func EntitlementKindIn(vs ...string) predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldIn(FieldEntitlementKind, vs...))
+}
+
+// EntitlementKindNotIn applies the NotIn predicate on the "entitlement_kind" field.
+func EntitlementKindNotIn(vs ...string) predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldNotIn(FieldEntitlementKind, vs...))
+}
+
+// EntitlementKindGT applies the GT predicate on the "entitlement_kind" field.
+func EntitlementKindGT(v string) predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldGT(FieldEntitlementKind, v))
+}
+
+// EntitlementKindGTE applies the GTE predicate on the "entitlement_kind" field.
+func EntitlementKindGTE(v string) predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldGTE(FieldEntitlementKind, v))
+}
+
+// EntitlementKindLT applies the LT predicate on the "entitlement_kind" field.
+func EntitlementKindLT(v string) predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldLT(FieldEntitlementKind, v))
+}
+
+// EntitlementKindLTE applies the LTE predicate on the "entitlement_kind" field.
+func EntitlementKindLTE(v string) predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldLTE(FieldEntitlementKind, v))
+}
+
+// EntitlementKindContains applies the Contains predicate on the "entitlement_kind" field.
+func EntitlementKindContains(v string) predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldContains(FieldEntitlementKind, v))
+}
+
+// EntitlementKindHasPrefix applies the HasPrefix predicate on the "entitlement_kind" field.
+func EntitlementKindHasPrefix(v string) predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldHasPrefix(FieldEntitlementKind, v))
+}
+
+// EntitlementKindHasSuffix applies the HasSuffix predicate on the "entitlement_kind" field.
+func EntitlementKindHasSuffix(v string) predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldHasSuffix(FieldEntitlementKind, v))
+}
+
+// EntitlementKindEqualFold applies the EqualFold predicate on the "entitlement_kind" field.
+func EntitlementKindEqualFold(v string) predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldEqualFold(FieldEntitlementKind, v))
+}
+
+// EntitlementKindContainsFold applies the ContainsFold predicate on the "entitlement_kind" field.
+func EntitlementKindContainsFold(v string) predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldContainsFold(FieldEntitlementKind, v))
+}
+
+// WelfareDailyLimitUsdEQ applies the EQ predicate on the "welfare_daily_limit_usd" field.
+func WelfareDailyLimitUsdEQ(v float64) predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldEQ(FieldWelfareDailyLimitUsd, v))
+}
+
+// WelfareDailyLimitUsdNEQ applies the NEQ predicate on the "welfare_daily_limit_usd" field.
+func WelfareDailyLimitUsdNEQ(v float64) predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldNEQ(FieldWelfareDailyLimitUsd, v))
+}
+
+// WelfareDailyLimitUsdIn applies the In predicate on the "welfare_daily_limit_usd" field.
+func WelfareDailyLimitUsdIn(vs ...float64) predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldIn(FieldWelfareDailyLimitUsd, vs...))
+}
+
+// WelfareDailyLimitUsdNotIn applies the NotIn predicate on the "welfare_daily_limit_usd" field.
+func WelfareDailyLimitUsdNotIn(vs ...float64) predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldNotIn(FieldWelfareDailyLimitUsd, vs...))
+}
+
+// WelfareDailyLimitUsdGT applies the GT predicate on the "welfare_daily_limit_usd" field.
+func WelfareDailyLimitUsdGT(v float64) predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldGT(FieldWelfareDailyLimitUsd, v))
+}
+
+// WelfareDailyLimitUsdGTE applies the GTE predicate on the "welfare_daily_limit_usd" field.
+func WelfareDailyLimitUsdGTE(v float64) predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldGTE(FieldWelfareDailyLimitUsd, v))
+}
+
+// WelfareDailyLimitUsdLT applies the LT predicate on the "welfare_daily_limit_usd" field.
+func WelfareDailyLimitUsdLT(v float64) predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldLT(FieldWelfareDailyLimitUsd, v))
+}
+
+// WelfareDailyLimitUsdLTE applies the LTE predicate on the "welfare_daily_limit_usd" field.
+func WelfareDailyLimitUsdLTE(v float64) predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldLTE(FieldWelfareDailyLimitUsd, v))
+}
+
+// WelfareDailyLimitUsdIsNil applies the IsNil predicate on the "welfare_daily_limit_usd" field.
+func WelfareDailyLimitUsdIsNil() predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldIsNull(FieldWelfareDailyLimitUsd))
+}
+
+// WelfareDailyLimitUsdNotNil applies the NotNil predicate on the "welfare_daily_limit_usd" field.
+func WelfareDailyLimitUsdNotNil() predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldNotNull(FieldWelfareDailyLimitUsd))
+}
+
+// WelfareWeeklyLimitUsdEQ applies the EQ predicate on the "welfare_weekly_limit_usd" field.
+func WelfareWeeklyLimitUsdEQ(v float64) predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldEQ(FieldWelfareWeeklyLimitUsd, v))
+}
+
+// WelfareWeeklyLimitUsdNEQ applies the NEQ predicate on the "welfare_weekly_limit_usd" field.
+func WelfareWeeklyLimitUsdNEQ(v float64) predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldNEQ(FieldWelfareWeeklyLimitUsd, v))
+}
+
+// WelfareWeeklyLimitUsdIn applies the In predicate on the "welfare_weekly_limit_usd" field.
+func WelfareWeeklyLimitUsdIn(vs ...float64) predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldIn(FieldWelfareWeeklyLimitUsd, vs...))
+}
+
+// WelfareWeeklyLimitUsdNotIn applies the NotIn predicate on the "welfare_weekly_limit_usd" field.
+func WelfareWeeklyLimitUsdNotIn(vs ...float64) predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldNotIn(FieldWelfareWeeklyLimitUsd, vs...))
+}
+
+// WelfareWeeklyLimitUsdGT applies the GT predicate on the "welfare_weekly_limit_usd" field.
+func WelfareWeeklyLimitUsdGT(v float64) predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldGT(FieldWelfareWeeklyLimitUsd, v))
+}
+
+// WelfareWeeklyLimitUsdGTE applies the GTE predicate on the "welfare_weekly_limit_usd" field.
+func WelfareWeeklyLimitUsdGTE(v float64) predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldGTE(FieldWelfareWeeklyLimitUsd, v))
+}
+
+// WelfareWeeklyLimitUsdLT applies the LT predicate on the "welfare_weekly_limit_usd" field.
+func WelfareWeeklyLimitUsdLT(v float64) predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldLT(FieldWelfareWeeklyLimitUsd, v))
+}
+
+// WelfareWeeklyLimitUsdLTE applies the LTE predicate on the "welfare_weekly_limit_usd" field.
+func WelfareWeeklyLimitUsdLTE(v float64) predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldLTE(FieldWelfareWeeklyLimitUsd, v))
+}
+
+// WelfareWeeklyLimitUsdIsNil applies the IsNil predicate on the "welfare_weekly_limit_usd" field.
+func WelfareWeeklyLimitUsdIsNil() predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldIsNull(FieldWelfareWeeklyLimitUsd))
+}
+
+// WelfareWeeklyLimitUsdNotNil applies the NotNil predicate on the "welfare_weekly_limit_usd" field.
+func WelfareWeeklyLimitUsdNotNil() predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldNotNull(FieldWelfareWeeklyLimitUsd))
+}
+
+// WelfareMonthlyLimitUsdEQ applies the EQ predicate on the "welfare_monthly_limit_usd" field.
+func WelfareMonthlyLimitUsdEQ(v float64) predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldEQ(FieldWelfareMonthlyLimitUsd, v))
+}
+
+// WelfareMonthlyLimitUsdNEQ applies the NEQ predicate on the "welfare_monthly_limit_usd" field.
+func WelfareMonthlyLimitUsdNEQ(v float64) predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldNEQ(FieldWelfareMonthlyLimitUsd, v))
+}
+
+// WelfareMonthlyLimitUsdIn applies the In predicate on the "welfare_monthly_limit_usd" field.
+func WelfareMonthlyLimitUsdIn(vs ...float64) predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldIn(FieldWelfareMonthlyLimitUsd, vs...))
+}
+
+// WelfareMonthlyLimitUsdNotIn applies the NotIn predicate on the "welfare_monthly_limit_usd" field.
+func WelfareMonthlyLimitUsdNotIn(vs ...float64) predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldNotIn(FieldWelfareMonthlyLimitUsd, vs...))
+}
+
+// WelfareMonthlyLimitUsdGT applies the GT predicate on the "welfare_monthly_limit_usd" field.
+func WelfareMonthlyLimitUsdGT(v float64) predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldGT(FieldWelfareMonthlyLimitUsd, v))
+}
+
+// WelfareMonthlyLimitUsdGTE applies the GTE predicate on the "welfare_monthly_limit_usd" field.
+func WelfareMonthlyLimitUsdGTE(v float64) predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldGTE(FieldWelfareMonthlyLimitUsd, v))
+}
+
+// WelfareMonthlyLimitUsdLT applies the LT predicate on the "welfare_monthly_limit_usd" field.
+func WelfareMonthlyLimitUsdLT(v float64) predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldLT(FieldWelfareMonthlyLimitUsd, v))
+}
+
+// WelfareMonthlyLimitUsdLTE applies the LTE predicate on the "welfare_monthly_limit_usd" field.
+func WelfareMonthlyLimitUsdLTE(v float64) predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldLTE(FieldWelfareMonthlyLimitUsd, v))
+}
+
+// WelfareMonthlyLimitUsdIsNil applies the IsNil predicate on the "welfare_monthly_limit_usd" field.
+func WelfareMonthlyLimitUsdIsNil() predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldIsNull(FieldWelfareMonthlyLimitUsd))
+}
+
+// WelfareMonthlyLimitUsdNotNil applies the NotNil predicate on the "welfare_monthly_limit_usd" field.
+func WelfareMonthlyLimitUsdNotNil() predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldNotNull(FieldWelfareMonthlyLimitUsd))
+}
+
+// WelfareGrantCountEQ applies the EQ predicate on the "welfare_grant_count" field.
+func WelfareGrantCountEQ(v int64) predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldEQ(FieldWelfareGrantCount, v))
+}
+
+// WelfareGrantCountNEQ applies the NEQ predicate on the "welfare_grant_count" field.
+func WelfareGrantCountNEQ(v int64) predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldNEQ(FieldWelfareGrantCount, v))
+}
+
+// WelfareGrantCountIn applies the In predicate on the "welfare_grant_count" field.
+func WelfareGrantCountIn(vs ...int64) predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldIn(FieldWelfareGrantCount, vs...))
+}
+
+// WelfareGrantCountNotIn applies the NotIn predicate on the "welfare_grant_count" field.
+func WelfareGrantCountNotIn(vs ...int64) predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldNotIn(FieldWelfareGrantCount, vs...))
+}
+
+// WelfareGrantCountGT applies the GT predicate on the "welfare_grant_count" field.
+func WelfareGrantCountGT(v int64) predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldGT(FieldWelfareGrantCount, v))
+}
+
+// WelfareGrantCountGTE applies the GTE predicate on the "welfare_grant_count" field.
+func WelfareGrantCountGTE(v int64) predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldGTE(FieldWelfareGrantCount, v))
+}
+
+// WelfareGrantCountLT applies the LT predicate on the "welfare_grant_count" field.
+func WelfareGrantCountLT(v int64) predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldLT(FieldWelfareGrantCount, v))
+}
+
+// WelfareGrantCountLTE applies the LTE predicate on the "welfare_grant_count" field.
+func WelfareGrantCountLTE(v int64) predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldLTE(FieldWelfareGrantCount, v))
+}
+
+// WelfareCycleClosedEQ applies the EQ predicate on the "welfare_cycle_closed" field.
+func WelfareCycleClosedEQ(v bool) predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldEQ(FieldWelfareCycleClosed, v))
+}
+
+// WelfareCycleClosedNEQ applies the NEQ predicate on the "welfare_cycle_closed" field.
+func WelfareCycleClosedNEQ(v bool) predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldNEQ(FieldWelfareCycleClosed, v))
 }
 
 // StartsAtEQ applies the EQ predicate on the "starts_at" field.

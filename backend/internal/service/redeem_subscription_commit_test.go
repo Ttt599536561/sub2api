@@ -75,6 +75,8 @@ func TestRedeemSubscriptionLocksUserAndDefersCacheUntilCommit(t *testing.T) {
 			client := dbent.NewClient(dbent.Driver(entsql.OpenDB(dialect.Postgres, db)))
 			mock.ExpectBegin()
 			mock.ExpectQuery(`SELECT .*"users".*FOR NO KEY UPDATE`).WithArgs(int64(11)).WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(int64(11)))
+			mock.ExpectQuery(`SELECT EXISTS\(SELECT 1 FROM qq_invite_code_pool p JOIN qq_invite_rewards r`).
+				WithArgs(int64(1)).WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(false))
 			commit := mock.ExpectCommit()
 			if commitFail {
 				commit.WillReturnError(errors.New("commit unavailable"))
@@ -108,6 +110,33 @@ func TestRedeemSubscriptionLocksUserAndDefersCacheUntilCommit(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestRedeemSubscriptionProvenanceFailureRollsBackBeforeAssignment(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+	client := dbent.NewClient(dbent.Driver(entsql.OpenDB(dialect.Postgres, db)))
+	mock.ExpectBegin()
+	mock.ExpectQuery(`SELECT .*"users".*FOR NO KEY UPDATE`).WithArgs(int64(11)).
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(int64(11)))
+	lookupErr := errors.New("welfare provenance unavailable")
+	mock.ExpectQuery(`SELECT EXISTS\(SELECT 1 FROM qq_invite_code_pool p JOIN qq_invite_rewards r`).
+		WithArgs(int64(1)).WillReturnError(lookupErr)
+	mock.ExpectRollback()
+	groupID := int64(13)
+	codeRepo := &redeemRejectRepo{code: RedeemCode{ID: 1, Code: "PROVENANCE-FAIL", Type: RedeemTypeSubscription,
+		Status: StatusUnused, GroupID: &groupID, ValidityDays: 30}}
+	auth := &mockAuthCacheInvalidator{}
+	// A missing subscription service makes any accidental fail-open assignment
+	// observable; provenance failure must roll back before granting any term.
+	svc := NewRedeemService(codeRepo, &mockUserRepo{getByIDUser: &User{ID: 11}}, nil, nil, nil, client, auth, nil)
+	got, err := svc.Redeem(context.Background(), 11, codeRepo.code.Code)
+	require.Nil(t, got)
+	require.ErrorIs(t, err, lookupErr)
+	require.ErrorContains(t, err, "verify welfare subscription provenance")
+	require.Empty(t, auth.invalidatedUserIDs)
+	require.NoError(t, mock.ExpectationsWereMet())
 }
 
 func TestRedeemSubscriptionPostCommitInvalidationIsSynchronous(t *testing.T) {

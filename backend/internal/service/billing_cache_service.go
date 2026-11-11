@@ -138,6 +138,23 @@ type subscriptionAdmissionService interface {
 	TriggerAutoDailyReset(context.Context, int64) error
 }
 
+type selectedSubscriptionAdmissionService interface {
+	GetSubscriptionByIDForAdmission(context.Context, int64, int64, int64) (*UserSubscription, *Group, error)
+}
+
+func (s *BillingCacheService) getSubscriptionForRequestAdmission(ctx context.Context, userID, groupID int64, selected *UserSubscription) (*UserSubscription, *Group, error) {
+	if selected != nil {
+		if service, ok := s.subscriptionService.(selectedSubscriptionAdmissionService); ok {
+			return service.GetSubscriptionByIDForAdmission(ctx, userID, groupID, selected.ID)
+		}
+	}
+	sub, group, err := s.subscriptionService.GetSubscriptionForAdmission(ctx, userID, groupID)
+	if err == nil && selected != nil && (sub == nil || sub.ID != selected.ID) {
+		return nil, group, ErrSubscriptionInvalid
+	}
+	return sub, group, err
+}
+
 // SetSubscriptionService is called during service construction, before requests
 // or usage workers can access subscription admission and reset processing.
 func (s *BillingCacheService) SetSubscriptionService(service subscriptionAdmissionService) {
@@ -867,7 +884,7 @@ func (s *BillingCacheService) checkBillingEligibility(ctx context.Context, user 
 		groupID = group.ID
 	}
 	if s.subscriptionService != nil && groupID > 0 {
-		freshSub, freshGroup, err := s.subscriptionService.GetSubscriptionForAdmission(ctx, user.ID, groupID)
+		freshSub, freshGroup, err := s.getSubscriptionForRequestAdmission(ctx, user.ID, groupID, subscription)
 		if err != nil {
 			if isBillingCallerCancellation(ctx, err) {
 				return err
@@ -937,7 +954,7 @@ func (s *BillingCacheService) RevalidateSubscription(ctx context.Context, subscr
 	if s == nil || s.subscriptionService == nil {
 		return ErrBillingServiceUnavailable
 	}
-	fresh, _, err := s.subscriptionService.GetSubscriptionForAdmission(ctx, subscription.UserID, subscription.GroupID)
+	fresh, _, err := s.getSubscriptionForRequestAdmission(ctx, subscription.UserID, subscription.GroupID, subscription)
 	if err != nil {
 		return err
 	}
@@ -972,7 +989,7 @@ func (s *BillingCacheService) ReserveFixedCharge(ctx context.Context, user *User
 			groupID = group.ID
 		}
 		if groupID > 0 {
-			freshSub, freshGroup, err := s.subscriptionService.GetSubscriptionForAdmission(ctx, user.ID, groupID)
+			freshSub, freshGroup, err := s.getSubscriptionForRequestAdmission(ctx, user.ID, groupID, subscription)
 			if err != nil {
 				return nil, err
 			}
@@ -984,6 +1001,9 @@ func (s *BillingCacheService) ReserveFixedCharge(ctx context.Context, user *User
 		}
 	}
 	subscriptionBill := group != nil && group.IsSubscriptionType() && subscription != nil
+	if subscriptionBill {
+		group = subscription.EffectiveGroup(group)
+	}
 	if !subscriptionBill {
 		balance, err := s.GetUserBalance(ctx, user.ID)
 		if err != nil {
@@ -1014,7 +1034,7 @@ func (s *BillingCacheService) ReserveFixedCharge(ctx context.Context, user *User
 		res, apiKeyPending = s.reserveInflightScope(ctx, res, user.ID, inflightAPIKeyScope(apiKey.ID), amount)
 	}
 	if subscriptionBill {
-		err = s.checkFixedChargeSubscription(ctx, user.ID, group, amount+subscriptionPending)
+		err = s.checkFixedChargeSubscription(ctx, user.ID, group, amount+subscriptionPending, subscription)
 	}
 	if err == nil && apiKey != nil {
 		err = s.checkFixedChargeAPIKey(ctx, apiKey, amount+apiKeyPending)
@@ -1027,7 +1047,34 @@ func (s *BillingCacheService) ReserveFixedCharge(ctx context.Context, user *User
 }
 
 // checkFixedChargeSubscription 按库中订阅用量校验日 / 周 / 月剩余额度覆盖 pending。
-func (s *BillingCacheService) checkFixedChargeSubscription(ctx context.Context, userID int64, group *Group, pending float64) error {
+func (s *BillingCacheService) checkFixedChargeSubscription(ctx context.Context, userID int64, group *Group, pending float64, selected ...*UserSubscription) error {
+	// Existing standard-only adapters can retain their user/group lookup. The
+	// production admission service and every welfare request read the selected
+	// row by ID, so their usage cannot come from the other entitlement.
+	_, supportsSelected := s.subscriptionService.(selectedSubscriptionAdmissionService)
+	if len(selected) > 0 && selected[0] != nil && s.subRepo != nil && (supportsSelected || selected[0].IsWelfare()) {
+		sub, err := s.subRepo.GetByID(ctx, selected[0].ID)
+		if err != nil {
+			return ErrBillingServiceUnavailable.WithCause(err)
+		}
+		if sub == nil || sub.ID != selected[0].ID || sub.UserID != userID || sub.GroupID != group.ID {
+			return ErrSubscriptionInvalid
+		}
+		group = sub.EffectiveGroup(group)
+		if err := checkAuthoritativeSubscriptionLimits(sub, group, time.Now()); err != nil {
+			return err
+		}
+		if !sub.CheckDailyLimit(group, pending) {
+			return ErrDailyLimitExceeded
+		}
+		if !sub.CheckWeeklyLimit(group, pending) {
+			return ErrWeeklyLimitExceeded
+		}
+		if !sub.CheckMonthlyLimit(group, pending) {
+			return ErrMonthlyLimitExceeded
+		}
+		return nil
+	}
 	read := s.GetSubscriptionStatus
 	if s.subRepo != nil {
 		read = s.getSubscriptionFromDB

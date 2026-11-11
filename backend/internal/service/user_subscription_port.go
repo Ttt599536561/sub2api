@@ -7,6 +7,12 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
 )
 
+// WelfareSubscriptionRepository is optional so ordinary subscription callers
+// and repositories retain their standard-entitlement semantics.
+type WelfareSubscriptionRepository interface {
+	ListWelfareByUserAndGroup(ctx context.Context, userID, groupID int64) ([]UserSubscription, error)
+}
+
 type UserSubscriptionRepository interface {
 	Create(ctx context.Context, sub *UserSubscription) error
 	GetByID(ctx context.Context, id int64) (*UserSubscription, error)

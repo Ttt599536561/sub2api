@@ -42,8 +42,8 @@ beforeEach(() => {
   localStorage.setItem('auth_user', JSON.stringify(auth.user))
   localStorage.setItem('auth_session_id', 'A')
   vi.mocked(getAll).mockResolvedValue([
-    { id: 7, name: 'Monthly', subscription_type: 'subscription' },
-    { id: 8, name: 'New monthly', subscription_type: 'subscription' }
+    { id: 7, name: 'Monthly', status: 'active', subscription_type: 'subscription', daily_limit_usd: null, weekly_limit_usd: null, monthly_limit_usd: 100 },
+    { id: 8, name: 'New monthly', status: 'active', subscription_type: 'subscription', daily_limit_usd: 0, weekly_limit_usd: 0, monthly_limit_usd: 100 }
   ] as AdminGroup[])
   vi.mocked(qqInviteAPI.campaigns).mockResolvedValue({ items: [{ ...campaign }], total: 1 })
   vi.mocked(qqInviteAPI.saveCampaign).mockResolvedValue({ ...campaign, version: 3 })
@@ -51,6 +51,41 @@ beforeEach(() => {
 afterEach(() => wrapper?.unmount())
 
 describe('NapCat campaign editing', () => {
+  it.each([
+    { status: 'inactive' },
+    { subscription_type: 'standard' },
+    { monthly_limit_usd: null },
+    { monthly_limit_usd: 0 },
+    { monthly_limit_usd: -1 },
+    { monthly_limit_usd: Number.NaN },
+    { monthly_limit_usd: Number.POSITIVE_INFINITY },
+    { monthly_limit_usd: 1e10 },
+    { daily_limit_usd: -1 },
+    { daily_limit_usd: Number.NaN },
+    { daily_limit_usd: Number.POSITIVE_INFINITY },
+    { daily_limit_usd: 1e10 },
+    { weekly_limit_usd: -1 },
+    { weekly_limit_usd: Number.NaN },
+    { weekly_limit_usd: Number.POSITIVE_INFINITY },
+    { weekly_limit_usd: 1e10 }
+  ] as Partial<AdminGroup>[])('excludes a group that cannot back redeemable welfare passes: %j', async invalid => {
+    vi.mocked(getAll).mockResolvedValue([
+      { id: 7, name: 'Invalid monthly', status: 'active', subscription_type: 'subscription', daily_limit_usd: null, weekly_limit_usd: null, monthly_limit_usd: 100, ...invalid }
+    ] as AdminGroup[])
+    wrapper = mount(NapCatCampaignPanel)
+    await flushPromises()
+    expect(subscriptionGroup().findAll('option')).toHaveLength(1)
+    expect(wrapper.text()).toContain(zh.qqInvite.noGroups)
+    await save()
+    expect(qqInviteAPI.saveCampaign).not.toHaveBeenCalled()
+  })
+
+  it('allows positive monthly quota with optional or zero daily and weekly limits', async () => {
+    wrapper = mount(NapCatCampaignPanel)
+    await flushPromises()
+    expect(subscriptionGroup().findAll('option').map(option => option.attributes('value'))).toEqual(['0', '7', '8'])
+  })
+
   it('explains the group editing boundary before submitting a draft group change with its version', async () => {
     wrapper = mount(NapCatCampaignPanel)
     await flushPromises()

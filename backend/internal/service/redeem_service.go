@@ -552,6 +552,16 @@ func (s *RedeemService) redeem(ctx context.Context, userID int64, code string, r
 		}).Only(txCtx); err != nil {
 			return nil, fmt.Errorf("lock user for subscription redemption: %w", err)
 		}
+		welfareCode, err := isAssignedWelfareSubscriptionCode(txCtx, tx, redeemCode.ID)
+		if err != nil {
+			return nil, fmt.Errorf("verify welfare subscription provenance: %w", err)
+		}
+		if welfareCode {
+			if err := s.grantWelfareSubscription(txCtx, tx, userID, redeemCode); err != nil {
+				return nil, fmt.Errorf("grant welfare subscription quota: %w", err)
+			}
+			break
+		}
 		validityDays := redeemCode.ValidityDays
 		if validityDays < 0 {
 			// 负数天数：缩短订阅，减到 0 则取消订阅

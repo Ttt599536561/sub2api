@@ -25,6 +25,18 @@ const (
 	FieldUserID = "user_id"
 	// FieldGroupID holds the string denoting the group_id field in the database.
 	FieldGroupID = "group_id"
+	// FieldEntitlementKind holds the string denoting the entitlement_kind field in the database.
+	FieldEntitlementKind = "entitlement_kind"
+	// FieldWelfareDailyLimitUsd holds the string denoting the welfare_daily_limit_usd field in the database.
+	FieldWelfareDailyLimitUsd = "welfare_daily_limit_usd"
+	// FieldWelfareWeeklyLimitUsd holds the string denoting the welfare_weekly_limit_usd field in the database.
+	FieldWelfareWeeklyLimitUsd = "welfare_weekly_limit_usd"
+	// FieldWelfareMonthlyLimitUsd holds the string denoting the welfare_monthly_limit_usd field in the database.
+	FieldWelfareMonthlyLimitUsd = "welfare_monthly_limit_usd"
+	// FieldWelfareGrantCount holds the string denoting the welfare_grant_count field in the database.
+	FieldWelfareGrantCount = "welfare_grant_count"
+	// FieldWelfareCycleClosed holds the string denoting the welfare_cycle_closed field in the database.
+	FieldWelfareCycleClosed = "welfare_cycle_closed"
 	// FieldStartsAt holds the string denoting the starts_at field in the database.
 	FieldStartsAt = "starts_at"
 	// FieldExpiresAt holds the string denoting the expires_at field in the database.
@@ -103,6 +115,12 @@ var Columns = []string{
 	FieldDeletedAt,
 	FieldUserID,
 	FieldGroupID,
+	FieldEntitlementKind,
+	FieldWelfareDailyLimitUsd,
+	FieldWelfareWeeklyLimitUsd,
+	FieldWelfareMonthlyLimitUsd,
+	FieldWelfareGrantCount,
+	FieldWelfareCycleClosed,
 	FieldStartsAt,
 	FieldExpiresAt,
 	FieldStatus,
@@ -144,6 +162,14 @@ var (
 	DefaultUpdatedAt func() time.Time
 	// UpdateDefaultUpdatedAt holds the default value on update for the "updated_at" field.
 	UpdateDefaultUpdatedAt func() time.Time
+	// DefaultEntitlementKind holds the default value on creation for the "entitlement_kind" field.
+	DefaultEntitlementKind string
+	// EntitlementKindValidator is a validator for the "entitlement_kind" field. It is called by the builders before save.
+	EntitlementKindValidator func(string) error
+	// DefaultWelfareGrantCount holds the default value on creation for the "welfare_grant_count" field.
+	DefaultWelfareGrantCount int64
+	// DefaultWelfareCycleClosed holds the default value on creation for the "welfare_cycle_closed" field.
+	DefaultWelfareCycleClosed bool
 	// DefaultStatus holds the default value on creation for the "status" field.
 	DefaultStatus string
 	// StatusValidator is a validator for the "status" field. It is called by the builders before save.
@@ -197,6 +223,36 @@ func ByUserID(opts ...sql.OrderTermOption) OrderOption {
 // ByGroupID orders the results by the group_id field.
 func ByGroupID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldGroupID, opts...).ToFunc()
+}
+
+// ByEntitlementKind orders the results by the entitlement_kind field.
+func ByEntitlementKind(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldEntitlementKind, opts...).ToFunc()
+}
+
+// ByWelfareDailyLimitUsd orders the results by the welfare_daily_limit_usd field.
+func ByWelfareDailyLimitUsd(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldWelfareDailyLimitUsd, opts...).ToFunc()
+}
+
+// ByWelfareWeeklyLimitUsd orders the results by the welfare_weekly_limit_usd field.
+func ByWelfareWeeklyLimitUsd(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldWelfareWeeklyLimitUsd, opts...).ToFunc()
+}
+
+// ByWelfareMonthlyLimitUsd orders the results by the welfare_monthly_limit_usd field.
+func ByWelfareMonthlyLimitUsd(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldWelfareMonthlyLimitUsd, opts...).ToFunc()
+}
+
+// ByWelfareGrantCount orders the results by the welfare_grant_count field.
+func ByWelfareGrantCount(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldWelfareGrantCount, opts...).ToFunc()
+}
+
+// ByWelfareCycleClosed orders the results by the welfare_cycle_closed field.
+func ByWelfareCycleClosed(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldWelfareCycleClosed, opts...).ToFunc()
 }
 
 // ByStartsAt orders the results by the starts_at field.

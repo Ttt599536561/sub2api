@@ -79,6 +79,90 @@ func (_c *UserSubscriptionCreate) SetGroupID(v int64) *UserSubscriptionCreate {
 	return _c
 }
 
+// SetEntitlementKind sets the "entitlement_kind" field.
+func (_c *UserSubscriptionCreate) SetEntitlementKind(v string) *UserSubscriptionCreate {
+	_c.mutation.SetEntitlementKind(v)
+	return _c
+}
+
+// SetNillableEntitlementKind sets the "entitlement_kind" field if the given value is not nil.
+func (_c *UserSubscriptionCreate) SetNillableEntitlementKind(v *string) *UserSubscriptionCreate {
+	if v != nil {
+		_c.SetEntitlementKind(*v)
+	}
+	return _c
+}
+
+// SetWelfareDailyLimitUsd sets the "welfare_daily_limit_usd" field.
+func (_c *UserSubscriptionCreate) SetWelfareDailyLimitUsd(v float64) *UserSubscriptionCreate {
+	_c.mutation.SetWelfareDailyLimitUsd(v)
+	return _c
+}
+
+// SetNillableWelfareDailyLimitUsd sets the "welfare_daily_limit_usd" field if the given value is not nil.
+func (_c *UserSubscriptionCreate) SetNillableWelfareDailyLimitUsd(v *float64) *UserSubscriptionCreate {
+	if v != nil {
+		_c.SetWelfareDailyLimitUsd(*v)
+	}
+	return _c
+}
+
+// SetWelfareWeeklyLimitUsd sets the "welfare_weekly_limit_usd" field.
+func (_c *UserSubscriptionCreate) SetWelfareWeeklyLimitUsd(v float64) *UserSubscriptionCreate {
+	_c.mutation.SetWelfareWeeklyLimitUsd(v)
+	return _c
+}
+
+// SetNillableWelfareWeeklyLimitUsd sets the "welfare_weekly_limit_usd" field if the given value is not nil.
+func (_c *UserSubscriptionCreate) SetNillableWelfareWeeklyLimitUsd(v *float64) *UserSubscriptionCreate {
+	if v != nil {
+		_c.SetWelfareWeeklyLimitUsd(*v)
+	}
+	return _c
+}
+
+// SetWelfareMonthlyLimitUsd sets the "welfare_monthly_limit_usd" field.
+func (_c *UserSubscriptionCreate) SetWelfareMonthlyLimitUsd(v float64) *UserSubscriptionCreate {
+	_c.mutation.SetWelfareMonthlyLimitUsd(v)
+	return _c
+}
+
+// SetNillableWelfareMonthlyLimitUsd sets the "welfare_monthly_limit_usd" field if the given value is not nil.
+func (_c *UserSubscriptionCreate) SetNillableWelfareMonthlyLimitUsd(v *float64) *UserSubscriptionCreate {
+	if v != nil {
+		_c.SetWelfareMonthlyLimitUsd(*v)
+	}
+	return _c
+}
+
+// SetWelfareGrantCount sets the "welfare_grant_count" field.
+func (_c *UserSubscriptionCreate) SetWelfareGrantCount(v int64) *UserSubscriptionCreate {
+	_c.mutation.SetWelfareGrantCount(v)
+	return _c
+}
+
+// SetNillableWelfareGrantCount sets the "welfare_grant_count" field if the given value is not nil.
+func (_c *UserSubscriptionCreate) SetNillableWelfareGrantCount(v *int64) *UserSubscriptionCreate {
+	if v != nil {
+		_c.SetWelfareGrantCount(*v)
+	}
+	return _c
+}
+
+// SetWelfareCycleClosed sets the "welfare_cycle_closed" field.
+func (_c *UserSubscriptionCreate) SetWelfareCycleClosed(v bool) *UserSubscriptionCreate {
+	_c.mutation.SetWelfareCycleClosed(v)
+	return _c
+}
+
+// SetNillableWelfareCycleClosed sets the "welfare_cycle_closed" field if the given value is not nil.
+func (_c *UserSubscriptionCreate) SetNillableWelfareCycleClosed(v *bool) *UserSubscriptionCreate {
+	if v != nil {
+		_c.SetWelfareCycleClosed(*v)
+	}
+	return _c
+}
+
 // SetStartsAt sets the "starts_at" field.
 func (_c *UserSubscriptionCreate) SetStartsAt(v time.Time) *UserSubscriptionCreate {
 	_c.mutation.SetStartsAt(v)
@@ -368,6 +452,18 @@ func (_c *UserSubscriptionCreate) defaults() error {
 		v := usersubscription.DefaultUpdatedAt()
 		_c.mutation.SetUpdatedAt(v)
 	}
+	if _, ok := _c.mutation.EntitlementKind(); !ok {
+		v := usersubscription.DefaultEntitlementKind
+		_c.mutation.SetEntitlementKind(v)
+	}
+	if _, ok := _c.mutation.WelfareGrantCount(); !ok {
+		v := usersubscription.DefaultWelfareGrantCount
+		_c.mutation.SetWelfareGrantCount(v)
+	}
+	if _, ok := _c.mutation.WelfareCycleClosed(); !ok {
+		v := usersubscription.DefaultWelfareCycleClosed
+		_c.mutation.SetWelfareCycleClosed(v)
+	}
 	if _, ok := _c.mutation.Status(); !ok {
 		v := usersubscription.DefaultStatus
 		_c.mutation.SetStatus(v)
@@ -419,6 +515,20 @@ func (_c *UserSubscriptionCreate) check() error {
 	}
 	if _, ok := _c.mutation.GroupID(); !ok {
 		return &ValidationError{Name: "group_id", err: errors.New(`ent: missing required field "UserSubscription.group_id"`)}
+	}
+	if _, ok := _c.mutation.EntitlementKind(); !ok {
+		return &ValidationError{Name: "entitlement_kind", err: errors.New(`ent: missing required field "UserSubscription.entitlement_kind"`)}
+	}
+	if v, ok := _c.mutation.EntitlementKind(); ok {
+		if err := usersubscription.EntitlementKindValidator(v); err != nil {
+			return &ValidationError{Name: "entitlement_kind", err: fmt.Errorf(`ent: validator failed for field "UserSubscription.entitlement_kind": %w`, err)}
+		}
+	}
+	if _, ok := _c.mutation.WelfareGrantCount(); !ok {
+		return &ValidationError{Name: "welfare_grant_count", err: errors.New(`ent: missing required field "UserSubscription.welfare_grant_count"`)}
+	}
+	if _, ok := _c.mutation.WelfareCycleClosed(); !ok {
+		return &ValidationError{Name: "welfare_cycle_closed", err: errors.New(`ent: missing required field "UserSubscription.welfare_cycle_closed"`)}
 	}
 	if _, ok := _c.mutation.StartsAt(); !ok {
 		return &ValidationError{Name: "starts_at", err: errors.New(`ent: missing required field "UserSubscription.starts_at"`)}
@@ -504,6 +614,30 @@ func (_c *UserSubscriptionCreate) createSpec() (*UserSubscription, *sqlgraph.Cre
 	if value, ok := _c.mutation.DeletedAt(); ok {
 		_spec.SetField(usersubscription.FieldDeletedAt, field.TypeTime, value)
 		_node.DeletedAt = &value
+	}
+	if value, ok := _c.mutation.EntitlementKind(); ok {
+		_spec.SetField(usersubscription.FieldEntitlementKind, field.TypeString, value)
+		_node.EntitlementKind = value
+	}
+	if value, ok := _c.mutation.WelfareDailyLimitUsd(); ok {
+		_spec.SetField(usersubscription.FieldWelfareDailyLimitUsd, field.TypeFloat64, value)
+		_node.WelfareDailyLimitUsd = &value
+	}
+	if value, ok := _c.mutation.WelfareWeeklyLimitUsd(); ok {
+		_spec.SetField(usersubscription.FieldWelfareWeeklyLimitUsd, field.TypeFloat64, value)
+		_node.WelfareWeeklyLimitUsd = &value
+	}
+	if value, ok := _c.mutation.WelfareMonthlyLimitUsd(); ok {
+		_spec.SetField(usersubscription.FieldWelfareMonthlyLimitUsd, field.TypeFloat64, value)
+		_node.WelfareMonthlyLimitUsd = &value
+	}
+	if value, ok := _c.mutation.WelfareGrantCount(); ok {
+		_spec.SetField(usersubscription.FieldWelfareGrantCount, field.TypeInt64, value)
+		_node.WelfareGrantCount = value
+	}
+	if value, ok := _c.mutation.WelfareCycleClosed(); ok {
+		_spec.SetField(usersubscription.FieldWelfareCycleClosed, field.TypeBool, value)
+		_node.WelfareCycleClosed = value
 	}
 	if value, ok := _c.mutation.StartsAt(); ok {
 		_spec.SetField(usersubscription.FieldStartsAt, field.TypeTime, value)
@@ -731,6 +865,120 @@ func (u *UserSubscriptionUpsert) SetGroupID(v int64) *UserSubscriptionUpsert {
 // UpdateGroupID sets the "group_id" field to the value that was provided on create.
 func (u *UserSubscriptionUpsert) UpdateGroupID() *UserSubscriptionUpsert {
 	u.SetExcluded(usersubscription.FieldGroupID)
+	return u
+}
+
+// SetEntitlementKind sets the "entitlement_kind" field.
+func (u *UserSubscriptionUpsert) SetEntitlementKind(v string) *UserSubscriptionUpsert {
+	u.Set(usersubscription.FieldEntitlementKind, v)
+	return u
+}
+
+// UpdateEntitlementKind sets the "entitlement_kind" field to the value that was provided on create.
+func (u *UserSubscriptionUpsert) UpdateEntitlementKind() *UserSubscriptionUpsert {
+	u.SetExcluded(usersubscription.FieldEntitlementKind)
+	return u
+}
+
+// SetWelfareDailyLimitUsd sets the "welfare_daily_limit_usd" field.
+func (u *UserSubscriptionUpsert) SetWelfareDailyLimitUsd(v float64) *UserSubscriptionUpsert {
+	u.Set(usersubscription.FieldWelfareDailyLimitUsd, v)
+	return u
+}
+
+// UpdateWelfareDailyLimitUsd sets the "welfare_daily_limit_usd" field to the value that was provided on create.
+func (u *UserSubscriptionUpsert) UpdateWelfareDailyLimitUsd() *UserSubscriptionUpsert {
+	u.SetExcluded(usersubscription.FieldWelfareDailyLimitUsd)
+	return u
+}
+
+// AddWelfareDailyLimitUsd adds v to the "welfare_daily_limit_usd" field.
+func (u *UserSubscriptionUpsert) AddWelfareDailyLimitUsd(v float64) *UserSubscriptionUpsert {
+	u.Add(usersubscription.FieldWelfareDailyLimitUsd, v)
+	return u
+}
+
+// ClearWelfareDailyLimitUsd clears the value of the "welfare_daily_limit_usd" field.
+func (u *UserSubscriptionUpsert) ClearWelfareDailyLimitUsd() *UserSubscriptionUpsert {
+	u.SetNull(usersubscription.FieldWelfareDailyLimitUsd)
+	return u
+}
+
+// SetWelfareWeeklyLimitUsd sets the "welfare_weekly_limit_usd" field.
+func (u *UserSubscriptionUpsert) SetWelfareWeeklyLimitUsd(v float64) *UserSubscriptionUpsert {
+	u.Set(usersubscription.FieldWelfareWeeklyLimitUsd, v)
+	return u
+}
+
+// UpdateWelfareWeeklyLimitUsd sets the "welfare_weekly_limit_usd" field to the value that was provided on create.
+func (u *UserSubscriptionUpsert) UpdateWelfareWeeklyLimitUsd() *UserSubscriptionUpsert {
+	u.SetExcluded(usersubscription.FieldWelfareWeeklyLimitUsd)
+	return u
+}
+
+// AddWelfareWeeklyLimitUsd adds v to the "welfare_weekly_limit_usd" field.
+func (u *UserSubscriptionUpsert) AddWelfareWeeklyLimitUsd(v float64) *UserSubscriptionUpsert {
+	u.Add(usersubscription.FieldWelfareWeeklyLimitUsd, v)
+	return u
+}
+
+// ClearWelfareWeeklyLimitUsd clears the value of the "welfare_weekly_limit_usd" field.
+func (u *UserSubscriptionUpsert) ClearWelfareWeeklyLimitUsd() *UserSubscriptionUpsert {
+	u.SetNull(usersubscription.FieldWelfareWeeklyLimitUsd)
+	return u
+}
+
+// SetWelfareMonthlyLimitUsd sets the "welfare_monthly_limit_usd" field.
+func (u *UserSubscriptionUpsert) SetWelfareMonthlyLimitUsd(v float64) *UserSubscriptionUpsert {
+	u.Set(usersubscription.FieldWelfareMonthlyLimitUsd, v)
+	return u
+}
+
+// UpdateWelfareMonthlyLimitUsd sets the "welfare_monthly_limit_usd" field to the value that was provided on create.
+func (u *UserSubscriptionUpsert) UpdateWelfareMonthlyLimitUsd() *UserSubscriptionUpsert {
+	u.SetExcluded(usersubscription.FieldWelfareMonthlyLimitUsd)
+	return u
+}
+
+// AddWelfareMonthlyLimitUsd adds v to the "welfare_monthly_limit_usd" field.
+func (u *UserSubscriptionUpsert) AddWelfareMonthlyLimitUsd(v float64) *UserSubscriptionUpsert {
+	u.Add(usersubscription.FieldWelfareMonthlyLimitUsd, v)
+	return u
+}
+
+// ClearWelfareMonthlyLimitUsd clears the value of the "welfare_monthly_limit_usd" field.
+func (u *UserSubscriptionUpsert) ClearWelfareMonthlyLimitUsd() *UserSubscriptionUpsert {
+	u.SetNull(usersubscription.FieldWelfareMonthlyLimitUsd)
+	return u
+}
+
+// SetWelfareGrantCount sets the "welfare_grant_count" field.
+func (u *UserSubscriptionUpsert) SetWelfareGrantCount(v int64) *UserSubscriptionUpsert {
+	u.Set(usersubscription.FieldWelfareGrantCount, v)
+	return u
+}
+
+// UpdateWelfareGrantCount sets the "welfare_grant_count" field to the value that was provided on create.
+func (u *UserSubscriptionUpsert) UpdateWelfareGrantCount() *UserSubscriptionUpsert {
+	u.SetExcluded(usersubscription.FieldWelfareGrantCount)
+	return u
+}
+
+// AddWelfareGrantCount adds v to the "welfare_grant_count" field.
+func (u *UserSubscriptionUpsert) AddWelfareGrantCount(v int64) *UserSubscriptionUpsert {
+	u.Add(usersubscription.FieldWelfareGrantCount, v)
+	return u
+}
+
+// SetWelfareCycleClosed sets the "welfare_cycle_closed" field.
+func (u *UserSubscriptionUpsert) SetWelfareCycleClosed(v bool) *UserSubscriptionUpsert {
+	u.Set(usersubscription.FieldWelfareCycleClosed, v)
+	return u
+}
+
+// UpdateWelfareCycleClosed sets the "welfare_cycle_closed" field to the value that was provided on create.
+func (u *UserSubscriptionUpsert) UpdateWelfareCycleClosed() *UserSubscriptionUpsert {
+	u.SetExcluded(usersubscription.FieldWelfareCycleClosed)
 	return u
 }
 
@@ -1073,6 +1321,139 @@ func (u *UserSubscriptionUpsertOne) SetGroupID(v int64) *UserSubscriptionUpsertO
 func (u *UserSubscriptionUpsertOne) UpdateGroupID() *UserSubscriptionUpsertOne {
 	return u.Update(func(s *UserSubscriptionUpsert) {
 		s.UpdateGroupID()
+	})
+}
+
+// SetEntitlementKind sets the "entitlement_kind" field.
+func (u *UserSubscriptionUpsertOne) SetEntitlementKind(v string) *UserSubscriptionUpsertOne {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.SetEntitlementKind(v)
+	})
+}
+
+// UpdateEntitlementKind sets the "entitlement_kind" field to the value that was provided on create.
+func (u *UserSubscriptionUpsertOne) UpdateEntitlementKind() *UserSubscriptionUpsertOne {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.UpdateEntitlementKind()
+	})
+}
+
+// SetWelfareDailyLimitUsd sets the "welfare_daily_limit_usd" field.
+func (u *UserSubscriptionUpsertOne) SetWelfareDailyLimitUsd(v float64) *UserSubscriptionUpsertOne {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.SetWelfareDailyLimitUsd(v)
+	})
+}
+
+// AddWelfareDailyLimitUsd adds v to the "welfare_daily_limit_usd" field.
+func (u *UserSubscriptionUpsertOne) AddWelfareDailyLimitUsd(v float64) *UserSubscriptionUpsertOne {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.AddWelfareDailyLimitUsd(v)
+	})
+}
+
+// UpdateWelfareDailyLimitUsd sets the "welfare_daily_limit_usd" field to the value that was provided on create.
+func (u *UserSubscriptionUpsertOne) UpdateWelfareDailyLimitUsd() *UserSubscriptionUpsertOne {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.UpdateWelfareDailyLimitUsd()
+	})
+}
+
+// ClearWelfareDailyLimitUsd clears the value of the "welfare_daily_limit_usd" field.
+func (u *UserSubscriptionUpsertOne) ClearWelfareDailyLimitUsd() *UserSubscriptionUpsertOne {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.ClearWelfareDailyLimitUsd()
+	})
+}
+
+// SetWelfareWeeklyLimitUsd sets the "welfare_weekly_limit_usd" field.
+func (u *UserSubscriptionUpsertOne) SetWelfareWeeklyLimitUsd(v float64) *UserSubscriptionUpsertOne {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.SetWelfareWeeklyLimitUsd(v)
+	})
+}
+
+// AddWelfareWeeklyLimitUsd adds v to the "welfare_weekly_limit_usd" field.
+func (u *UserSubscriptionUpsertOne) AddWelfareWeeklyLimitUsd(v float64) *UserSubscriptionUpsertOne {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.AddWelfareWeeklyLimitUsd(v)
+	})
+}
+
+// UpdateWelfareWeeklyLimitUsd sets the "welfare_weekly_limit_usd" field to the value that was provided on create.
+func (u *UserSubscriptionUpsertOne) UpdateWelfareWeeklyLimitUsd() *UserSubscriptionUpsertOne {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.UpdateWelfareWeeklyLimitUsd()
+	})
+}
+
+// ClearWelfareWeeklyLimitUsd clears the value of the "welfare_weekly_limit_usd" field.
+func (u *UserSubscriptionUpsertOne) ClearWelfareWeeklyLimitUsd() *UserSubscriptionUpsertOne {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.ClearWelfareWeeklyLimitUsd()
+	})
+}
+
+// SetWelfareMonthlyLimitUsd sets the "welfare_monthly_limit_usd" field.
+func (u *UserSubscriptionUpsertOne) SetWelfareMonthlyLimitUsd(v float64) *UserSubscriptionUpsertOne {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.SetWelfareMonthlyLimitUsd(v)
+	})
+}
+
+// AddWelfareMonthlyLimitUsd adds v to the "welfare_monthly_limit_usd" field.
+func (u *UserSubscriptionUpsertOne) AddWelfareMonthlyLimitUsd(v float64) *UserSubscriptionUpsertOne {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.AddWelfareMonthlyLimitUsd(v)
+	})
+}
+
+// UpdateWelfareMonthlyLimitUsd sets the "welfare_monthly_limit_usd" field to the value that was provided on create.
+func (u *UserSubscriptionUpsertOne) UpdateWelfareMonthlyLimitUsd() *UserSubscriptionUpsertOne {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.UpdateWelfareMonthlyLimitUsd()
+	})
+}
+
+// ClearWelfareMonthlyLimitUsd clears the value of the "welfare_monthly_limit_usd" field.
+func (u *UserSubscriptionUpsertOne) ClearWelfareMonthlyLimitUsd() *UserSubscriptionUpsertOne {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.ClearWelfareMonthlyLimitUsd()
+	})
+}
+
+// SetWelfareGrantCount sets the "welfare_grant_count" field.
+func (u *UserSubscriptionUpsertOne) SetWelfareGrantCount(v int64) *UserSubscriptionUpsertOne {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.SetWelfareGrantCount(v)
+	})
+}
+
+// AddWelfareGrantCount adds v to the "welfare_grant_count" field.
+func (u *UserSubscriptionUpsertOne) AddWelfareGrantCount(v int64) *UserSubscriptionUpsertOne {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.AddWelfareGrantCount(v)
+	})
+}
+
+// UpdateWelfareGrantCount sets the "welfare_grant_count" field to the value that was provided on create.
+func (u *UserSubscriptionUpsertOne) UpdateWelfareGrantCount() *UserSubscriptionUpsertOne {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.UpdateWelfareGrantCount()
+	})
+}
+
+// SetWelfareCycleClosed sets the "welfare_cycle_closed" field.
+func (u *UserSubscriptionUpsertOne) SetWelfareCycleClosed(v bool) *UserSubscriptionUpsertOne {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.SetWelfareCycleClosed(v)
+	})
+}
+
+// UpdateWelfareCycleClosed sets the "welfare_cycle_closed" field to the value that was provided on create.
+func (u *UserSubscriptionUpsertOne) UpdateWelfareCycleClosed() *UserSubscriptionUpsertOne {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.UpdateWelfareCycleClosed()
 	})
 }
 
@@ -1620,6 +2001,139 @@ func (u *UserSubscriptionUpsertBulk) SetGroupID(v int64) *UserSubscriptionUpsert
 func (u *UserSubscriptionUpsertBulk) UpdateGroupID() *UserSubscriptionUpsertBulk {
 	return u.Update(func(s *UserSubscriptionUpsert) {
 		s.UpdateGroupID()
+	})
+}
+
+// SetEntitlementKind sets the "entitlement_kind" field.
+func (u *UserSubscriptionUpsertBulk) SetEntitlementKind(v string) *UserSubscriptionUpsertBulk {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.SetEntitlementKind(v)
+	})
+}
+
+// UpdateEntitlementKind sets the "entitlement_kind" field to the value that was provided on create.
+func (u *UserSubscriptionUpsertBulk) UpdateEntitlementKind() *UserSubscriptionUpsertBulk {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.UpdateEntitlementKind()
+	})
+}
+
+// SetWelfareDailyLimitUsd sets the "welfare_daily_limit_usd" field.
+func (u *UserSubscriptionUpsertBulk) SetWelfareDailyLimitUsd(v float64) *UserSubscriptionUpsertBulk {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.SetWelfareDailyLimitUsd(v)
+	})
+}
+
+// AddWelfareDailyLimitUsd adds v to the "welfare_daily_limit_usd" field.
+func (u *UserSubscriptionUpsertBulk) AddWelfareDailyLimitUsd(v float64) *UserSubscriptionUpsertBulk {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.AddWelfareDailyLimitUsd(v)
+	})
+}
+
+// UpdateWelfareDailyLimitUsd sets the "welfare_daily_limit_usd" field to the value that was provided on create.
+func (u *UserSubscriptionUpsertBulk) UpdateWelfareDailyLimitUsd() *UserSubscriptionUpsertBulk {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.UpdateWelfareDailyLimitUsd()
+	})
+}
+
+// ClearWelfareDailyLimitUsd clears the value of the "welfare_daily_limit_usd" field.
+func (u *UserSubscriptionUpsertBulk) ClearWelfareDailyLimitUsd() *UserSubscriptionUpsertBulk {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.ClearWelfareDailyLimitUsd()
+	})
+}
+
+// SetWelfareWeeklyLimitUsd sets the "welfare_weekly_limit_usd" field.
+func (u *UserSubscriptionUpsertBulk) SetWelfareWeeklyLimitUsd(v float64) *UserSubscriptionUpsertBulk {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.SetWelfareWeeklyLimitUsd(v)
+	})
+}
+
+// AddWelfareWeeklyLimitUsd adds v to the "welfare_weekly_limit_usd" field.
+func (u *UserSubscriptionUpsertBulk) AddWelfareWeeklyLimitUsd(v float64) *UserSubscriptionUpsertBulk {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.AddWelfareWeeklyLimitUsd(v)
+	})
+}
+
+// UpdateWelfareWeeklyLimitUsd sets the "welfare_weekly_limit_usd" field to the value that was provided on create.
+func (u *UserSubscriptionUpsertBulk) UpdateWelfareWeeklyLimitUsd() *UserSubscriptionUpsertBulk {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.UpdateWelfareWeeklyLimitUsd()
+	})
+}
+
+// ClearWelfareWeeklyLimitUsd clears the value of the "welfare_weekly_limit_usd" field.
+func (u *UserSubscriptionUpsertBulk) ClearWelfareWeeklyLimitUsd() *UserSubscriptionUpsertBulk {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.ClearWelfareWeeklyLimitUsd()
+	})
+}
+
+// SetWelfareMonthlyLimitUsd sets the "welfare_monthly_limit_usd" field.
+func (u *UserSubscriptionUpsertBulk) SetWelfareMonthlyLimitUsd(v float64) *UserSubscriptionUpsertBulk {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.SetWelfareMonthlyLimitUsd(v)
+	})
+}
+
+// AddWelfareMonthlyLimitUsd adds v to the "welfare_monthly_limit_usd" field.
+func (u *UserSubscriptionUpsertBulk) AddWelfareMonthlyLimitUsd(v float64) *UserSubscriptionUpsertBulk {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.AddWelfareMonthlyLimitUsd(v)
+	})
+}
+
+// UpdateWelfareMonthlyLimitUsd sets the "welfare_monthly_limit_usd" field to the value that was provided on create.
+func (u *UserSubscriptionUpsertBulk) UpdateWelfareMonthlyLimitUsd() *UserSubscriptionUpsertBulk {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.UpdateWelfareMonthlyLimitUsd()
+	})
+}
+
+// ClearWelfareMonthlyLimitUsd clears the value of the "welfare_monthly_limit_usd" field.
+func (u *UserSubscriptionUpsertBulk) ClearWelfareMonthlyLimitUsd() *UserSubscriptionUpsertBulk {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.ClearWelfareMonthlyLimitUsd()
+	})
+}
+
+// SetWelfareGrantCount sets the "welfare_grant_count" field.
+func (u *UserSubscriptionUpsertBulk) SetWelfareGrantCount(v int64) *UserSubscriptionUpsertBulk {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.SetWelfareGrantCount(v)
+	})
+}
+
+// AddWelfareGrantCount adds v to the "welfare_grant_count" field.
+func (u *UserSubscriptionUpsertBulk) AddWelfareGrantCount(v int64) *UserSubscriptionUpsertBulk {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.AddWelfareGrantCount(v)
+	})
+}
+
+// UpdateWelfareGrantCount sets the "welfare_grant_count" field to the value that was provided on create.
+func (u *UserSubscriptionUpsertBulk) UpdateWelfareGrantCount() *UserSubscriptionUpsertBulk {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.UpdateWelfareGrantCount()
+	})
+}
+
+// SetWelfareCycleClosed sets the "welfare_cycle_closed" field.
+func (u *UserSubscriptionUpsertBulk) SetWelfareCycleClosed(v bool) *UserSubscriptionUpsertBulk {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.SetWelfareCycleClosed(v)
+	})
+}
+
+// UpdateWelfareCycleClosed sets the "welfare_cycle_closed" field to the value that was provided on create.
+func (u *UserSubscriptionUpsertBulk) UpdateWelfareCycleClosed() *UserSubscriptionUpsertBulk {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.UpdateWelfareCycleClosed()
 	})
 }
 

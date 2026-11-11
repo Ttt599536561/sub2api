@@ -238,7 +238,7 @@ func (r *subscriptionDailyResetRepository) SetAutomatic(ctx context.Context, use
 		return state, service.ErrResetStateChanged
 	}
 	// Turning off remains possible even after expiry or a group permission change.
-	if enabled && (s.DeletedAt != nil || s.User.DeletedAt != nil || s.User.Status != service.StatusActive || s.Group.Status != service.StatusActive || s.Status != service.SubscriptionStatusActive || state.ServerTime.Before(s.StartsAt) || !s.ExpiresAt.After(state.ServerTime) || !s.Group.AllowSubscriptionDayReset || s.Group.SubscriptionType != service.SubscriptionTypeSubscription || s.Group.DailyLimitUSD == nil || !finitePositiveResetLimit(*s.Group.DailyLimitUSD)) {
+	if enabled && (s.IsWelfare() || s.DeletedAt != nil || s.User.DeletedAt != nil || s.User.Status != service.StatusActive || s.Group.Status != service.StatusActive || s.Status != service.SubscriptionStatusActive || state.ServerTime.Before(s.StartsAt) || !s.ExpiresAt.After(state.ServerTime) || !s.Group.AllowSubscriptionDayReset || s.Group.SubscriptionType != service.SubscriptionTypeSubscription || s.Group.DailyLimitUSD == nil || !finitePositiveResetLimit(*s.Group.DailyLimitUSD)) {
 		if err := tx.Commit(); err != nil {
 			return nil, err
 		}
@@ -294,6 +294,7 @@ func (r *subscriptionDailyResetRepository) ListAutomaticCandidates(ctx context.C
 	rows, err := r.db.QueryContext(ctx, `SELECT s.id, s.user_id, s.daily_reset_version
 		FROM user_subscriptions s JOIN groups g ON g.id = s.group_id JOIN users u ON u.id = s.user_id
 		WHERE s.id > $1 AND s.auto_daily_reset_enabled AND s.deleted_at IS NULL AND s.status = 'active'
+		AND s.entitlement_kind = 'standard'
 		AND s.expires_at > clock_timestamp() + INTERVAL '86400 seconds'
 		AND g.deleted_at IS NULL AND g.status = 'active' AND g.allow_subscription_day_reset
 		AND g.subscription_type = 'subscription' AND g.daily_limit_usd > 0

@@ -181,7 +181,7 @@ func (s *Store) SaveCampaign(ctx context.Context, c Campaign, actor int64) (Camp
 
 func subscriptionName(ctx context.Context, q queryRower, id int64) (string, error) {
 	var name string
-	e := q.QueryRowContext(ctx, `SELECT name FROM groups WHERE id=$1 AND subscription_type='subscription' AND status='active' AND deleted_at IS NULL`, id).Scan(&name)
+	e := q.QueryRowContext(ctx, `SELECT name FROM groups WHERE id=$1 AND subscription_type='subscription' AND status='active' AND deleted_at IS NULL AND monthly_limit_usd>0 AND monthly_limit_usd<10000000000 AND (daily_limit_usd IS NULL OR (daily_limit_usd>=0 AND daily_limit_usd<10000000000)) AND (weekly_limit_usd IS NULL OR (weekly_limit_usd>=0 AND weekly_limit_usd<10000000000))`, id).Scan(&name)
 	if e == sql.ErrNoRows {
 		return "", ErrInvalid
 	}

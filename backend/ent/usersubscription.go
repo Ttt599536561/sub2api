@@ -29,6 +29,18 @@ type UserSubscription struct {
 	UserID int64 `json:"user_id,omitempty"`
 	// GroupID holds the value of the "group_id" field.
 	GroupID int64 `json:"group_id,omitempty"`
+	// EntitlementKind holds the value of the "entitlement_kind" field.
+	EntitlementKind string `json:"entitlement_kind,omitempty"`
+	// WelfareDailyLimitUsd holds the value of the "welfare_daily_limit_usd" field.
+	WelfareDailyLimitUsd *float64 `json:"welfare_daily_limit_usd,omitempty"`
+	// WelfareWeeklyLimitUsd holds the value of the "welfare_weekly_limit_usd" field.
+	WelfareWeeklyLimitUsd *float64 `json:"welfare_weekly_limit_usd,omitempty"`
+	// WelfareMonthlyLimitUsd holds the value of the "welfare_monthly_limit_usd" field.
+	WelfareMonthlyLimitUsd *float64 `json:"welfare_monthly_limit_usd,omitempty"`
+	// WelfareGrantCount holds the value of the "welfare_grant_count" field.
+	WelfareGrantCount int64 `json:"welfare_grant_count,omitempty"`
+	// WelfareCycleClosed holds the value of the "welfare_cycle_closed" field.
+	WelfareCycleClosed bool `json:"welfare_cycle_closed,omitempty"`
 	// StartsAt holds the value of the "starts_at" field.
 	StartsAt time.Time `json:"starts_at,omitempty"`
 	// ExpiresAt holds the value of the "expires_at" field.
@@ -127,13 +139,13 @@ func (*UserSubscription) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case usersubscription.FieldAutoDailyResetEnabled, usersubscription.FieldPreserveCalendarDailyReset:
+		case usersubscription.FieldWelfareCycleClosed, usersubscription.FieldAutoDailyResetEnabled, usersubscription.FieldPreserveCalendarDailyReset:
 			values[i] = new(sql.NullBool)
-		case usersubscription.FieldDailyUsageUsd, usersubscription.FieldWeeklyUsageUsd, usersubscription.FieldMonthlyUsageUsd:
+		case usersubscription.FieldWelfareDailyLimitUsd, usersubscription.FieldWelfareWeeklyLimitUsd, usersubscription.FieldWelfareMonthlyLimitUsd, usersubscription.FieldDailyUsageUsd, usersubscription.FieldWeeklyUsageUsd, usersubscription.FieldMonthlyUsageUsd:
 			values[i] = new(sql.NullFloat64)
-		case usersubscription.FieldID, usersubscription.FieldUserID, usersubscription.FieldGroupID, usersubscription.FieldDailyResetVersion, usersubscription.FieldAssignedBy:
+		case usersubscription.FieldID, usersubscription.FieldUserID, usersubscription.FieldGroupID, usersubscription.FieldWelfareGrantCount, usersubscription.FieldDailyResetVersion, usersubscription.FieldAssignedBy:
 			values[i] = new(sql.NullInt64)
-		case usersubscription.FieldStatus, usersubscription.FieldNotes:
+		case usersubscription.FieldEntitlementKind, usersubscription.FieldStatus, usersubscription.FieldNotes:
 			values[i] = new(sql.NullString)
 		case usersubscription.FieldCreatedAt, usersubscription.FieldUpdatedAt, usersubscription.FieldDeletedAt, usersubscription.FieldStartsAt, usersubscription.FieldExpiresAt, usersubscription.FieldDailyWindowStart, usersubscription.FieldWeeklyWindowStart, usersubscription.FieldMonthlyWindowStart, usersubscription.FieldAssignedAt:
 			values[i] = new(sql.NullTime)
@@ -188,6 +200,45 @@ func (_m *UserSubscription) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field group_id", values[i])
 			} else if value.Valid {
 				_m.GroupID = value.Int64
+			}
+		case usersubscription.FieldEntitlementKind:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field entitlement_kind", values[i])
+			} else if value.Valid {
+				_m.EntitlementKind = value.String
+			}
+		case usersubscription.FieldWelfareDailyLimitUsd:
+			if value, ok := values[i].(*sql.NullFloat64); !ok {
+				return fmt.Errorf("unexpected type %T for field welfare_daily_limit_usd", values[i])
+			} else if value.Valid {
+				_m.WelfareDailyLimitUsd = new(float64)
+				*_m.WelfareDailyLimitUsd = value.Float64
+			}
+		case usersubscription.FieldWelfareWeeklyLimitUsd:
+			if value, ok := values[i].(*sql.NullFloat64); !ok {
+				return fmt.Errorf("unexpected type %T for field welfare_weekly_limit_usd", values[i])
+			} else if value.Valid {
+				_m.WelfareWeeklyLimitUsd = new(float64)
+				*_m.WelfareWeeklyLimitUsd = value.Float64
+			}
+		case usersubscription.FieldWelfareMonthlyLimitUsd:
+			if value, ok := values[i].(*sql.NullFloat64); !ok {
+				return fmt.Errorf("unexpected type %T for field welfare_monthly_limit_usd", values[i])
+			} else if value.Valid {
+				_m.WelfareMonthlyLimitUsd = new(float64)
+				*_m.WelfareMonthlyLimitUsd = value.Float64
+			}
+		case usersubscription.FieldWelfareGrantCount:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field welfare_grant_count", values[i])
+			} else if value.Valid {
+				_m.WelfareGrantCount = value.Int64
+			}
+		case usersubscription.FieldWelfareCycleClosed:
+			if value, ok := values[i].(*sql.NullBool); !ok {
+				return fmt.Errorf("unexpected type %T for field welfare_cycle_closed", values[i])
+			} else if value.Valid {
+				_m.WelfareCycleClosed = value.Bool
 			}
 		case usersubscription.FieldStartsAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
@@ -356,6 +407,30 @@ func (_m *UserSubscription) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("group_id=")
 	builder.WriteString(fmt.Sprintf("%v", _m.GroupID))
+	builder.WriteString(", ")
+	builder.WriteString("entitlement_kind=")
+	builder.WriteString(_m.EntitlementKind)
+	builder.WriteString(", ")
+	if v := _m.WelfareDailyLimitUsd; v != nil {
+		builder.WriteString("welfare_daily_limit_usd=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
+	builder.WriteString(", ")
+	if v := _m.WelfareWeeklyLimitUsd; v != nil {
+		builder.WriteString("welfare_weekly_limit_usd=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
+	builder.WriteString(", ")
+	if v := _m.WelfareMonthlyLimitUsd; v != nil {
+		builder.WriteString("welfare_monthly_limit_usd=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
+	builder.WriteString(", ")
+	builder.WriteString("welfare_grant_count=")
+	builder.WriteString(fmt.Sprintf("%v", _m.WelfareGrantCount))
+	builder.WriteString(", ")
+	builder.WriteString("welfare_cycle_closed=")
+	builder.WriteString(fmt.Sprintf("%v", _m.WelfareCycleClosed))
 	builder.WriteString(", ")
 	builder.WriteString("starts_at=")
 	builder.WriteString(_m.StartsAt.Format(time.ANSIC))
