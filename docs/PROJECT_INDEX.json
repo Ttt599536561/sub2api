@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "purpose": "AI task routing; identities and boundaries, not live deployment state",
-  "verified_local_on": "2026-10-26",
+  "verified_local_on": "2026-10-27",
   "timezone": "Asia/Shanghai",
   "canonical_file": "E:/sub2二次开发项目/docs/PROJECT_INDEX.json",
   "startup_rules": "E:/sub2二次开发项目/docs/AI_START_HERE.md",
@@ -19,6 +19,7 @@
       "env_script": "E:/sub2二次开发项目/tools/project-env.ps1",
       "context": "docs/AI_CONTEXT.md",
       "handoff": "docs/HANDOFF.md",
+      "maintenance_entry": "docs/HANDOFF.md#当前代码和发布状态",
       "changelog": "CHANGELOG.md",
       "git_remote": "https://github.com/Ttt599536561/sub2api",
       "purpose": "Go/Gin/Ent + Vue 管理与API平台；用户、余额、渠道、福利及QQ付费生图业务",
@@ -108,6 +109,9 @@
         "backend/internal/server/routes/qq_image.go",
         "frontend/src/views/user/QQBindView.vue",
         "frontend/src/views/user/QQOrdersView.vue",
+        "frontend/src/components/user/QQGalleryCard.vue",
+        "frontend/src/components/user/QQGalleryDetail.vue",
+        "frontend/src/composables/useQQGalleryMedia.ts",
         "frontend/src/views/admin/WelfareSettingsView.vue",
         "frontend/src/components/admin/QQImagePanel.vue",
         "frontend/src/components/admin/QQReplyTemplatesPanel.vue"
@@ -115,6 +119,8 @@
       "owns": [
         "QQ群识别/白名单",
         "网站账号绑定/授权",
+        "绑定与生图业务独立开关",
+        "用户私有作品图库",
         "余额冻结与结算",
         "生图订单",
         "调用生图上游",
@@ -135,7 +141,8 @@
       "data": "selected Sub2 instance PostgreSQL/Redis; generated images currently PostgreSQL, not AI-site R2",
       "evidence": [
         "docs/changes/2026-10-23-qq-unified-menu.md",
-        "deploy/CUSTOM_IMAGE_0.2.17-r5.md"
+        "docs/changes/2026-10-27-qq-controls-gallery.md",
+        "docs/HANDOFF.md#当前代码和发布状态"
       ]
     },
     "ai-site": {
@@ -268,11 +275,12 @@
     },
     "qq-test": {
       "url": "https://qq-test.tangguo.xin",
-      "purpose": "独立Sub2验收栈，用于QQ生图联调",
+      "purpose": "独立Sub2验收栈与历史数据；是否接收收费指令须查当前交接，不按测试站名称推断",
       "remote_root": "/srv/sub2-qq-test",
       "cohosted_with": "production (last deployment record)",
       "isolation": "separate application, PostgreSQL, Redis, config and data; not a separate source repository",
-      "deployment_evidence": "docs/changes/2026-10-23-qq-remote-acceptance.md",
+      "deployment_evidence": "docs/HANDOFF.md#当前代码和发布状态",
+      "initial_deployment_evidence": "docs/changes/2026-10-23-qq-remote-acceptance.md",
       "live_state": "must_read_before_change"
     }
   },

@@ -4,7 +4,7 @@
 
 # Sub2API
 
-[![Go](https://img.shields.io/badge/Go-1.27.0-00ADD8.svg)](https://golang.org/)
+[![Go](https://img.shields.io/badge/Go-1.27.3-00ADD8.svg)](https://golang.org/)
 [![Vue](https://img.shields.io/badge/Vue-3.4+-4FC08D.svg)](https://vuejs.org/)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15+-336791.svg)](https://www.postgresql.org/)
 [![Redis](https://img.shields.io/badge/Redis-7+-DC382D.svg)](https://redis.io/)
@@ -17,6 +17,8 @@
 [English](README.md) | [中文](README_CN.md) | 日本語
 
 </div>
+
+> このフォークには福利厚生、サブスクリプション、紹介、監視、QQ 画像生成の独自機能が含まれます。[現在の保守・リリース情報](docs/HANDOFF.md#当前代码和发布状态)、[変更履歴](CHANGELOG.md)、[開発ガイド](DEV_GUIDE.md)を参照してください（保守文書は中国語）。公開済みイメージとサーバーで稼働中のバージョンは個別に確認してください。
 
 ## ⚠️ 重要なお知らせ
 
@@ -217,7 +219,7 @@ Sub2API を拡張・統合するコミュニティプロジェクト:
 
 | コンポーネント | 技術 |
 |-----------|------------|
-| バックエンド | Go 1.27.0, Gin, Ent |
+| バックエンド | Go 1.27.3, Gin, Ent |
 | フロントエンド | Vue 3.4+, Vite 5+, TailwindCSS |
 | データベース | PostgreSQL 15+ |
 | キャッシュ/キュー | Redis 7+ |

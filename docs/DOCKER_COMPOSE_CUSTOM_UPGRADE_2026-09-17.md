@@ -1,5 +1,11 @@
 # 从已上线的上游版本切换到二开版：Docker Compose 操作指南
 
+> **历史操作记录：2026-09-17 的 `0.2.5` 月卡重置版本（入口核对：2026-10-27）。** 下文“当前”“本轮”、固定提交、镜像和验证结果均指该历史阶段；保留原文用于追溯，不代表当前源码或服务器状态。
+>
+> 当前维护先读 [HANDOFF 当前代码和发布状态](HANDOFF.md#当前代码和发布状态)，再读 [0.2.18-r2 发布与升级记录](../deploy/CUSTOM_IMAGE_0.2.18-r2.md)。该镜像的固定应用源码为 `03eb8f3fc`；最新镜像已发布不等于正式/测试实例已升级。升级须按目标版本核对迁移、福利暂停与回退、QQ密钥保留等要求，不能直接执行本页旧 `r3` 打包/切换命令。
+>
+> 下文 C 盘/桌面路径仅是历史记录；本机现行主目录为 `E:\sub2二次开发项目`，每次 PowerShell 先加载该目录的 `tools\project-env.ps1`，缓存/临时文件使用项目 `.cache`、交付产物使用 `output`，不得按旧命令在 C 盘新建构建或测试目录。
+
 适用对象：当前已用 Docker Compose 运行 Sub2API，要保留用户、API Key、余额、订阅、账号和配置，切换到本仓库的月卡日额度提前重置版本。
 
 本指南配合 [本轮审查报告](REVIEW3_2026-09-17.md) 使用。当前生产版本、服务器路径、PostgreSQL 主版本尚未提供，文中的服务器值必须以第 1 步采集结果为准。命令中的服务器操作使用 **Linux Bash**；本机打包使用 **Windows PowerShell**。逐节执行，遇到错误停止，不要整篇一次粘贴运行。
@@ -73,7 +79,7 @@ REDIS_IMAGE_ID=$(docker inspect --format '{{.Image}}' "$REDIS_CID")
 确认 Docker Desktop 已启动并使用 Linux 容器。在本机 PowerShell 中：
 
 ```powershell
-Set-Location 'C:\Users\Administrator\Desktop\Sub2api'
+Set-Location 'E:\sub2二次开发项目'
 $ReleaseDir = Join-Path $env:USERPROFILE 'Desktop\sub2api-release-r3'
 New-Item -ItemType Directory -Force -Path $ReleaseDir | Out-Null
 $Image = 'sub2api-custom:0.2.5-daily-reset-r3-20260917'

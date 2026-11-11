@@ -2,6 +2,15 @@
 
 This directory contains files for deploying Sub2API on Linux servers and Apple-silicon Macs.
 
+## 二开维护入口（2026-10-27）
+
+维护本仓库的二开部署，先读 [当前代码和发布状态](../docs/HANDOFF.md#当前代码和发布状态)；主目录源码、已发布镜像、正式/测试实例的运行状态分别记录，不能由镜像发布推断服务器已升级。
+
+- 最新已记录发布为 [0.2.18-r2 Linux 发布与升级记录](CUSTOM_IMAGE_0.2.18-r2.md)，固定应用源码为 `03eb8f3fc`；镜像地址、digest、迁移、福利暂停与回退、QQ原密钥保留要求以该记录为准。后续版本从 HANDOFF 当前摘要进入。
+- [2026-09-17 Compose 升级记录](../docs/DOCKER_COMPOSE_CUSTOM_UPGRADE_2026-09-17.md) 与 [GitHub 源码切换记录](../docs/GITHUB_DOCKER_COMPOSE_SWITCH.md) 属于旧 `0.2.5` 阶段，保留用于追溯备份/切换方案；其中版本、固定提交、路径与命令不是当前升级流程。
+
+下文保留上游通用安装说明，含官方仓库下载和初始化命令。现有二开实例升级须按上述发布记录核对目标镜像，保留原 Compose、数据及密钥；不要把通用安装、官方在线更新或 `latest` 当作本仓库二开升级入口。
+
 ## Deployment Methods
 
 | Method | Best For | Setup Wizard |

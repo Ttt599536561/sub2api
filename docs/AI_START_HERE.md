@@ -1,12 +1,12 @@
 # AI 启动入口：先定位项目，再接手任务
 
-用途：跨对话恢复项目身份与边界。核对日期：2026-10-26，Asia/Shanghai。本文和 [PROJECT_INDEX.json](PROJECT_INDEX.json) 是稳定路由索引；版本、余额、在线状态不是本文的实时事实。
+用途：跨对话恢复项目身份与边界。本仓入口核对日期：2026-10-27，Asia/Shanghai；外部服务状态未在本次在线复核。本文和 [PROJECT_INDEX.json](PROJECT_INDEX.json) 是稳定路由索引；版本、余额、在线状态不是本文的实时事实。
 
 ## 最短加载顺序
 
 1. 读 `E:/sub2二次开发项目/docs/PROJECT_INDEX.json`，由用户用词、明确 URL/文件路径及本次上下文选择 repository/service/environment；当前 CWD 和侧栏名称只作线索。
 2. 到选中的 canonical root，先读当地 `AGENTS.override.md`（若有）或 `AGENTS.md`，再读 `docs/AI_CONTEXT.md`；需要跨服务时只加载相关服务的卡片与入口。
-3. 按该仓要求读 HANDOFF 的接手摘要和最新 CHANGELOG；只继续读与任务相关的发布/变更记录。日期旧的“当前”“待完成”属于当时状态，不能覆盖新证据。
+3. 按该仓要求读 HANDOFF 的接手摘要和最新 CHANGELOG；Sub2 的固定入口是 [当前代码和发布状态](HANDOFF.md#当前代码和发布状态)，由此进入最新发布说明；只继续读与任务相关的发布/变更记录。日期旧的“当前”“待完成”属于当时状态，不能覆盖新证据。
 4. 每次 PowerShell 调用在同一进程加载目标仓的绝对 `tools/project-env.ps1`；Sub2 工作树使用主目录入口，检测站始终使用自己的入口。然后检查实际工作目录、Git HEAD/分支/dirty 状态。
 5. 在开始改动前说明本次选择的仓库、服务和环境。只有仍有实质歧义时才问用户；不要让用户重复提供索引已经包含的信息。
 

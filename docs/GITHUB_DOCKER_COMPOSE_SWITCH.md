@@ -1,5 +1,9 @@
 # 把现有 Docker Compose 部署切到自己的 GitHub 二开版
 
+> **历史操作记录：`0.2.5` 阶段的 GitHub 源码构建与切换（入口核对：2026-10-27）。** 下文固定分支、提交 `112875bd73c73fbc464f39f04f302772d292aab1`、构建版本及“本次”均保留当时含义，不代表当前发布流程。
+>
+> 当前维护先读 [HANDOFF 当前代码和发布状态](HANDOFF.md#当前代码和发布状态)，再读 [0.2.18-r2 发布与升级记录](../deploy/CUSTOM_IMAGE_0.2.18-r2.md)。该镜像固定应用源码为 `03eb8f3fc`，包含 Linux amd64/arm64 发布证据和升级/回退要求；发布成功不等于正式或测试服务器已经升级。现有二开升级不要直接照搬本页旧分支/提交，也不要把旧指南的备份步骤当作已覆盖新版本迁移要求。
+
 适用于面板/服务器当前通过 Docker Compose 运行官方 Sub2API 镜像的部署。本次代码在自己的仓库 [Ttt599536561/sub2api](https://github.com/Ttt599536561/sub2api/tree/feature/monthly-subscription-daily-reset)，分支为 `feature/monthly-subscription-daily-reset`，固定源码提交为 **`112875bd73c73fbc464f39f04f302772d292aab1`**。分支之后可能增加文档提交，构建仍使用这个已经确定的源码提交。
 
 GitHub 地址是**源码仓库地址**，不能直接填进 Compose 的 `image:`。这里的流程是：服务器获取自己的源码 → 固定提交 → 用根目录 Dockerfile 构建本地镜像 → 给原 Compose 增加一个只修改应用镜像的覆盖文件。无需先发布 GHCR 镜像，也无需合并到 `main`。

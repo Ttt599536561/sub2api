@@ -4,7 +4,7 @@
 
 # Sub2API
 
-[![Go](https://img.shields.io/badge/Go-1.27.0-00ADD8.svg)](https://golang.org/)
+[![Go](https://img.shields.io/badge/Go-1.27.3-00ADD8.svg)](https://golang.org/)
 [![Vue](https://img.shields.io/badge/Vue-3.4+-4FC08D.svg)](https://vuejs.org/)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15+-336791.svg)](https://www.postgresql.org/)
 [![Redis](https://img.shields.io/badge/Redis-7+-DC382D.svg)](https://redis.io/)
@@ -18,7 +18,7 @@
 
 </div>
 
-> 本分支包含月卡日额度提前重置及第三轮审查修复。已有 Docker Compose 服务切换到个人仓库版本，请阅读 [GitHub 源码部署指南](docs/GITHUB_DOCKER_COMPOSE_SWITCH.md)，按固定提交构建镜像并保留原数据库和配置。
+> 本分支包含福利、月卡、推广、监控及 QQ 付费生图二开。维护请先读 [当前代码与发布状态](docs/HANDOFF.md#当前代码和发布状态)、[更新日志](CHANGELOG.md)和 [开发指南](DEV_GUIDE.md)；最新镜像与升级说明统一从交接入口进入。镜像已发布不代表服务器已升级。
 
 
 ## ⚠️ 重要提醒
@@ -225,7 +225,7 @@ Sub2API 是一个 AI API 网关平台，用于分发和管理 AI 产品订阅的
 
 | 组件 | 技术 |
 |------|------|
-| 后端 | Go 1.27.0, Gin, Ent |
+| 后端 | Go 1.27.3, Gin, Ent |
 | 前端 | Vue 3.4+, Vite 5+, TailwindCSS |
 | 数据库 | PostgreSQL 15+ |
 | 缓存/队列 | Redis 7+ |

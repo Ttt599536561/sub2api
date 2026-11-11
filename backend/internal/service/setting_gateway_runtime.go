@@ -338,7 +338,7 @@ func (s *SettingService) GetOpenAICodexUserAgent(ctx context.Context) string {
 }
 
 // GetOpenAICodexClientVersion 返回出站声明的 Codex 客户端版本号。
-// 优先级：管理员在面板覆写的版本 → 自动同步到的官方最新稳定版 → 内置常量。
+// 优先级：管理员在面板覆写的版本 → 自动同步值与内置常量中较新的版本。
 // 上游会按客户端身份进行风控分层，陈旧版本可能被优先丢弃，故该值需保持跟随官方发布；
 // 自动同步让运维不必为了跟版本而发新版本。
 func (s *SettingService) GetOpenAICodexClientVersion(ctx context.Context) string {
@@ -378,9 +378,12 @@ func (s *SettingService) GetOpenAICodexClientVersion(ctx context.Context) string
 		version := NormalizeCodexClientVersion(values[SettingKeyOpenAICodexClientVersion])
 		if version == "" {
 			version = NormalizeCodexClientVersion(values[SettingKeyOpenAICodexClientVersionSynced])
-		}
-		if version == "" {
-			version = fallback
+			// 同步可能被关闭、网络不可用或尚未完成首次刷新。历史同步值不能
+			// 覆盖新服务内置的兼容基线，否则升级服务后仍可能触发模型版本门槛。
+			// 仅约束自动选择；管理员显式固定的版本仍优先。
+			if version == "" || CompareVersions(version, fallback) < 0 {
+				version = fallback
+			}
 		}
 		s.openAICodexVersionCache.Store(&cachedOpenAICodexClientVersion{
 			version:   version,

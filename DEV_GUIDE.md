@@ -1,10 +1,10 @@
 # sub2api 项目开发指南
 
-> 本文档记录项目环境配置、常见坑点和注意事项，供 Claude Code 和团队成员参考。
+> 本文档记录开发环境与维护规范。AI接手先读 [项目定位入口](docs/AI_START_HERE.md) 和 [Sub2上下文卡](docs/AI_CONTEXT.md)，明确仓库/服务/环境后再读本文。
 
 ## 更新记录与交接规范
 
-接手项目先阅读 [更新日志](CHANGELOG.md) 和 [当前交接](docs/HANDOFF.md)。已发布镜像的地址、源码与升级说明见 [0.2.17-r2 发布记录](deploy/CUSTOM_IMAGE_0.2.17-r2.md)；旧报告的版本与验证数字仅代表其历史阶段。
+接手项目先阅读 [更新日志](CHANGELOG.md) 和 [当前交接](docs/HANDOFF.md)。已发布镜像的地址、固定源码与升级说明从交接页进入对应发布记录；不要把某一历史版本作为长期入口。旧报告的版本与验证数字仅代表其历史阶段。
 
 - 每次提交项目自身的代码更新，包括功能、修复、兼容、配置、迁移及 CI/发布变更，都要同步维护 `CHANGELOG.md`。上游批量合并以一次升级汇总，不逐条抄录所有上游提交；后续本地兼容修正仍分别记录。
 - 记录日期（Asia/Shanghai）、稳定的变更名称或编号、改了什么、原因与影响、实际验证结果，以及部署/迁移注意事项。普通改动几行即可；重大升级在 `docs/changes/YYYY-MM-DD-主题.md` 保存详情并从日志链接。
@@ -27,31 +27,79 @@
 
 ## 二、本地环境配置
 
+### Windows：项目缓存和临时文件放 E 盘
+
+本机主项目位于 `E:\sub2二次开发项目`。每个新 PowerShell 会话或自动化工具调用，先载入项目环境；环境变量只影响当前进程及其子进程，不修改系统和用户全局设置：
+
+```powershell
+. 'E:\sub2二次开发项目\tools\project-env.ps1'
+Set-Location 'E:\sub2二次开发项目\backend'
+go test -tags=unit ./...
+
+Set-Location 'E:\sub2二次开发项目\frontend'
+corepack pnpm@9.15.9 install --frozen-lockfile
+corepack pnpm@9.15.9 test:run
+```
+
+也可用包装器运行单条命令（需要 PowerShell 7.3+，保留参数及命令退出码）：
+
+```powershell
+pwsh -NoProfile -File 'E:\sub2二次开发项目\tools\with-project-env.ps1' corepack pnpm@9.15.9 --dir 'E:\sub2二次开发项目\frontend' test:run
+```
+
+脚本把 Go 编译/模块/工具缓存、golangci-lint、npm/pnpm 缓存和 `TEMP`、`TMP`、`TMPDIR`、`GOTMPDIR` 统一指向主项目 `.cache`；也设置 pip、uv、Playwright、Node 编译缓存和 Python 字节码缓存的路径，不安装这些工具。`TEMP/TMP` 同时覆盖 Go 测试 `t.TempDir()` 等运行时临时文件。测试日志和临时脚本也应放 `.cache`，需交付的文件放项目 `output`。前端构建仍输出到项目 `backend/internal/web/dist`。
+
+脚本同时配置 `npm_config_*` 与 `PNPM_CONFIG_STORE_DIR`、`PNPM_CONFIG_CACHE_DIR`、`PNPM_CONFIG_STATE_DIR`，兼容不同 pnpm 版本的缓存入口。`COREPACK_HOME` 指向 `.cache/corepack`，供 Corepack 保存 pnpm 等包管理器。历史本机依赖曾由 pnpm 10.12.3 建立，默认 shim 也可能与 CI 不同；切换包管理器版本和迁移缓存是两个独立操作。当前仓库的版本基线见下方“开发工具”，不要因本机 shim 版本而改动锁文件。
+
+所有新工作树放 `E:\sub2二次开发项目\.worktrees`，从工作树运行时仍使用上面的主项目绝对路径入口，复用同一份缓存。不要在 C 盘新建项目临时目录或工作树。`AGENTS.md` 和 `AGENTS.override.md` 保存了本机的后续执行约定。
+
+已有的 C 盘工作树仅作只读检查，并调用主项目入口。安装、构建、测试、代码生成必须先转到 E 盘工作树执行；`node_modules`、`.vite`、覆盖率和构建产物仍可能按工作目录写入，环境变量不能把这些输出自动迁移。新工作树使用 E 盘明确路径，不使用默认落在 C 盘的托管工作树位置。本机 `AGENTS.override.md` 和 `.worktrees` 已加入 `.git/info/exclude`，不修改仓库共享的忽略规则。
+
+本机 `.codex/config.toml` 同步设置这些环境变量，只对受信任项目生效，可能需要新聊天加载；当前聊天和独立终端仍显式使用脚本入口。此配置不移动现有文件，也不改变 Docker Desktop 的磁盘镜像、数据库服务或其他应用的缓存。
+
+Docker 构建和容器测试使用独立存储，`TEMP`、`GOCACHE` 等变量不会改变它。执行这类任务前，应检查 Docker Desktop 磁盘镜像的实际宿主路径，确认位于 E 盘；底层镜像仍在 C 盘时，不在该引擎上生成新的项目构建缓存或测试容器。旧缓存的检查和清理可以正常进行。
+
+若现有 `node_modules` 仍关联旧 pnpm/store，安装可能报 `ERR_PNPM_UNEXPECTED_STORE`。先核对 `frontend/node_modules/.modules.yaml` 中的包管理器和 store 路径；确需迁移且依赖未被使用时，从已载入环境的终端进入 `frontend`，用确定的 pnpm 版本执行 `install --force --frozen-lockfile` 重新关联。复用 E 盘缓存，缺失的包仍需下载；不要手改 `.modules.yaml`，也不要擅自重装正在使用的依赖。
+
 ### PostgreSQL 16 (Windows 服务)
+
+以下是历史本机安装位置，服务端口与数据目录应先只读核实；软件安装在 C 盘不代表可以在 C 盘新建项目、测试库或缓存。凭据从本机私有配置读取，不在维护文档保存，也不假设存在默认密码。
 
 | 配置项 | 值 |
 |--------|-----|
 | 端口 | 5432 |
 | psql 路径 | `C:\Program Files\PostgreSQL\16\bin\psql.exe` |
 | pg_hba.conf | `C:\Program Files\PostgreSQL\16\data\pg_hba.conf` |
-| 数据库凭据 | user=`sub2api`, password=`sub2api`, dbname=`sub2api` |
-| 超级用户 | user=`postgres`, password=`postgres` |
+| 数据库凭据 | 从本机私有配置读取；不在文档保存用户名或密码 |
+| 超级用户 | 按本机 PostgreSQL 实例配置核实；不得假设默认密码 |
 
 ### Redis
 
 | 配置项 | 值 |
 |--------|-----|
 | 端口 | 6379 |
-| 密码 | 无 |
+| 密码 | 按本机 Redis 私有配置核实，不假设无密码或默认值 |
 
 ### 开发工具
 
-```bash
-# golangci-lint（CI 用 v2.13，本地建议装同一版以免版本差异带来的噪音）
-go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.13
+工具链核对日期：2026-10-27；以下按源码配置记录，不代表本机已经安装或本轮执行过构建。
 
-# pnpm (前端包管理)
-npm install -g pnpm
+| 工具 | 当前配置依据 |
+| --- | --- |
+| Go | `backend/go.mod` 为 **1.27.3**；三个 Dockerfile 的 Go 镜像均为 `1.27.3-alpine` |
+| golangci-lint | `backend-ci.yml` 固定 **v2.14.0** |
+| Node.js | `backend-ci.yml`、`security-scan.yml`、`release.yml` 为 **20**；根目录及 `deploy/Dockerfile` 默认 **24-alpine**，两者不是同一配置 |
+| pnpm | 上述 CI 使用 **9**，两个前端 Docker 构建固定 **9.15.9**；`frontend/pnpm-lock.yaml` 的 `lockfileVersion` 为 **9.0**，`package.json` 未设置 `packageManager` 或 `engines` |
+
+安装或切换工具前先加载环境，复用 E 盘缓存。下面的显式 pnpm 调用可避免默认 shim 版本漂移；不要用全局 npm 安装替代项目约定：
+
+```powershell
+. 'E:\sub2二次开发项目\tools\project-env.ps1'
+Set-Location 'E:\sub2二次开发项目\backend'
+go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.14.0
+
+Set-Location 'E:\sub2二次开发项目\frontend'
+corepack pnpm@9.15.9 --version
 ```
 
 ## 三、CI/CD 流水线
@@ -60,29 +108,41 @@ npm install -g pnpm
 
 | Workflow | 触发条件 | 检查内容 |
 |----------|----------|----------|
-| **backend-ci.yml** | push, pull_request | 单元测试 + 集成测试 + golangci-lint v2.13 |
-| **security-scan.yml** | push, pull_request, 每周一 | govulncheck + gosec + pnpm audit |
-| **release.yml** | tag `v*` | 构建发布（PR 不触发） |
+| **backend-ci.yml** | push, pull_request | 部署脚本检查、Go 单元/集成测试（含独立 QQ PostgreSQL）、前端 lint/类型/关键 Vitest、golangci-lint v2.14.0、发布辅助脚本测试 |
+| **security-scan.yml** | push, pull_request, 每周一 03:00 UTC | govulncheck + pnpm 生产依赖审计及豁免校验；当前没有独立 gosec 步骤 |
+| **release.yml** | tag `v*`、workflow_dispatch | 构建/验证/发布；手动支持 `dry_run` 与 `simple_release`，PR 不触发 |
+| **publish-custom-*.yml** | workflow_dispatch | 各版本独立发布配置；从交接页定位对应文件，核对固定源码和精确 SHA 的 CI/安全门禁，再构建及验证 Linux 镜像；不代表服务器已升级 |
+
+本表列主要测试与发布入口；仓库另有 Apple Container、CLA 等工作流，以 `.github/workflows/` 的实际触发条件为准。纯文档维护无需触发构建或发布。
 
 ### CI 要求
 
-- Go 版本必须是 **1.27.2**：三个 workflow 都用 `go-version-file: backend/go.mod` 取版本，随后硬断言 `go version | grep -q 'go1.27.2'`。升级 Go 时要同时改 `backend/go.mod`、`backend-ci.yml`（两处）、`release.yml`、`security-scan.yml` 里的这句断言，**以及三个 Dockerfile 里的 Go 构建镜像**（`Dockerfile` / `deploy/Dockerfile` 的 `ARG GOLANG_IMAGE`、`backend/Dockerfile` 的 `FROM golang:`）。前者漏了 CI 会在版本校验步骤直接失败；**后者漏了 CI 不会报，而是等到有人用这些 Dockerfile 构建时才失败**（`go.mod requires go >= X (running Y; GOTOOLCHAIN=local)`）。
-- 前端使用 `pnpm install --frozen-lockfile`，必须提交 `pnpm-lock.yaml`
+- Go 当前基线为 **1.27.3**。常规 CI/安全/发布通过 `go-version-file: backend/go.mod` 取版本，并在相应步骤断言 `go1.27.3`。升级时同步检查这些断言、三个 Dockerfile 的 Go 构建镜像，以及待发布 `publish-custom-*.yml` 中单独固定的 `go-version`；历史发布配置只作为当时来源记录，不批量改写。
+- 前端使用 `pnpm install --frozen-lockfile`，依赖变更必须同步 `package.json` 与 `pnpm-lock.yaml`。`pnpm build` 依次执行 i18n 完整性检查、`vue-tsc -b`、Vite；`pnpm lint:check` 只读检查，`pnpm lint` 会自动修复文件。
+- 根目录 `make test-frontend` 执行 `lint:check`、`typecheck` 和 `FRONTEND_CRITICAL_VITEST` 清单，不是完整前端测试。完整套件使用 `pnpm test:run`；记录验证时区分两者。
 
 ### 本地测试命令
 
-```bash
+按改动范围选择以下命令，不应整段无差别执行；集成测试需先满足隔离数据库与 Docker 的 E 盘存储要求。
+
+```powershell
+. 'E:\sub2二次开发项目\tools\project-env.ps1'
+Set-Location 'E:\sub2二次开发项目\backend'
 # 后端单元测试
-cd backend && go test -tags=unit ./...
+go test -tags=unit ./...
 
 # 后端集成测试
-cd backend && go test -tags=integration ./...
+go test -tags=integration ./...
 
 # 代码质量检查
-cd backend && golangci-lint run ./...
+golangci-lint run ./...
 
 # 前端依赖安装（必须用 pnpm）
-cd frontend && pnpm install
+Set-Location 'E:\sub2二次开发项目\frontend'
+corepack pnpm@9.15.9 install --frozen-lockfile
+corepack pnpm@9.15.9 lint:check
+corepack pnpm@9.15.9 typecheck
+corepack pnpm@9.15.9 test:run
 ```
 
 ## 四、常见坑点 & 解决方案
@@ -94,12 +154,14 @@ cd frontend && pnpm install
 **原因**：上游 CI 使用 pnpm，lock 文件不同步会报错。
 
 **解决**：
-```bash
-cd frontend
-pnpm install  # 更新 pnpm-lock.yaml
-git add pnpm-lock.yaml
-git commit -m "chore: update pnpm-lock.yaml"
+```powershell
+. 'E:\sub2二次开发项目\tools\project-env.ps1'
+Set-Location 'E:\sub2二次开发项目\frontend'
+corepack pnpm@9.15.9 install  # 仅在有意更新依赖时更新锁文件
+git diff -- package.json pnpm-lock.yaml
 ```
+
+核对依赖差异后，将锁文件与对应依赖变更一并提交；常规安装仍用 `--frozen-lockfile`。
 
 ---
 
@@ -107,12 +169,7 @@ git commit -m "chore: update pnpm-lock.yaml"
 
 **问题**：之前用 npm 装过 `node_modules`，pnpm install 报 `EPERM` 错误。
 
-**解决**：
-```bash
-cd frontend
-rm -rf node_modules  # 或 PowerShell: Remove-Item -Recurse -Force node_modules
-pnpm install
-```
+**解决**：先停止占用依赖的开发进程，区分权限占用和 `ERR_PNPM_UNEXPECTED_STORE`。需要重新关联时按上方 E 盘缓存迁移说明处理；确需删除 `node_modules` 时，先核实其解析后的绝对路径在当前 E 盘工作区内，再使用 PowerShell 的 `Remove-Item -LiteralPath`。不要直接复制 `rm -rf` 或清理旧 C 盘联接。
 
 ---
 
@@ -120,51 +177,40 @@ pnpm install
 
 **问题**：bcrypt hash 格式如 `$2a$10$xxx...`，PowerShell 把 `$2a` 当变量解析，导致数据丢失。
 
-**解决**：将 SQL 写入文件，用 `psql -f` 执行：
-```bash
-# 错误示范（PowerShell 会吃掉 $）
-psql -c "INSERT INTO users ... VALUES ('$2a$10$...')"
-
-# 正确做法
-echo "INSERT INTO users ... VALUES ('\$2a\$10\$...')" > temp.sql
-psql -U sub2api -h 127.0.0.1 -d sub2api -f temp.sql
+**解决**：PowerShell 使用单引号 here-string 保留 `$`，将 SQL 写入 E 盘项目临时文件后用 `psql -f` 执行。下面仅演示字面量，不写用户表；真实连接参数按本机私有配置填写。
+```powershell
+. 'E:\sub2二次开发项目\tools\project-env.ps1'
+$sqlFile = Join-Path $env:TEMP 'literal-dollar-example.sql'
+@'
+SELECT '$2a$10$example' AS literal_text;
+'@ | Set-Content -LiteralPath $sqlFile -Encoding utf8
+Set-Location -LiteralPath $env:TEMP
+psql -h 127.0.0.1 -f '.\literal-dollar-example.sql'
+Remove-Item -LiteralPath $sqlFile
 ```
 
 ---
 
-### 坑 4：psql 不支持中文路径
+### 坑 4：psql 的路径编码兼容问题
 
-**问题**：`psql -f "D:\中文路径\file.sql"` 报错找不到文件。
+**问题**：部分 Windows 客户端或调用方式使用中文绝对路径时可能报找不到文件，不能据此认定所有 psql 版本都不支持中文路径。
 
-**解决**：复制到纯英文路径再执行：
-```bash
-cp "D:\中文路径\file.sql" "C:\temp.sql"
-psql -f "C:\temp.sql"
+**解决**：把文件放到项目临时目录，进入目录后只向 psql 传相对文件名：
+```powershell
+. 'E:\sub2二次开发项目\tools\project-env.ps1'
+Copy-Item -LiteralPath 'E:\sub2二次开发项目\output\file.sql' -Destination (Join-Path $env:TEMP 'psql-input.sql')
+Set-Location -LiteralPath $env:TEMP
+psql -f '.\psql-input.sql'
+Remove-Item -LiteralPath (Join-Path $env:TEMP 'psql-input.sql')
 ```
 
 ---
 
 ### 坑 5：PostgreSQL 密码重置流程
 
-**场景**：忘记 PostgreSQL 密码。
+先区分服务未启动、连接目标错误、`pg_hba.conf` 规则不匹配和密码失效。端口、服务名、数据目录、角色名都以目标本机实例为准；能连接时只读核对 `SHOW data_directory`、`SHOW hba_file`，无法连接时从对应服务配置定位，不把历史安装表或默认密码当成实际配置。
 
-**步骤**：
-1. 修改 `C:\Program Files\PostgreSQL\16\data\pg_hba.conf`
-   ```
-   # 将 scram-sha-256 改为 trust
-   host    all    all    127.0.0.1/32    trust
-   ```
-2. 重启 PostgreSQL 服务
-   ```powershell
-   Restart-Service postgresql-x64-16
-   ```
-3. 无密码登录并重置
-   ```bash
-   psql -U postgres -h 127.0.0.1
-   ALTER USER sub2api WITH PASSWORD 'sub2api';
-   ALTER USER postgres WITH PASSWORD 'postgres';
-   ```
-4. 改回 `scram-sha-256` 并重启
+确需恢复本机实例访问时，先备份实际认证配置。优先通过已有管理连接，用 psql 的 `\password <实际角色名>` 交互设置新密码，避免把明文写入命令历史、SQL 文件或文档。若必须临时调整认证，仅限制到所需本机地址、数据库和角色；完成后立即恢复原认证规则并核对连接，不把所有数据库和角色长期设为 `trust`。同步使用该凭据的本机私有配置，不在维护指南记录其值。正式与 QQ 测试数据库按各自部署交接处理。
 
 ---
 
@@ -175,11 +221,11 @@ psql -f "C:\temp.sql"
 **原因**：所有测试文件中实现该 interface 的 stub/mock 都必须补上新方法。
 
 **解决**：
-```bash
+```powershell
+. 'E:\sub2二次开发项目\tools\project-env.ps1'
 # 搜索所有实现该 interface 的 struct
-cd backend
-grep -r "type.*Stub.*struct" internal/
-grep -r "type.*Mock.*struct" internal/
+Set-Location 'E:\sub2二次开发项目\backend'
+rg -n 'type.*(Stub|Mock).*struct' internal
 
 # 逐一补全新方法
 ```
@@ -199,7 +245,9 @@ grep -r "type.*Mock.*struct" internal/
 **问题**：CI 里用 `make test-unit`，本地 Windows 没有 make。
 
 **解决**：直接用 Makefile 里的原始命令：
-```bash
+```powershell
+. 'E:\sub2二次开发项目\tools\project-env.ps1'
+Set-Location 'E:\sub2二次开发项目\backend'
 # 代替 make test-unit
 go test -tags=unit ./...
 
@@ -214,10 +262,11 @@ go test -tags=integration ./...
 **问题**：修改 `ent/schema/*.go` 后，代码不生效。
 
 **解决**：
-```bash
-cd backend
+```powershell
+. 'E:\sub2二次开发项目\tools\project-env.ps1'
+Set-Location 'E:\sub2二次开发项目\backend'
 go generate ./ent  # 重新生成 ent 代码（json.RawMessage 字段会生成为同类型的 jsontext.Value，属预期）
-git add ent/       # 生成的文件也要提交
+git diff --stat -- ent  # 审查生成差异，生成文件与 schema 一并提交
 ```
 
 ---
@@ -247,11 +296,12 @@ git add ent/       # 生成的文件也要提交
 
 ### 坑 11：PR 提交前检查清单
 
-提交 PR 前务必本地验证：
+提交 PR 前按改动范围选择本地验证，并注明未执行或条件跳过的原因。纯文档更正检查链接、引用和差异，不运行无关业务测试；涉及数据库或集成测试时先满足隔离环境及 E 盘存储要求：
 
 - [ ] `go test -tags=unit ./...` 通过
 - [ ] `go test -tags=integration ./...` 通过
 - [ ] `golangci-lint run ./...` 无新增问题
+- [ ] 前端变更执行 `lint:check`、`typecheck` 及相关测试；涉及构建时执行 `build`
 - [ ] `pnpm-lock.yaml` 已同步（如果改了 package.json）
 - [ ] 所有 test stub 补全新接口方法（如果改了 interface）
 - [ ] Ent 生成的代码已提交（如果改了 schema）
@@ -260,7 +310,11 @@ git add ent/       # 生成的文件也要提交
 
 ### 数据库操作
 
-```bash
+以下为独立命令示例，连接身份与数据库名按实际本机配置选择；不要对正式或 QQ 测试实例直接套用本地示例。
+
+```powershell
+. 'E:\sub2二次开发项目\tools\project-env.ps1'
+Set-Location 'E:\sub2二次开发项目'
 # 连接数据库
 psql -U sub2api -h 127.0.0.1 -d sub2api
 
@@ -271,45 +325,47 @@ psql -U postgres -h 127.0.0.1 -c "\du"
 psql -U postgres -h 127.0.0.1 -c "\l"
 
 # 执行 SQL 文件
-psql -U sub2api -h 127.0.0.1 -d sub2api -f migration.sql
+psql -U sub2api -h 127.0.0.1 -d sub2api -f '.\output\migration.sql'
 ```
 
 ### Git 操作
 
-```bash
-# 同步上游
+```powershell
+. 'E:\sub2二次开发项目\tools\project-env.ps1'
+Set-Location 'E:\sub2二次开发项目'
+# 先核对当前分支、未提交修改和上游差异
+git status --short
+git branch --show-current
 git fetch upstream
-git checkout main
-git merge upstream/main
-git push origin main
+git log --oneline HEAD..upstream/main
 
-# 创建功能分支
-git checkout -b feature/xxx
-
-# Rebase 到最新 main
-git fetch upstream
-git rebase upstream/main
+# 需要隔离开发时，创建 E 盘工作树；进入后仍使用主项目环境入口
+git worktree add '.\.worktrees\feature-example' -b feature/example
 ```
+
+合并、rebase、推送按本次任务范围执行，不把上述只读核对当作自动发布流程。保留原分支与未提交修改；不要重置或清理既有工作树。
 
 ### 前端操作
 
-```bash
+```powershell
+. 'E:\sub2二次开发项目\tools\project-env.ps1'
+Set-Location 'E:\sub2二次开发项目\frontend'
 # 安装依赖（必须用 pnpm）
-cd frontend
-pnpm install
+corepack pnpm@9.15.9 install --frozen-lockfile
 
 # 开发服务器
-pnpm dev
+corepack pnpm@9.15.9 dev
 
 # 构建
-pnpm build
+corepack pnpm@9.15.9 build
 ```
 
 ### 后端操作
 
-```bash
+```powershell
+. 'E:\sub2二次开发项目\tools\project-env.ps1'
+Set-Location 'E:\sub2二次开发项目\backend'
 # 运行服务器
-cd backend
 go run ./cmd/server/
 
 # 生成 Ent 代码
@@ -326,7 +382,7 @@ golangci-lint run ./...
 ## 六、项目结构速览
 
 ```
-sub2api-bmai/
+E:/sub2二次开发项目/
 ├── backend/
 │   ├── cmd/server/          # 主程序入口
 │   ├── ent/                 # Ent ORM 生成代码
@@ -335,9 +391,10 @@ sub2api-bmai/
 │   │   ├── handler/         # HTTP 处理器
 │   │   ├── service/         # 业务逻辑
 │   │   ├── repository/      # 数据访问层
+│   │   ├── qqimage/         # QQ 付费生图模块
 │   │   └── server/          # 服务器配置
 │   ├── migrations/          # 数据库迁移脚本
-│   └── config.yaml          # 配置文件
+│   └── go.mod               # Go 工具链与依赖
 ├── frontend/
 │   ├── src/
 │   │   ├── api/             # API 调用
@@ -347,8 +404,11 @@ sub2api-bmai/
 │   │   └── i18n/            # 国际化
 │   ├── package.json         # 依赖配置
 │   └── pnpm-lock.yaml       # pnpm 锁文件（必须提交）
-└── .claude/
-    └── CLAUDE.md            # 本文档
+├── deploy/                  # 部署配置与分版本发布记录
+├── docs/                    # HANDOFF、AI入口、变更记录
+├── tools/                   # 本机环境入口与维护工具
+├── CHANGELOG.md             # 项目更新日志
+└── DEV_GUIDE.md             # 本文档
 ```
 
 ## 七、参考资源

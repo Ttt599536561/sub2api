@@ -4,7 +4,7 @@
 
 # Sub2API
 
-[![Go](https://img.shields.io/badge/Go-1.27.0-00ADD8.svg)](https://golang.org/)
+[![Go](https://img.shields.io/badge/Go-1.27.3-00ADD8.svg)](https://golang.org/)
 [![Vue](https://img.shields.io/badge/Vue-3.4+-4FC08D.svg)](https://vuejs.org/)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15+-336791.svg)](https://www.postgresql.org/)
 [![Redis](https://img.shields.io/badge/Redis-7+-DC382D.svg)](https://redis.io/)
@@ -18,7 +18,7 @@ English | [中文](README_CN.md) | [日本語](README_JA.md)
 
 </div>
 
-> 本分支包含月卡日额度提前重置及第三轮审查修复。已有 Docker Compose 服务切换到个人仓库版本，请阅读 [GitHub 源码部署指南](docs/GITHUB_DOCKER_COMPOSE_SWITCH.md)，按固定提交构建镜像并保留原数据库和配置。
+> This fork includes custom welfare, subscription, promotion, monitoring and QQ image features. Start with the [current maintenance handoff](docs/HANDOFF.md#当前代码和发布状态), [changelog](CHANGELOG.md) and [development guide](DEV_GUIDE.md). The handoff links to the latest custom image and upgrade instructions; a published image does not establish the version running on your server.
 
 ## ⚠️ Important Notice
 
@@ -223,7 +223,7 @@ Community projects that extend or integrate with Sub2API:
 
 | Component | Technology |
 |-----------|------------|
-| Backend | Go 1.27.0, Gin, Ent |
+| Backend | Go 1.27.3, Gin, Ent |
 | Frontend | Vue 3.4+, Vite 5+, TailwindCSS |
 | Database | PostgreSQL 15+ |
 | Cache/Queue | Redis 7+ |

@@ -95,6 +95,8 @@ export function resolveCcSwitchImportConfig(
 
 export function buildCcSwitchImportDeeplink(input: CcSwitchImportDeeplinkInput): string {
   const config = resolveCcSwitchImportConfig(input.platform, input.clientType, input.baseUrl)
+  // Usage scripts append /v1/usage; keep their base separate from the inference endpoint.
+  const usageBaseUrl = input.baseUrl.trim().replace(/\/+$/, '').replace(/\/v1$/, '')
   const entries: [string, string][] = [
     ['resource', 'provider'],
     ['app', config.app],
@@ -105,6 +107,7 @@ export function buildCcSwitchImportDeeplink(input: CcSwitchImportDeeplinkInput):
     ['configFormat', 'json'],
     ['usageEnabled', 'true'],
     ['usageScript', btoa(input.usageScript)],
+    ['usageBaseUrl', usageBaseUrl],
     ['usageAutoInterval', '30']
   ]
 

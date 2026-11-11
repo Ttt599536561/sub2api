@@ -1,6 +1,6 @@
 # AI上下文卡：sub2api / qq-image
 
-核对日期：2026-10-26。先读 [跨项目路由](AI_START_HERE.md) / [机器索引](PROJECT_INDEX.json)。本卡是定位资料，不是在线状态检查。
+本仓文档核对日期：2026-10-27（外部服务状态未在本次在线核验）。先读 [跨项目路由](AI_START_HERE.md) / [机器索引](PROJECT_INDEX.json)。本卡是定位资料，不是在线状态检查。
 
 ## Identity
 
@@ -14,11 +14,11 @@
 
 | 对象 | 身份 | 接手依据 |
 | --- | --- | --- |
-| 正式应用 | https://api.tangguo.xin | [HANDOFF](HANDOFF.md) 当前部署表；操作前重新核实 |
-| QQ测试应用 | https://qq-test.tangguo.xin；远端 `/srv/sub2-qq-test` | [独立验收栈记录](changes/2026-10-23-qq-remote-acceptance.md) + HANDOFF后续更新 |
-| 发布镜像 | `ghcr.io/ttt599536561/sub2api-custom` | [r5发布记录](../deploy/CUSTOM_IMAGE_0.2.17-r5.md)，只是2026-10-25发布证据 |
+| 正式应用 | https://api.tangguo.xin | [HANDOFF 当前摘要](HANDOFF.md#当前代码和发布状态)及 [QQ 正式接管](changes/2026-10-27-qq-controls-gallery.md)；操作前重新核实 |
+| QQ测试应用 | https://qq-test.tangguo.xin；远端 `/srv/sub2-qq-test` | [HANDOFF 当前摘要](HANDOFF.md#当前代码和发布状态)；独立验收栈保留，正式接管后已记录停止收费接收 |
+| 发布镜像 | `ghcr.io/ttt599536561/sub2api-custom` | [HANDOFF 最新发布入口](HANDOFF.md#当前代码和发布状态)；版本与 digest 由对应发行记录维护 |
 
-正式/测试最后记录为同宿主机但独立应用、PG、Redis、配置和数据；“同服务器”不代表共用账户/余额。最新发布镜像与正式/测试当前运行镜像必须分开核实。不要把r5已发布写成生产已升级。
+正式/测试最后记录为同宿主机但独立应用、PG、Redis、配置和数据；“同服务器”不代表共用账户/余额。最新发布镜像与正式/测试当前运行镜像必须分开核实。镜像已发布不代表生产已升级；维护入口不固定复制发行号，避免再次漂移。
 
 ## Task → source
 
@@ -28,14 +28,16 @@
 | 生图侧QQ WebSocket、心跳、恢复 | `backend/internal/qqimage/gateway_supervisor.go`、`gateway_client.go`、`gateway.go`；HTTP入口 `backend/internal/handler/qq_image_runtime.go` |
 | QQ管理/API/媒体 | `backend/internal/server/routes/qq_image.go`；`backend/internal/handler/qq_image*.go` |
 | QQ后台配置、文案编辑 | `frontend/src/views/admin/WelfareSettingsView.vue`；`frontend/src/components/admin/QQImagePanel.vue`、`QQReplyTemplatesPanel.vue`；`frontend/src/api/qqImage.ts` |
-| 用户绑定/订单页面 | `frontend/src/views/user/QQBindView.vue`、`QQOrdersView.vue` |
+| 用户绑定/作品图库 | `frontend/src/views/user/QQBindView.vue`、`QQOrdersView.vue`；`frontend/src/components/user/QQGalleryCard.vue`、`QQGalleryDetail.vue`；`frontend/src/composables/useQQGalleryMedia.ts` |
+| QQ 独立业务开关 | `frontend/src/views/admin/SettingsView.vue`、`backend/internal/handler/admin/setting_handler.go`、`backend/internal/qqimage/business_controls.go`；实现与规则见 [QQ 开关记录](changes/2026-10-27-qq-controls-gallery.md) |
+| 福利签到/抽奖 | `backend/internal/service/welfare_service.go`、`backend/migrations/251_welfare_checkin_rules_v3.sql`、`backend/migrations/252_welfare_lottery_rules_v4.sql`；[福利规则](WELFARE_CENTER.md) |
 | 邮箱验证/换绑/SMTP | `backend/internal/service/auth_email_binding.go`；检索同目录 `SendQQImageEmailCode` / email；沿用普通账号认证 |
 | 构建/发布/迁移 | `.github/workflows/`、`deploy/`、`backend/migrations/`；先读对应release记录 |
 
 ## Cross-project contract
 
 - 当前联合模式下，CF `oneapi-observer-qq` 处理裸@、通用菜单和智商截图；Sub2处理 `/识别群 /绑定 /确认绑定 /生图帮助 /生图 /任务 /重发`。`/生图一个黑洞` 也有专门边界规则，改动时核对两侧。
-- 测试栈启用 `QQ_IMAGE_EXTERNAL_HELP=true` 时通用帮助交给CF；独立部署默认false。不要盲目向正式环境复制该开关。
+- 联合模式以 `QQ_IMAGE_EXTERNAL_HELP=true` 将通用帮助交给 CF，独立部署默认 false。2026-10-27 接管记录已确认正式站配置此开关及独立加密密钥，测试收费接收停止；后续升级保留原值与原密钥，不双开收费接收器。实际连接状态须另行只读核查。
 - CF对生图命令静默，不把收费请求代理到Go；两套独立QQ连接，一个online不代表另一个online。
 - Sub2发布回复模板，CF从固定测试站读取六类菜单/智商文案。编辑内容先查后台发布版本；更改同步契约要审两仓。
 - 用户/授权/余额/订单/生图图片属于选中的Sub2实例；当前图片保存在PostgreSQL，未启用检测站R2方案。QQ生成图片与检测站生成HTML不是同一执行器；该模块扣本实例 users.balance，不扣月卡/福利钱包。测试域名也不等于QQ平台sandbox。取消/解绑是网站能力，不杜撰 `/取消` 或 `/解绑` QQ命令。
@@ -43,7 +45,7 @@
 
 ## Read next
 
-读取 [HANDOFF](HANDOFF.md) 接手摘要、[CHANGELOG](../CHANGELOG.md) 最新条目与 [DEV_GUIDE](../DEV_GUIDE.md) 更新记录规范；只按任务追加 [统一菜单契约](changes/2026-10-23-qq-unified-menu.md)、[模板同步](changes/2026-10-24-qq-reply-templates.md)、[r5审查](changes/2026-10-25-qq-release-review.md)。历史规格中的“未合并/未部署”不能覆盖后续完成记录。索引不保存或授权使用实际凭据，不以真实QQ发送或收费生成作为常规测试。
+读取 [HANDOFF 当前摘要](HANDOFF.md#当前代码和发布状态)、[CHANGELOG](../CHANGELOG.md) 最新条目与 [DEV_GUIDE](../DEV_GUIDE.md) 更新记录规范；只按任务追加 [统一菜单契约](changes/2026-10-23-qq-unified-menu.md)、[模板同步](changes/2026-10-24-qq-reply-templates.md)、[QQ 独立开关/图库/接管](changes/2026-10-27-qq-controls-gallery.md)及当前发布记录。历史规格中的“未合并/未部署”不能覆盖后续完成记录。索引不保存或授权使用实际凭据，不以真实QQ发送或收费生成作为常规测试。
 
 ## NapCat邀请月卡（2026-11-11指引更新）
 

@@ -129,6 +129,50 @@ describe('ccswitchImport utils', () => {
     expect(params.has('model')).toBe(false)
     expect(params.has('config')).toBe(false)
   })
+
+  it.each([
+    { baseUrl: 'https://api.example.com', usageUrl: 'https://api.example.com/v1/usage' },
+    { baseUrl: 'https://api.example.com/', usageUrl: 'https://api.example.com/v1/usage' },
+    { baseUrl: 'https://api.example.com/v1', usageUrl: 'https://api.example.com/v1/usage' },
+    { baseUrl: 'https://api.example.com/v1/', usageUrl: 'https://api.example.com/v1/usage' },
+    { baseUrl: ' https://api.example.com/v1/ ', usageUrl: 'https://api.example.com/v1/usage' },
+    { baseUrl: 'https://api.example.com/relay/v1/', usageUrl: 'https://api.example.com/relay/v1/usage' }
+  ])('keeps imported usage queries on $usageUrl for base URL $baseUrl', ({ baseUrl, usageUrl }) => {
+    for (const platform of ['openai', 'anthropic', 'gemini', 'grok', 'antigravity'] as const) {
+      const usageScript = '({ request: { url: "{{baseUrl}}/v1/usage" } })'
+      const params = paramsFromDeeplink(
+        buildCcSwitchImportDeeplink({
+          ...baseInput,
+          baseUrl,
+          usageScript,
+          platform,
+          clientType: 'claude'
+        })
+      )
+
+      // CC Switch prefers usageBaseUrl, falling back to the provider endpoint.
+      // It trims trailing slashes but deliberately preserves a /v1 suffix.
+      const queryBaseUrl = (params.get('usageBaseUrl') || params.get('endpoint') || '').replace(/\/+$/, '')
+      const importedScript = atob(params.get('usageScript') || '')
+      const requestUrl = importedScript.replace('{{baseUrl}}', queryBaseUrl).match(/url: "([^"]+)"/)?.[1]
+
+      expect(requestUrl, `${platform}: ${baseUrl}`).toBe(usageUrl)
+    }
+  })
+
+  it('preserves the Codex inference endpoint when normalizing the usage query base URL', () => {
+    const params = paramsFromDeeplink(
+      buildCcSwitchImportDeeplink({
+        ...baseInput,
+        baseUrl: 'https://api.example.com/v1',
+        platform: 'openai',
+        clientType: 'claude'
+      })
+    )
+
+    expect(params.get('endpoint')).toBe('https://api.example.com/v1')
+    expect(params.get('usageBaseUrl')).toBe('https://api.example.com')
+  })
 })
 
 describe('CC Switch usage script', () => {

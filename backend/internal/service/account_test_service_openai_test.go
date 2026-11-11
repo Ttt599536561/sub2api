@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/openai"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/openai_compat"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/tlsfingerprint"
 	"github.com/gin-gonic/gin"
@@ -163,6 +164,91 @@ func TestAccountTestService_OpenAIOAuthTestNormalizesGPT56Alias(t *testing.T) {
 	body, err := io.ReadAll(upstream.requests[0].Body)
 	require.NoError(t, err)
 	require.Equal(t, "gpt-5.6-sol", gjson.GetBytes(body, "model").String())
+}
+
+// Astra support was added in Codex 0.153.1. Browser probes must not advertise
+// the pre-Astra 0.146.0 identity when sync is unavailable or still holds old data.
+func TestAccountTestService_OpenAIOAuthAstraClientVersion(t *testing.T) {
+	codexCanonicalUAMu.RLock()
+	previousResolver := codexCanonicalUAResolver
+	codexCanonicalUAMu.RUnlock()
+	previousEnforcement := codexIdentityEnforcement.Load()
+	SetCodexIdentityEnforcementEnabled(true)
+	t.Cleanup(func() {
+		SetCodexCanonicalUserAgentResolver(previousResolver)
+		SetCodexIdentityEnforcementEnabled(previousEnforcement)
+	})
+
+	for _, tt := range []struct {
+		name               string
+		settings           *codexVersionSettingRepoStub
+		wantVersion        string
+		disableEnforcement bool
+	}{
+		{name: "no resolver"},
+		{name: "sync not initialized", settings: &codexVersionSettingRepoStub{}},
+		{name: "stale synced version", settings: &codexVersionSettingRepoStub{values: map[string]string{
+			SettingKeyOpenAICodexClientVersionSynced: "0.146.0",
+		}}},
+		{name: "settings unavailable", settings: &codexVersionSettingRepoStub{err: fmt.Errorf("db unavailable")}},
+		{name: "explicit version", wantVersion: "0.155.1", settings: &codexVersionSettingRepoStub{values: map[string]string{
+			SettingKeyOpenAICodexClientVersion: "0.155.1",
+		}}},
+		{name: "explicit version with malformed panel UA", wantVersion: "0.200.1", settings: &codexVersionSettingRepoStub{values: map[string]string{
+			SettingKeyOpenAICodexClientVersion: "0.200.1",
+			SettingKeyOpenAICodexUserAgent:     "not-a-codex-client",
+		}}},
+		{name: "explicit version with browser panel UA", wantVersion: "0.200.1", settings: &codexVersionSettingRepoStub{values: map[string]string{
+			SettingKeyOpenAICodexClientVersion: "0.200.1",
+			SettingKeyOpenAICodexUserAgent:     "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+		}}},
+		{name: "explicit version with enforcement disabled", wantVersion: "0.155.1", disableEnforcement: true, settings: &codexVersionSettingRepoStub{values: map[string]string{
+			SettingKeyOpenAICodexClientVersion: "0.155.1",
+		}}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			SetCodexIdentityEnforcementEnabled(!tt.disableEnforcement)
+			SetCodexCanonicalUserAgentResolver(nil)
+			if tt.settings != nil {
+				settings := NewSettingService(tt.settings, nil)
+				SetCodexCanonicalUserAgentResolver(func() string {
+					return settings.GetOpenAICodexCanonicalUserAgent(context.Background())
+				})
+			}
+			ctx, recorder := newTestContext()
+			upstream := &queuedHTTPUpstream{responses: []*http.Response{
+				newJSONResponse(http.StatusOK, "data: {\"type\":\"response.completed\"}\n\n"),
+			}}
+			svc := &AccountTestService{httpUpstream: upstream}
+			account := &Account{
+				ID: 90, Platform: PlatformOpenAI, Type: AccountTypeOAuth, Concurrency: 1,
+				Credentials: map[string]any{"access_token": "test-token"},
+			}
+
+			require.NoError(t, svc.testOpenAIAccountConnection(ctx, account, "gpt-6-astra", "", ""))
+			require.Len(t, upstream.requests, 1)
+			req := upstream.requests[0]
+			require.Equal(t, chatgptCodexAPIURL, req.URL.String())
+			version := req.Header.Get("Version")
+			clientVersion := openai.CodexUserAgentVersion(req.UserAgent())
+			if tt.wantVersion != "" {
+				require.Equal(t, tt.wantVersion, clientVersion)
+			}
+			require.GreaterOrEqual(t, CompareVersions(clientVersion, "0.153.1"), 0,
+				"Astra probe must advertise a Codex release with Astra support; got %q", clientVersion)
+			if tt.disableEnforcement {
+				// The fallback preserves a valid UA and does not fill an absent version header.
+				require.Empty(t, version)
+			} else {
+				require.Equal(t, clientVersion, version)
+			}
+			require.Equal(t, openai.CodexDefaultOriginator, req.Header.Get("Originator"))
+			body, err := io.ReadAll(req.Body)
+			require.NoError(t, err)
+			require.Equal(t, "gpt-6-astra", gjson.GetBytes(body, "model").String())
+			require.Contains(t, recorder.Body.String(), `"success":true`)
+		})
+	}
 }
 
 func TestAccountTestService_OpenAIShadowUsesParentCredentialsAndShadowModel(t *testing.T) {
