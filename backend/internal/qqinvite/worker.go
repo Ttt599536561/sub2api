@@ -85,6 +85,7 @@ func (r *Runtime) ProcessOnce(ctx context.Context) error {
 	lease := token()
 	var w workRecord
 	var snapshot []byte
+	// Drain legacy pending_level records under the current level-free policy.
 	e = r.store.scanWrite(ctx, `UPDATE qq_invite_records SET lease_token=$1,lease_until=now()+interval '60 seconds' WHERE id=(SELECT id FROM qq_invite_records WHERE status IN ('received','pending_level','queued_inventory') AND next_attempt_at<=now() AND (lease_until IS NULL OR lease_until<now()) ORDER BY id FOR UPDATE SKIP LOCKED LIMIT 1) RETURNING id,campaign_id,self_id,group_id,invitee_qq,inviter_qq,status,snapshot`, []any{lease}, &w.id, &w.campaignID, &w.self, &w.group, &w.invitee, &w.inviter, &w.status, &snapshot)
 	if errors.Is(e, sql.ErrNoRows) {
 		return nil
@@ -97,31 +98,28 @@ func (r *Runtime) ProcessOnce(ctx context.Context) error {
 		return e
 	}
 	if cfg.BotQQ != w.self {
-		return r.finishPending(ctx, w, "pending_level", "bot_account_mismatch", nil)
+		return r.finishPending(ctx, w, "received", "bot_account_mismatch")
 	}
 	if w.inviter == "" {
-		return r.finishPending(ctx, w, "pending_attribution", "inviter_not_verified", nil)
+		return r.finishPending(ctx, w, "pending_attribution", "inviter_not_verified")
 	}
 	bot, e := r.factory(cfg)
 	if e != nil {
-		return r.finishPending(ctx, w, "pending_level", "bot_unavailable", nil)
+		return r.finishPending(ctx, w, "received", "bot_unavailable")
 	}
-	level, e := bot.GetLevel(ctx, w.invitee)
-	if e != nil || level < 0 {
-		return r.finishPending(ctx, w, "pending_level", "qq_level_unavailable", nil)
+	// Account identity remains required; the invitee's QQ level is never queried.
+	if e = bot.CheckAccount(ctx); e != nil {
+		return r.finishPending(ctx, w, "received", "bot_unavailable")
 	}
-	if level <= 10 {
-		return r.finishPending(ctx, w, "ineligible", "qq_level_must_exceed_10", &level)
-	}
-	return r.allocate(ctx, w, level)
+	return r.allocate(ctx, w)
 }
-func (r *Runtime) finishPending(ctx context.Context, w workRecord, status, reason string, level *int) error {
+func (r *Runtime) finishPending(ctx context.Context, w workRecord, status, reason string) error {
 	tx, e := r.store.beginWrite(ctx)
 	if e != nil {
 		return e
 	}
 	defer func() { _ = tx.Rollback() }()
-	res, e := tx.ExecContext(ctx, `UPDATE qq_invite_records SET status=$3,reason=$4,qq_level=COALESCE($5,qq_level),lease_token=NULL,lease_until=NULL,next_attempt_at=now()+interval '60 seconds',updated_at=now() WHERE id=$1 AND lease_token=$2`, w.id, w.lease, status, reason, level)
+	res, e := tx.ExecContext(ctx, `UPDATE qq_invite_records SET status=$3,reason=$4,lease_token=NULL,lease_until=NULL,next_attempt_at=now()+interval '60 seconds',updated_at=now() WHERE id=$1 AND lease_token=$2`, w.id, w.lease, status, reason)
 	if e != nil {
 		return e
 	}
@@ -129,14 +127,14 @@ func (r *Runtime) finishPending(ctx context.Context, w workRecord, status, reaso
 	if n == 0 {
 		return tx.Commit()
 	}
-	if (status == "pending_attribution" || status == "pending_level" || status == "queued_inventory") && w.campaign.PendingTemplate != "" {
+	if (status == "pending_attribution" || status == "received" || status == "queued_inventory") && w.campaign.PendingTemplate != "" {
 		if e = enqueue(ctx, tx, w.id, "pending_notice", w.group, w.invitee, w.campaign.PendingTemplate); e != nil {
 			return e
 		}
 	}
 	return tx.Commit()
 }
-func (r *Runtime) allocate(ctx context.Context, w workRecord, level int) error {
+func (r *Runtime) allocate(ctx context.Context, w workRecord) error {
 	tx, e := r.store.beginWrite(ctx)
 	if e != nil {
 		return e
@@ -152,7 +150,7 @@ func (r *Runtime) allocate(ctx context.Context, w workRecord, level int) error {
 	if _, e = subscriptionName(ctx, tx, w.campaign.SubscriptionGroupID); e != nil {
 		if errors.Is(e, ErrInvalid) {
 			_ = tx.Rollback()
-			return r.finishPending(ctx, w, "queued_inventory", "subscription_unavailable", &level)
+			return r.finishPending(ctx, w, "queued_inventory", "subscription_unavailable")
 		}
 		return e
 	}
@@ -160,7 +158,7 @@ func (r *Runtime) allocate(ctx context.Context, w workRecord, level int) error {
 	e = tx.QueryRowContext(ctx, `SELECT p.id FROM qq_invite_code_pool p JOIN redeem_codes c ON c.id=p.redeem_code_id WHERE p.campaign_id=$1 AND p.record_id IS NULL AND c.status='unused' AND c.type='subscription' AND c.group_id=$2 AND c.validity_days=30 AND (c.expires_at IS NULL OR c.expires_at>now()) ORDER BY p.id FOR UPDATE OF p,c SKIP LOCKED LIMIT 1`, w.campaignID, w.campaign.SubscriptionGroupID).Scan(&poolID)
 	if errors.Is(e, sql.ErrNoRows) {
 		_ = tx.Rollback()
-		return r.finishPending(ctx, w, "queued_inventory", "monthly_card_stock_empty", &level)
+		return r.finishPending(ctx, w, "queued_inventory", "monthly_card_stock_empty")
 	}
 	if e != nil {
 		return e
@@ -171,7 +169,7 @@ func (r *Runtime) allocate(ctx context.Context, w workRecord, level int) error {
 	if _, e = tx.ExecContext(ctx, `INSERT INTO qq_invite_rewards(record_id,pool_id) VALUES($1,$2)`, w.id, poolID); e != nil {
 		return e
 	}
-	if _, e = tx.ExecContext(ctx, `UPDATE qq_invite_records SET status='awarded',reason='',qq_level=$2,lease_token=NULL,lease_until=NULL,updated_at=now() WHERE id=$1`, w.id, level); e != nil {
+	if _, e = tx.ExecContext(ctx, `UPDATE qq_invite_records SET status='awarded',reason='',lease_token=NULL,lease_until=NULL,updated_at=now() WHERE id=$1`, w.id); e != nil {
 		return e
 	}
 	if _, e = tx.ExecContext(ctx, `UPDATE qq_invite_outbox SET status='cancelled' WHERE record_id=$1 AND kind='pending_notice' AND status IN ('pending','failed','unknown')`, w.id); e != nil {
@@ -188,7 +186,12 @@ func (r *Runtime) allocate(ctx context.Context, w workRecord, level int) error {
 	return tx.Commit()
 }
 func renderTemplate(template string, w workRecord, level int, code, baseURL string) string {
-	return strings.NewReplacer("{invitee}", w.invitee, "{inviter}", w.inviter, "{level}", fmt.Sprint(level), "{code}", code, "{url}", strings.TrimRight(baseURL, "/")+"/redeem", "{plan_name}", w.campaign.PlanName).Replace(template)
+	// Keep old templates and recorded levels readable without inventing a level.
+	levelText := "未采集"
+	if level > 0 {
+		levelText = fmt.Sprint(level)
+	}
+	return strings.NewReplacer("{invitee}", w.invitee, "{inviter}", w.inviter, "{level}", levelText, "{code}", code, "{url}", strings.TrimRight(baseURL, "/")+"/redeem", "{plan_name}", w.campaign.PlanName).Replace(template)
 }
 func (r *Runtime) DeliverOnce(ctx context.Context) error {
 	cfg, e := r.store.RuntimeConfig(ctx)

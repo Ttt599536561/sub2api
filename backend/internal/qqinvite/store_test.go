@@ -96,7 +96,7 @@ func TestConcurrentCrossGroupAndLastCode(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			r := NewRuntime(s, func(Config) (Bot, error) { return &fakeBot{level: 11}, nil })
+			r := NewRuntime(s, func(Config) (Bot, error) { return &fakeBot{}, nil })
 			errs <- r.ProcessOnce(ctx)
 		}()
 	}
@@ -116,7 +116,7 @@ func TestConcurrentCrossGroupAndLastCode(t *testing.T) {
 	if _, e := s.GenerateCodes(ctx, c.ID, 1, 1); e != nil {
 		t.Fatal(e)
 	}
-	r := NewRuntime(s, func(Config) (Bot, error) { return &fakeBot{level: 11}, nil })
+	r := NewRuntime(s, func(Config) (Bot, error) { return &fakeBot{}, nil })
 	if e := r.ProcessOnce(ctx); e != nil {
 		t.Fatal(e)
 	}
@@ -134,7 +134,7 @@ func TestUnknownDeliveryAndRestartKeepOriginalCode(t *testing.T) {
 	if _, e := s.GenerateCodes(ctx, c.ID, 2, 1); e != nil {
 		t.Fatal(e)
 	}
-	b := &fakeBot{level: 11, privateErr: ErrDeliveryUnknown}
+	b := &fakeBot{privateErr: ErrDeliveryUnknown}
 	r := NewRuntime(s, func(Config) (Bot, error) { return b, nil })
 	if e := s.AcceptEvent(ctx, Event{SelfID: "123456", GroupID: "100", UserID: "33333", OperatorID: "44444", SubType: "invite", Kind: "group_increase", Time: time.Now().Unix()}); e != nil {
 		t.Fatal(e)
@@ -206,7 +206,7 @@ func TestAllocationRollbackHasNoLostCode(t *testing.T) {
 	if _, e := s.GenerateCodes(ctx, c.ID, 1, 1); e != nil {
 		t.Fatal(e)
 	}
-	r := NewRuntime(s, func(Config) (Bot, error) { return &fakeBot{level: 11}, nil })
+	r := NewRuntime(s, func(Config) (Bot, error) { return &fakeBot{}, nil })
 	must(t, s.AcceptEvent(ctx, Event{SelfID: "123456", GroupID: "100", UserID: "33333", OperatorID: "44444", SubType: "invite", Kind: "group_increase", Time: time.Now().Unix()}))
 	_, e := s.db.Exec(`CREATE FUNCTION fail_outbox() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.kind='private' THEN RAISE EXCEPTION 'test fault'; END IF; RETURN NEW; END $$; CREATE TRIGGER test_fault BEFORE INSERT ON qq_invite_outbox FOR EACH ROW EXECUTE FUNCTION fail_outbox()`)
 	if e != nil {
@@ -271,7 +271,7 @@ func TestPendingNoticeCancelledWhenAwarded(t *testing.T) {
 		t.Fatal(e)
 	}
 	configure(t, s)
-	r := NewRuntime(s, func(Config) (Bot, error) { return &fakeBot{level: 11}, nil })
+	r := NewRuntime(s, func(Config) (Bot, error) { return &fakeBot{}, nil })
 	must(t, s.AcceptEvent(ctx, Event{SelfID: "123456", GroupID: "100", UserID: "33333", OperatorID: "44444", SubType: "approve", Kind: "group_increase", Time: time.Now().Unix()}))
 	must(t, r.ProcessOnce(ctx))
 	records, e := s.ListRecords(ctx, c.ID, "", 1, 20)
@@ -309,7 +309,7 @@ func TestExpiringInventoryAndExpiredDelivery(t *testing.T) {
 		t.Fatal(e)
 	}
 	must(t, s.AcceptEvent(ctx, Event{SelfID: "123456", GroupID: "100", UserID: "33333", OperatorID: "44444", SubType: "invite", Kind: "group_increase", Time: time.Now().Unix()}))
-	b := &fakeBot{level: 11}
+	b := &fakeBot{}
 	r := NewRuntime(s, func(Config) (Bot, error) { return b, nil })
 	if e = r.ProcessOnce(ctx); e != nil {
 		t.Fatal(e)
@@ -356,20 +356,20 @@ func TestPausedCampaignLateEvidenceUsesOriginalVersion(t *testing.T) {
 	if e := s.AcceptEvent(ctx, ev); e != nil {
 		t.Fatal(e)
 	}
-	b := &fakeBot{level: 11, levelErr: errors.New("network failure")}
+	b := &fakeBot{accountErr: errors.New("network failure")}
 	r := NewRuntime(s, func(Config) (Bot, error) { return b, nil })
 	if e := r.ProcessOnce(ctx); e != nil {
 		t.Fatal(e)
 	}
 	records, e := s.ListRecords(ctx, c.ID, "", 1, 20)
-	if e != nil || len(records.Items) != 1 || records.Items[0].Status != "pending_level" {
+	if e != nil || len(records.Items) != 1 || records.Items[0].Status != "received" || records.Items[0].Reason != "bot_unavailable" || records.Items[0].QQLevel != nil || records.Items[0].RewardID != nil {
 		t.Fatalf("records=%+v %v", records, e)
 	}
 	var template string
 	if e = s.db.QueryRow(`SELECT template FROM qq_invite_outbox WHERE kind='welcome'`).Scan(&template); e != nil || template != "Welcome {invitee}" {
 		t.Fatalf("template=%q %v", template, e)
 	}
-	b.levelErr = nil
+	b.accountErr = nil
 	if _, e = s.GenerateCodes(ctx, c.ID, 1, 1); e != nil {
 		t.Fatal(e)
 	}
@@ -393,7 +393,7 @@ func TestRejoinDoesNotWelcomeOrAwardAgain(t *testing.T) {
 	if _, e := s.GenerateCodes(ctx, c.ID, 2, 1); e != nil {
 		t.Fatal(e)
 	}
-	r := NewRuntime(s, func(Config) (Bot, error) { return &fakeBot{level: 11}, nil })
+	r := NewRuntime(s, func(Config) (Bot, error) { return &fakeBot{}, nil })
 	ev := Event{SelfID: "123456", GroupID: "100", UserID: "33333", OperatorID: "44444", SubType: "invite", Kind: "group_increase", Time: time.Now().Unix()}
 	if e := s.AcceptEvent(ctx, ev); e != nil {
 		t.Fatal(e)
@@ -508,7 +508,7 @@ func TestPlanNameSnapshotAndDisabledSubscriptionStock(t *testing.T) {
 	if e := s.AcceptEvent(ctx, Event{SelfID: "123456", GroupID: "100", UserID: "33333", OperatorID: "44444", SubType: "invite", Kind: "group_increase", Time: time.Now().Unix()}); e != nil {
 		t.Fatal(e)
 	}
-	r := NewRuntime(s, func(Config) (Bot, error) { return &fakeBot{level: 11}, nil })
+	r := NewRuntime(s, func(Config) (Bot, error) { return &fakeBot{}, nil })
 	if e := r.ProcessOnce(ctx); e != nil {
 		t.Fatal(e)
 	}
@@ -526,7 +526,7 @@ func TestPrivateFailureQueuesClaimNoticeAndRetryLimit(t *testing.T) {
 	if _, e := s.GenerateCodes(ctx, c.ID, 1, 1); e != nil {
 		t.Fatal(e)
 	}
-	b := &fakeBot{level: 11, privateErr: errors.New("explicit send rejection")}
+	b := &fakeBot{privateErr: errors.New("explicit send rejection")}
 	r := NewRuntime(s, func(Config) (Bot, error) { return b, nil })
 	if e := s.AcceptEvent(ctx, Event{SelfID: "123456", GroupID: "100", UserID: "33333", OperatorID: "44444", SubType: "invite", Kind: "group_increase", Time: time.Now().Unix()}); e != nil {
 		t.Fatal(e)
@@ -589,7 +589,7 @@ func TestUnknownOutcomeNeverAutomaticallyResends(t *testing.T) {
 	if _, e := s.GenerateCodes(ctx, c.ID, 1, 1); e != nil {
 		t.Fatal(e)
 	}
-	b := &fakeBot{level: 11, privateErr: ErrDeliveryUnknown}
+	b := &fakeBot{privateErr: ErrDeliveryUnknown}
 	r := NewRuntime(s, func(Config) (Bot, error) { return b, nil })
 	must(t, s.AcceptEvent(ctx, Event{SelfID: "123456", GroupID: "100", UserID: "33333", OperatorID: "44444", SubType: "invite", Kind: "group_increase", Time: time.Now().Unix()}))
 	must(t, r.ProcessOnce(ctx))
@@ -630,7 +630,7 @@ func TestOwnBotJoinAndBaselineMembership(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	r := NewRuntime(s, func(Config) (Bot, error) { return &fakeBot{level: 11}, nil })
+	r := NewRuntime(s, func(Config) (Bot, error) { return &fakeBot{}, nil })
 	if e = r.SyncBaseline(ctx, c.ID, 1); !errors.Is(e, ErrInvalid) {
 		t.Fatalf("baseline without bot membership accepted: %v", e)
 	}
@@ -640,6 +640,11 @@ func TestTemplateAndRedeemOriginValidation(t *testing.T) {
 	c := Campaign{PrivateTemplate: "{code} {url}"}
 	if got := renderTemplate("{url}", workRecord{campaign: c}, 0, "", "https://sub.example.com/"); got != "https://sub.example.com/redeem" {
 		t.Fatalf("redemption URL=%s", got)
+	}
+	for level, want := range map[int]string{0: "未采集", 10: "10"} {
+		if got := renderTemplate("{level}", workRecord{campaign: c}, level, "", ""); got != want {
+			t.Fatalf("level %d rendered as %q, want %q", level, got, want)
+		}
 	}
 	for _, v := range []string{"{unknown}", "{{code}}", "unbalanced{", "{code}"} {
 		if checkTemplate(v, false) {
@@ -696,7 +701,7 @@ func TestPrivateClaimImmediatelyResumesOwnOriginalCode(t *testing.T) {
 	if _, e := s.GenerateCodes(ctx, c.ID, 1, 1); e != nil {
 		t.Fatal(e)
 	}
-	b := &fakeBot{level: 11, privateErr: ErrDeliveryUnknown}
+	b := &fakeBot{privateErr: ErrDeliveryUnknown}
 	r := NewRuntime(s, func(Config) (Bot, error) { return b, nil })
 	must(t, s.AcceptEvent(ctx, Event{SelfID: "123456", GroupID: "100", UserID: "33333", OperatorID: "44444", SubType: "invite", Kind: "group_increase", Time: time.Now().Unix()}))
 	must(t, r.ProcessOnce(ctx))
@@ -793,7 +798,7 @@ func TestInventoryGuardsAndAtomicAllocation(t *testing.T) {
 	if _, e := s.db.Exec("DELETE FROM redeem_codes"); e == nil {
 		t.Fatal("pool code deletable")
 	}
-	bot := &fakeBot{level: 11}
+	bot := &fakeBot{}
 	r := NewRuntime(s, func(Config) (Bot, error) { return bot, nil })
 	configure(t, s)
 	for _, g := range []string{"100", "200"} {
@@ -811,20 +816,27 @@ func TestInventoryGuardsAndAtomicAllocation(t *testing.T) {
 	if e := s.db.QueryRow("SELECT count(*) FROM qq_invite_rewards").Scan(&n); e != nil || n != 1 {
 		t.Fatalf("rewards=%d err=%v", n, e)
 	}
+	var level sql.NullInt64
+	must(t, s.db.QueryRow("SELECT qq_level FROM qq_invite_records").Scan(&level))
+	if level.Valid {
+		t.Fatalf("new reward recorded a QQ level: %d", level.Int64)
+	}
 	if _, e := s.db.Exec("UPDATE redeem_codes SET status='used',used_by=2,used_at=now()"); e != nil {
 		t.Fatalf("allocated redemption rejected: %v", e)
 	}
 }
 
 type fakeBot struct {
-	level      int
-	levelErr   error
+	accountErr error
 	privateErr error
 	private    []string
 	groups     []string
 }
 
-func (b *fakeBot) GetLevel(context.Context, string) (int, error) { return b.level, b.levelErr }
+func (b *fakeBot) CheckAccount(context.Context) error { return b.accountErr }
+func (b *fakeBot) GetLevel(context.Context, string) (int, error) {
+	panic("invitation rewards must not query QQ level")
+}
 func (b *fakeBot) GroupMembers(context.Context, string) ([]string, error) {
 	return []string{"99999"}, nil
 }
@@ -844,12 +856,12 @@ func configure(t *testing.T, s *Store) {
 	}
 }
 
-func TestUnknownAttributionLowLevelBaselineAndStockQueue(t *testing.T) {
+func TestUnknownAttributionBaselineAndStockQueue(t *testing.T) {
 	s := testStore(t)
 	ctx := context.Background()
 	c := campaignFixture(t, s)
 	configure(t, s)
-	b := &fakeBot{level: 10}
+	b := &fakeBot{}
 	r := NewRuntime(s, func(Config) (Bot, error) { return b, nil })
 	for _, ev := range []Event{{UserID: "11111", OperatorID: "44444", SubType: "approve"}, {UserID: "22222", OperatorID: "44444", SubType: "invite"}, {UserID: "99999", OperatorID: "44444", SubType: "invite"}} {
 		ev.Kind = "group_increase"
@@ -871,17 +883,19 @@ func TestUnknownAttributionLowLevelBaselineAndStockQueue(t *testing.T) {
 	var reviewID int64
 	for _, v := range rows.Items {
 		states[v.InviteeQQ] = v.Status
+		if v.QQLevel != nil {
+			t.Fatalf("new invitation recorded a QQ level: %+v", v)
+		}
 		if v.InviteeQQ == "11111" {
 			reviewID = v.ID
 		}
 	}
-	if states["11111"] != "pending_attribution" || states["22222"] != "ineligible" || states["99999"] != "baseline" {
+	if states["11111"] != "pending_attribution" || states["22222"] != "queued_inventory" || states["99999"] != "baseline" {
 		t.Fatalf("states=%v", states)
 	}
 	if e := s.ReviewRecord(ctx, reviewID, "44444", "Verified invitation with group administrator", 1); e != nil {
 		t.Fatal(e)
 	}
-	b.level = 11
 	if e := r.ProcessOnce(ctx); e != nil {
 		t.Fatal(e)
 	}
@@ -895,5 +909,56 @@ func TestUnknownAttributionLowLevelBaselineAndStockQueue(t *testing.T) {
 	must(t, s.db.QueryRow("SELECT count(*) FROM qq_invite_rewards").Scan(&n))
 	if n != 1 {
 		t.Fatalf("queued reward not filled %d", n)
+	}
+}
+
+func TestLegacyLevelRecordsFollowCurrentPolicy(t *testing.T) {
+	for _, tc := range []struct {
+		status string
+		level  int
+		reason string
+	}{
+		{status: "pending_level", reason: "qq_level_unavailable"},
+		{status: "ineligible", level: 10, reason: "qq_level_must_exceed_10"},
+	} {
+		t.Run(tc.status, func(t *testing.T) {
+			s := testStore(t)
+			ctx := context.Background()
+			c := campaignFixture(t, s)
+			configure(t, s)
+			if _, e := s.GenerateCodes(ctx, c.ID, 1, 1); e != nil {
+				t.Fatal(e)
+			}
+			must(t, s.AcceptEvent(ctx, Event{SelfID: "123456", GroupID: "100", UserID: "33333", OperatorID: "44444", SubType: "invite", Kind: "group_increase", Time: time.Now().Unix()}))
+			var id int64
+			must(t, s.db.QueryRow(`UPDATE qq_invite_records SET status=$1,qq_level=NULLIF($2,0),reason=$3 RETURNING id`, tc.status, tc.level, tc.reason).Scan(&id))
+			r := NewRuntime(s, func(Config) (Bot, error) { return &fakeBot{}, nil })
+			must(t, r.ProcessOnce(ctx))
+			if tc.status == "ineligible" {
+				records, e := s.ListRecords(ctx, c.ID, "", 1, 20)
+				if e != nil || len(records.Items) != 1 || records.Items[0].Status != "ineligible" || records.Items[0].RewardID != nil {
+					t.Fatalf("legacy rejection changed without explicit recheck: %+v %v", records, e)
+				}
+				must(t, s.RecheckRecord(ctx, id, 1))
+				must(t, r.ProcessOnce(ctx))
+			}
+			records, e := s.ListRecords(ctx, c.ID, "", 1, 20)
+			if e != nil || len(records.Items) != 1 || records.Items[0].Status != "awarded" || records.Items[0].RewardID == nil {
+				t.Fatalf("legacy record not awarded under current policy: %+v %v", records, e)
+			}
+			level := records.Items[0].QQLevel
+			if (tc.level == 0 && level != nil) || (tc.level != 0 && (level == nil || *level != tc.level)) {
+				t.Fatalf("legacy recorded level changed: %+v", records.Items[0])
+			}
+			if e := s.RecheckRecord(ctx, id, 1); !errors.Is(e, ErrConflict) {
+				t.Fatalf("awarded record can be rechecked: %v", e)
+			}
+			must(t, r.ProcessOnce(ctx))
+			var rewards int
+			must(t, s.db.QueryRow(`SELECT count(*) FROM qq_invite_rewards`).Scan(&rewards))
+			if rewards != 1 {
+				t.Fatalf("legacy record awarded %d times", rewards)
+			}
+		})
 	}
 }

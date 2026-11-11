@@ -109,7 +109,7 @@ type CodePreview struct {
 	Items        []CodePreviewItem `json:"items"`
 }
 type Bot interface {
-	GetLevel(context.Context, string) (int, error)
+	CheckAccount(context.Context) error
 	GroupMembers(context.Context, string) ([]string, error)
 	SendGroup(context.Context, string, string, string) (string, error)
 	SendPrivate(context.Context, string, string) (string, error)

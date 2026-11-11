@@ -19,7 +19,7 @@ export type InviteCampaignInput = Omit<InviteCampaign, 'id' | 'baseline_ready' |
 export interface InviteCode { id: InviteID; campaign_id: InviteID; code_hint: string; state: string; record_id?: InviteID; created_at: string }
 export interface InviteCodePreview { valid_count: number; invalid_count: number; items: { index: number; valid: boolean; reason: string; code_hint: string }[] }
 export interface InviteRecord {
-  id: InviteID; campaign_id: InviteID; group_id: string; invitee_qq: string; inviter_qq: string; qq_level?: number
+  id: InviteID; campaign_id: InviteID; group_id: string; invitee_qq: string; inviter_qq: string; qq_level?: number | null
   status: string; reason: string; reward_id?: InviteID; code_hint?: string; private_status?: string; group_status?: string; created_at: string
 }
 export interface InvitePage<T> { items: T[]; total: number }

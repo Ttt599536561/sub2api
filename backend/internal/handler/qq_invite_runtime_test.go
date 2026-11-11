@@ -17,7 +17,6 @@ type inviteBotStub struct {
 }
 
 func (s *inviteBotStub) Status(context.Context) (napcat.Status, error) { return s.state, nil }
-func (s *inviteBotStub) GetLevel(context.Context, string) (int, error) { return 11, nil }
 func (s *inviteBotStub) GroupMembers(context.Context, string) ([]string, error) {
 	return []string{"123"}, nil
 }
@@ -35,7 +34,7 @@ func TestQQInviteBotCannotSendFromDifferentLoggedInAccount(t *testing.T) {
 	_, err := b.SendPrivate(context.Background(), "88888", "code")
 	require.ErrorIs(t, err, napcat.ErrOffline)
 	require.Zero(t, s.sent)
-	_, err = b.GetLevel(context.Background(), "88888")
+	err = b.CheckAccount(context.Background())
 	require.ErrorIs(t, err, napcat.ErrOffline)
 	s.state = napcat.Status{Online: false, QQ: "12345"}
 	_, err = b.SendGroup(context.Background(), "77777", "hello", "88888")

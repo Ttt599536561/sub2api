@@ -18,7 +18,6 @@ import (
 
 type qqInviteBotClient interface {
 	Status(context.Context) (napcat.Status, error)
-	GetLevel(context.Context, string) (int, error)
 	GroupMembers(context.Context, string) ([]string, error)
 	SendGroup(context.Context, string, string, string) (string, error)
 	SendPrivate(context.Context, string, string) (string, error)
@@ -38,11 +37,8 @@ func (b qqInviteBotAdapter) check(ctx context.Context) error {
 	}
 	return nil
 }
-func (b qqInviteBotAdapter) GetLevel(ctx context.Context, qq string) (int, error) {
-	if err := b.check(ctx); err != nil {
-		return 0, err
-	}
-	return b.client.GetLevel(ctx, qq)
+func (b qqInviteBotAdapter) CheckAccount(ctx context.Context) error {
+	return b.check(ctx)
 }
 func (b qqInviteBotAdapter) GroupMembers(ctx context.Context, group string) ([]string, error) {
 	if err := b.check(ctx); err != nil {

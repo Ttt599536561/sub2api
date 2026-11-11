@@ -415,8 +415,8 @@ func (c *Client) GetLevel(ctx context.Context, qq string) (int, error) {
 		return 0, err
 	}
 	var level int
-	// NapCat can expose missing native level as zero. It is not evidence that
-	// the account has a known level, and must never satisfy reward eligibility.
+	// NapCat can expose missing native level as zero; do not report that as
+	// a known account level. Invitation rewards do not use this information.
 	if len(data.Level) == 0 || json.Unmarshal(data.Level, &level) != nil || level <= 0 || level > 1000 {
 		return 0, ErrUnknownLevel
 	}
