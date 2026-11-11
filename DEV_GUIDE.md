@@ -82,13 +82,13 @@ Docker 构建和容器测试使用独立存储，`TEMP`、`GOCACHE` 等变量不
 
 ### 开发工具
 
-工具链核对日期：2026-10-27；以下按源码配置记录，不代表本机已经安装或本轮执行过构建。
+工具链核对日期：2026-11-11；以下按源码配置记录，不代表本机已经安装或本轮执行过构建。
 
 | 工具 | 当前配置依据 |
 | --- | --- |
 | Go | `backend/go.mod` 为 **1.27.3**；三个 Dockerfile 的 Go 镜像均为 `1.27.3-alpine` |
 | golangci-lint | `backend-ci.yml` 固定 **v2.14.0** |
-| Node.js | `backend-ci.yml`、`security-scan.yml`、`release.yml` 为 **20**；根目录及 `deploy/Dockerfile` 默认 **24-alpine**，两者不是同一配置 |
+| Node.js | `backend-ci.yml`、`security-scan.yml`、`release.yml` 为 **24**；根目录及 `deploy/Dockerfile` 默认 **24-alpine** |
 | pnpm | 上述 CI 使用 **9**，两个前端 Docker 构建固定 **9.15.9**；`frontend/pnpm-lock.yaml` 的 `lockfileVersion` 为 **9.0**，`package.json` 未设置 `packageManager` 或 `engines` |
 
 安装或切换工具前先加载环境，复用 E 盘缓存。下面的显式 pnpm 调用可避免默认 shim 版本漂移；不要用全局 npm 安装替代项目约定：
@@ -108,7 +108,7 @@ corepack pnpm@9.15.9 --version
 
 | Workflow | 触发条件 | 检查内容 |
 |----------|----------|----------|
-| **backend-ci.yml** | push, pull_request | 部署脚本检查、Go 单元/集成测试（含独立 QQ PostgreSQL）、前端 lint/类型/关键 Vitest、golangci-lint v2.14.0、发布辅助脚本测试 |
+| **backend-ci.yml** | push, pull_request | 部署脚本检查、Go 单元/集成测试（含独立 QQ PostgreSQL）、前端 lint/类型/全量 Vitest、golangci-lint v2.14.0、发布辅助脚本测试 |
 | **security-scan.yml** | push, pull_request, 每周一 03:00 UTC | govulncheck + pnpm 生产依赖审计及豁免校验；当前没有独立 gosec 步骤 |
 | **release.yml** | tag `v*`、workflow_dispatch | 构建/验证/发布；手动支持 `dry_run` 与 `simple_release`，PR 不触发 |
 | **publish-custom-*.yml** | workflow_dispatch | 各版本独立发布配置；从交接页定位对应文件，核对固定源码和精确 SHA 的 CI/安全门禁，再构建及验证 Linux 镜像；不代表服务器已升级 |
