@@ -53,7 +53,7 @@ jobs:
           cache-dependency-path: backend/go.sum
       - name: Verify Go version
         run: |
-          go version | grep -q 'go1.27.3'
+          go version | grep -q 'go1.27.4'
       - name: NapCat migration compatibility on PostgreSQL 18
         working-directory: backend
         run: go test -tags=unit ./internal/repository -run 'Test(UpstreamV0220Migration|QQInviteMigration)' -count=1
@@ -122,7 +122,7 @@ jobs:
           cache-dependency-path: backend/go.sum
       - name: Verify Go version
         run: |
-          go version | grep -q 'go1.27.3'
+          go version | grep -q 'go1.27.4'
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v9
         with:

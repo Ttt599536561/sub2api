@@ -86,7 +86,7 @@ Docker 构建和容器测试使用独立存储，`TEMP`、`GOCACHE` 等变量不
 
 | 工具 | 当前配置依据 |
 | --- | --- |
-| Go | `backend/go.mod` 为 **1.27.3**；三个 Dockerfile 的 Go 镜像均为 `1.27.3-alpine` |
+| Go | `backend/go.mod` 为 **1.27.4**；三个 Dockerfile 的 Go 镜像均为 `1.27.4-alpine` |
 | golangci-lint | `backend-ci.yml` 固定 **v2.14.0** |
 | Node.js | `backend-ci.yml`、`security-scan.yml`、`release.yml` 为 **24**；根目录及 `deploy/Dockerfile` 默认 **24-alpine** |
 | pnpm | 上述 CI 使用 **9**，两个前端 Docker 构建固定 **9.15.9**；`frontend/pnpm-lock.yaml` 的 `lockfileVersion` 为 **9.0**，`package.json` 未设置 `packageManager` 或 `engines` |
@@ -117,7 +117,7 @@ corepack pnpm@9.15.9 --version
 
 ### CI 要求
 
-- Go 当前基线为 **1.27.3**。常规 CI/安全/发布通过 `go-version-file: backend/go.mod` 取版本，并在相应步骤断言 `go1.27.3`。升级时同步检查这些断言、三个 Dockerfile 的 Go 构建镜像，以及待发布 `publish-custom-*.yml` 中单独固定的 `go-version`；历史发布配置只作为当时来源记录，不批量改写。
+- Go 当前基线为 **1.27.4**。常规 CI/安全/发布通过 `go-version-file: backend/go.mod` 取版本，并在相应步骤断言 `go1.27.4`。升级时同步检查这些断言、三个 Dockerfile 的 Go 构建镜像，以及待发布 `publish-custom-*.yml` 中单独固定的 `go-version`；历史发布配置只作为当时来源记录，不批量改写。
 - 前端使用 `pnpm install --frozen-lockfile`，依赖变更必须同步 `package.json` 与 `pnpm-lock.yaml`。`pnpm build` 依次执行 i18n 完整性检查、`vue-tsc -b`、Vite；`pnpm lint:check` 只读检查，`pnpm lint` 会自动修复文件。
 - 根目录 `make test-frontend` 执行 `lint:check`、`typecheck` 和 `FRONTEND_CRITICAL_VITEST` 清单，不是完整前端测试。完整套件使用 `pnpm test:run`；记录验证时区分两者。
 
