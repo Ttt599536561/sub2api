@@ -14,8 +14,28 @@
 
 先检查调用链、数据约束与部署身份，修改后进行独立代码审查，修复审查问题，再编译部署包。按用户要求不执行单元/集成/真实QQ或兑换测试；已有测试代码同步契约但不宣称执行通过。部署所需编译和只读健康核对单独记录。
 
-部署保留原Compose项目、网络、全部环境和密钥及PG/Redis/NapCat。更新前备份原Compose并保留原镜像用于回退；不改活动开关、库存或已有资格数据。镜像来源、实际审查/编译和SSH部署结果在本记录后续补充。
+部署保留原Compose项目、网络、全部环境和密钥及PG/Redis/NapCat。更新前备份原Compose并保留原镜像用于回退；不改活动开关、库存或已有资格数据。实际部署结果见下文。
 
 ## 已完成的源码审查
 
 两轮独立静态审查均未发现P1/P2阻断问题：后端调用路径/账号核验/历史数据与SQL约束，以及完整前后端diff/类型/文案/测试契约分别复核。`git diff --check` 与索引JSON解析通过，Vite生产构建（含Vue类型检查）成功，仅提示已有大分块警告。未执行测试；此前直接 `pnpm exec` 因本机新版pnpm与旧lockfile校验差异未启动构建，后改用已安装的同一Vite入口执行，无依赖安装或lockfile变更。
+
+## 部署完成（20:42，北京时间）
+
+- 固定应用源码：`09fc0b27f66ce2c8c088badabf3c812eea772eaf`。本地主目录main已提交；未推送GitHub或发布新的公共镜像。
+- 临时E盘工作树在该提交上编译，Go `1.27.4`、`linux/amd64`、`CGO_ENABLED=0`、`-tags embed`，构建信息 `vcs.modified=false`。前端产物嵌入同一二进制，原主目录产物和其他未跟踪文件保持。
+- 二进制SHA256：`d18977ac1a0e0da8c5f940acc6ce47252408211494c24f8dbec8859b17d84280`。
+- 基于服务器现用固定 `ghcr.io/ttt599536561/sub2api-custom@sha256:7749490a780211cc4fc08a958dee590baed93f15bf72efad4a8b49c1b8abc32a` 离线构建，只追加新的 `/app/sub2api` 层，继承原运行资源及入口。
+- 当前服务器本地镜像：`sub2api-local:0.2.21-r1-qq-invite-no-level-09fc0b27f66c`；镜像ID `sha256:0ac9668f40dd968d318d6a6d25bf1c43ff43c1acb3681ce280a75d23624b7504`。这是服务器本地镜像，不是可从GHCR拉取的发布版本。
+- 现有腾讯服务器SSH已连通。原Compose项目 `sub2api-deploy`、目录 `/root/sub2api-deploy`，只把主 `docker-compose.yml` 的Sub2 image替换，完整解析比对仅此一项变化，overlay兼容。仅以 `--no-deps --pull never` 重建Sub2。
+- 切换前备份当前主Compose、overlay、主env及邀请env；数据库custom dump为787,585,939字节，目录检查和完整解码均通过。私有备份、部署状态和原镜像保留用于回退。
+- 20:42:21首次验证、20:42:55独立复核：Sub2 healthy、运行二进制hash匹配；原环境、邀请密钥、挂载/端口、网络/默认网关保持；PG/Redis/NapCat容器ID保持且healthy；邀请配置无启动解密错误。20:42:52公开 `https://api.tangguo.xin/health` 返回200和`status=ok`。
+- 未触发真实QQ邀请、发码、群消息或兑换；未运行单元/集成测试。健康核对不等同于真实业务全链路验收。
+
+部署脚本经独立静态审查，SHA256 `8f87d4769e0031d73ce8f3a33b33fe0b84853df2022ebcdf274bb4951a798c59`，包含配置/容器漂移检查、在途任务检查和失败后恢复本次备份的分支；本次没有触发回退。脱敏回执和脚本在本机 `.cache/qq-invite-no-level-20261111/`，服务器对应 `.maintenance/qq-invite-no-level-20261111/` 私有目录保留备份。
+
+后续镜像升级须包含上述源码提交；切回旧公共 `0.2.21-r1` 会恢复原等级限制。不要把本地镜像标签作为其他服务器的pull地址。回滚只能使用本次备份的主Compose，不能用此前环境修复前缺邀请env/network的旧备份。
+
+## 清理状态
+
+本次尝试清理E盘临时构建工作树和已上传的二进制/压缩包等文件，被自动审批以 `blocked by policy` 拒绝，命令未执行。临时工作树 `.worktrees/qq-invite-no-level-build-20261111`、本机二进制和压缩包均保留（两文件共169,747,212字节），未重试绕过限制；共享依赖缓存、原主目录产物和服务器回退备份完整保留。不能记为已清理。
