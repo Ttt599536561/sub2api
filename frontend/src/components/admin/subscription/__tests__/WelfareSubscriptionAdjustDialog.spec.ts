@@ -5,7 +5,10 @@ import WelfareSubscriptionAdjustDialog from '../WelfareSubscriptionAdjustDialog.
 
 const { getById, adjustWelfare } = vi.hoisted(() => ({ getById: vi.fn(), adjustWelfare: vi.fn() }))
 vi.mock('@/api/admin', () => ({ adminAPI: { subscriptions: { getById, adjustWelfare } } }))
-vi.mock('vue-i18n', () => ({ useI18n: () => ({ t: (key: string) => key }) }))
+vi.mock('vue-i18n', async (importOriginal) => ({
+  ...await importOriginal<typeof import('vue-i18n')>(),
+  useI18n: () => ({ t: (key: string) => key })
+}))
 
 function subscription(overrides: Partial<UserSubscription> = {}): UserSubscription {
   return {
