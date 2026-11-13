@@ -1,15 +1,33 @@
 # 0.2.21-r4 Linux镜像发布
 
-状态：准备发布，尚未确认镜像构建成功；用户自行部署，不连接服务器。
+北京时间2026-11-13 23:40:23：公开镜像已发布并完成验证。由用户自行部署，本轮未连接或修改服务器。
 
-- 目标镜像：`ghcr.io/ttt599536561/sub2api-custom:0.2.21-r4`。
-- 应用源码：`974f727ca58caf74bc1b278df7ccac07664ab636`。
-- 平台：仅原生Linux amd64/arm64，不触发macOS工作流，不推v*标签。
-- 专用工作流：`.github/workflows/publish-custom-v0221-r4.yml`；发布前应用与控制SHA必须通过完整CI/Security，禁止覆盖已有最终tag。
-- 功能：QQ邀请退群月卡取消/原周期额度追回、群与邀请者私信通知、不可复活与并发保护。详见[实现记录](../docs/changes/2026-11-13-qq-invite-revocation.md)。
-- 相对r3新增258，迁移318→319；此前r2通常317→319，公开r1为314→319。备份后保留原密钥、PG/Redis卷、NapCat网络与会话，只替换Sub2镜像。
-- 不将镜像发布等同线上部署；升级后处理收到的退群事件，未上报的历史退群不能自动追溯。缺少旧兑换授予凭据的记录明确进入人工核对。
+```text
+ghcr.io/ttt599536561/sub2api-custom:0.2.21-r4
+```
 
-构建运行、digest与五份artifact/匿名层验证证据在实际完成后追加。本机缓存路径`.cache/qq-invite-revoke-20261113/publish`。
+固定digest：`sha256:9a70273ffa66a46b441e1e5c28dc0c497993899afae5e75713fc2904f3e08627`。
 
-最终审查补强鉴权缓存失败重试，handler/service相关专项通过，三方审查均无剩余阻断。先前4a709da56/9e7a93542仅为构建前阶段，尚未发布镜像；门禁需针对上述最终应用SHA重新执行。
+- 应用源码：`974f727ca58caf74bc1b278df7ccac07664ab636`；发布控制：`d567ebd626ef1303e9fcd4bbea986ab8ecd82be7`。
+- 仅原生`linux/amd64`和`linux/arm64`，Go1.27.4；无macOS构建、无v*标签、无服务器部署。
+- [应用CI43450352935](https://github.com/Ttt599536561/sub2api/actions/runs/43450352935)、[应用Security43450352954](https://github.com/Ttt599536561/sub2api/actions/runs/43450352954)、[控制CI43450435407](https://github.com/Ttt599536561/sub2api/actions/runs/43450435407)、[控制Security43450435447](https://github.com/Ttt599536561/sub2api/actions/runs/43450435447)及[发布43453423791](https://github.com/Ttt599536561/sub2api/actions/runs/43453423791)全部成功。
+- 双架构实际启动、版本/OCI来源及资源检查通过；五必要artifact的ZIP hash/size/CRC、精确文件集合及来源/版本/Go/架构绑定通过。
+- 匿名核验24个镜像层，共92,682,721字节；14层14,254,294字节复用后重新hash与匿名HEAD，10层78,428,427字节下载后校验。OCI/Actions绑定、最终tag稳定检查全部通过，验证器exit0。
+
+## 功能与升级
+
+QQ邀请者奖励与被邀请者在原邀请群的资格绑定；未兑码永久作废，已兑按原授予凭据扣回原福利周期额度，保留用量、期限、其他奖励与付费权益；新增群内取消公告及邀请者私信、后台取消状态与通知状态。完整行为、并发与审查见[实现记录](../docs/changes/2026-11-13-qq-invite-revocation.md)。
+
+相对r3新增258迁移，318→319；此前r2通常317→319，公开r1为314→319。先备份数据库和配置，只替换Sub2应用镜像；保留原邀请/生图加密密钥、PG/Redis卷、NapCat网络与会话，不重新初始化机器人。不要回退不理解撤销账本的旧应用或恢复作废码。
+
+升级后处理收到的有效退群事件，已有映射奖励也适用；未上报的历史退群不能凭空追溯。历史兑换缺少授予凭据时明确进入人工核对，不猜测扣其他权益。未向真实QQ发送测试消息。
+
+## 审查与证据
+
+三方审查补齐跨群迟到入群误扣、通知/领取反向锁序、跨活动多码与兑换死锁，以及鉴权缓存可靠失效。真实PG回归先复现死锁再验证修复；最终全量CI/Security、PG18迁移与Integration均通过。
+
+先前应用4a709da56/控制9e7a93542属于发布准备阶段；补正鉴权缓存后旧两CI取消、无失败job，不用于最终门禁。唯一r4发布固定上述最终来源，没有覆盖旧镜像。
+
+本机证据：`.cache/qq-invite-revoke-20261113/publish/verification-0.2.21-r4/final-verification-summary.json`及关联provenance/registry摘要；共享依赖和已验镜像层缓存保留，无残留.partial。测试PG已安全停止、55473无监听。
+
+自动审批拒绝本轮临时PG数据/环境及审查临时文件清理，仅返回`blocked by policy`，未提供具体原因；文件实际保留，未换手段重试。主目录原dist、调查文件与本机环境脚本均保全。
