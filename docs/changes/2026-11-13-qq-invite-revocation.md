@@ -16,7 +16,7 @@
 
 258迁移新增departures、reward_revocations、subscription_invalidations及匹配索引；迁移总数318→319。原迁移checksum不变。撤销审计保留原奖励/码、原周期、退群时间、原授予金额与变更前后额度。
 
-锁序record→全部相关code（固定ID顺序）→user NO KEY UPDATE→subscription，兑换沿用code→user→subscription。发奖、撤销、取消旧投递及新增撤销通知原子提交；发送持record锁与退群线性化。领取、恢复过期投递也保持record→outbox顺序，防死锁。缓存失效任务随额度事务落库，提交后清本机/跨节点订阅及鉴权缓存，失败保留重试。福利准入仍使用既有数据库权威检查。
+锁序record→全部相关code（固定ID顺序）→user NO KEY UPDATE→subscription，兑换沿用code→user→subscription。发奖、撤销、取消旧投递及新增撤销通知原子提交；发送持record锁与退群线性化。领取、恢复过期投递也保持record→outbox顺序，防死锁。缓存失效任务随额度事务落库，提交后清本机/跨节点订阅及鉴权缓存，任一订阅或鉴权缓存失效失败均返回错误并保留重试（最终审查从best-effort鉴权接口切换到已有Reliable接口）。福利准入仍使用既有数据库权威检查。
 
 ## 验证与限制
 

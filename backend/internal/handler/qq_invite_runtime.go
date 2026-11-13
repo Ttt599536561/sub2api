@@ -152,7 +152,7 @@ func ProvideQQInviteRuntime(db *sql.DB, cfg *config.Config, subscriptions *servi
 		if apiKeys != nil {
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
-			apiKeys.InvalidateAuthCacheByUserID(ctx, userID)
+			cacheErr = errors.Join(cacheErr, apiKeys.InvalidateAuthCacheByUserIDReliable(ctx, userID))
 		}
 		return cacheErr
 	})
