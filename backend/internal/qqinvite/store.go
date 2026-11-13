@@ -12,12 +12,15 @@ import (
 	"net/url"
 	"regexp"
 	"strings"
+	"sync"
 	"unicode/utf16"
 )
 
 type Store struct {
-	db  *sql.DB
-	key []byte
+	db                     *sql.DB
+	key                    []byte
+	invalidatorMu          sync.RWMutex
+	invalidateSubscription func(userID, groupID int64) error
 }
 
 func NewStore(db *sql.DB, key []byte) *Store { return &Store{db: db, key: append([]byte(nil), key...)} }

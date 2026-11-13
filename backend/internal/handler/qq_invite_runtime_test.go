@@ -56,7 +56,7 @@ func TestQQInviteBootstrapCannotBlockMainStartup(t *testing.T) {
 	defer func() { _ = db.Close() }()
 	mock.ExpectQuery("SELECT id,payload,secrets FROM qq_invite_config_versions").WillDelayFor(6 * time.Second).WillReturnRows(sqlmock.NewRows([]string{"id", "payload", "secrets"}))
 	started := time.Now()
-	runtime := ProvideQQInviteRuntime(db, nil)
+	runtime := ProvideQQInviteRuntime(db, nil, nil, nil)
 	defer func() {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 		defer cancel()

@@ -55,6 +55,14 @@ describe('RedeemView refresh after redemption', () => {
     vi.restoreAllMocks()
   })
 
+  it('explains an invitation reward cancellation using the actual API reason field', async () => {
+    redeem.mockRejectedValue({ status: 400, code: 400, reason: 'REDEEM_CODE_CANCELLED', message: 'cancelled' })
+    const wrapper = await submitCode()
+    expect(wrapper.text()).toContain('redeem.codeCancelled')
+    expect(refreshUser).not.toHaveBeenCalled()
+    wrapper.unmount()
+  })
+
   it.each(['balance', 'concurrency', 'subscription'])(
     'keeps a successful %s redemption when profile refresh fails', async (type) => {
       redeem.mockResolvedValue({ type, value: 20, message: 'Code applied' })

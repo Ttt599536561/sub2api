@@ -804,6 +804,7 @@ export default {
     subscriptionDays: '{days} 天',
     days: '天',
     codeRedeemSuccess: '兑换成功！',
+    codeCancelled: '兑换码无效，已被取消本次资格。被邀请者已退出群聊。',
     failedToRedeem: '兑换失败，请检查兑换码后重试。',
     historyLoadFailed: '加载兑换记录失败，请重试。',
     userRefreshFailed: '兑换成功，但账户信息刷新失败。',

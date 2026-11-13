@@ -22,6 +22,7 @@ var (
 	ErrPaymentRedeemCodeReserved = infraerrors.Forbidden("PAYMENT_REDEEM_CODE_RESERVED", "payment recharge codes are reserved for payment fulfillment")
 	ErrRedeemCodeNotFound        = infraerrors.NotFound("REDEEM_CODE_NOT_FOUND", "redeem code not found")
 	ErrRedeemCodeUsed            = infraerrors.Conflict("REDEEM_CODE_USED", "redeem code already used")
+	ErrRedeemCodeCancelled       = infraerrors.Conflict("REDEEM_CODE_CANCELLED", "redeem code cancelled")
 	ErrRedeemCodeExpired         = infraerrors.Conflict("REDEEM_CODE_EXPIRED", "redeem code expired")
 	ErrInsufficientBalance       = infraerrors.BadRequest("INSUFFICIENT_BALANCE", "insufficient balance")
 	ErrRedeemRateLimited         = infraerrors.TooManyRequests("REDEEM_RATE_LIMITED", "too many failed attempts, please try again later")
@@ -456,6 +457,12 @@ func (s *RedeemService) redeem(ctx context.Context, userID int64, code string, r
 	}
 
 	// 检查兑换码状态和码本身的过期时间
+	if redeemCode.Status == "cancelled" {
+		if rateLimitPolicy == enforceRedeemRateLimit {
+			s.incrementRedeemErrorCount(ctx, userID)
+		}
+		return nil, ErrRedeemCodeCancelled
+	}
 	if redeemCode.IsExpired() {
 		if rateLimitPolicy == enforceRedeemRateLimit {
 			s.incrementRedeemErrorCount(ctx, userID)
@@ -507,6 +514,13 @@ func (s *RedeemService) redeem(ctx context.Context, userID int64, code string, r
 	// 利用数据库乐观锁（WHERE status = 'unused'）保证原子性
 	if err := s.redeemRepo.Use(txCtx, redeemCode.ID, userID); err != nil {
 		if errors.Is(err, ErrRedeemCodeNotFound) || errors.Is(err, ErrRedeemCodeUsed) {
+			// A departure can cancel the code after the initial lookup. The
+			// subscription transaction uses Read Committed, so this read observes
+			// the winning cancellation after the conditional UPDATE waited.
+			current, lookupErr := s.redeemRepo.GetByID(txCtx, redeemCode.ID)
+			if lookupErr == nil && current != nil && current.Status == "cancelled" {
+				return nil, ErrRedeemCodeCancelled
+			}
 			return nil, ErrRedeemCodeUsed
 		}
 		return nil, fmt.Errorf("mark code as used: %w", err)

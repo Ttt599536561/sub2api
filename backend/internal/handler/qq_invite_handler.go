@@ -212,7 +212,7 @@ func (h *QQInviteHandler) Events(c *gin.Context) {
 		c.Status(http.StatusForbidden)
 		return
 	}
-	if !cfg.Enabled {
+	if !cfg.Enabled && event.Kind != "group_decrease" && event.Kind != "private_claim" {
 		c.JSON(http.StatusOK, map[string]bool{"accepted": false, "disabled": true})
 		return
 	}

@@ -21,6 +21,7 @@ var welfareSubscriptionUpgradeFiles = []string{
 	"255_qq_welfare_subscription_backfill.sql",
 	"256_qq_welfare_backfill_no_resets.sql",
 	"257_welfare_subscription_adjustments.sql",
+	"258_qq_invite_reward_revocations.sql",
 }
 
 func welfareSubscriptionUpgradeTarget(t *testing.T, count int) fstest.MapFS {
@@ -147,8 +148,8 @@ func TestWelfareSubscriptionUpgradeMigrations(t *testing.T) {
 	// Reuse the existing harness's strict loopback URL validation, CREATEDB,
 	// random database name and cleanup. The supplied database is never migrated.
 	t.Setenv("QQ_IMAGE_TEST_DATABASE_URL", dsn)
-	for _, initialCount := range []int{314, 317} {
-		t.Run(fmt.Sprintf("%d_to_318", initialCount), func(t *testing.T) {
+	for _, initialCount := range []int{314, 317, 318} {
+		t.Run(fmt.Sprintf("%d_to_319", initialCount), func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 			defer cancel()
 			db := upstreamAC1B8F1TestDatabase(t, ctx)
@@ -163,7 +164,7 @@ func TestWelfareSubscriptionUpgradeMigrations(t *testing.T) {
 			preservedTables := []string{"users", "groups", "redeem_codes", "payment_orders", "qq_invite_campaigns",
 				"qq_invite_campaign_versions", "qq_invite_records", "qq_invite_code_pool", "qq_invite_rewards", "subscription_daily_reset_events"}
 			preserved := welfareSubscriptionUpgradeTables(t, ctx, db, preservedTables)
-			if initialCount == 317 {
+			if initialCount >= 317 {
 				require.NoError(t, applyMigrationsFS(ctx, db, welfareSubscriptionUpgradeTarget(t, 316)))
 				var kind string
 				require.NoError(t, db.QueryRowContext(ctx, `SELECT entitlement_kind FROM user_subscriptions WHERE id=$1`, rows["auto-only"].id).Scan(&kind))
@@ -171,13 +172,21 @@ func TestWelfareSubscriptionUpgradeMigrations(t *testing.T) {
 				require.NoError(t, applyMigrationsFS(ctx, db, welfareSubscriptionUpgradeTarget(t, 317)))
 				_, err := db.ExecContext(ctx, `UPDATE user_subscriptions SET welfare_monthly_limit_usd=0 WHERE id=$1`, rows["pure"].id)
 				require.ErrorContains(t, err, "user_subscriptions_welfare_limits_check", "before 257, zero welfare total is forbidden")
+				if initialCount == 318 {
+					require.NoError(t, applyMigrationsFS(ctx, db, welfareSubscriptionUpgradeTarget(t, 318)))
+				}
 			}
 			baselineHistory := upstreamAC1B8F1History(t, ctx, db)
 			require.Len(t, baselineHistory, initialCount)
-			target := welfareSubscriptionUpgradeTarget(t, 318)
+			target := welfareSubscriptionUpgradeTarget(t, 319)
 			require.NoError(t, applyMigrationsFS(ctx, db, target))
 			afterHistory := upstreamAC1B8F1History(t, ctx, db)
-			require.Len(t, afterHistory, 318)
+			require.Len(t, afterHistory, 319)
+			for _, table := range qqInviteRevocationMigrationTables {
+				var count int
+				require.NoError(t, db.QueryRowContext(ctx, "SELECT count(*) FROM "+pq.QuoteIdentifier(table)).Scan(&count))
+				require.Zero(t, count, "upgrade must not manufacture departures or revoke existing rewards: %s", table)
+			}
 			for name, entry := range originalHistory {
 				require.Equal(t, entry, afterHistory[name], "preserve original r1 checksum and applied_at: %s", name)
 			}
@@ -241,6 +250,7 @@ func TestWelfareSubscriptionUpgradeMigrations(t *testing.T) {
 				FROM user_subscriptions s JOIN user_welfare_subscription_adjustments a ON a.subscription_id=s.id WHERE s.id=$1`, row.id).Scan(&zeroAndAudited))
 			require.True(t, zeroAndAudited)
 			allTables := append(append([]string{}, preservedTables...), "user_subscriptions", "user_welfare_subscription_grants", "user_welfare_subscription_adjustments")
+			allTables = append(allTables, qqInviteRevocationMigrationTables...)
 			after := welfareSubscriptionUpgradeTables(t, ctx, db, allTables)
 			for range 2 {
 				require.NoError(t, applyMigrationsFS(ctx, db, target))

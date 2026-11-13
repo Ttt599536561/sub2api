@@ -49,6 +49,8 @@ func newWelfareRedemptionFixture(t *testing.T) *welfareRedemptionFixture {
 	require.NoError(t, err)
 	query := parsed.Query()
 	query.Set("search_path", schema)
+	query.Set("TimeZone", "UTC")
+	query.Set("application_name", schema)
 	// The service must explicitly choose Read Committed before its user lock.
 	query.Set("default_transaction_isolation", "repeatable read")
 	parsed.RawQuery = query.Encode()

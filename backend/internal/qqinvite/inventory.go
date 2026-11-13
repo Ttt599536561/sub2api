@@ -152,7 +152,7 @@ func (s *Store) ListCodes(ctx context.Context, id int64, page, size int) (CodeLi
 	if e := s.db.QueryRowContext(ctx, `SELECT count(*),count(*) FILTER(WHERE p.record_id IS NULL AND r.status='unused' AND (r.expires_at IS NULL OR r.expires_at>now())),count(*) FILTER(WHERE p.record_id IS NOT NULL) FROM qq_invite_code_pool p JOIN redeem_codes r ON r.id=p.redeem_code_id WHERE ($1=0 OR p.campaign_id=$1)`, id).Scan(&out.Total, &out.Available, &out.Assigned); e != nil {
 		return out, e
 	}
-	rows, e := s.db.QueryContext(ctx, `SELECT p.id,p.campaign_id,r.code,p.record_id,p.created_at,r.status,r.expires_at FROM qq_invite_code_pool p JOIN redeem_codes r ON r.id=p.redeem_code_id WHERE ($1=0 OR p.campaign_id=$1) ORDER BY p.id DESC LIMIT $2 OFFSET $3`, id, size, offset)
+	rows, e := s.db.QueryContext(ctx, `SELECT p.id,p.campaign_id,r.code,p.record_id,p.created_at,r.status,r.expires_at,EXISTS(SELECT 1 FROM qq_invite_reward_revocations v WHERE v.redeem_code_id=r.id) FROM qq_invite_code_pool p JOIN redeem_codes r ON r.id=p.redeem_code_id WHERE ($1=0 OR p.campaign_id=$1) ORDER BY p.id DESC LIMIT $2 OFFSET $3`, id, size, offset)
 	if e != nil {
 		return out, e
 	}
@@ -161,7 +161,8 @@ func (s *Store) ListCodes(ctx context.Context, id int64, page, size int) (CodeLi
 		var p PoolCode
 		var code, status string
 		var expiry sql.NullTime
-		if e = rows.Scan(&p.ID, &p.CampaignID, &code, &p.RecordID, &p.CreatedAt, &status, &expiry); e != nil {
+		var revoked bool
+		if e = rows.Scan(&p.ID, &p.CampaignID, &code, &p.RecordID, &p.CreatedAt, &status, &expiry, &revoked); e != nil {
 			return out, e
 		}
 		p.CodeHint = hint(code)
@@ -173,6 +174,9 @@ func (s *Store) ListCodes(ctx context.Context, id int64, page, size int) (CodeLi
 			p.State = "used"
 		} else if expiry.Valid && !expiry.Time.After(time.Now()) {
 			p.State = "expired"
+		}
+		if revoked {
+			p.State = "revoked"
 		}
 		out.Items = append(out.Items, p)
 	}

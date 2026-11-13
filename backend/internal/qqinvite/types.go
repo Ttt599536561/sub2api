@@ -61,19 +61,21 @@ type Event struct {
 	EventID    string `json:"event_id,omitempty"`
 }
 type Record struct {
-	ID            int64     `json:"id"`
-	CampaignID    int64     `json:"campaign_id"`
-	GroupID       string    `json:"group_id"`
-	InviteeQQ     string    `json:"invitee_qq"`
-	InviterQQ     string    `json:"inviter_qq"`
-	QQLevel       *int      `json:"qq_level"`
-	Status        string    `json:"status"`
-	Reason        string    `json:"reason"`
-	RewardID      *int64    `json:"reward_id,omitempty"`
-	CodeHint      string    `json:"code_hint,omitempty"`
-	PrivateStatus string    `json:"private_status,omitempty"`
-	GroupStatus   string    `json:"group_status,omitempty"`
-	CreatedAt     time.Time `json:"created_at"`
+	RevokePrivateStatus string    `json:"revoke_private_status,omitempty"`
+	RevokeGroupStatus   string    `json:"revoke_group_status,omitempty"`
+	ID                  int64     `json:"id"`
+	CampaignID          int64     `json:"campaign_id"`
+	GroupID             string    `json:"group_id"`
+	InviteeQQ           string    `json:"invitee_qq"`
+	InviterQQ           string    `json:"inviter_qq"`
+	QQLevel             *int      `json:"qq_level"`
+	Status              string    `json:"status"`
+	Reason              string    `json:"reason"`
+	RewardID            *int64    `json:"reward_id,omitempty"`
+	CodeHint            string    `json:"code_hint,omitempty"`
+	PrivateStatus       string    `json:"private_status,omitempty"`
+	GroupStatus         string    `json:"group_status,omitempty"`
+	CreatedAt           time.Time `json:"created_at"`
 }
 type RecordList struct {
 	Items []Record `json:"items"`

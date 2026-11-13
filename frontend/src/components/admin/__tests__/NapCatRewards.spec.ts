@@ -56,6 +56,14 @@ describe('NapCat stock', () => {
   })
 })
 describe('NapCat attribution and delivery', () => {
+  it('shows revoked eligibility and prevents rechecking or resending its reward', async () => {
+    vi.mocked(qqInviteAPI.records).mockResolvedValue({ items: [{ id: 9, campaign_id: 1, group_id: '123456', invitee_qq: '234567', inviter_qq: '345678', status: 'revoked', reason: 'invitee_left', reward_id: 10, private_status: 'sent', created_at: '2026-11-01T00:00:00Z' }], total: 1 })
+    wrapper = mount(NapCatRecordsPanel, { props: { campaignId: 1 } }); await flushPromises()
+    expect(wrapper.text()).toContain('qqInvite.recordStates.revoked')
+    expect(wrapper.get('[data-test="redeliver"]').attributes('disabled')).toBeDefined()
+    const recheck = wrapper.findAll('button').find(b => b.text() === 'qqInvite.recheck')!
+    expect(recheck.attributes('disabled')).toBeDefined()
+  })
   it('requires explicit inviter QQ plus reason and does not infer an approver as inviter', async () => {
     wrapper = mount(NapCatRecordsPanel, { props: { campaignId: 1 } }); await flushPromises()
     await wrapper.get('[data-test="review-open"]').trigger('click')

@@ -85,6 +85,29 @@ func TestQQInviteWebhookRequiresExactBodySignatureAndAccount(t *testing.T) {
 	require.Equal(t, 1, s.calls)
 }
 
+func TestQQInviteDepartureAcceptedWhileRewardsDisabled(t *testing.T) {
+	s := &inviteHTTPStub{cfg: qqinvite.Config{Enabled: false, BotQQ: "12345", EventSecret: "test-secret"}}
+	h := &QQInviteHandler{store: s}
+	body := `{"time":1794312345,"self_id":12345,"post_type":"notice","notice_type":"group_decrease","sub_type":"leave","group_id":77777,"user_id":88888}`
+	mac := hmac.New(sha1.New, []byte("test-secret"))
+	_, _ = mac.Write([]byte(body))
+	sig := "sha1=" + hex.EncodeToString(mac.Sum(nil))
+	w := inviteHTTPRequest(h, "POST", "/events", body, "", h.Events, map[string]string{"X-Signature": sig})
+	require.Equal(t, 200, w.Code)
+	require.Equal(t, 1, s.calls)
+}
+
+func TestQQInviteCancellationClaimAcceptedWhileRewardsDisabled(t *testing.T) {
+	s := &inviteHTTPStub{cfg: qqinvite.Config{Enabled: false, BotQQ: "12345", EventSecret: "test-secret"}}
+	h := &QQInviteHandler{store: s}
+	body := `{"time":1794312345,"self_id":12345,"post_type":"message","message_type":"private","user_id":88888,"raw_message":"领取奖励"}`
+	mac := hmac.New(sha1.New, []byte("test-secret"))
+	_, _ = mac.Write([]byte(body))
+	w := inviteHTTPRequest(h, "POST", "/events", body, "", h.Events, map[string]string{"X-Signature": "sha1=" + hex.EncodeToString(mac.Sum(nil))})
+	require.Equal(t, 200, w.Code)
+	require.Equal(t, 1, s.calls)
+}
+
 func (s *inviteHTTPStub) GenerateCodes(_ context.Context, _ int64, n int, _ int64) (qqinvite.CodePreview, error) {
 	s.calls++
 	return qqinvite.CodePreview{ValidCount: n}, nil

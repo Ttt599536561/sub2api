@@ -5,6 +5,19 @@ import (
 	"testing"
 )
 
+func TestQQInviteDepartureNotices(t *testing.T) {
+	for _, sub := range []string{"leave", "kick", "kick_me"} {
+		t.Run(sub, func(t *testing.T) {
+			e, ok, err := parseQQInviteEvent([]byte(`{"time":1794312345,"self_id":12345,"post_type":"notice","notice_type":"group_decrease","sub_type":"` + sub + `","group_id":77777,"user_id":88888,"operator_id":99999}`))
+			require.NoError(t, err)
+			require.True(t, ok)
+			require.Equal(t, "group_decrease", e.Kind)
+			require.Equal(t, sub, e.SubType)
+			require.Equal(t, "77777", e.GroupID)
+		})
+	}
+}
+
 func TestQQInviteEventNormalization(t *testing.T) {
 	e, ok, err := parseQQInviteEvent([]byte(`{"time":1794312345,"self_id":12345,"post_type":"notice","notice_type":"group_increase","sub_type":"invite","group_id":77777,"user_id":88888,"operator_id":99999}`))
 	require.NoError(t, err)

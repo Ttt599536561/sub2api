@@ -33,6 +33,11 @@ func parseQQInviteEvent(body []byte) (qqinvite.Event, bool, error) {
 	switch {
 	case wire.PostType == "notice" && wire.NoticeType == "group_increase":
 		kind = "group_increase"
+	case wire.PostType == "notice" && wire.NoticeType == "group_decrease":
+		if wire.SubType != "leave" && wire.SubType != "kick" && wire.SubType != "kick_me" {
+			return qqinvite.Event{}, false, nil
+		}
+		kind = "group_decrease"
 	case wire.PostType == "message" && wire.MessageType == "private" && (strings.TrimSpace(wire.RawMessage) == "/领取奖励" || strings.TrimSpace(wire.RawMessage) == "领取奖励"):
 		kind = "private_claim"
 	default:
@@ -49,14 +54,14 @@ func parseQQInviteEvent(body []byte) (qqinvite.Event, bool, error) {
 	if e.UserID, err = qqInviteID(wire.UserID, false); err != nil {
 		return e, false, err
 	}
-	if kind == "group_increase" {
+	if kind == "group_increase" || kind == "group_decrease" {
 		if e.GroupID, err = qqInviteID(wire.GroupID, false); err != nil {
 			return e, false, err
 		}
 		if e.OperatorID, err = qqInviteID(wire.OperatorID, true); err != nil {
 			return e, false, err
 		}
-		if e.SubType != "invite" && e.SubType != "approve" {
+		if kind == "group_increase" && e.SubType != "invite" && e.SubType != "approve" {
 			e.SubType = "unknown"
 		}
 	}

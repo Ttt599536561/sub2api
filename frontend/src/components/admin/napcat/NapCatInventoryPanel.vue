@@ -41,7 +41,7 @@ function generate() { if (!Number.isInteger(count.value) || count.value < 1 || c
   notice.value = 'generated'; page.value = 1; await fetchStock()
 }) }
 function move(delta: number) { if (blocked.value || page.value + delta < 1) return; page.value += delta; void reload() }
-function state(value: string) { return ['available', 'assigned', 'used', 'invalid', 'expired'].includes(value) ? value : 'unknown' }
+function state(value: string) { return ['available', 'assigned', 'used', 'invalid', 'expired', 'revoked'].includes(value) ? value : 'unknown' }
 function previewReason(value: string) { return ['duplicate', 'not_found', 'not_monthly_subscription', 'not_unused', 'expired', 'already_in_pool'].includes(value) ? value : 'unknown' }
 onMounted(reload)
 </script>

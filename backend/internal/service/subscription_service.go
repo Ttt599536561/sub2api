@@ -185,6 +185,13 @@ func (s *SubscriptionService) StartSubCacheInvalidationSubscriber(ctx context.Co
 	}
 }
 
+// InvalidateWelfareSubscriptionCaches synchronously evicts committed welfare
+// entitlements locally and across instances. Callers must invoke it only after
+// their transaction commits and retry returned cache failures independently.
+func (s *SubscriptionService) InvalidateWelfareSubscriptionCaches(userID, groupID int64) error {
+	return s.invalidateSubscriptionCaches(userID, groupID)
+}
+
 func (s *SubscriptionService) invalidateSubscriptionCaches(userID, groupID int64) error {
 	s.InvalidateSubCacheSync(userID, groupID)
 	if s.billingCacheService == nil {

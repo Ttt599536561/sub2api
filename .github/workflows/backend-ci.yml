@@ -57,7 +57,7 @@ jobs:
           go version | grep -q 'go1.27.4'
       - name: NapCat and welfare migration compatibility on PostgreSQL 18
         working-directory: backend
-        run: go test -tags=unit ./internal/repository -run 'Test(UpstreamV0220Migration|QQInviteMigration|WelfareSubscriptionUpgradeMigrations)' -count=1
+        run: go test -tags=unit ./internal/repository -run 'Test(UpstreamV0220Migration|QQInviteMigration|QQInviteRevocationMigration|WelfareSubscriptionUpgradeMigrations)' -count=1
       - name: Unit tests
         working-directory: backend
         run: make test-unit

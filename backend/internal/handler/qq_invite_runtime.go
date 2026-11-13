@@ -137,13 +137,25 @@ func (r *QQInviteRuntime) Stop(ctx context.Context) error {
 	}
 	return nil
 }
-func ProvideQQInviteRuntime(db *sql.DB, cfg *config.Config) *QQInviteRuntime {
+func ProvideQQInviteRuntime(db *sql.DB, cfg *config.Config, subscriptions *service.SubscriptionService, apiKeys *service.APIKeyService) *QQInviteRuntime {
 	key, err := qqimage.ParseEncryptionKey(os.Getenv("QQ_INVITE_ENCRYPTION_KEY"))
 	if err != nil {
 		slog.Warn("NapCat invitation encryption key invalid; configuration disabled")
 		key = nil
 	}
 	r := &QQInviteRuntime{core: qqinvite.NewStore(db, key), disabled: cfg != nil && cfg.RunMode == config.RunModeSimple}
+	r.core.SetSubscriptionInvalidator(func(userID, groupID int64) error {
+		var cacheErr error
+		if subscriptions != nil {
+			cacheErr = subscriptions.InvalidateWelfareSubscriptionCaches(userID, groupID)
+		}
+		if apiKeys != nil {
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			apiKeys.InvalidateAuthCacheByUserID(ctx, userID)
+		}
+		return cacheErr
+	})
 	if r.disabled {
 		return r
 	}

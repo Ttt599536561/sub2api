@@ -56,6 +56,14 @@ func testStore(t *testing.T) *Store {
 	if _, e = scoped.Exec(string(b)); e != nil {
 		t.Fatal(e)
 	}
+	_, e = scoped.Exec(`CREATE TABLE users(id BIGINT PRIMARY KEY);
+CREATE TABLE user_subscriptions(id BIGSERIAL PRIMARY KEY,user_id BIGINT NOT NULL,group_id BIGINT NOT NULL,entitlement_kind TEXT NOT NULL DEFAULT 'standard',welfare_daily_limit_usd NUMERIC(20,10),welfare_weekly_limit_usd NUMERIC(20,10),welfare_monthly_limit_usd NUMERIC(20,10),welfare_grant_count BIGINT NOT NULL DEFAULT 0,welfare_cycle_closed BOOLEAN NOT NULL DEFAULT false,daily_reset_version BIGINT NOT NULL DEFAULT 0,updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),daily_usage_usd NUMERIC NOT NULL DEFAULT 0,weekly_usage_usd NUMERIC NOT NULL DEFAULT 0,monthly_usage_usd NUMERIC NOT NULL DEFAULT 0,expires_at TIMESTAMPTZ NOT NULL DEFAULT now()+interval '30 days');
+CREATE TABLE user_welfare_subscription_grants(redeem_code_id BIGINT PRIMARY KEY REFERENCES redeem_codes(id),subscription_id BIGINT NOT NULL REFERENCES user_subscriptions(id),daily_limit_usd NUMERIC(20,10),weekly_limit_usd NUMERIC(20,10),monthly_limit_usd NUMERIC(20,10),granted_at TIMESTAMPTZ NOT NULL DEFAULT now());`)
+	must(t, e)
+	b, e = os.ReadFile("../../migrations/258_qq_invite_reward_revocations.sql")
+	must(t, e)
+	_, e = scoped.Exec(string(b))
+	must(t, e)
 	return NewStore(scoped, []byte(strings.Repeat("k", 32)))
 }
 

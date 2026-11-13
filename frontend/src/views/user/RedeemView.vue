@@ -513,7 +513,10 @@ const handleRedeem = async () => {
     // Show success toast
     appStore.showSuccess(t('redeem.codeRedeemSuccess'))
   } catch (error: any) {
-    errorMessage.value = error.response?.data?.detail || t('redeem.failedToRedeem')
+    const reason = error.reason || error.response?.data?.reason || error.code
+    errorMessage.value = reason === 'REDEEM_CODE_CANCELLED'
+      ? t('redeem.codeCancelled')
+      : error.response?.data?.detail || t('redeem.failedToRedeem')
 
     appStore.showError(t('redeem.redeemFailed'))
   } finally {

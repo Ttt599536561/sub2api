@@ -800,6 +800,7 @@ export default {
     subscriptionDays: '{days} days',
     days: ' days',
     codeRedeemSuccess: 'Code redeemed successfully!',
+    codeCancelled: 'This code is invalid because the invitee left the group and this reward was cancelled.',
     failedToRedeem: 'Failed to redeem code. Please check the code and try again.',
     historyLoadFailed: 'Failed to load activity. Please try again.',
     userRefreshFailed: 'Redeemed successfully, but failed to refresh account information.',

@@ -15,10 +15,13 @@ func (s *Store) AcceptEvent(ctx context.Context, ev Event) error {
 	if !validQQ(ev.SelfID) || !validQQ(ev.UserID) || ev.Time <= 0 || ev.Time > time.Now().Add(5*time.Minute).Unix() {
 		return ErrInvalid
 	}
-	if ev.Kind != "group_increase" && ev.Kind != "private_claim" {
+	if ev.Kind != "group_increase" && ev.Kind != "private_claim" && ev.Kind != "group_decrease" {
 		return ErrInvalid
 	}
-	if ev.Kind == "group_increase" && !validGroup(ev.GroupID) {
+	if ev.Kind != "private_claim" && !validGroup(ev.GroupID) {
+		return ErrInvalid
+	}
+	if ev.Kind == "group_decrease" && ev.SubType != "leave" && ev.SubType != "kick" && ev.SubType != "kick_me" {
 		return ErrInvalid
 	}
 	tx, e := s.beginWrite(ctx)
@@ -33,7 +36,7 @@ func (s *Store) AcceptEvent(ctx context.Context, ev Event) error {
 	if e != nil {
 		return e
 	}
-	if !cfg.Enabled {
+	if !cfg.Enabled && ev.Kind != "group_decrease" && ev.Kind != "private_claim" {
 		return ErrDisabled
 	}
 	if cfg.BotQQ != ev.SelfID {
@@ -53,16 +56,22 @@ func (s *Store) AcceptEvent(ctx context.Context, ev Event) error {
 	if n == 0 {
 		return tx.Commit()
 	}
-	if ev.Kind == "group_increase" && ev.UserID == ev.SelfID {
+	if ev.Kind != "private_claim" && ev.UserID == ev.SelfID {
 		return tx.Commit()
 	}
-	if ev.Kind == "private_claim" {
-		_, e = tx.ExecContext(ctx, `WITH claimed AS (UPDATE qq_invite_outbox o SET status='pending',attempts=0,next_attempt_at=now(),lease_token=NULL,lease_until=NULL FROM qq_invite_records r WHERE o.record_id=r.id AND r.inviter_qq=$1 AND r.self_id=$2 AND o.kind='private' AND o.status NOT IN ('sending','pending') AND (r.last_claim_at IS NULL OR r.last_claim_at<now()-interval '1 minute') RETURNING o.record_id) UPDATE qq_invite_records SET last_claim_at=now() WHERE id IN (SELECT record_id FROM claimed)`, ev.UserID, ev.SelfID)
-		if e != nil {
+	if ev.Kind == "group_decrease" {
+		if e = s.acceptDeparture(ctx, tx, ev); e != nil {
 			return e
 		}
 		return tx.Commit()
 	}
+	if ev.Kind == "private_claim" {
+		if e = s.claimRewards(ctx, tx, ev, cfg.Enabled); e != nil {
+			return e
+		}
+		return tx.Commit()
+	}
+
 	rows, e := tx.QueryContext(ctx, `SELECT DISTINCT ON(campaign_id) campaign_id,version,payload FROM qq_invite_campaign_versions WHERE created_at < to_timestamp($1)+interval '1 second' ORDER BY campaign_id,version DESC`, ev.Time)
 	if e != nil {
 		return e
@@ -127,6 +136,23 @@ func (s *Store) AcceptEvent(ctx context.Context, ev Event) error {
 		} else if e != nil {
 			return e
 		}
+
+		var departedAt sql.NullTime
+		if e = tx.QueryRowContext(ctx, `SELECT max(d.departed_at) FROM qq_invite_departures d JOIN qq_invite_records r ON d.self_id=r.self_id AND d.group_id=r.group_id AND d.invitee_qq=r.invitee_qq AND d.departed_at>=r.event_time WHERE r.id=$1`, recordID).Scan(&departedAt); e != nil {
+			return e
+		}
+		if departedAt.Valid {
+			var state string
+			if e = tx.QueryRowContext(ctx, `SELECT status FROM qq_invite_records WHERE id=$1 FOR UPDATE`, recordID).Scan(&state); e != nil {
+				return e
+			}
+			if state != "revoked" && state != "baseline" {
+				if e = s.revokeRecord(ctx, tx, recordID, departedAt.Time); e != nil {
+					return e
+				}
+			}
+			continue
+		}
 		joined, e := tx.ExecContext(ctx, `INSERT INTO qq_invite_joins(campaign_id,group_id,qq) VALUES($1,$2,$3) ON CONFLICT DO NOTHING`, c.ID, ev.GroupID, ev.UserID)
 		if e != nil {
 			return e
@@ -150,7 +176,7 @@ func (s *Store) ListRecords(ctx context.Context, campaignID int64, status string
 	if e := s.db.QueryRowContext(ctx, `SELECT count(*) FROM qq_invite_records WHERE ($1=0 OR campaign_id=$1) AND ($2='' OR status=$2)`, campaignID, status).Scan(&out.Total); e != nil {
 		return out, e
 	}
-	rows, e := s.db.QueryContext(ctx, `SELECT r.id,r.campaign_id,r.group_id,r.invitee_qq,r.inviter_qq,r.qq_level,r.status,r.reason,w.id,COALESCE(c.code,''),COALESCE((SELECT status FROM qq_invite_outbox WHERE record_id=r.id AND kind='private' LIMIT 1),''),COALESCE((SELECT status FROM qq_invite_outbox WHERE record_id=r.id AND kind='congratulation' LIMIT 1),''),r.created_at FROM qq_invite_records r LEFT JOIN qq_invite_rewards w ON w.record_id=r.id LEFT JOIN qq_invite_code_pool p ON p.id=w.pool_id LEFT JOIN redeem_codes c ON c.id=p.redeem_code_id WHERE ($1=0 OR r.campaign_id=$1) AND ($2='' OR r.status=$2) ORDER BY r.id DESC LIMIT $3 OFFSET $4`, campaignID, status, size, offset)
+	rows, e := s.db.QueryContext(ctx, `SELECT r.id,r.campaign_id,r.group_id,r.invitee_qq,r.inviter_qq,r.qq_level,r.status,r.reason,w.id,COALESCE(c.code,''),COALESCE((SELECT status FROM qq_invite_outbox WHERE record_id=r.id AND kind='private' LIMIT 1),''),COALESCE((SELECT status FROM qq_invite_outbox WHERE record_id=r.id AND kind='congratulation' LIMIT 1),''),COALESCE((SELECT status FROM qq_invite_outbox WHERE record_id=r.id AND kind='revoke_private' LIMIT 1),''),COALESCE((SELECT status FROM qq_invite_outbox WHERE record_id=r.id AND kind='revoke_group' LIMIT 1),''),r.created_at FROM qq_invite_records r LEFT JOIN qq_invite_rewards w ON w.record_id=r.id LEFT JOIN qq_invite_code_pool p ON p.id=w.pool_id LEFT JOIN redeem_codes c ON c.id=p.redeem_code_id WHERE ($1=0 OR r.campaign_id=$1) AND ($2='' OR r.status=$2) ORDER BY r.id DESC LIMIT $3 OFFSET $4`, campaignID, status, size, offset)
 	if e != nil {
 		return out, e
 	}
@@ -158,7 +184,7 @@ func (s *Store) ListRecords(ctx context.Context, campaignID int64, status string
 	for rows.Next() {
 		var r Record
 		var code string
-		if e = rows.Scan(&r.ID, &r.CampaignID, &r.GroupID, &r.InviteeQQ, &r.InviterQQ, &r.QQLevel, &r.Status, &r.Reason, &r.RewardID, &code, &r.PrivateStatus, &r.GroupStatus, &r.CreatedAt); e != nil {
+		if e = rows.Scan(&r.ID, &r.CampaignID, &r.GroupID, &r.InviteeQQ, &r.InviterQQ, &r.QQLevel, &r.Status, &r.Reason, &r.RewardID, &code, &r.PrivateStatus, &r.GroupStatus, &r.RevokePrivateStatus, &r.RevokeGroupStatus, &r.CreatedAt); e != nil {
 			return out, e
 		}
 		if code != "" {
@@ -181,7 +207,7 @@ func (s *Store) ReviewRecord(ctx context.Context, id int64, inviter, reason stri
 	if e = tx.QueryRowContext(ctx, `SELECT status,invitee_qq,self_id FROM qq_invite_records WHERE id=$1 FOR UPDATE`, id).Scan(&status, &invitee, &self); e != nil {
 		return mapError(e)
 	}
-	if status == "awarded" || status == "baseline" || inviter == invitee || inviter == self {
+	if status == "awarded" || status == "baseline" || status == "revoked" || inviter == invitee || inviter == self {
 		return ErrConflict
 	}
 	if _, e = tx.ExecContext(ctx, `UPDATE qq_invite_records SET inviter_qq=$2,status='received',reason='admin_verified',lease_token=NULL,lease_until=NULL,next_attempt_at=now(),updated_at=now() WHERE id=$1`, id, inviter); e != nil {
@@ -198,7 +224,7 @@ func (s *Store) RecheckRecord(ctx context.Context, id, actor int64) error {
 		return e
 	}
 	defer func() { _ = tx.Rollback() }()
-	res, e := tx.ExecContext(ctx, `UPDATE qq_invite_records SET status='received',next_attempt_at=now(),lease_token=NULL,lease_until=NULL WHERE id=$1 AND status NOT IN ('awarded','baseline')`, id)
+	res, e := tx.ExecContext(ctx, `UPDATE qq_invite_records SET status='received',next_attempt_at=now(),lease_token=NULL,lease_until=NULL WHERE id=$1 AND status NOT IN ('awarded','baseline','revoked')`, id)
 	if e != nil {
 		return e
 	}
@@ -218,8 +244,11 @@ func (s *Store) RedeliverReward(ctx context.Context, id, actor int64) error {
 	}
 	defer func() { _ = tx.Rollback() }()
 	var recordID int64
-	if e = tx.QueryRowContext(ctx, `SELECT record_id FROM qq_invite_rewards WHERE id=$1`, id).Scan(&recordID); e != nil {
-		return mapError(e)
+	if e = tx.QueryRowContext(ctx, `SELECT r.id FROM qq_invite_rewards w JOIN qq_invite_records r ON r.id=w.record_id WHERE w.id=$1 AND r.status='awarded' FOR UPDATE OF r`, id).Scan(&recordID); e != nil {
+		if errors.Is(e, sql.ErrNoRows) {
+			return ErrConflict
+		}
+		return e
 	}
 	res, e := tx.ExecContext(ctx, `UPDATE qq_invite_outbox SET status='pending',attempts=0,next_attempt_at=now(),lease_token=NULL,lease_until=NULL WHERE record_id=$1 AND kind='private' AND (status<>'sending' OR lease_until<now())`, recordID)
 	if e != nil {
@@ -236,4 +265,48 @@ func (s *Store) RedeliverReward(ctx context.Context, id, actor int64) error {
 		return e
 	}
 	return tx.Commit()
+}
+
+// Claim and sending share the record -> outbox lock order. A revoked record can
+// only replay its cancellation explanation, never its original reward.
+func (s *Store) claimRewards(ctx context.Context, tx *sql.Tx, ev Event, enabled bool) error {
+	rows, err := tx.QueryContext(ctx, `SELECT id,status FROM qq_invite_records WHERE inviter_qq=$1 AND self_id=$2 AND status IN ('awarded','revoked') AND ($3 OR status='revoked') AND (last_claim_at IS NULL OR last_claim_at<now()-interval '1 minute') ORDER BY id FOR UPDATE`, ev.UserID, ev.SelfID, enabled)
+	if err != nil {
+		return err
+	}
+	type claim struct {
+		id     int64
+		status string
+	}
+	var claims []claim
+	for rows.Next() {
+		var c claim
+		if err = rows.Scan(&c.id, &c.status); err != nil {
+			_ = rows.Close()
+			return err
+		}
+		claims = append(claims, c)
+	}
+	err = rows.Err()
+	_ = rows.Close()
+	if err != nil {
+		return err
+	}
+	for _, c := range claims {
+		kind := "private"
+		if c.status == "revoked" {
+			kind = "revoke_private"
+		}
+		result, err := tx.ExecContext(ctx, `UPDATE qq_invite_outbox SET status='pending',attempts=0,next_attempt_at=now(),lease_token=NULL,lease_until=NULL WHERE record_id=$1 AND kind=$2 AND status NOT IN ('sending','pending')`, c.id, kind)
+		if err != nil {
+			return err
+		}
+		n, _ := result.RowsAffected()
+		if n > 0 {
+			if _, err = tx.ExecContext(ctx, `UPDATE qq_invite_records SET last_claim_at=now() WHERE id=$1`, c.id); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }

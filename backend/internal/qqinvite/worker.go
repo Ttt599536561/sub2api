@@ -194,12 +194,12 @@ func renderTemplate(template string, w workRecord, level int, code, baseURL stri
 	return strings.NewReplacer("{invitee}", w.invitee, "{inviter}", w.inviter, "{level}", levelText, "{code}", code, "{url}", strings.TrimRight(baseURL, "/")+"/redeem", "{plan_name}", w.campaign.PlanName).Replace(template)
 }
 func (r *Runtime) DeliverOnce(ctx context.Context) error {
+	if e := r.store.invalidateOnce(ctx); e != nil {
+		return e
+	}
 	cfg, e := r.store.RuntimeConfig(ctx)
 	if e != nil {
 		return e
-	}
-	if !cfg.Enabled {
-		return nil
 	}
 	if e = r.recoverExpiredSends(ctx); e != nil {
 		return e
@@ -208,19 +208,45 @@ func (r *Runtime) DeliverOnce(ctx context.Context) error {
 	var id, recordID int64
 	var kind, destination, mention, template string
 	var attempts int
-	e = r.store.scanWrite(ctx, `UPDATE qq_invite_outbox SET status='sending',lease_token=$1,lease_until=now()+interval '60 seconds',attempts=attempts+1 WHERE id=(SELECT o.id FROM qq_invite_outbox o WHERE o.status IN ('pending','failed') AND o.next_attempt_at<=now() AND (o.kind<>'congratulation' OR EXISTS(SELECT 1 FROM qq_invite_outbox p WHERE p.record_id=o.record_id AND p.kind='private' AND p.status='sent')) ORDER BY o.id FOR UPDATE SKIP LOCKED LIMIT 1) RETURNING id,record_id,kind,destination,mention,template,attempts`, []any{lease}, &id, &recordID, &kind, &destination, &mention, &template, &attempts)
+	e = r.store.scanWrite(ctx, `UPDATE qq_invite_outbox SET status='sending',lease_token=$1,lease_until=now()+interval '60 seconds',attempts=attempts+1 WHERE id=(SELECT o.id FROM qq_invite_outbox o WHERE o.status IN ('pending','failed') AND o.next_attempt_at<=now() AND ($2 OR o.kind IN ('revoke_group','revoke_private')) AND (o.kind<>'congratulation' OR EXISTS(SELECT 1 FROM qq_invite_outbox p WHERE p.record_id=o.record_id AND p.kind='private' AND p.status='sent')) ORDER BY o.id FOR UPDATE SKIP LOCKED LIMIT 1) RETURNING id,record_id,kind,destination,mention,template,attempts`, []any{lease, cfg.Enabled}, &id, &recordID, &kind, &destination, &mention, &template, &attempts)
 	if errors.Is(e, sql.ErrNoRows) {
 		return nil
 	}
 	if e != nil {
 		return e
 	}
+	// Serialize the final eligibility check, the send, and its result with
+	// departure handling. A send already in flight finishes before revocation;
+	// unsent work is cancelled, and the compensating notice follows it.
+	tx, e := r.store.beginWrite(ctx)
+	if e != nil {
+		return e
+	}
+	defer func() { _ = tx.Rollback() }()
+	var recordStatus string
+	if e = tx.QueryRowContext(ctx, `SELECT status FROM qq_invite_records WHERE id=$1 FOR UPDATE`, recordID).Scan(&recordStatus); e != nil {
+		return e
+	}
+	var validLease bool
+	if e = tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM qq_invite_outbox WHERE id=$1 AND lease_token=$2 AND status='sending')`, id, lease).Scan(&validLease); e != nil {
+		return e
+	}
+	revokeNotice := kind == "revoke_group" || kind == "revoke_private"
+	if !validLease {
+		return tx.Commit()
+	}
+	if recordStatus == "revoked" && !revokeNotice {
+		if _, e = tx.ExecContext(ctx, `UPDATE qq_invite_outbox SET status='cancelled',lease_token=NULL,lease_until=NULL WHERE id=$1 AND lease_token=$2`, id, lease); e != nil {
+			return e
+		}
+		return tx.Commit()
+	}
 	var w workRecord
 	var level sql.NullInt64
 	var snapshot []byte
 	var code string
 	var expiry sql.NullTime
-	e = r.store.db.QueryRowContext(ctx, `SELECT r.self_id,r.group_id,r.invitee_qq,r.inviter_qq,r.qq_level,r.snapshot,COALESCE(c.code,''),c.expires_at FROM qq_invite_records r LEFT JOIN qq_invite_rewards w ON w.record_id=r.id LEFT JOIN qq_invite_code_pool p ON p.id=w.pool_id LEFT JOIN redeem_codes c ON c.id=p.redeem_code_id WHERE r.id=$1`, recordID).Scan(&w.self, &w.group, &w.invitee, &w.inviter, &level, &snapshot, &code, &expiry)
+	e = tx.QueryRowContext(ctx, `SELECT r.self_id,r.group_id,r.invitee_qq,r.inviter_qq,r.qq_level,r.snapshot,COALESCE(c.code,''),c.expires_at FROM qq_invite_records r LEFT JOIN qq_invite_rewards w ON w.record_id=r.id LEFT JOIN qq_invite_code_pool p ON p.id=w.pool_id LEFT JOIN redeem_codes c ON c.id=p.redeem_code_id WHERE r.id=$1`, recordID).Scan(&w.self, &w.group, &w.invitee, &w.inviter, &level, &snapshot, &code, &expiry)
 	if e != nil {
 		return e
 	}
@@ -228,10 +254,13 @@ func (r *Runtime) DeliverOnce(ctx context.Context) error {
 		return e
 	}
 	if kind == "private" && expiry.Valid && !expiry.Time.After(time.Now()) {
-		e = r.store.execWrite(ctx, `UPDATE qq_invite_outbox SET status=CASE WHEN attempts>=8 THEN 'blocked' ELSE 'failed' END,last_error='code_expired',lease_token=NULL,lease_until=NULL,next_attempt_at=now()+interval '1 day' WHERE id=$1 AND lease_token=$2`, id, lease)
-		return e
+		_, e = tx.ExecContext(ctx, `UPDATE qq_invite_outbox SET status=CASE WHEN attempts>=8 THEN 'blocked' ELSE 'failed' END,last_error='code_expired',lease_token=NULL,lease_until=NULL,next_attempt_at=now()+interval '1 day' WHERE id=$1 AND lease_token=$2`, id, lease)
+		if e != nil {
+			return e
+		}
+		return tx.Commit()
 	}
-	if kind != "private" {
+	if kind != "private" && kind != "revoke_private" {
 		code = ""
 	}
 	message := renderTemplate(template, w, int(level.Int64), code, cfg.PublicBaseURL)
@@ -241,7 +270,7 @@ func (r *Runtime) DeliverOnce(ctx context.Context) error {
 		bot, err := r.factory(cfg)
 		sendErr = err
 		if err == nil {
-			if kind == "private" {
+			if kind == "private" || kind == "revoke_private" {
 				msgID, sendErr = bot.SendPrivate(ctx, destination, message)
 			} else {
 				msgID, sendErr = bot.SendGroup(ctx, destination, message, mention)
@@ -261,11 +290,6 @@ func (r *Runtime) DeliverOnce(ctx context.Context) error {
 		}
 	}
 	delay := time.Duration(1<<min(attempts, 8)) * time.Second
-	tx, e := r.store.beginWrite(ctx)
-	if e != nil {
-		return e
-	}
-	defer func() { _ = tx.Rollback() }()
 	result, e := tx.ExecContext(ctx, `UPDATE qq_invite_outbox SET status=$3,message_id=$4,last_error=$5,lease_token=NULL,lease_until=NULL,next_attempt_at=$6 WHERE id=$1 AND lease_token=$2`, id, lease, status, msgID, reason, time.Now().Add(delay))
 	if e != nil {
 		return e
@@ -300,42 +324,51 @@ func (r *Runtime) recoverExpiredSends(ctx context.Context) error {
 		return e
 	}
 	defer func() { _ = tx.Rollback() }()
-	rows, e := tx.QueryContext(ctx, `UPDATE qq_invite_outbox SET status='unknown',last_error='delivery_unknown',lease_token=NULL,lease_until=NULL WHERE id IN (SELECT id FROM qq_invite_outbox WHERE status='sending' AND lease_until<now() ORDER BY id FOR UPDATE SKIP LOCKED LIMIT 50) RETURNING record_id,kind`)
+	// Lock records before their outbox rows, including FK checks when inserting
+	// delivery_pending. SKIP LOCKED leaves active sends for the next sweep.
+	rows, e := tx.QueryContext(ctx, `SELECT r.id,r.status,r.group_id,r.inviter_qq,r.snapshot FROM qq_invite_records r WHERE EXISTS(SELECT 1 FROM qq_invite_outbox o WHERE o.record_id=r.id AND o.status='sending' AND o.lease_until<now()) ORDER BY r.id FOR UPDATE OF r SKIP LOCKED LIMIT 50`)
 	if e != nil {
 		return e
 	}
-	var privateIDs []int64
+	type recovery struct {
+		id                     int64
+		status, group, inviter string
+		snapshot               []byte
+	}
+	var items []recovery
 	for rows.Next() {
-		var id int64
-		var kind string
-		if e = rows.Scan(&id, &kind); e != nil {
+		var it recovery
+		if e = rows.Scan(&it.id, &it.status, &it.group, &it.inviter, &it.snapshot); e != nil {
 			_ = rows.Close()
 			return e
 		}
-		if kind == "private" {
-			privateIDs = append(privateIDs, id)
-		}
+		items = append(items, it)
 	}
 	e = rows.Err()
 	_ = rows.Close()
 	if e != nil {
 		return e
 	}
-	for _, id := range privateIDs {
-		var group, inviter string
-		var snapshot []byte
-		if e = tx.QueryRowContext(ctx, `SELECT group_id,inviter_qq,snapshot FROM qq_invite_records WHERE id=$1`, id).Scan(&group, &inviter, &snapshot); e != nil {
+	for _, it := range items {
+		var privateExpired bool
+		if e = tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM qq_invite_outbox WHERE record_id=$1 AND kind='private' AND status='sending' AND lease_until<now())`, it.id).Scan(&privateExpired); e != nil {
 			return e
 		}
+		if _, e = tx.ExecContext(ctx, `UPDATE qq_invite_outbox SET status=CASE WHEN $2='revoked' AND kind NOT IN ('revoke_private','revoke_group') THEN 'cancelled' ELSE 'unknown' END,last_error='delivery_unknown',lease_token=NULL,lease_until=NULL WHERE record_id=$1 AND status='sending' AND lease_until<now()`, it.id, it.status); e != nil {
+			return e
+		}
+		if !privateExpired || it.status == "revoked" {
+			continue
+		}
 		var c Campaign
-		if e = json.Unmarshal(snapshot, &c); e != nil {
+		if e = json.Unmarshal(it.snapshot, &c); e != nil {
 			return e
 		}
 		template := c.DeliveryPendingTemplate
 		if template == "" {
 			template = defaultDeliveryPendingTemplate
 		}
-		if e = enqueue(ctx, tx, id, "delivery_pending", group, inviter, template); e != nil {
+		if e = enqueue(ctx, tx, it.id, "delivery_pending", it.group, it.inviter, template); e != nil {
 			return e
 		}
 	}
