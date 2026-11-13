@@ -31,3 +31,5 @@ QQ邀请者奖励与被邀请者在原邀请群的资格绑定；未兑码永久
 本机证据：`.cache/qq-invite-revoke-20261113/publish/verification-0.2.21-r4/final-verification-summary.json`及关联provenance/registry摘要；共享依赖和已验镜像层缓存保留，无残留.partial。测试PG已安全停止、55473无监听。
 
 自动审批拒绝本轮临时PG数据/环境及审查临时文件清理，仅返回`blocked by policy`，未提供具体原因；文件实际保留，未换手段重试。主目录原dist、调查文件与本机环境脚本均保全。
+
+收尾补充：已核对本轮工作树无未提交差异且全部提交合入main；删除本轮依赖junction/临时工作树的命令同样在执行前被自动审批拒绝（blocked by policy），实际工作树与junction保留，未重试。主目录和远端main同步；必要源码与发布结论已归档，保留分支历史。
