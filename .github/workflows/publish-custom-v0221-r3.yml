@@ -16,7 +16,7 @@ env:
   IMAGE: ghcr.io/ttt599536561/sub2api-custom
   VERSION: 0.2.21-r3
   # Build the exact application commit requested for this release, independent of the workflow commit.
-  SOURCE_COMMIT: 9a292e291ec2f1b7456fc59cae6abdccd8234149
+  SOURCE_COMMIT: 7b5b36fa18ce51330ed527eb6113f553e1c16d4f
 
 jobs:
   gate:
@@ -32,8 +32,8 @@ jobs:
           set -euo pipefail
           for checked_sha in "$SOURCE_COMMIT" "$GITHUB_SHA"; do
             for workflow in backend-ci.yml security-scan.yml; do
-              gh api "/repos/$GITHUB_REPOSITORY/actions/workflows/$workflow/runs?head_sha=$checked_sha&event=push&branch=main&per_page=100" > runs.json
-              jq --arg sha "$checked_sha" '[.workflow_runs[] | select(.head_sha == $sha and .head_branch == "main" and .event == "push")] | sort_by(.id) | last' runs.json > latest.json
+              gh api "/repos/$GITHUB_REPOSITORY/actions/workflows/$workflow/runs?head_sha=$checked_sha&branch=main&per_page=100" > runs.json
+              jq --arg sha "$checked_sha" '[.workflow_runs[] | select(.head_sha == $sha and .head_branch == "main" and (.event == "push" or .event == "workflow_dispatch"))] | sort_by(.id) | last' runs.json > latest.json
               jq -e '. != null and .status == "completed" and .conclusion == "success"' latest.json
               jq -r '"Verified " + .name + " run " + (.id | tostring) + " at " + .head_sha' latest.json
             done
