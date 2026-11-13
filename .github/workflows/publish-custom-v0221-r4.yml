@@ -16,7 +16,7 @@ env:
   IMAGE: ghcr.io/ttt599536561/sub2api-custom
   VERSION: 0.2.21-r4
   # Build the exact application commit requested for this release, independent of the workflow commit.
-  SOURCE_COMMIT: 4a709da569863edc429613b04511eba559b94ef8
+  SOURCE_COMMIT: 974f727ca58caf74bc1b278df7ccac07664ab636
 
 jobs:
   gate:
