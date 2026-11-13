@@ -52,6 +52,7 @@ func projectSubscriptionJSON(raw json.RawMessage, readable bool) any {
 	keys := []string{"id"}
 	if readable {
 		keys = append(keys, "user_id", "group_id", "starts_at", "expires_at", "status",
+			"entitlement_kind", "welfare_grant_count", "welfare_adjustment_version", "welfare_cycle_closed", "welfare_monthly_limit_usd",
 			"daily_window_start", "weekly_window_start", "monthly_window_start",
 			"daily_usage_usd", "weekly_usage_usd", "monthly_usage_usd",
 			"created_at", "updated_at", "revoked_at", "assigned_by", "assigned_at", "notes")

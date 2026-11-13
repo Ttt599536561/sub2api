@@ -15,6 +15,28 @@ import type {
 
 export type SubscriptionBulkAction = 'extend' | 'reset_quota' | 'revoke' | 'restore'
 
+export interface AdjustWelfareSubscriptionRequest {
+  monthly_limit_usd?: number
+  remaining_days?: number
+  expected_version: number
+  expected_grant_count: number
+  reason: string
+}
+
+/** Adjust only this user's current welfare term; existing usage is retained. */
+export async function adjustWelfare(
+  id: number,
+  request: AdjustWelfareSubscriptionRequest,
+  idempotencyKey: string
+): Promise<UserSubscription> {
+  const { data } = await apiClient.post<UserSubscription>(
+    `/admin/subscriptions/${id}/adjust-welfare`,
+    request,
+    { headers: { 'Idempotency-Key': idempotencyKey } }
+  )
+  return data
+}
+
 export interface SubscriptionBulkActionRequest {
   subscription_ids: number[]
   action: SubscriptionBulkAction
@@ -237,6 +259,7 @@ export const subscriptionsAPI = {
   bulkAssign,
   bulkAction,
   extend,
+  adjustWelfare,
   revoke,
   restore,
   resetQuota,

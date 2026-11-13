@@ -1939,7 +1939,7 @@ func (h *GatewayHandler) calculateSubscriptionRemaining(group *service.Group, su
 	}
 
 	// 检查月限额
-	if group.HasMonthlyLimit() {
+	if group.HasMonthlyLimit() || sub.IsWelfare() && group.MonthlyLimitUSD != nil {
 		remaining := *group.MonthlyLimitUSD - sub.MonthlyUsageUSD
 		if remaining <= 0 {
 			return 0

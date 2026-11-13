@@ -18,3 +18,15 @@ func TestScopedPermissionCatalogRequiresExplicitGrant(t *testing.T) {
 		t.Fatal("旧策略不得继承新增权限")
 	}
 }
+
+func TestWelfareAdjustmentRequiresDedicatedPermission(t *testing.T) {
+	const route = "/api/v1/admin/subscriptions/:id/adjust-welfare"
+	for _, permissions := range [][]string{nil, {"subscriptions.read"}, {"subscriptions.extend"}, {"subscriptions.reset"}} {
+		if RouteAllowed(Policy{GlobalPermissions: permissions}, "POST", route) {
+			t.Fatalf("unrelated permissions authorize welfare adjustment: %v", permissions)
+		}
+	}
+	if !RouteAllowed(Policy{GlobalPermissions: []string{"subscriptions.welfare.adjust"}}, "POST", route) {
+		t.Fatal("dedicated permission must authorize welfare adjustment")
+	}
+}

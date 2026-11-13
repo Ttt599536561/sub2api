@@ -326,25 +326,28 @@
               </div>
 
               <!-- Monthly Usage -->
-              <div v-if="row.group?.monthly_limit_usd" class="usage-row">
+              <div v-if="getMonthlyLimit(row) || (row.entitlement_kind === 'welfare' && getMonthlyLimit(row) === 0)" class="usage-row">
                 <div class="flex items-center gap-2">
                   <span class="usage-label">{{ t('admin.subscriptions.monthly') }}</span>
                   <div class="h-1.5 flex-1 rounded-full bg-gray-200 dark:bg-dark-600">
                     <div
                       class="h-1.5 rounded-full transition-all"
-                      :class="getProgressClass(row.monthly_usage_usd, row.group?.monthly_limit_usd)"
+                      :class="getProgressClass(row.monthly_usage_usd, getMonthlyLimit(row))"
                       :style="{
-                        width: getProgressWidth(row.monthly_usage_usd, row.group?.monthly_limit_usd)
+                        width: getProgressWidth(row.monthly_usage_usd, getMonthlyLimit(row))
                       }"
                     ></div>
                   </div>
                   <span class="usage-amount">
                     ${{ row.monthly_usage_usd?.toFixed(2) || '0.00' }}
                     <span class="text-gray-400">/</span>
-                    ${{ row.group?.monthly_limit_usd?.toFixed(2) }}
+                    ${{ getMonthlyLimit(row)?.toFixed(2) }}
                   </span>
                 </div>
-                <div class="reset-info" v-if="row.monthly_window_start">
+                <p v-if="row.entitlement_kind === 'welfare' && getMonthlyLimit(row) === 0" class="mt-1 text-xs text-amber-700 dark:text-amber-300">
+                  {{ t('userSubscriptions.welfareQuotaDisabled') }}
+                </p>
+                <div class="reset-info" v-if="row.entitlement_kind === 'welfare' ? row.expires_at : row.monthly_window_start">
                   <svg
                     class="h-3 w-3"
                     fill="none"
@@ -358,7 +361,9 @@
                       d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
                     />
                   </svg>
-                  <span>{{ formatResetTime(row.monthly_window_start, 'monthly') }}</span>
+                  <span>{{ row.entitlement_kind === 'welfare'
+                    ? t('userSubscriptions.welfareQuotaExpiresAt', { time: formatDateTimeToMinute(row.expires_at) })
+                    : formatResetTime(row.monthly_window_start, 'monthly') }}</span>
                 </div>
               </div>
 
@@ -367,7 +372,8 @@
                 v-if="
                   !row.group?.daily_limit_usd &&
                   !row.group?.weekly_limit_usd &&
-                  !row.group?.monthly_limit_usd
+                  !row.group?.monthly_limit_usd &&
+                  row.entitlement_kind !== 'welfare'
                 "
                 class="flex items-center gap-2 rounded-lg bg-gradient-to-r from-emerald-50 to-teal-50 px-3 py-2 dark:from-emerald-900/20 dark:to-teal-900/20"
               >
@@ -422,6 +428,14 @@
 
           <template #cell-actions="{ row }">
             <div class="flex items-center gap-1">
+              <button
+                v-if="row.entitlement_kind === 'welfare' && !row.welfare_cycle_closed && (row.status === 'active' || row.status === 'expired')"
+                @click="welfareAdjustingSubscription = row"
+                class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-violet-50 hover:text-violet-600 dark:hover:bg-violet-900/20 dark:hover:text-violet-400"
+              >
+                <Icon name="calendar" size="sm" />
+                <span class="text-xs">{{ t('admin.subscriptions.welfareAdjust.action') }}</span>
+              </button>
               <button
                 v-if="row.entitlement_kind !== 'welfare' && (row.status === 'active' || row.status === 'expired')"
                 @click="handleExtend(row)"
@@ -489,6 +503,14 @@
       :subscriptions="bulkSubscriptions"
       @close="bulkAction = null"
       @completed="handleBulkCompleted"
+    />
+
+    <WelfareSubscriptionAdjustDialog
+      v-if="welfareAdjustingSubscription"
+      :key="welfareAdjustingSubscription.id"
+      :subscription-id="welfareAdjustingSubscription.id"
+      @close="welfareAdjustingSubscription = null"
+      @completed="handleWelfareAdjusted"
     />
 
     <!-- Assign Subscription Modal -->
@@ -853,6 +875,7 @@ import type { SimpleUser } from '@/api/admin/usage'
 import type { SubscriptionBulkAction, SubscriptionBulkActionResult, BulkAssignSubscriptionResult } from '@/api/admin/subscriptions'
 import { useTableSelection } from '@/composables/useTableSelection'
 import BulkSubscriptionActionDialog from '@/components/admin/subscription/BulkSubscriptionActionDialog.vue'
+import WelfareSubscriptionAdjustDialog from '@/components/admin/subscription/WelfareSubscriptionAdjustDialog.vue'
 import type { Column } from '@/components/common/types'
 import { formatDateTimeToMinute } from '@/utils/format'
 import { getPersistedPageSize } from '@/composables/usePersistedPageSize'
@@ -1094,6 +1117,7 @@ const submitting = ref(false)
 const resettingSubscription = ref<UserSubscription | null>(null)
 const resettingQuota = ref(false)
 const extendingSubscription = ref<UserSubscription | null>(null)
+const welfareAdjustingSubscription = ref<UserSubscription | null>(null)
 const revokingSubscription = ref<UserSubscription | null>(null)
 const restoringSubscription = ref<UserSubscription | null>(null)
 
@@ -1393,6 +1417,13 @@ const handleAssignSubscription = async () => {
   }
 }
 
+const handleWelfareAdjusted = (updated: UserSubscription) => {
+  subscriptions.value = subscriptions.value.map(subscription => subscription.id === updated.id ? updated : subscription)
+  welfareAdjustingSubscription.value = null
+  appStore.showSuccess(t('admin.subscriptions.welfareAdjust.saved'))
+  loadSubscriptions()
+}
+
 const handleExtend = (subscription: UserSubscription) => {
   if (subscription.entitlement_kind === 'welfare') return
   extendingSubscription.value = subscription
@@ -1534,6 +1565,10 @@ const getProgressWidth = (used: number | null | undefined, limit: number | null)
   const percentage = Math.min((usedValue / limit) * 100, 100)
   return `${percentage}%`
 }
+
+const getMonthlyLimit = (subscription: UserSubscription): number | null => subscription.entitlement_kind === 'welfare'
+  ? subscription.welfare_monthly_limit_usd ?? subscription.group?.monthly_limit_usd ?? null
+  : subscription.group?.monthly_limit_usd ?? null
 
 const getProgressClass = (used: number | null | undefined, limit: number | null): string => {
   if (!limit || limit === 0) return 'bg-gray-400'

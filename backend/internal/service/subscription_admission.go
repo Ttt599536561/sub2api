@@ -155,10 +155,13 @@ func checkAuthoritativeSubscriptionLimits(sub *UserSubscription, group *Group, n
 			return ErrSubscriptionInvalid
 		}
 	}
+	if sub.IsWelfare() && (group.MonthlyLimitUSD == nil || *group.MonthlyLimitUSD < 0) {
+		return ErrSubscriptionInvalid
+	}
 	if group.HasWeeklyLimit() && sub.WeeklyUsageUSD >= *group.WeeklyLimitUSD {
 		return ErrWeeklyLimitExceeded
 	}
-	if group.HasMonthlyLimit() && sub.MonthlyUsageUSD >= *group.MonthlyLimitUSD {
+	if (group.HasMonthlyLimit() || sub.IsWelfare()) && sub.MonthlyUsageUSD >= *group.MonthlyLimitUSD {
 		return ErrMonthlyLimitExceeded
 	}
 	if group.HasDailyLimit() && sub.DailyUsageUSD >= *group.DailyLimitUSD {

@@ -681,6 +681,35 @@ export default {
 
     // Subscriptions
     subscriptions: {
+      welfareAdjust: {
+        action: 'Adjust welfare pass',
+        title: 'Adjust user welfare pass',
+        currentTotal: 'Current monthly total',
+        used: 'Used this term',
+        available: 'Current remaining quota',
+        scopeHint: 'Only this user’s current welfare term is adjusted. Used quota is retained and paid subscriptions are unaffected. Only checked fields are submitted.',
+        changeTotal: 'Change monthly total',
+        newTotal: 'New monthly total (USD)',
+        totalHint: 'Sets the term total, rather than adding quota. Use up to 2 decimal places and a value below 10 billion. Zero disables the quota.',
+        newAvailable: 'Remaining quota after adjustment',
+        quotaDisabled: 'Zero total: quota is disabled. Existing usage is retained.',
+        changeDays: 'Change remaining days',
+        daysHint: 'Sets 0–36500 remaining days from the time of saving. Leave unchecked to retain the current expiry.',
+        expiresImmediately: 'Zero remaining days: expires immediately when saved.',
+        reason: 'Reason for adjustment',
+        reasonHint: 'Required, 3–500 characters, recorded with this adjustment.',
+        unavailable: 'This welfare term cannot be adjusted, or current quota and version details are missing. Reload and check the server version if it remains unavailable.',
+        selectChange: 'Select at least one field to change.',
+        invalidTotal: 'Enter an amount from 0 to less than 10 billion, with up to 2 decimal places.',
+        invalidDays: 'Remaining days must be a whole number from 0 to 36500.',
+        invalidReason: 'Enter a reason of 3–500 characters.',
+        conflict: 'This welfare pass has changed or the request is still processing. Reload the latest details, review them, then save again. Your entries will be retained.',
+        reload: 'Reload latest details',
+        loadFailed: 'Could not load welfare pass details. Please retry.',
+        retryHint: 'The result is not confirmed. Saving unchanged entries retries the same operation to avoid duplicate adjustments.',
+        save: 'Save welfare adjustment',
+        saved: 'Welfare pass adjusted'
+      },
       batchAssign: {
         enable: 'Assign to multiple users',
         hint: 'Search and add up to 100 users to assign the same group and validity period.',

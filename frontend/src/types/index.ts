@@ -2199,6 +2199,9 @@ export interface UserSubscription {
   group_id: number
   entitlement_kind?: 'standard' | 'welfare'
   welfare_grant_count?: number
+  welfare_adjustment_version?: number
+  welfare_cycle_closed?: boolean
+  welfare_monthly_limit_usd?: number | null
   status: 'active' | 'expired' | 'revoked' | 'suspended'
   starts_at: string
   daily_usage_usd: number

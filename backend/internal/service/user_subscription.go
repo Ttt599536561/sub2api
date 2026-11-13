@@ -133,7 +133,7 @@ func (s *UserSubscription) NeedsMonthlyReset() bool {
 }
 
 func (s *UserSubscription) NeedsMonthlyResetAt(now time.Time) bool {
-	if s.MonthlyWindowStart == nil {
+	if s.IsWelfare() || s.MonthlyWindowStart == nil {
 		return false
 	}
 	return !now.Before(s.MonthlyWindowStart.Add(30 * 24 * time.Hour))
@@ -191,6 +191,13 @@ func (s *UserSubscription) windowResetAnchor(previous time.Time) time.Time {
 // 窗口从锚点按整数个 period 步进，且不越过订阅到期时间，避免最后一个不完整
 // 周期重复发放额度（issue #5051）。日窗口不走此函数，见 automaticDailyWindowStartAt。
 func (s *UserSubscription) automaticWindowStartAt(previous *time.Time, period time.Duration, now time.Time) (time.Time, bool) {
+	// Welfare monthly quota is the total granted for this entitlement's entire
+	// term. An administrator may extend that term without issuing another grant.
+	// Keep this guard at the shared primitive so every maintenance path preserves
+	// consumed quota, including locked daily-reset maintenance and list views.
+	if s.IsWelfare() && period == 30*24*time.Hour {
+		return time.Time{}, false
+	}
 	if previous == nil {
 		return time.Time{}, false
 	}
@@ -234,6 +241,11 @@ func (s *UserSubscription) MonthlyResetTime() *time.Time {
 	if s.MonthlyWindowStart == nil {
 		return nil
 	}
+	if s.IsWelfare() {
+		// The quota ends with this welfare cycle; it does not refresh at day 30.
+		t := s.ExpiresAt
+		return &t
+	}
 	t := s.windowResetAnchor(*s.MonthlyWindowStart).Add(30 * 24 * time.Hour)
 	return &t
 }
@@ -255,6 +267,12 @@ func (s *UserSubscription) CheckWeeklyLimit(group *Group, additionalCost float64
 }
 
 func (s *UserSubscription) CheckMonthlyLimit(group *Group, additionalCost float64) bool {
+	if s.IsWelfare() {
+		// Zero is an exhausted finite welfare total, while ordinary groups retain
+		// their existing zero-means-unlimited convention.
+		return s.WelfareMonthlyLimitUSD != nil && *s.WelfareMonthlyLimitUSD > 0 &&
+			s.MonthlyUsageUSD+additionalCost <= *s.WelfareMonthlyLimitUSD
+	}
 	group = s.EffectiveGroup(group)
 	if !group.HasMonthlyLimit() {
 		return true

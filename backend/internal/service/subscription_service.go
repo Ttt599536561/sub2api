@@ -1284,8 +1284,12 @@ func (s *SubscriptionService) calculateProgress(sub *UserSubscription, group *Gr
 	}
 
 	// 月进度
-	if group.HasMonthlyLimit() && sub.MonthlyWindowStart != nil {
+	if (group.HasMonthlyLimit() || sub.IsWelfare() && group.MonthlyLimitUSD != nil) && sub.MonthlyWindowStart != nil {
 		limit := *group.MonthlyLimitUSD
+		percentage := 100.0
+		if limit > 0 {
+			percentage = (sub.MonthlyUsageUSD / limit) * 100
+		}
 		resetsAt := sub.MonthlyWindowStart.Add(30 * 24 * time.Hour)
 		if monthlyResetTime := sub.MonthlyResetTime(); monthlyResetTime != nil {
 			resetsAt = *monthlyResetTime
@@ -1294,7 +1298,7 @@ func (s *SubscriptionService) calculateProgress(sub *UserSubscription, group *Gr
 			LimitUSD:        limit,
 			UsedUSD:         sub.MonthlyUsageUSD,
 			RemainingUSD:    limit - sub.MonthlyUsageUSD,
-			Percentage:      (sub.MonthlyUsageUSD / limit) * 100,
+			Percentage:      percentage,
 			WindowStart:     *sub.MonthlyWindowStart,
 			ResetsAt:        resetsAt,
 			ResetsInSeconds: int64(time.Until(resetsAt).Seconds()),

@@ -50,6 +50,25 @@ describe('subscription daily reset controls', () => {
     sessionStorage.clear()
   })
 
+  it.each(['welfare', 'standard'] as const)('shows zero monthly total correctly for %s', async kind => {
+    const item = subscription()
+    item.entitlement_kind = kind
+    item.group = { ...item.group!, daily_limit_usd: null, weekly_limit_usd: null, monthly_limit_usd: 0 }
+    api.getMySubscriptions.mockResolvedValue([item])
+    const wrapper = mountView()
+    await flushPromises()
+    if (kind === 'welfare') {
+      expect(wrapper.text()).toContain('userSubscriptions.welfareQuotaDisabled')
+      expect(wrapper.text()).toContain('userSubscriptions.welfareQuotaExpiresAt')
+      expect(wrapper.text()).toContain('$700.00 / $0.00')
+      expect(wrapper.text()).not.toContain('userSubscriptions.unlimited')
+    } else {
+      expect(wrapper.text()).toContain('userSubscriptions.unlimited')
+      expect(wrapper.text()).not.toContain('userSubscriptions.welfareQuotaDisabled')
+    }
+    wrapper.unmount()
+  })
+
   it('shows controls only for eligible subscriptions and trusts can_reset despite rounded usage', async () => {
     const ineligible = subscription(2)
     ineligible.daily_reset!.eligible = false

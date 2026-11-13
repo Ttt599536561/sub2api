@@ -681,6 +681,35 @@ export default {
 
     // Subscriptions Management
     subscriptions: {
+      welfareAdjust: {
+        action: '调整福利月卡',
+        title: '调整用户福利月卡',
+        currentTotal: '当前月总额度',
+        used: '本期已用额度',
+        available: '当前剩余额度',
+        scopeHint: '仅调整此用户当前这期福利月卡。已用额度保留，购买订阅不受影响。只提交勾选的项目。',
+        changeTotal: '修改月总额度',
+        newTotal: '新的月总额度（美元）',
+        totalHint: '设置本期总额度，不是增加额度；最多 2 位小数，必须小于 100 亿。设为 0 将停用额度。',
+        newAvailable: '调整后剩余额度',
+        quotaDisabled: '总额度为 0：额度已停用，已用记录仍保留。',
+        changeDays: '修改剩余天数',
+        daysHint: '从保存时刻起计算剩余天数，范围 0–36500 天。未勾选则保留当前到期时间。',
+        expiresImmediately: '剩余天数为 0：保存后立即到期。',
+        reason: '调整原因',
+        reasonHint: '必填，3–500 个字符，用于记录本次调整。',
+        unavailable: '当前福利周期不可调整，或缺少最新额度及版本信息。请重新加载；仍不可用时请核对服务版本。',
+        selectChange: '请至少勾选一个需要修改的项目。',
+        invalidTotal: '请输入不小于 0、且小于 100 亿的金额，最多 2 位小数。',
+        invalidDays: '剩余天数必须是 0–36500 之间的整数。',
+        invalidReason: '请填写 3–500 个字符的调整原因。',
+        conflict: '该福利月卡已发生变化或请求仍在处理中。请重新加载最新数据，核对后再次保存；已填写内容会保留。',
+        reload: '重新加载最新数据',
+        loadFailed: '无法加载福利月卡详情，请重试。',
+        retryHint: '请求结果尚未确认。保持内容不变再次保存会重试同一操作，避免重复调整。',
+        save: '保存福利调整',
+        saved: '福利月卡已调整'
+      },
       batchAssign: {
         enable: '批量分配订阅',
         hint: '搜索并添加多个用户，统一分配所选分组和有效期。每次最多 100 人。',

@@ -134,7 +134,7 @@
                   </span>
                 </div>
 
-                <div v-if="subscription.group?.monthly_limit_usd" class="flex items-center gap-2">
+                <div v-if="subscription.group?.monthly_limit_usd || (subscription.entitlement_kind === 'welfare' && subscription.group?.monthly_limit_usd === 0)" class="flex items-center gap-2">
                   <span class="w-8 flex-shrink-0 text-[10px] text-gray-500">{{
                     t('subscriptionProgress.monthly')
                   }}</span>
@@ -164,6 +164,9 @@
                     }}
                   </span>
                 </div>
+                <p v-if="subscription.entitlement_kind === 'welfare' && subscription.group?.monthly_limit_usd === 0" class="text-[10px] text-amber-700 dark:text-amber-300">
+                  {{ t('userSubscriptions.welfareQuotaDisabled') }}
+                </p>
               </template>
             </div>
           </div>
@@ -230,6 +233,7 @@ function getMaxUsagePercentage(sub: UserSubscription): number {
 
 function isUnlimited(sub: UserSubscription): boolean {
   return (
+    sub.entitlement_kind !== 'welfare' &&
     !sub.group?.daily_limit_usd &&
     !sub.group?.weekly_limit_usd &&
     !sub.group?.monthly_limit_usd
@@ -237,6 +241,7 @@ function isUnlimited(sub: UserSubscription): boolean {
 }
 
 function getProgressDotClass(sub: UserSubscription): string {
+  if (sub.entitlement_kind === 'welfare' && sub.group?.monthly_limit_usd === 0) return 'bg-gray-400'
   // Unlimited subscriptions get a special color
   if (isUnlimited(sub)) {
     return 'bg-emerald-500'

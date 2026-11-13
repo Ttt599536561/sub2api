@@ -199,7 +199,7 @@
             </div>
 
             <!-- Monthly Usage -->
-            <div v-if="subscription.group?.monthly_limit_usd" class="space-y-2">
+            <div v-if="subscription.group?.monthly_limit_usd || (subscription.entitlement_kind === 'welfare' && subscription.group?.monthly_limit_usd === 0)" class="space-y-2">
               <div class="flex items-center justify-between">
                 <span class="text-sm font-medium text-gray-700 dark:text-gray-300">
                   {{ t('userSubscriptions.monthly') }}
@@ -227,12 +227,17 @@
                   }"
                 ></div>
               </div>
+              <p v-if="subscription.entitlement_kind === 'welfare' && subscription.group?.monthly_limit_usd === 0" class="text-xs text-amber-700 dark:text-amber-300">
+                {{ t('userSubscriptions.welfareQuotaDisabled') }}
+              </p>
               <p
-                v-if="subscription.monthly_window_start"
+                v-if="subscription.entitlement_kind === 'welfare' ? subscription.expires_at : subscription.monthly_window_start"
                 class="text-xs text-gray-500 dark:text-dark-400"
               >
                 {{
-                  t('userSubscriptions.resetIn', {
+                  subscription.entitlement_kind === 'welfare'
+                    ? t('userSubscriptions.welfareQuotaExpiresAt', { time: formatDateTimeToMinute(subscription.expires_at!) })
+                    : t('userSubscriptions.resetIn', {
                     time: formatResetTime(subscription.monthly_window_start, 720)
                   })
                 }}
@@ -244,7 +249,8 @@
               v-if="
                 !subscription.group?.daily_limit_usd &&
                 !subscription.group?.weekly_limit_usd &&
-                !subscription.group?.monthly_limit_usd
+                !subscription.group?.monthly_limit_usd &&
+                subscription.entitlement_kind !== 'welfare'
               "
               class="flex items-center justify-center rounded-xl bg-gradient-to-r from-emerald-50 to-teal-50 py-6 dark:from-emerald-900/20 dark:to-teal-900/20"
             >

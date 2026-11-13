@@ -113,8 +113,10 @@ export default {
   userSubscriptions: {
     welfare: '福利订阅',
     welfareGrantCount: '已叠加 {count} 张福利卡',
-    welfareFixedExpiry: '沿用首张到期时间',
-    welfareQuotaRule: '同一有效期内再次兑换只叠加额度，全部额度沿用首张卡的到期时间，不延长天数；到期后再兑换开始新一期。付费订阅独立计算。',
+    welfareFixedExpiry: '以当前周期到期时间为准',
+    welfareQuotaDisabled: '额度已停用（$0.00）',
+    welfareQuotaExpiresAt: '额度到期：{time}',
+    welfareQuotaRule: '同一周期内再次兑换只叠加额度，不延长当前到期时间。管理员可调整本周期的总额度和有效期，已用额度不会清零；到期后再兑换开始新一期。付费订阅独立计算。',
     resetDaily: '重置',
     autoDailyReset: '自动重置日额度',
     dailyResetCount: '今日已重置 {count}/{limit} 次',

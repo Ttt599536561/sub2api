@@ -793,6 +793,9 @@ type UserSubscription struct {
 // 注意：普通用户接口不得返回 assigned_by/assigned_at/notes/assigned_by_user 等管理员字段。
 type AdminUserSubscription struct {
 	UserSubscription
+	WelfareAdjustmentVersion int64    `json:"welfare_adjustment_version"`
+	WelfareCycleClosed       bool     `json:"welfare_cycle_closed"`
+	WelfareMonthlyLimitUSD   *float64 `json:"welfare_monthly_limit_usd,omitempty"`
 
 	AssignedBy *int64    `json:"assigned_by"`
 	AssignedAt time.Time `json:"assigned_at"`

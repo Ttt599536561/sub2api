@@ -115,8 +115,10 @@ export default {
   userSubscriptions: {
     welfare: 'Welfare subscription',
     welfareGrantCount: '{count} welfare passes stacked',
-    welfareFixedExpiry: 'First pass expiry applies',
-    welfareQuotaRule: 'Additional redemptions in the current term add quota and keep the first pass expiry. Redeeming after expiry starts a new term. Paid subscriptions remain separate.',
+    welfareFixedExpiry: 'Current term expiry applies',
+    welfareQuotaDisabled: 'Quota disabled ($0.00)',
+    welfareQuotaExpiresAt: 'Quota expires: {time}',
+    welfareQuotaRule: 'Additional redemptions add quota without extending the current term. Administrators can adjust its total quota and expiry without clearing usage. Redeeming after expiry starts a new term. Paid subscriptions remain separate.',
     resetDaily: 'Reset',
     autoDailyReset: 'Auto-reset daily quota',
     dailyResetCount: 'Today: {count}/{limit} resets',
