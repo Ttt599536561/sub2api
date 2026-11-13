@@ -49,6 +49,32 @@ func migrationUpgradeExpectedGroupDefaults(t *testing.T, snapshot string) string
 	return string(expected)
 }
 
+// Add the six welfare defaults only to the expected historical rows. Keeping
+// the actual snapshot intact verifies every old field and every new default.
+func migrationUpgradeExpectedSubscriptionDefaults(t *testing.T, snapshot string) string {
+	t.Helper()
+	var subscriptions []map[string]json.RawMessage
+	require.NoError(t, json.Unmarshal([]byte(snapshot), &subscriptions))
+	require.NotEmpty(t, subscriptions, "the historical fixture must contain existing subscriptions")
+	defaults := map[string]json.RawMessage{
+		"entitlement_kind":          json.RawMessage(`"standard"`),
+		"welfare_daily_limit_usd":   json.RawMessage(`null`),
+		"welfare_weekly_limit_usd":  json.RawMessage(`null`),
+		"welfare_monthly_limit_usd": json.RawMessage(`null`),
+		"welfare_grant_count":       json.RawMessage(`0`),
+		"welfare_cycle_closed":      json.RawMessage(`false`),
+	}
+	for _, subscription := range subscriptions {
+		for field, value := range defaults {
+			require.NotContains(t, subscription, field, "the pinned source fixture must predate welfare entitlements")
+			subscription[field] = value
+		}
+	}
+	expected, err := json.Marshal(subscriptions)
+	require.NoError(t, err)
+	return string(expected)
+}
+
 // Start from the upstream migration set, with existing customer data, rather
 // than merely checking that the customized schema installs into an empty DB.
 // The source fixture stays pinned to upstream a3eb7ef302 (0.2.8), even as
@@ -111,6 +137,7 @@ func TestSubscriptionDailyResetUpgradeReview3_ExistingUpstreamDataAndMigrationHi
 		before[name] = snapshot(query)
 	}
 	before["groups"] = migrationUpgradeExpectedGroupDefaults(t, before["groups"])
+	before["subscriptions"] = migrationUpgradeExpectedSubscriptionDefaults(t, before["subscriptions"])
 
 	require.NoError(t, ApplyMigrations(ctx, db))
 	require.Equal(t, "0", snapshot("SELECT count(*)::text FROM groups WHERE image_count_billing IS DISTINCT FROM false"),

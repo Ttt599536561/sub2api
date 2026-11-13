@@ -191,6 +191,7 @@ func testDeployedCustomUpgrade(t *testing.T, baseline migrationUpgradeBaseline) 
 		before[name] = snapshot(query)
 	}
 	before["groups"] = migrationUpgradeExpectedGroupDefaults(t, before["groups"])
+	before["subscriptions"] = migrationUpgradeExpectedSubscriptionDefaults(t, before["subscriptions"])
 	before["programs"] = welfareCheckinV3ExpectedPrograms(t, before["programs"])
 	before["programs"] = welfareLotteryV4ExpectedPrograms(t, before["programs"])
 
