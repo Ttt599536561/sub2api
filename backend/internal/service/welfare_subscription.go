@@ -19,7 +19,7 @@ func isAssignedWelfareSubscriptionCode(ctx context.Context, tx *dbent.Tx, codeID
 	if err != nil {
 		return false, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	var found bool
 	if !rows.Next() {
 		if err := rows.Err(); err != nil {

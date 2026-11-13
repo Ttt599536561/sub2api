@@ -134,6 +134,9 @@ func TestFixedChargeReviewRejectsChangedSubscriptionIdentity(t *testing.T) {
 			switch name {
 			case "replacement":
 				subRepo.sub.ID++
+				// Admission now reads the selected ID directly. A replacement is
+				// absent from that request's entitlement, rather than a new match.
+				wantErr = ErrSubscriptionNotFound
 			case "billing mode":
 				groupRepo.group.SubscriptionType = SubscriptionTypeStandard
 			case "group unavailable":

@@ -270,6 +270,10 @@ export default {
       "label": "Reset subscription quota",
       "category": "Subscriptions"
     },
+    "subscriptions_dwelfare_dadjust": {
+      "label": "Adjust invitation welfare monthly pass quota and remaining days",
+      "category": "Subscriptions"
+    },
     "announcements_dread": {
       "label": "Read all announcements and read receipts",
       "category": "Content"

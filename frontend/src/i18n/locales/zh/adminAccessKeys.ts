@@ -270,6 +270,10 @@ export default {
       "label": "重置订阅额度",
       "category": "订阅"
     },
+    "subscriptions_dwelfare_dadjust": {
+      "label": "调整邀请福利月卡额度和天数",
+      "category": "订阅"
+    },
     "announcements_dread": {
       "label": "读取所有公告与阅读记录",
       "category": "内容"
