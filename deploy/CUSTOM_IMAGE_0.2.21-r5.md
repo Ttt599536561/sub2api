@@ -6,7 +6,7 @@
 
 目标镜像：`ghcr.io/ttt599536561/sub2api-custom:0.2.21-r5`，只包含原生linux/amd64和linux/arm64。当前为版本提交/发布准备阶段，尚未构建或发布，不应提前拉取。
 
-应用来源在版本提交后固定于r5专用workflow。发布必须通过该应用SHA及发布控制SHA各自最新的完整CI、Security Scan；随后双架构原生运行、版本/OCI/资源校验、五必要产物验证及匿名registry全部层验证。
+已推送并固定应用源码：`8eb4fe13a3215248cbf67e35586df9aa692b51aa`。应用Security Scan已成功，完整CI正在执行；r5专用workflow固定该源码，发布控制提交随后单独验证。发布必须通过应用SHA及发布控制SHA各自最新的完整CI、Security Scan；随后双架构原生运行、版本/OCI/资源校验、五必要产物验证及匿名registry全部层验证。
 
 ## 功能和升级
 
