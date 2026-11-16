@@ -39,6 +39,16 @@ type RedeemCode struct {
 	ExpiresAt *time.Time `json:"expires_at,omitempty"`
 	// GroupID holds the value of the "group_id" field.
 	GroupID *int64 `json:"group_id,omitempty"`
+	// SubscriptionEffect holds the value of the "subscription_effect" field.
+	SubscriptionEffect string `json:"subscription_effect,omitempty"`
+	// WelfareCampaignID holds the value of the "welfare_campaign_id" field.
+	WelfareCampaignID *int64 `json:"welfare_campaign_id,omitempty"`
+	// WelfareCampaignVersion holds the value of the "welfare_campaign_version" field.
+	WelfareCampaignVersion *int64 `json:"welfare_campaign_version,omitempty"`
+	// WelfareCampaignName holds the value of the "welfare_campaign_name" field.
+	WelfareCampaignName string `json:"welfare_campaign_name,omitempty"`
+	// QuotaAmountUsd holds the value of the "quota_amount_usd" field.
+	QuotaAmountUsd *float64 `json:"quota_amount_usd,omitempty"`
 	// ValidityDays holds the value of the "validity_days" field.
 	ValidityDays int `json:"validity_days,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
@@ -85,11 +95,11 @@ func (*RedeemCode) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case redeemcode.FieldValue:
+		case redeemcode.FieldValue, redeemcode.FieldQuotaAmountUsd:
 			values[i] = new(sql.NullFloat64)
-		case redeemcode.FieldID, redeemcode.FieldUsedBy, redeemcode.FieldGroupID, redeemcode.FieldValidityDays:
+		case redeemcode.FieldID, redeemcode.FieldUsedBy, redeemcode.FieldGroupID, redeemcode.FieldWelfareCampaignID, redeemcode.FieldWelfareCampaignVersion, redeemcode.FieldValidityDays:
 			values[i] = new(sql.NullInt64)
-		case redeemcode.FieldCode, redeemcode.FieldType, redeemcode.FieldStatus, redeemcode.FieldNotes:
+		case redeemcode.FieldCode, redeemcode.FieldType, redeemcode.FieldStatus, redeemcode.FieldNotes, redeemcode.FieldSubscriptionEffect, redeemcode.FieldWelfareCampaignName:
 			values[i] = new(sql.NullString)
 		case redeemcode.FieldUsedAt, redeemcode.FieldCreatedAt, redeemcode.FieldExpiresAt:
 			values[i] = new(sql.NullTime)
@@ -178,6 +188,39 @@ func (_m *RedeemCode) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.GroupID = new(int64)
 				*_m.GroupID = value.Int64
+			}
+		case redeemcode.FieldSubscriptionEffect:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field subscription_effect", values[i])
+			} else if value.Valid {
+				_m.SubscriptionEffect = value.String
+			}
+		case redeemcode.FieldWelfareCampaignID:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field welfare_campaign_id", values[i])
+			} else if value.Valid {
+				_m.WelfareCampaignID = new(int64)
+				*_m.WelfareCampaignID = value.Int64
+			}
+		case redeemcode.FieldWelfareCampaignVersion:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field welfare_campaign_version", values[i])
+			} else if value.Valid {
+				_m.WelfareCampaignVersion = new(int64)
+				*_m.WelfareCampaignVersion = value.Int64
+			}
+		case redeemcode.FieldWelfareCampaignName:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field welfare_campaign_name", values[i])
+			} else if value.Valid {
+				_m.WelfareCampaignName = value.String
+			}
+		case redeemcode.FieldQuotaAmountUsd:
+			if value, ok := values[i].(*sql.NullFloat64); !ok {
+				return fmt.Errorf("unexpected type %T for field quota_amount_usd", values[i])
+			} else if value.Valid {
+				_m.QuotaAmountUsd = new(float64)
+				*_m.QuotaAmountUsd = value.Float64
 			}
 		case redeemcode.FieldValidityDays:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
@@ -268,6 +311,27 @@ func (_m *RedeemCode) String() string {
 	builder.WriteString(", ")
 	if v := _m.GroupID; v != nil {
 		builder.WriteString("group_id=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
+	builder.WriteString(", ")
+	builder.WriteString("subscription_effect=")
+	builder.WriteString(_m.SubscriptionEffect)
+	builder.WriteString(", ")
+	if v := _m.WelfareCampaignID; v != nil {
+		builder.WriteString("welfare_campaign_id=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
+	builder.WriteString(", ")
+	if v := _m.WelfareCampaignVersion; v != nil {
+		builder.WriteString("welfare_campaign_version=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
+	builder.WriteString(", ")
+	builder.WriteString("welfare_campaign_name=")
+	builder.WriteString(_m.WelfareCampaignName)
+	builder.WriteString(", ")
+	if v := _m.QuotaAmountUsd; v != nil {
+		builder.WriteString("quota_amount_usd=")
 		builder.WriteString(fmt.Sprintf("%v", *v))
 	}
 	builder.WriteString(", ")

@@ -55,6 +55,39 @@ describe('RedeemView refresh after redemption', () => {
     vi.restoreAllMocks()
   })
 
+  it.each([
+    ['add_quota', '+$12.50'],
+    ['extend_duration', '+45']
+  ])('shows the %s supplement with the actual result and labels history as a snapshot', async (effect, display) => {
+    const supplement = {
+      type: 'subscription', value: 0, message: 'Applied', subscription_effect: effect,
+      quota_amount_usd: 12.5, validity_days: 45, welfare_campaign_name: 'Autumn invitation',
+      welfare_result: { subscription_id: 55, monthly_limit_usd: 112.5, monthly_usage_usd: 20,
+        remaining_usd: 92.5, expires_at: '2027-01-01T00:00:00Z' }
+    }
+    redeem.mockResolvedValue(supplement)
+    getHistory.mockResolvedValue({ items: [{ ...supplement, id: 1, code: 'WELFARE-CODE', used_at: '2026-11-16T00:00:00Z' }], total: 1 })
+    const wrapper = await submitCode()
+    expect(wrapper.text()).toContain(display)
+    expect(wrapper.text()).toContain('Autumn invitation')
+    expect(wrapper.text()).toContain('$112.50')
+    expect(wrapper.text()).toContain('$20.00')
+    expect(wrapper.text()).toContain('$92.50')
+    expect(wrapper.text()).toContain('welfareRedeem.resultAtRedemption')
+    expect(wrapper.text()).not.toContain('redeem.subscriptionAssigned')
+    expect(fetchActiveSubscriptions).toHaveBeenCalledWith(true)
+    wrapper.unmount()
+  })
+
+  it('explains an inactive welfare entitlement and preserves the failed code', async () => {
+    redeem.mockRejectedValue({ status: 400, reason: 'WELFARE_SUPPLEMENT_NO_ACTIVE_CYCLE', message: 'unavailable' })
+    const wrapper = await submitCode()
+    expect(wrapper.text()).toContain('welfareRedeem.errors.subscriptionRequired')
+    expect((wrapper.get('input#code').element as HTMLInputElement).value).toBe(' REDEEM-CODE ')
+    expect(refreshUser).not.toHaveBeenCalled()
+    wrapper.unmount()
+  })
+
   it('explains an invitation reward cancellation using the actual API reason field', async () => {
     redeem.mockRejectedValue({ status: 400, code: 400, reason: 'REDEEM_CODE_CANCELLED', message: 'cancelled' })
     const wrapper = await submitCode()

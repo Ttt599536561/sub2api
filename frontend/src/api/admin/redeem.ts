@@ -9,6 +9,8 @@ import type {
   GenerateRedeemCodesRequest,
   BatchUpdateRedeemCodeFields,
   RedeemCodeType,
+  WelfareRedeemCampaign,
+  WelfareRedeemGenerateOptions,
   PaginatedResponse
 } from '@/types'
 
@@ -70,7 +72,8 @@ export async function generate(
   value: number,
   groupId?: number | null,
   validityDays?: number,
-  expiresInDays?: number | null
+  expiresInDays?: number | null,
+  welfare?: WelfareRedeemGenerateOptions
 ): Promise<RedeemCode[]> {
   const payload: GenerateRedeemCodesRequest = {
     count,
@@ -80,8 +83,14 @@ export async function generate(
 
   // 订阅类型专用字段
   if (type === 'subscription') {
-    payload.group_id = groupId
-    if (validityDays && validityDays > 0) {
+    if (welfare) {
+      payload.subscription_effect = welfare.subscription_effect
+      payload.welfare_campaign_id = welfare.welfare_campaign_id
+      if (welfare.subscription_effect === 'add_quota') payload.quota_amount_usd = welfare.quota_amount_usd
+    } else {
+      payload.group_id = groupId
+    }
+    if (welfare?.subscription_effect !== 'add_quota' && validityDays && validityDays > 0) {
       payload.validity_days = validityDays
     }
   }
@@ -90,6 +99,11 @@ export async function generate(
   }
 
   const { data } = await apiClient.post<RedeemCode[]>('/admin/redeem-codes/generate', payload)
+  return data
+}
+
+export async function welfareCampaigns(): Promise<WelfareRedeemCampaign[]> {
+  const { data } = await apiClient.get<WelfareRedeemCampaign[]>('/admin/redeem-codes/welfare-campaigns')
   return data
 }
 
@@ -195,6 +209,7 @@ export const redeemAPI = {
   list,
   getById,
   generate,
+  welfareCampaigns,
   delete: deleteCode,
   batchDelete,
   batchUpdate,

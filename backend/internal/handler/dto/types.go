@@ -514,15 +514,20 @@ type ProxyAccountSummary struct {
 }
 
 type RedeemCode struct {
-	ID        int64      `json:"id"`
-	Code      string     `json:"code"`
-	Type      string     `json:"type"`
-	Value     float64    `json:"value"`
-	Status    string     `json:"status"`
-	UsedBy    *int64     `json:"used_by"`
-	UsedAt    *time.Time `json:"used_at"`
-	CreatedAt time.Time  `json:"created_at"`
-	ExpiresAt *time.Time `json:"expires_at,omitempty"`
+	SubscriptionEffect  string                           `json:"subscription_effect,omitempty"`
+	WelfareCampaignID   *int64                           `json:"welfare_campaign_id,omitempty"`
+	WelfareCampaignName string                           `json:"welfare_campaign_name,omitempty"`
+	QuotaAmountUSD      *float64                         `json:"quota_amount_usd,omitempty"`
+	WelfareResult       *service.WelfareSupplementResult `json:"welfare_result,omitempty"`
+	ID                  int64                            `json:"id"`
+	Code                string                           `json:"code"`
+	Type                string                           `json:"type"`
+	Value               float64                          `json:"value"`
+	Status              string                           `json:"status"`
+	UsedBy              *int64                           `json:"used_by"`
+	UsedAt              *time.Time                       `json:"used_at"`
+	CreatedAt           time.Time                        `json:"created_at"`
+	ExpiresAt           *time.Time                       `json:"expires_at,omitempty"`
 
 	GroupID      *int64 `json:"group_id"`
 	ValidityDays int    `json:"validity_days"`

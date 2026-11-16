@@ -64,6 +64,16 @@ CREATE TABLE user_welfare_subscription_grants(redeem_code_id BIGINT PRIMARY KEY 
 	must(t, e)
 	_, e = scoped.Exec(string(b))
 	must(t, e)
+	_, e = scoped.Exec(`ALTER TABLE redeem_codes ADD COLUMN subscription_effect TEXT NOT NULL DEFAULT '', ADD COLUMN welfare_campaign_id BIGINT, ADD COLUMN welfare_campaign_version BIGINT, ADD COLUMN quota_amount_usd NUMERIC(20,10);`)
+	must(t, e)
+	b, e = os.ReadFile("../../migrations/259_welfare_redeem_supplements.sql")
+	must(t, e)
+	projectionStart := strings.Index(string(b), "CREATE TABLE IF NOT EXISTS user_welfare_subscription_supplement_quota")
+	if projectionStart < 0 {
+		t.Fatal("supplement projection DDL missing")
+	}
+	_, e = scoped.Exec(string(b)[projectionStart:])
+	must(t, e)
 	return NewStore(scoped, []byte(strings.Repeat("k", 32)))
 }
 

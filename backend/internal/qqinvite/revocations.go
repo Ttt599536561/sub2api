@@ -120,13 +120,17 @@ func (s *Store) revokeRecord(ctx context.Context, tx *sql.Tx, id int64, departed
 	if receiptID.Valid {
 		// Every arithmetic operation stays NUMERIC in PostgreSQL. Preserve usage,
 		// windows, expiry, status, grant count, and the identity of the original term.
+		// The subscription is locked before reading its protected supplement
+		// projection. Missing projection means zero, preserving legacy grants;
+		// administrator cuts already trimmed it in their own locked transaction.
 		_, err = tx.ExecContext(ctx, `UPDATE qq_invite_reward_revocations v SET daily_limit_usd=g.daily_limit_usd,weekly_limit_usd=g.weekly_limit_usd,monthly_limit_usd=g.monthly_limit_usd,before_daily_limit_usd=s.welfare_daily_limit_usd,before_weekly_limit_usd=s.welfare_weekly_limit_usd,before_monthly_limit_usd=s.welfare_monthly_limit_usd,after_daily_limit_usd=CASE WHEN s.welfare_daily_limit_usd IS NULL THEN
  CASE WHEN EXISTS(SELECT 1 FROM user_welfare_subscription_grants remaining WHERE remaining.subscription_id=s.id AND remaining.daily_limit_usd IS NULL AND NOT EXISTS(SELECT 1 FROM qq_invite_reward_revocations rv WHERE rv.redeem_code_id=remaining.redeem_code_id AND rv.status='applied')) THEN NULL
  ELSE COALESCE((SELECT sum(remaining.daily_limit_usd) FROM user_welfare_subscription_grants remaining WHERE remaining.subscription_id=s.id AND NOT EXISTS(SELECT 1 FROM qq_invite_reward_revocations rv WHERE rv.redeem_code_id=remaining.redeem_code_id AND rv.status='applied')),0) END
  ELSE GREATEST(0,s.welfare_daily_limit_usd-COALESCE(g.daily_limit_usd,0)) END,after_weekly_limit_usd=CASE WHEN s.welfare_weekly_limit_usd IS NULL THEN
  CASE WHEN EXISTS(SELECT 1 FROM user_welfare_subscription_grants remaining WHERE remaining.subscription_id=s.id AND remaining.weekly_limit_usd IS NULL AND NOT EXISTS(SELECT 1 FROM qq_invite_reward_revocations rv WHERE rv.redeem_code_id=remaining.redeem_code_id AND rv.status='applied')) THEN NULL
  ELSE COALESCE((SELECT sum(remaining.weekly_limit_usd) FROM user_welfare_subscription_grants remaining WHERE remaining.subscription_id=s.id AND NOT EXISTS(SELECT 1 FROM qq_invite_reward_revocations rv WHERE rv.redeem_code_id=remaining.redeem_code_id AND rv.status='applied')),0) END
- ELSE GREATEST(0,s.welfare_weekly_limit_usd-COALESCE(g.weekly_limit_usd,0)) END,after_monthly_limit_usd=GREATEST(0,s.welfare_monthly_limit_usd-g.monthly_limit_usd) FROM user_welfare_subscription_grants g JOIN user_subscriptions s ON s.id=g.subscription_id WHERE v.id=$1 AND g.redeem_code_id=v.redeem_code_id`, revocationID)
+ ELSE GREATEST(0,s.welfare_weekly_limit_usd-COALESCE(g.weekly_limit_usd,0)) END,after_monthly_limit_usd=GREATEST(0,s.welfare_monthly_limit_usd-g.monthly_limit_usd,
+ LEAST(s.welfare_monthly_limit_usd,COALESCE((SELECT protected_quota_usd FROM user_welfare_subscription_supplement_quota p WHERE p.subscription_id=s.id),0))) FROM user_welfare_subscription_grants g JOIN user_subscriptions s ON s.id=g.subscription_id WHERE v.id=$1 AND g.redeem_code_id=v.redeem_code_id`, revocationID)
 		if err != nil {
 			return err
 		}

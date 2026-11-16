@@ -39088,28 +39088,36 @@ func (m *ProxyMutation) ResetEdge(name string) error {
 // RedeemCodeMutation represents an operation that mutates the RedeemCode nodes in the graph.
 type RedeemCodeMutation struct {
 	config
-	op               Op
-	typ              string
-	id               *int64
-	code             *string
-	_type            *string
-	value            *float64
-	addvalue         *float64
-	status           *string
-	used_at          *time.Time
-	notes            *string
-	created_at       *time.Time
-	expires_at       *time.Time
-	validity_days    *int
-	addvalidity_days *int
-	clearedFields    map[string]struct{}
-	user             *int64
-	cleareduser      bool
-	group            *int64
-	clearedgroup     bool
-	done             bool
-	oldValue         func(context.Context) (*RedeemCode, error)
-	predicates       []predicate.RedeemCode
+	op                          Op
+	typ                         string
+	id                          *int64
+	code                        *string
+	_type                       *string
+	value                       *float64
+	addvalue                    *float64
+	status                      *string
+	used_at                     *time.Time
+	notes                       *string
+	created_at                  *time.Time
+	expires_at                  *time.Time
+	subscription_effect         *string
+	welfare_campaign_id         *int64
+	addwelfare_campaign_id      *int64
+	welfare_campaign_version    *int64
+	addwelfare_campaign_version *int64
+	welfare_campaign_name       *string
+	quota_amount_usd            *float64
+	addquota_amount_usd         *float64
+	validity_days               *int
+	addvalidity_days            *int
+	clearedFields               map[string]struct{}
+	user                        *int64
+	cleareduser                 bool
+	group                       *int64
+	clearedgroup                bool
+	done                        bool
+	oldValue                    func(context.Context) (*RedeemCode, error)
+	predicates                  []predicate.RedeemCode
 }
 
 var _ ent.Mutation = (*RedeemCodeMutation)(nil)
@@ -39655,6 +39663,288 @@ func (m *RedeemCodeMutation) ResetGroupID() {
 	delete(m.clearedFields, redeemcode.FieldGroupID)
 }
 
+// SetSubscriptionEffect sets the "subscription_effect" field.
+func (m *RedeemCodeMutation) SetSubscriptionEffect(s string) {
+	m.subscription_effect = &s
+}
+
+// SubscriptionEffect returns the value of the "subscription_effect" field in the mutation.
+func (m *RedeemCodeMutation) SubscriptionEffect() (r string, exists bool) {
+	v := m.subscription_effect
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSubscriptionEffect returns the old "subscription_effect" field's value of the RedeemCode entity.
+// If the RedeemCode object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *RedeemCodeMutation) OldSubscriptionEffect(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSubscriptionEffect is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSubscriptionEffect requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSubscriptionEffect: %w", err)
+	}
+	return oldValue.SubscriptionEffect, nil
+}
+
+// ResetSubscriptionEffect resets all changes to the "subscription_effect" field.
+func (m *RedeemCodeMutation) ResetSubscriptionEffect() {
+	m.subscription_effect = nil
+}
+
+// SetWelfareCampaignID sets the "welfare_campaign_id" field.
+func (m *RedeemCodeMutation) SetWelfareCampaignID(i int64) {
+	m.welfare_campaign_id = &i
+	m.addwelfare_campaign_id = nil
+}
+
+// WelfareCampaignID returns the value of the "welfare_campaign_id" field in the mutation.
+func (m *RedeemCodeMutation) WelfareCampaignID() (r int64, exists bool) {
+	v := m.welfare_campaign_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldWelfareCampaignID returns the old "welfare_campaign_id" field's value of the RedeemCode entity.
+// If the RedeemCode object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *RedeemCodeMutation) OldWelfareCampaignID(ctx context.Context) (v *int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldWelfareCampaignID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldWelfareCampaignID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldWelfareCampaignID: %w", err)
+	}
+	return oldValue.WelfareCampaignID, nil
+}
+
+// AddWelfareCampaignID adds i to the "welfare_campaign_id" field.
+func (m *RedeemCodeMutation) AddWelfareCampaignID(i int64) {
+	if m.addwelfare_campaign_id != nil {
+		*m.addwelfare_campaign_id += i
+	} else {
+		m.addwelfare_campaign_id = &i
+	}
+}
+
+// AddedWelfareCampaignID returns the value that was added to the "welfare_campaign_id" field in this mutation.
+func (m *RedeemCodeMutation) AddedWelfareCampaignID() (r int64, exists bool) {
+	v := m.addwelfare_campaign_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearWelfareCampaignID clears the value of the "welfare_campaign_id" field.
+func (m *RedeemCodeMutation) ClearWelfareCampaignID() {
+	m.welfare_campaign_id = nil
+	m.addwelfare_campaign_id = nil
+	m.clearedFields[redeemcode.FieldWelfareCampaignID] = struct{}{}
+}
+
+// WelfareCampaignIDCleared returns if the "welfare_campaign_id" field was cleared in this mutation.
+func (m *RedeemCodeMutation) WelfareCampaignIDCleared() bool {
+	_, ok := m.clearedFields[redeemcode.FieldWelfareCampaignID]
+	return ok
+}
+
+// ResetWelfareCampaignID resets all changes to the "welfare_campaign_id" field.
+func (m *RedeemCodeMutation) ResetWelfareCampaignID() {
+	m.welfare_campaign_id = nil
+	m.addwelfare_campaign_id = nil
+	delete(m.clearedFields, redeemcode.FieldWelfareCampaignID)
+}
+
+// SetWelfareCampaignVersion sets the "welfare_campaign_version" field.
+func (m *RedeemCodeMutation) SetWelfareCampaignVersion(i int64) {
+	m.welfare_campaign_version = &i
+	m.addwelfare_campaign_version = nil
+}
+
+// WelfareCampaignVersion returns the value of the "welfare_campaign_version" field in the mutation.
+func (m *RedeemCodeMutation) WelfareCampaignVersion() (r int64, exists bool) {
+	v := m.welfare_campaign_version
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldWelfareCampaignVersion returns the old "welfare_campaign_version" field's value of the RedeemCode entity.
+// If the RedeemCode object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *RedeemCodeMutation) OldWelfareCampaignVersion(ctx context.Context) (v *int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldWelfareCampaignVersion is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldWelfareCampaignVersion requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldWelfareCampaignVersion: %w", err)
+	}
+	return oldValue.WelfareCampaignVersion, nil
+}
+
+// AddWelfareCampaignVersion adds i to the "welfare_campaign_version" field.
+func (m *RedeemCodeMutation) AddWelfareCampaignVersion(i int64) {
+	if m.addwelfare_campaign_version != nil {
+		*m.addwelfare_campaign_version += i
+	} else {
+		m.addwelfare_campaign_version = &i
+	}
+}
+
+// AddedWelfareCampaignVersion returns the value that was added to the "welfare_campaign_version" field in this mutation.
+func (m *RedeemCodeMutation) AddedWelfareCampaignVersion() (r int64, exists bool) {
+	v := m.addwelfare_campaign_version
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearWelfareCampaignVersion clears the value of the "welfare_campaign_version" field.
+func (m *RedeemCodeMutation) ClearWelfareCampaignVersion() {
+	m.welfare_campaign_version = nil
+	m.addwelfare_campaign_version = nil
+	m.clearedFields[redeemcode.FieldWelfareCampaignVersion] = struct{}{}
+}
+
+// WelfareCampaignVersionCleared returns if the "welfare_campaign_version" field was cleared in this mutation.
+func (m *RedeemCodeMutation) WelfareCampaignVersionCleared() bool {
+	_, ok := m.clearedFields[redeemcode.FieldWelfareCampaignVersion]
+	return ok
+}
+
+// ResetWelfareCampaignVersion resets all changes to the "welfare_campaign_version" field.
+func (m *RedeemCodeMutation) ResetWelfareCampaignVersion() {
+	m.welfare_campaign_version = nil
+	m.addwelfare_campaign_version = nil
+	delete(m.clearedFields, redeemcode.FieldWelfareCampaignVersion)
+}
+
+// SetWelfareCampaignName sets the "welfare_campaign_name" field.
+func (m *RedeemCodeMutation) SetWelfareCampaignName(s string) {
+	m.welfare_campaign_name = &s
+}
+
+// WelfareCampaignName returns the value of the "welfare_campaign_name" field in the mutation.
+func (m *RedeemCodeMutation) WelfareCampaignName() (r string, exists bool) {
+	v := m.welfare_campaign_name
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldWelfareCampaignName returns the old "welfare_campaign_name" field's value of the RedeemCode entity.
+// If the RedeemCode object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *RedeemCodeMutation) OldWelfareCampaignName(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldWelfareCampaignName is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldWelfareCampaignName requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldWelfareCampaignName: %w", err)
+	}
+	return oldValue.WelfareCampaignName, nil
+}
+
+// ResetWelfareCampaignName resets all changes to the "welfare_campaign_name" field.
+func (m *RedeemCodeMutation) ResetWelfareCampaignName() {
+	m.welfare_campaign_name = nil
+}
+
+// SetQuotaAmountUsd sets the "quota_amount_usd" field.
+func (m *RedeemCodeMutation) SetQuotaAmountUsd(f float64) {
+	m.quota_amount_usd = &f
+	m.addquota_amount_usd = nil
+}
+
+// QuotaAmountUsd returns the value of the "quota_amount_usd" field in the mutation.
+func (m *RedeemCodeMutation) QuotaAmountUsd() (r float64, exists bool) {
+	v := m.quota_amount_usd
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldQuotaAmountUsd returns the old "quota_amount_usd" field's value of the RedeemCode entity.
+// If the RedeemCode object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *RedeemCodeMutation) OldQuotaAmountUsd(ctx context.Context) (v *float64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldQuotaAmountUsd is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldQuotaAmountUsd requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldQuotaAmountUsd: %w", err)
+	}
+	return oldValue.QuotaAmountUsd, nil
+}
+
+// AddQuotaAmountUsd adds f to the "quota_amount_usd" field.
+func (m *RedeemCodeMutation) AddQuotaAmountUsd(f float64) {
+	if m.addquota_amount_usd != nil {
+		*m.addquota_amount_usd += f
+	} else {
+		m.addquota_amount_usd = &f
+	}
+}
+
+// AddedQuotaAmountUsd returns the value that was added to the "quota_amount_usd" field in this mutation.
+func (m *RedeemCodeMutation) AddedQuotaAmountUsd() (r float64, exists bool) {
+	v := m.addquota_amount_usd
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearQuotaAmountUsd clears the value of the "quota_amount_usd" field.
+func (m *RedeemCodeMutation) ClearQuotaAmountUsd() {
+	m.quota_amount_usd = nil
+	m.addquota_amount_usd = nil
+	m.clearedFields[redeemcode.FieldQuotaAmountUsd] = struct{}{}
+}
+
+// QuotaAmountUsdCleared returns if the "quota_amount_usd" field was cleared in this mutation.
+func (m *RedeemCodeMutation) QuotaAmountUsdCleared() bool {
+	_, ok := m.clearedFields[redeemcode.FieldQuotaAmountUsd]
+	return ok
+}
+
+// ResetQuotaAmountUsd resets all changes to the "quota_amount_usd" field.
+func (m *RedeemCodeMutation) ResetQuotaAmountUsd() {
+	m.quota_amount_usd = nil
+	m.addquota_amount_usd = nil
+	delete(m.clearedFields, redeemcode.FieldQuotaAmountUsd)
+}
+
 // SetValidityDays sets the "validity_days" field.
 func (m *RedeemCodeMutation) SetValidityDays(i int) {
 	m.validity_days = &i
@@ -39812,7 +40102,7 @@ func (m *RedeemCodeMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *RedeemCodeMutation) Fields() []string {
-	fields := make([]string, 0, 11)
+	fields := make([]string, 0, 16)
 	if m.code != nil {
 		fields = append(fields, redeemcode.FieldCode)
 	}
@@ -39842,6 +40132,21 @@ func (m *RedeemCodeMutation) Fields() []string {
 	}
 	if m.group != nil {
 		fields = append(fields, redeemcode.FieldGroupID)
+	}
+	if m.subscription_effect != nil {
+		fields = append(fields, redeemcode.FieldSubscriptionEffect)
+	}
+	if m.welfare_campaign_id != nil {
+		fields = append(fields, redeemcode.FieldWelfareCampaignID)
+	}
+	if m.welfare_campaign_version != nil {
+		fields = append(fields, redeemcode.FieldWelfareCampaignVersion)
+	}
+	if m.welfare_campaign_name != nil {
+		fields = append(fields, redeemcode.FieldWelfareCampaignName)
+	}
+	if m.quota_amount_usd != nil {
+		fields = append(fields, redeemcode.FieldQuotaAmountUsd)
 	}
 	if m.validity_days != nil {
 		fields = append(fields, redeemcode.FieldValidityDays)
@@ -39874,6 +40179,16 @@ func (m *RedeemCodeMutation) Field(name string) (ent.Value, bool) {
 		return m.ExpiresAt()
 	case redeemcode.FieldGroupID:
 		return m.GroupID()
+	case redeemcode.FieldSubscriptionEffect:
+		return m.SubscriptionEffect()
+	case redeemcode.FieldWelfareCampaignID:
+		return m.WelfareCampaignID()
+	case redeemcode.FieldWelfareCampaignVersion:
+		return m.WelfareCampaignVersion()
+	case redeemcode.FieldWelfareCampaignName:
+		return m.WelfareCampaignName()
+	case redeemcode.FieldQuotaAmountUsd:
+		return m.QuotaAmountUsd()
 	case redeemcode.FieldValidityDays:
 		return m.ValidityDays()
 	}
@@ -39905,6 +40220,16 @@ func (m *RedeemCodeMutation) OldField(ctx context.Context, name string) (ent.Val
 		return m.OldExpiresAt(ctx)
 	case redeemcode.FieldGroupID:
 		return m.OldGroupID(ctx)
+	case redeemcode.FieldSubscriptionEffect:
+		return m.OldSubscriptionEffect(ctx)
+	case redeemcode.FieldWelfareCampaignID:
+		return m.OldWelfareCampaignID(ctx)
+	case redeemcode.FieldWelfareCampaignVersion:
+		return m.OldWelfareCampaignVersion(ctx)
+	case redeemcode.FieldWelfareCampaignName:
+		return m.OldWelfareCampaignName(ctx)
+	case redeemcode.FieldQuotaAmountUsd:
+		return m.OldQuotaAmountUsd(ctx)
 	case redeemcode.FieldValidityDays:
 		return m.OldValidityDays(ctx)
 	}
@@ -39986,6 +40311,41 @@ func (m *RedeemCodeMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetGroupID(v)
 		return nil
+	case redeemcode.FieldSubscriptionEffect:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSubscriptionEffect(v)
+		return nil
+	case redeemcode.FieldWelfareCampaignID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetWelfareCampaignID(v)
+		return nil
+	case redeemcode.FieldWelfareCampaignVersion:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetWelfareCampaignVersion(v)
+		return nil
+	case redeemcode.FieldWelfareCampaignName:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetWelfareCampaignName(v)
+		return nil
+	case redeemcode.FieldQuotaAmountUsd:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetQuotaAmountUsd(v)
+		return nil
 	case redeemcode.FieldValidityDays:
 		v, ok := value.(int)
 		if !ok {
@@ -40004,6 +40364,15 @@ func (m *RedeemCodeMutation) AddedFields() []string {
 	if m.addvalue != nil {
 		fields = append(fields, redeemcode.FieldValue)
 	}
+	if m.addwelfare_campaign_id != nil {
+		fields = append(fields, redeemcode.FieldWelfareCampaignID)
+	}
+	if m.addwelfare_campaign_version != nil {
+		fields = append(fields, redeemcode.FieldWelfareCampaignVersion)
+	}
+	if m.addquota_amount_usd != nil {
+		fields = append(fields, redeemcode.FieldQuotaAmountUsd)
+	}
 	if m.addvalidity_days != nil {
 		fields = append(fields, redeemcode.FieldValidityDays)
 	}
@@ -40017,6 +40386,12 @@ func (m *RedeemCodeMutation) AddedField(name string) (ent.Value, bool) {
 	switch name {
 	case redeemcode.FieldValue:
 		return m.AddedValue()
+	case redeemcode.FieldWelfareCampaignID:
+		return m.AddedWelfareCampaignID()
+	case redeemcode.FieldWelfareCampaignVersion:
+		return m.AddedWelfareCampaignVersion()
+	case redeemcode.FieldQuotaAmountUsd:
+		return m.AddedQuotaAmountUsd()
 	case redeemcode.FieldValidityDays:
 		return m.AddedValidityDays()
 	}
@@ -40034,6 +40409,27 @@ func (m *RedeemCodeMutation) AddField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.AddValue(v)
+		return nil
+	case redeemcode.FieldWelfareCampaignID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddWelfareCampaignID(v)
+		return nil
+	case redeemcode.FieldWelfareCampaignVersion:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddWelfareCampaignVersion(v)
+		return nil
+	case redeemcode.FieldQuotaAmountUsd:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddQuotaAmountUsd(v)
 		return nil
 	case redeemcode.FieldValidityDays:
 		v, ok := value.(int)
@@ -40065,6 +40461,15 @@ func (m *RedeemCodeMutation) ClearedFields() []string {
 	if m.FieldCleared(redeemcode.FieldGroupID) {
 		fields = append(fields, redeemcode.FieldGroupID)
 	}
+	if m.FieldCleared(redeemcode.FieldWelfareCampaignID) {
+		fields = append(fields, redeemcode.FieldWelfareCampaignID)
+	}
+	if m.FieldCleared(redeemcode.FieldWelfareCampaignVersion) {
+		fields = append(fields, redeemcode.FieldWelfareCampaignVersion)
+	}
+	if m.FieldCleared(redeemcode.FieldQuotaAmountUsd) {
+		fields = append(fields, redeemcode.FieldQuotaAmountUsd)
+	}
 	return fields
 }
 
@@ -40093,6 +40498,15 @@ func (m *RedeemCodeMutation) ClearField(name string) error {
 		return nil
 	case redeemcode.FieldGroupID:
 		m.ClearGroupID()
+		return nil
+	case redeemcode.FieldWelfareCampaignID:
+		m.ClearWelfareCampaignID()
+		return nil
+	case redeemcode.FieldWelfareCampaignVersion:
+		m.ClearWelfareCampaignVersion()
+		return nil
+	case redeemcode.FieldQuotaAmountUsd:
+		m.ClearQuotaAmountUsd()
 		return nil
 	}
 	return fmt.Errorf("unknown RedeemCode nullable field %s", name)
@@ -40131,6 +40545,21 @@ func (m *RedeemCodeMutation) ResetField(name string) error {
 		return nil
 	case redeemcode.FieldGroupID:
 		m.ResetGroupID()
+		return nil
+	case redeemcode.FieldSubscriptionEffect:
+		m.ResetSubscriptionEffect()
+		return nil
+	case redeemcode.FieldWelfareCampaignID:
+		m.ResetWelfareCampaignID()
+		return nil
+	case redeemcode.FieldWelfareCampaignVersion:
+		m.ResetWelfareCampaignVersion()
+		return nil
+	case redeemcode.FieldWelfareCampaignName:
+		m.ResetWelfareCampaignName()
+		return nil
+	case redeemcode.FieldQuotaAmountUsd:
+		m.ResetQuotaAmountUsd()
 		return nil
 	case redeemcode.FieldValidityDays:
 		m.ResetValidityDays()

@@ -23,7 +23,7 @@ func NewRedeemCodeRepository(client *dbent.Client) service.RedeemCodeRepository 
 }
 
 func (r *redeemCodeRepository) Create(ctx context.Context, code *service.RedeemCode) error {
-	created, err := r.client.RedeemCode.Create().
+	created, err := clientFromContext(ctx, r.client).RedeemCode.Create().
 		SetCode(code.Code).
 		SetType(code.Type).
 		SetValue(code.Value).
@@ -34,6 +34,11 @@ func (r *redeemCodeRepository) Create(ctx context.Context, code *service.RedeemC
 		SetNillableUsedBy(code.UsedBy).
 		SetNillableUsedAt(code.UsedAt).
 		SetNillableGroupID(code.GroupID).
+		SetSubscriptionEffect(code.SubscriptionEffect).
+		SetNillableWelfareCampaignID(code.WelfareCampaignID).
+		SetNillableWelfareCampaignVersion(code.WelfareCampaignVersion).
+		SetWelfareCampaignName(code.WelfareCampaignName).
+		SetNillableQuotaAmountUsd(code.QuotaAmountUSD).
 		Save(ctx)
 	if err == nil {
 		code.ID = created.ID
@@ -50,7 +55,7 @@ func (r *redeemCodeRepository) CreateBatch(ctx context.Context, codes []service.
 	builders := make([]*dbent.RedeemCodeCreate, 0, len(codes))
 	for i := range codes {
 		c := &codes[i]
-		b := r.client.RedeemCode.Create().
+		b := clientFromContext(ctx, r.client).RedeemCode.Create().
 			SetCode(c.Code).
 			SetType(c.Type).
 			SetValue(c.Value).
@@ -60,11 +65,16 @@ func (r *redeemCodeRepository) CreateBatch(ctx context.Context, codes []service.
 			SetNillableExpiresAt(c.ExpiresAt).
 			SetNillableUsedBy(c.UsedBy).
 			SetNillableUsedAt(c.UsedAt).
-			SetNillableGroupID(c.GroupID)
+			SetNillableGroupID(c.GroupID).
+			SetSubscriptionEffect(c.SubscriptionEffect).
+			SetNillableWelfareCampaignID(c.WelfareCampaignID).
+			SetNillableWelfareCampaignVersion(c.WelfareCampaignVersion).
+			SetWelfareCampaignName(c.WelfareCampaignName).
+			SetNillableQuotaAmountUsd(c.QuotaAmountUSD)
 		builders = append(builders, b)
 	}
 
-	return r.client.RedeemCode.CreateBulk(builders...).Exec(ctx)
+	return clientFromContext(ctx, r.client).RedeemCode.CreateBulk(builders...).Exec(ctx)
 }
 
 func (r *redeemCodeRepository) GetByID(ctx context.Context, id int64) (*service.RedeemCode, error) {
@@ -77,7 +87,11 @@ func (r *redeemCodeRepository) GetByID(ctx context.Context, id int64) (*service.
 		}
 		return nil, err
 	}
-	return redeemCodeEntityToService(m), nil
+	out := redeemCodeEntityToService(m)
+	if err := r.loadWelfareSupplementResults(ctx, []*service.RedeemCode{out}); err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 func (r *redeemCodeRepository) GetByCode(ctx context.Context, code string) (*service.RedeemCode, error) {
@@ -90,7 +104,11 @@ func (r *redeemCodeRepository) GetByCode(ctx context.Context, code string) (*ser
 		}
 		return nil, err
 	}
-	return redeemCodeEntityToService(m), nil
+	out := redeemCodeEntityToService(m)
+	if err := r.loadWelfareSupplementResults(ctx, []*service.RedeemCode{out}); err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 func (r *redeemCodeRepository) Delete(ctx context.Context, id int64) error {
@@ -161,6 +179,9 @@ func (r *redeemCodeRepository) ListWithFilters(ctx context.Context, params pagin
 	}
 
 	outCodes := redeemCodeEntitiesToService(codes)
+	if err := r.loadWelfareSupplementSlice(ctx, outCodes); err != nil {
+		return nil, nil, err
+	}
 
 	return outCodes, paginationResultFromTotal(int64(total), params), nil
 }
@@ -281,6 +302,13 @@ func (r *redeemCodeRepository) batchUpdate(ctx context.Context, client *dbent.Cl
 	if len(existing) != len(ids) {
 		return 0, service.ErrRedeemCodeNotFound
 	}
+	if fields.GroupID.Set {
+		for _, code := range existing {
+			if code.SubscriptionEffect != "" {
+				return 0, service.ErrWelfareSupplementInvalid
+			}
+		}
+	}
 	if fields.TouchesUsedSensitiveFields() {
 		for _, code := range existing {
 			if code.Status == service.StatusUsed {
@@ -354,7 +382,11 @@ func (r *redeemCodeRepository) ListByUser(ctx context.Context, userID int64, lim
 		return nil, err
 	}
 
-	return redeemCodeEntitiesToService(codes), nil
+	out := redeemCodeEntitiesToService(codes)
+	if err := r.loadWelfareSupplementSlice(ctx, out); err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 // ListByUserPaginated returns paginated balance/concurrency history for a user.
@@ -383,7 +415,11 @@ func (r *redeemCodeRepository) ListByUserPaginated(ctx context.Context, userID i
 		return nil, nil, err
 	}
 
-	return redeemCodeEntitiesToService(codes), paginationResultFromTotal(int64(total), params), nil
+	out := redeemCodeEntitiesToService(codes)
+	if err := r.loadWelfareSupplementSlice(ctx, out); err != nil {
+		return nil, nil, err
+	}
+	return out, paginationResultFromTotal(int64(total), params), nil
 }
 
 // SumPositiveBalanceByUser returns total recharged amount (sum of value > 0 where type is balance/admin_balance).
@@ -413,18 +449,20 @@ func redeemCodeEntityToService(m *dbent.RedeemCode) *service.RedeemCode {
 		return nil
 	}
 	out := &service.RedeemCode{
-		ID:           m.ID,
-		Code:         m.Code,
-		Type:         m.Type,
-		Value:        m.Value,
-		Status:       m.Status,
-		UsedBy:       m.UsedBy,
-		UsedAt:       m.UsedAt,
-		Notes:        derefString(m.Notes),
-		CreatedAt:    m.CreatedAt,
-		ExpiresAt:    m.ExpiresAt,
-		GroupID:      m.GroupID,
-		ValidityDays: m.ValidityDays,
+		ID:                 m.ID,
+		Code:               m.Code,
+		Type:               m.Type,
+		Value:              m.Value,
+		Status:             m.Status,
+		UsedBy:             m.UsedBy,
+		UsedAt:             m.UsedAt,
+		Notes:              derefString(m.Notes),
+		CreatedAt:          m.CreatedAt,
+		ExpiresAt:          m.ExpiresAt,
+		GroupID:            m.GroupID,
+		ValidityDays:       m.ValidityDays,
+		SubscriptionEffect: m.SubscriptionEffect, WelfareCampaignID: m.WelfareCampaignID, WelfareCampaignVersion: m.WelfareCampaignVersion,
+		WelfareCampaignName: m.WelfareCampaignName, QuotaAmountUSD: m.QuotaAmountUsd,
 	}
 	if m.Edges.User != nil {
 		out.User = userEntityToService(m.Edges.User)

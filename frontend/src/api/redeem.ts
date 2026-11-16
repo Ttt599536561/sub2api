@@ -4,9 +4,9 @@
  */
 
 import { apiClient } from './client'
-import type { PaginatedResponse, RedeemCodeRequest } from '@/types'
+import type { PaginatedResponse, RedeemCodeRequest, WelfareRedeemDetails } from '@/types'
 
-export interface RedeemHistoryItem {
+export interface RedeemHistoryItem extends WelfareRedeemDetails {
   id: number
   code: string
   type: string
@@ -30,22 +30,20 @@ export interface RedeemHistoryItem {
  * @param code - Redeem code string
  * @returns Redemption result with updated balance or concurrency
  */
-export async function redeem(code: string): Promise<{
+export interface RedeemResult extends WelfareRedeemDetails {
   message: string
   type: string
   value: number
   new_balance?: number
   new_concurrency?: number
-}> {
+  group_name?: string
+  validity_days?: number
+}
+
+export async function redeem(code: string): Promise<RedeemResult> {
   const payload: RedeemCodeRequest = { code }
 
-  const { data } = await apiClient.post<{
-    message: string
-    type: string
-    value: number
-    new_balance?: number
-    new_concurrency?: number
-  }>('/redeem', payload)
+  const { data } = await apiClient.post<RedeemResult>('/redeem', payload)
 
   return data
 }

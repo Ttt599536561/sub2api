@@ -156,6 +156,76 @@ func (_c *RedeemCodeCreate) SetNillableGroupID(v *int64) *RedeemCodeCreate {
 	return _c
 }
 
+// SetSubscriptionEffect sets the "subscription_effect" field.
+func (_c *RedeemCodeCreate) SetSubscriptionEffect(v string) *RedeemCodeCreate {
+	_c.mutation.SetSubscriptionEffect(v)
+	return _c
+}
+
+// SetNillableSubscriptionEffect sets the "subscription_effect" field if the given value is not nil.
+func (_c *RedeemCodeCreate) SetNillableSubscriptionEffect(v *string) *RedeemCodeCreate {
+	if v != nil {
+		_c.SetSubscriptionEffect(*v)
+	}
+	return _c
+}
+
+// SetWelfareCampaignID sets the "welfare_campaign_id" field.
+func (_c *RedeemCodeCreate) SetWelfareCampaignID(v int64) *RedeemCodeCreate {
+	_c.mutation.SetWelfareCampaignID(v)
+	return _c
+}
+
+// SetNillableWelfareCampaignID sets the "welfare_campaign_id" field if the given value is not nil.
+func (_c *RedeemCodeCreate) SetNillableWelfareCampaignID(v *int64) *RedeemCodeCreate {
+	if v != nil {
+		_c.SetWelfareCampaignID(*v)
+	}
+	return _c
+}
+
+// SetWelfareCampaignVersion sets the "welfare_campaign_version" field.
+func (_c *RedeemCodeCreate) SetWelfareCampaignVersion(v int64) *RedeemCodeCreate {
+	_c.mutation.SetWelfareCampaignVersion(v)
+	return _c
+}
+
+// SetNillableWelfareCampaignVersion sets the "welfare_campaign_version" field if the given value is not nil.
+func (_c *RedeemCodeCreate) SetNillableWelfareCampaignVersion(v *int64) *RedeemCodeCreate {
+	if v != nil {
+		_c.SetWelfareCampaignVersion(*v)
+	}
+	return _c
+}
+
+// SetWelfareCampaignName sets the "welfare_campaign_name" field.
+func (_c *RedeemCodeCreate) SetWelfareCampaignName(v string) *RedeemCodeCreate {
+	_c.mutation.SetWelfareCampaignName(v)
+	return _c
+}
+
+// SetNillableWelfareCampaignName sets the "welfare_campaign_name" field if the given value is not nil.
+func (_c *RedeemCodeCreate) SetNillableWelfareCampaignName(v *string) *RedeemCodeCreate {
+	if v != nil {
+		_c.SetWelfareCampaignName(*v)
+	}
+	return _c
+}
+
+// SetQuotaAmountUsd sets the "quota_amount_usd" field.
+func (_c *RedeemCodeCreate) SetQuotaAmountUsd(v float64) *RedeemCodeCreate {
+	_c.mutation.SetQuotaAmountUsd(v)
+	return _c
+}
+
+// SetNillableQuotaAmountUsd sets the "quota_amount_usd" field if the given value is not nil.
+func (_c *RedeemCodeCreate) SetNillableQuotaAmountUsd(v *float64) *RedeemCodeCreate {
+	if v != nil {
+		_c.SetQuotaAmountUsd(*v)
+	}
+	return _c
+}
+
 // SetValidityDays sets the "validity_days" field.
 func (_c *RedeemCodeCreate) SetValidityDays(v int) *RedeemCodeCreate {
 	_c.mutation.SetValidityDays(v)
@@ -245,6 +315,14 @@ func (_c *RedeemCodeCreate) defaults() {
 		v := redeemcode.DefaultCreatedAt()
 		_c.mutation.SetCreatedAt(v)
 	}
+	if _, ok := _c.mutation.SubscriptionEffect(); !ok {
+		v := redeemcode.DefaultSubscriptionEffect
+		_c.mutation.SetSubscriptionEffect(v)
+	}
+	if _, ok := _c.mutation.WelfareCampaignName(); !ok {
+		v := redeemcode.DefaultWelfareCampaignName
+		_c.mutation.SetWelfareCampaignName(v)
+	}
 	if _, ok := _c.mutation.ValidityDays(); !ok {
 		v := redeemcode.DefaultValidityDays
 		_c.mutation.SetValidityDays(v)
@@ -282,6 +360,12 @@ func (_c *RedeemCodeCreate) check() error {
 	}
 	if _, ok := _c.mutation.CreatedAt(); !ok {
 		return &ValidationError{Name: "created_at", err: errors.New(`ent: missing required field "RedeemCode.created_at"`)}
+	}
+	if _, ok := _c.mutation.SubscriptionEffect(); !ok {
+		return &ValidationError{Name: "subscription_effect", err: errors.New(`ent: missing required field "RedeemCode.subscription_effect"`)}
+	}
+	if _, ok := _c.mutation.WelfareCampaignName(); !ok {
+		return &ValidationError{Name: "welfare_campaign_name", err: errors.New(`ent: missing required field "RedeemCode.welfare_campaign_name"`)}
 	}
 	if _, ok := _c.mutation.ValidityDays(); !ok {
 		return &ValidationError{Name: "validity_days", err: errors.New(`ent: missing required field "RedeemCode.validity_days"`)}
@@ -344,6 +428,26 @@ func (_c *RedeemCodeCreate) createSpec() (*RedeemCode, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.ExpiresAt(); ok {
 		_spec.SetField(redeemcode.FieldExpiresAt, field.TypeTime, value)
 		_node.ExpiresAt = &value
+	}
+	if value, ok := _c.mutation.SubscriptionEffect(); ok {
+		_spec.SetField(redeemcode.FieldSubscriptionEffect, field.TypeString, value)
+		_node.SubscriptionEffect = value
+	}
+	if value, ok := _c.mutation.WelfareCampaignID(); ok {
+		_spec.SetField(redeemcode.FieldWelfareCampaignID, field.TypeInt64, value)
+		_node.WelfareCampaignID = &value
+	}
+	if value, ok := _c.mutation.WelfareCampaignVersion(); ok {
+		_spec.SetField(redeemcode.FieldWelfareCampaignVersion, field.TypeInt64, value)
+		_node.WelfareCampaignVersion = &value
+	}
+	if value, ok := _c.mutation.WelfareCampaignName(); ok {
+		_spec.SetField(redeemcode.FieldWelfareCampaignName, field.TypeString, value)
+		_node.WelfareCampaignName = value
+	}
+	if value, ok := _c.mutation.QuotaAmountUsd(); ok {
+		_spec.SetField(redeemcode.FieldQuotaAmountUsd, field.TypeFloat64, value)
+		_node.QuotaAmountUsd = &value
 	}
 	if value, ok := _c.mutation.ValidityDays(); ok {
 		_spec.SetField(redeemcode.FieldValidityDays, field.TypeInt, value)
@@ -579,6 +683,102 @@ func (u *RedeemCodeUpsert) ClearGroupID() *RedeemCodeUpsert {
 	return u
 }
 
+// SetSubscriptionEffect sets the "subscription_effect" field.
+func (u *RedeemCodeUpsert) SetSubscriptionEffect(v string) *RedeemCodeUpsert {
+	u.Set(redeemcode.FieldSubscriptionEffect, v)
+	return u
+}
+
+// UpdateSubscriptionEffect sets the "subscription_effect" field to the value that was provided on create.
+func (u *RedeemCodeUpsert) UpdateSubscriptionEffect() *RedeemCodeUpsert {
+	u.SetExcluded(redeemcode.FieldSubscriptionEffect)
+	return u
+}
+
+// SetWelfareCampaignID sets the "welfare_campaign_id" field.
+func (u *RedeemCodeUpsert) SetWelfareCampaignID(v int64) *RedeemCodeUpsert {
+	u.Set(redeemcode.FieldWelfareCampaignID, v)
+	return u
+}
+
+// UpdateWelfareCampaignID sets the "welfare_campaign_id" field to the value that was provided on create.
+func (u *RedeemCodeUpsert) UpdateWelfareCampaignID() *RedeemCodeUpsert {
+	u.SetExcluded(redeemcode.FieldWelfareCampaignID)
+	return u
+}
+
+// AddWelfareCampaignID adds v to the "welfare_campaign_id" field.
+func (u *RedeemCodeUpsert) AddWelfareCampaignID(v int64) *RedeemCodeUpsert {
+	u.Add(redeemcode.FieldWelfareCampaignID, v)
+	return u
+}
+
+// ClearWelfareCampaignID clears the value of the "welfare_campaign_id" field.
+func (u *RedeemCodeUpsert) ClearWelfareCampaignID() *RedeemCodeUpsert {
+	u.SetNull(redeemcode.FieldWelfareCampaignID)
+	return u
+}
+
+// SetWelfareCampaignVersion sets the "welfare_campaign_version" field.
+func (u *RedeemCodeUpsert) SetWelfareCampaignVersion(v int64) *RedeemCodeUpsert {
+	u.Set(redeemcode.FieldWelfareCampaignVersion, v)
+	return u
+}
+
+// UpdateWelfareCampaignVersion sets the "welfare_campaign_version" field to the value that was provided on create.
+func (u *RedeemCodeUpsert) UpdateWelfareCampaignVersion() *RedeemCodeUpsert {
+	u.SetExcluded(redeemcode.FieldWelfareCampaignVersion)
+	return u
+}
+
+// AddWelfareCampaignVersion adds v to the "welfare_campaign_version" field.
+func (u *RedeemCodeUpsert) AddWelfareCampaignVersion(v int64) *RedeemCodeUpsert {
+	u.Add(redeemcode.FieldWelfareCampaignVersion, v)
+	return u
+}
+
+// ClearWelfareCampaignVersion clears the value of the "welfare_campaign_version" field.
+func (u *RedeemCodeUpsert) ClearWelfareCampaignVersion() *RedeemCodeUpsert {
+	u.SetNull(redeemcode.FieldWelfareCampaignVersion)
+	return u
+}
+
+// SetWelfareCampaignName sets the "welfare_campaign_name" field.
+func (u *RedeemCodeUpsert) SetWelfareCampaignName(v string) *RedeemCodeUpsert {
+	u.Set(redeemcode.FieldWelfareCampaignName, v)
+	return u
+}
+
+// UpdateWelfareCampaignName sets the "welfare_campaign_name" field to the value that was provided on create.
+func (u *RedeemCodeUpsert) UpdateWelfareCampaignName() *RedeemCodeUpsert {
+	u.SetExcluded(redeemcode.FieldWelfareCampaignName)
+	return u
+}
+
+// SetQuotaAmountUsd sets the "quota_amount_usd" field.
+func (u *RedeemCodeUpsert) SetQuotaAmountUsd(v float64) *RedeemCodeUpsert {
+	u.Set(redeemcode.FieldQuotaAmountUsd, v)
+	return u
+}
+
+// UpdateQuotaAmountUsd sets the "quota_amount_usd" field to the value that was provided on create.
+func (u *RedeemCodeUpsert) UpdateQuotaAmountUsd() *RedeemCodeUpsert {
+	u.SetExcluded(redeemcode.FieldQuotaAmountUsd)
+	return u
+}
+
+// AddQuotaAmountUsd adds v to the "quota_amount_usd" field.
+func (u *RedeemCodeUpsert) AddQuotaAmountUsd(v float64) *RedeemCodeUpsert {
+	u.Add(redeemcode.FieldQuotaAmountUsd, v)
+	return u
+}
+
+// ClearQuotaAmountUsd clears the value of the "quota_amount_usd" field.
+func (u *RedeemCodeUpsert) ClearQuotaAmountUsd() *RedeemCodeUpsert {
+	u.SetNull(redeemcode.FieldQuotaAmountUsd)
+	return u
+}
+
 // SetValidityDays sets the "validity_days" field.
 func (u *RedeemCodeUpsert) SetValidityDays(v int) *RedeemCodeUpsert {
 	u.Set(redeemcode.FieldValidityDays, v)
@@ -807,6 +1007,118 @@ func (u *RedeemCodeUpsertOne) UpdateGroupID() *RedeemCodeUpsertOne {
 func (u *RedeemCodeUpsertOne) ClearGroupID() *RedeemCodeUpsertOne {
 	return u.Update(func(s *RedeemCodeUpsert) {
 		s.ClearGroupID()
+	})
+}
+
+// SetSubscriptionEffect sets the "subscription_effect" field.
+func (u *RedeemCodeUpsertOne) SetSubscriptionEffect(v string) *RedeemCodeUpsertOne {
+	return u.Update(func(s *RedeemCodeUpsert) {
+		s.SetSubscriptionEffect(v)
+	})
+}
+
+// UpdateSubscriptionEffect sets the "subscription_effect" field to the value that was provided on create.
+func (u *RedeemCodeUpsertOne) UpdateSubscriptionEffect() *RedeemCodeUpsertOne {
+	return u.Update(func(s *RedeemCodeUpsert) {
+		s.UpdateSubscriptionEffect()
+	})
+}
+
+// SetWelfareCampaignID sets the "welfare_campaign_id" field.
+func (u *RedeemCodeUpsertOne) SetWelfareCampaignID(v int64) *RedeemCodeUpsertOne {
+	return u.Update(func(s *RedeemCodeUpsert) {
+		s.SetWelfareCampaignID(v)
+	})
+}
+
+// AddWelfareCampaignID adds v to the "welfare_campaign_id" field.
+func (u *RedeemCodeUpsertOne) AddWelfareCampaignID(v int64) *RedeemCodeUpsertOne {
+	return u.Update(func(s *RedeemCodeUpsert) {
+		s.AddWelfareCampaignID(v)
+	})
+}
+
+// UpdateWelfareCampaignID sets the "welfare_campaign_id" field to the value that was provided on create.
+func (u *RedeemCodeUpsertOne) UpdateWelfareCampaignID() *RedeemCodeUpsertOne {
+	return u.Update(func(s *RedeemCodeUpsert) {
+		s.UpdateWelfareCampaignID()
+	})
+}
+
+// ClearWelfareCampaignID clears the value of the "welfare_campaign_id" field.
+func (u *RedeemCodeUpsertOne) ClearWelfareCampaignID() *RedeemCodeUpsertOne {
+	return u.Update(func(s *RedeemCodeUpsert) {
+		s.ClearWelfareCampaignID()
+	})
+}
+
+// SetWelfareCampaignVersion sets the "welfare_campaign_version" field.
+func (u *RedeemCodeUpsertOne) SetWelfareCampaignVersion(v int64) *RedeemCodeUpsertOne {
+	return u.Update(func(s *RedeemCodeUpsert) {
+		s.SetWelfareCampaignVersion(v)
+	})
+}
+
+// AddWelfareCampaignVersion adds v to the "welfare_campaign_version" field.
+func (u *RedeemCodeUpsertOne) AddWelfareCampaignVersion(v int64) *RedeemCodeUpsertOne {
+	return u.Update(func(s *RedeemCodeUpsert) {
+		s.AddWelfareCampaignVersion(v)
+	})
+}
+
+// UpdateWelfareCampaignVersion sets the "welfare_campaign_version" field to the value that was provided on create.
+func (u *RedeemCodeUpsertOne) UpdateWelfareCampaignVersion() *RedeemCodeUpsertOne {
+	return u.Update(func(s *RedeemCodeUpsert) {
+		s.UpdateWelfareCampaignVersion()
+	})
+}
+
+// ClearWelfareCampaignVersion clears the value of the "welfare_campaign_version" field.
+func (u *RedeemCodeUpsertOne) ClearWelfareCampaignVersion() *RedeemCodeUpsertOne {
+	return u.Update(func(s *RedeemCodeUpsert) {
+		s.ClearWelfareCampaignVersion()
+	})
+}
+
+// SetWelfareCampaignName sets the "welfare_campaign_name" field.
+func (u *RedeemCodeUpsertOne) SetWelfareCampaignName(v string) *RedeemCodeUpsertOne {
+	return u.Update(func(s *RedeemCodeUpsert) {
+		s.SetWelfareCampaignName(v)
+	})
+}
+
+// UpdateWelfareCampaignName sets the "welfare_campaign_name" field to the value that was provided on create.
+func (u *RedeemCodeUpsertOne) UpdateWelfareCampaignName() *RedeemCodeUpsertOne {
+	return u.Update(func(s *RedeemCodeUpsert) {
+		s.UpdateWelfareCampaignName()
+	})
+}
+
+// SetQuotaAmountUsd sets the "quota_amount_usd" field.
+func (u *RedeemCodeUpsertOne) SetQuotaAmountUsd(v float64) *RedeemCodeUpsertOne {
+	return u.Update(func(s *RedeemCodeUpsert) {
+		s.SetQuotaAmountUsd(v)
+	})
+}
+
+// AddQuotaAmountUsd adds v to the "quota_amount_usd" field.
+func (u *RedeemCodeUpsertOne) AddQuotaAmountUsd(v float64) *RedeemCodeUpsertOne {
+	return u.Update(func(s *RedeemCodeUpsert) {
+		s.AddQuotaAmountUsd(v)
+	})
+}
+
+// UpdateQuotaAmountUsd sets the "quota_amount_usd" field to the value that was provided on create.
+func (u *RedeemCodeUpsertOne) UpdateQuotaAmountUsd() *RedeemCodeUpsertOne {
+	return u.Update(func(s *RedeemCodeUpsert) {
+		s.UpdateQuotaAmountUsd()
+	})
+}
+
+// ClearQuotaAmountUsd clears the value of the "quota_amount_usd" field.
+func (u *RedeemCodeUpsertOne) ClearQuotaAmountUsd() *RedeemCodeUpsertOne {
+	return u.Update(func(s *RedeemCodeUpsert) {
+		s.ClearQuotaAmountUsd()
 	})
 }
 
@@ -1207,6 +1519,118 @@ func (u *RedeemCodeUpsertBulk) UpdateGroupID() *RedeemCodeUpsertBulk {
 func (u *RedeemCodeUpsertBulk) ClearGroupID() *RedeemCodeUpsertBulk {
 	return u.Update(func(s *RedeemCodeUpsert) {
 		s.ClearGroupID()
+	})
+}
+
+// SetSubscriptionEffect sets the "subscription_effect" field.
+func (u *RedeemCodeUpsertBulk) SetSubscriptionEffect(v string) *RedeemCodeUpsertBulk {
+	return u.Update(func(s *RedeemCodeUpsert) {
+		s.SetSubscriptionEffect(v)
+	})
+}
+
+// UpdateSubscriptionEffect sets the "subscription_effect" field to the value that was provided on create.
+func (u *RedeemCodeUpsertBulk) UpdateSubscriptionEffect() *RedeemCodeUpsertBulk {
+	return u.Update(func(s *RedeemCodeUpsert) {
+		s.UpdateSubscriptionEffect()
+	})
+}
+
+// SetWelfareCampaignID sets the "welfare_campaign_id" field.
+func (u *RedeemCodeUpsertBulk) SetWelfareCampaignID(v int64) *RedeemCodeUpsertBulk {
+	return u.Update(func(s *RedeemCodeUpsert) {
+		s.SetWelfareCampaignID(v)
+	})
+}
+
+// AddWelfareCampaignID adds v to the "welfare_campaign_id" field.
+func (u *RedeemCodeUpsertBulk) AddWelfareCampaignID(v int64) *RedeemCodeUpsertBulk {
+	return u.Update(func(s *RedeemCodeUpsert) {
+		s.AddWelfareCampaignID(v)
+	})
+}
+
+// UpdateWelfareCampaignID sets the "welfare_campaign_id" field to the value that was provided on create.
+func (u *RedeemCodeUpsertBulk) UpdateWelfareCampaignID() *RedeemCodeUpsertBulk {
+	return u.Update(func(s *RedeemCodeUpsert) {
+		s.UpdateWelfareCampaignID()
+	})
+}
+
+// ClearWelfareCampaignID clears the value of the "welfare_campaign_id" field.
+func (u *RedeemCodeUpsertBulk) ClearWelfareCampaignID() *RedeemCodeUpsertBulk {
+	return u.Update(func(s *RedeemCodeUpsert) {
+		s.ClearWelfareCampaignID()
+	})
+}
+
+// SetWelfareCampaignVersion sets the "welfare_campaign_version" field.
+func (u *RedeemCodeUpsertBulk) SetWelfareCampaignVersion(v int64) *RedeemCodeUpsertBulk {
+	return u.Update(func(s *RedeemCodeUpsert) {
+		s.SetWelfareCampaignVersion(v)
+	})
+}
+
+// AddWelfareCampaignVersion adds v to the "welfare_campaign_version" field.
+func (u *RedeemCodeUpsertBulk) AddWelfareCampaignVersion(v int64) *RedeemCodeUpsertBulk {
+	return u.Update(func(s *RedeemCodeUpsert) {
+		s.AddWelfareCampaignVersion(v)
+	})
+}
+
+// UpdateWelfareCampaignVersion sets the "welfare_campaign_version" field to the value that was provided on create.
+func (u *RedeemCodeUpsertBulk) UpdateWelfareCampaignVersion() *RedeemCodeUpsertBulk {
+	return u.Update(func(s *RedeemCodeUpsert) {
+		s.UpdateWelfareCampaignVersion()
+	})
+}
+
+// ClearWelfareCampaignVersion clears the value of the "welfare_campaign_version" field.
+func (u *RedeemCodeUpsertBulk) ClearWelfareCampaignVersion() *RedeemCodeUpsertBulk {
+	return u.Update(func(s *RedeemCodeUpsert) {
+		s.ClearWelfareCampaignVersion()
+	})
+}
+
+// SetWelfareCampaignName sets the "welfare_campaign_name" field.
+func (u *RedeemCodeUpsertBulk) SetWelfareCampaignName(v string) *RedeemCodeUpsertBulk {
+	return u.Update(func(s *RedeemCodeUpsert) {
+		s.SetWelfareCampaignName(v)
+	})
+}
+
+// UpdateWelfareCampaignName sets the "welfare_campaign_name" field to the value that was provided on create.
+func (u *RedeemCodeUpsertBulk) UpdateWelfareCampaignName() *RedeemCodeUpsertBulk {
+	return u.Update(func(s *RedeemCodeUpsert) {
+		s.UpdateWelfareCampaignName()
+	})
+}
+
+// SetQuotaAmountUsd sets the "quota_amount_usd" field.
+func (u *RedeemCodeUpsertBulk) SetQuotaAmountUsd(v float64) *RedeemCodeUpsertBulk {
+	return u.Update(func(s *RedeemCodeUpsert) {
+		s.SetQuotaAmountUsd(v)
+	})
+}
+
+// AddQuotaAmountUsd adds v to the "quota_amount_usd" field.
+func (u *RedeemCodeUpsertBulk) AddQuotaAmountUsd(v float64) *RedeemCodeUpsertBulk {
+	return u.Update(func(s *RedeemCodeUpsert) {
+		s.AddQuotaAmountUsd(v)
+	})
+}
+
+// UpdateQuotaAmountUsd sets the "quota_amount_usd" field to the value that was provided on create.
+func (u *RedeemCodeUpsertBulk) UpdateQuotaAmountUsd() *RedeemCodeUpsertBulk {
+	return u.Update(func(s *RedeemCodeUpsert) {
+		s.UpdateQuotaAmountUsd()
+	})
+}
+
+// ClearQuotaAmountUsd clears the value of the "quota_amount_usd" field.
+func (u *RedeemCodeUpsertBulk) ClearQuotaAmountUsd() *RedeemCodeUpsertBulk {
+	return u.Update(func(s *RedeemCodeUpsert) {
+		s.ClearQuotaAmountUsd()
 	})
 }
 

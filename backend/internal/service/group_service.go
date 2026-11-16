@@ -9,9 +9,11 @@ import (
 )
 
 var (
-	ErrGroupNotFound = infraerrors.NotFound("GROUP_NOT_FOUND", "group not found")
-	ErrGroupExists   = infraerrors.Conflict("GROUP_EXISTS", "group name already exists")
-	ErrGroupNotEmpty = infraerrors.Conflict("GROUP_NOT_EMPTY", "group contains accounts")
+	ErrGroupNotFound           = infraerrors.NotFound("GROUP_NOT_FOUND", "group not found")
+	ErrGroupExists             = infraerrors.Conflict("GROUP_EXISTS", "group name already exists")
+	ErrGroupNotEmpty           = infraerrors.Conflict("GROUP_NOT_EMPTY", "group contains accounts")
+	ErrGroupWelfareReferenced  = infraerrors.Conflict("GROUP_WELFARE_REFERENCED", "This group is referenced by an invitation campaign or welfare history and cannot be deleted or changed to a non-subscription group.")
+	ErrGroupWriteRetryRequired = infraerrors.Conflict("GROUP_WRITE_RETRY_REQUIRED", "Group deletion or type changes must be retried in a new transaction.")
 )
 
 type GroupRepository interface {

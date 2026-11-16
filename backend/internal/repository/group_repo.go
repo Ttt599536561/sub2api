@@ -289,7 +289,14 @@ func (r *groupRepository) Update(ctx context.Context, groupIn *service.Group) er
 	if err != nil {
 		return fmt.Errorf("marshal group model pricing: %w", err)
 	}
-	builder := r.client.Group.UpdateOneID(groupIn.ID).
+	client, tx, err := r.beginGroupWrite(ctx)
+	if err != nil {
+		return err
+	}
+	if tx != nil {
+		defer func() { _ = tx.Rollback() }()
+	}
+	builder := client.Group.UpdateOneID(groupIn.ID).
 		SetName(groupIn.Name).
 		SetDescription(groupIn.Description).
 		SetPlatform(groupIn.Platform).
@@ -451,6 +458,11 @@ func (r *groupRepository) Update(ctx context.Context, groupIn *service.Group) er
 	if err != nil {
 		return translatePersistenceError(err, service.ErrGroupNotFound, service.ErrGroupExists)
 	}
+	if tx != nil {
+		if err := tx.Commit(); err != nil {
+			return translatePersistenceError(err, nil, nil)
+		}
+	}
 	groupIn.UpdatedAt = updated.UpdatedAt
 	if err := enqueueSchedulerOutbox(ctx, r.sql, service.SchedulerOutboxEventGroupChanged, nil, &groupIn.ID, nil); err != nil {
 		logger.LegacyPrintf("repository.group", "[SchedulerOutbox] enqueue group update failed: group=%d err=%v", groupIn.ID, err)
@@ -459,9 +471,21 @@ func (r *groupRepository) Update(ctx context.Context, groupIn *service.Group) er
 }
 
 func (r *groupRepository) Delete(ctx context.Context, id int64) error {
-	_, err := r.client.Group.Delete().Where(group.IDEQ(id)).Exec(ctx)
+	client, tx, err := r.beginGroupWrite(ctx)
+	if err != nil {
+		return err
+	}
+	if tx != nil {
+		defer func() { _ = tx.Rollback() }()
+	}
+	_, err = client.Group.Delete().Where(group.IDEQ(id)).Exec(ctx)
 	if err != nil {
 		return translatePersistenceError(err, service.ErrGroupNotFound, nil)
+	}
+	if tx != nil {
+		if err := tx.Commit(); err != nil {
+			return translatePersistenceError(err, nil, nil)
+		}
 	}
 	if err := enqueueSchedulerOutbox(ctx, r.sql, service.SchedulerOutboxEventGroupChanged, nil, &id, nil); err != nil {
 		logger.LegacyPrintf("repository.group", "[SchedulerOutbox] enqueue group delete failed: group=%d err=%v", id, err)
@@ -872,21 +896,35 @@ func (r *groupRepository) DeleteCascadeIfEmpty(ctx context.Context, id int64) ([
 	return r.deleteCascade(ctx, id, true)
 }
 
+// Fresh RC snapshots are necessary after waiting for reference writers' group
+// SHARE locks. Existing caller transactions retain ownership; the database guard
+// rejects destructive mutations if such a transaction uses a stale RR snapshot.
+func (r *groupRepository) beginGroupWrite(ctx context.Context) (*dbent.Client, *dbent.Tx, error) {
+	// Let the SQL driver select isolation without emitting dialect-specific SQL.
+	// Generated Ent BeginTx currently returns a fresh error for nested transactions
+	// instead of ErrTxStarted. Accept only that exact message, never a substring or
+	// a wrapped driver error, while retaining sentinel support for future versions.
+	tx, err := r.client.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelReadCommitted})
+	if errors.Is(err, dbent.ErrTxStarted) || (err != nil && err.Error() == dbent.ErrTxStarted.Error()) {
+		return r.client, nil, nil
+	}
+	if err != nil {
+		return nil, nil, err
+	}
+	return tx.Client(), tx, nil
+}
+
 func (r *groupRepository) deleteCascade(ctx context.Context, id int64, requireEmpty bool) ([]int64, error) {
 	// 使用 ent 事务统一包裹：避免手工基于 *sql.Tx 构造 ent client 带来的驱动断言问题，
 	// 同时保证级联删除的原子性。
-	tx, err := r.client.Tx(ctx)
-	if err != nil && !errors.Is(err, dbent.ErrTxStarted) {
+	exec, tx, err := r.beginGroupWrite(ctx)
+	if err != nil {
 		return nil, err
 	}
-	exec := r.client
-	txClient := r.client
-	if err == nil {
+	txClient := exec
+	if tx != nil {
 		defer func() { _ = tx.Rollback() }()
-		exec = tx.Client()
-		txClient = exec
 	}
-	// err 为 dbent.ErrTxStarted 时，复用当前 client 参与同一事务。
 
 	// Lock the group row to avoid concurrent writes while we cascade.
 	// 这里使用 exec.QueryContext 手动扫描，确保同一事务内加锁并能区分"未找到"与其他错误。
@@ -910,6 +948,11 @@ func (r *groupRepository) deleteCascade(ctx context.Context, id int64, requireEm
 	}
 	if lockedID == 0 {
 		return nil, service.ErrGroupNotFound
+	}
+	// Refuse before changing any subscription, membership or moderation settings.
+	// The function only reads references; it must not acquire reverse row locks.
+	if _, err := exec.ExecContext(ctx, "SELECT welfare_assert_group_mutable($1)", id); err != nil {
+		return nil, translatePersistenceError(err, nil, nil)
 	}
 	if requireEmpty {
 		var hasAccount bool
@@ -971,7 +1014,7 @@ func (r *groupRepository) deleteCascade(ctx context.Context, id int64, requireEm
 
 	// 5. Soft-delete group itself.
 	if _, err := txClient.Group.Delete().Where(group.IDEQ(id)).Exec(ctx); err != nil {
-		return nil, err
+		return nil, translatePersistenceError(err, service.ErrGroupNotFound, nil)
 	}
 	// Lock and validate the text value before using JSONB operators. A legacy
 	// malformed setting must not prevent deletion or be silently replaced.

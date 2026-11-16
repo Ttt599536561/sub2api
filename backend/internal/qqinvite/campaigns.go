@@ -76,9 +76,6 @@ func (s *Store) SaveCampaign(ctx context.Context, c Campaign, actor int64) (Camp
 	if _, e = tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock(81425302)`); e != nil {
 		return Campaign{}, e
 	}
-	if c.PlanName, e = subscriptionName(ctx, tx, c.SubscriptionGroupID); e != nil {
-		return Campaign{}, e
-	}
 	var baseline *time.Time
 	if c.ID != 0 {
 		old, e := scanCampaign(tx.QueryRowContext(ctx, `SELECT id,version,payload,baseline_at,created_at FROM qq_invite_campaigns WHERE id=$1 FOR UPDATE`, c.ID))
@@ -99,6 +96,7 @@ func (s *Store) SaveCampaign(ctx context.Context, c Campaign, actor int64) (Camp
 				EXISTS(SELECT 1 FROM qq_invite_code_pool WHERE campaign_id=$1)
 				OR EXISTS(SELECT 1 FROM qq_invite_records WHERE campaign_id=$1)
 				OR EXISTS(SELECT 1 FROM qq_invite_joins WHERE campaign_id=$1)
+				OR EXISTS(SELECT 1 FROM redeem_codes WHERE welfare_campaign_id=$1 AND subscription_effect<>'')
 				OR EXISTS(SELECT 1 FROM qq_invite_campaign_versions WHERE campaign_id=$1 AND (payload->>'enabled')::boolean)`, c.ID).Scan(&locked); e != nil {
 				return Campaign{}, e
 			}
@@ -122,6 +120,10 @@ func (s *Store) SaveCampaign(ctx context.Context, c Campaign, actor int64) (Camp
 		}
 		c.Version = 1
 		c.CreatedAt = time.Now().UTC()
+	}
+	// Lock campaign before group everywhere (including manual supplements).
+	if c.PlanName, e = subscriptionNameForWrite(ctx, tx, c.SubscriptionGroupID); e != nil {
+		return Campaign{}, e
 	}
 	c.BaselineReady = baseline != nil
 	if c.Enabled && !c.BaselineReady {
@@ -180,8 +182,18 @@ func (s *Store) SaveCampaign(ctx context.Context, c Campaign, actor int64) (Camp
 }
 
 func subscriptionName(ctx context.Context, q queryRower, id int64) (string, error) {
+	return readSubscriptionName(ctx, q, id, false)
+}
+func subscriptionNameForWrite(ctx context.Context, q queryRower, id int64) (string, error) {
+	return readSubscriptionName(ctx, q, id, true)
+}
+func readSubscriptionName(ctx context.Context, q queryRower, id int64, lock bool) (string, error) {
 	var name string
-	e := q.QueryRowContext(ctx, `SELECT name FROM groups WHERE id=$1 AND subscription_type='subscription' AND status='active' AND deleted_at IS NULL AND monthly_limit_usd>0 AND monthly_limit_usd<10000000000 AND (daily_limit_usd IS NULL OR (daily_limit_usd>=0 AND daily_limit_usd<10000000000)) AND (weekly_limit_usd IS NULL OR (weekly_limit_usd>=0 AND weekly_limit_usd<10000000000))`, id).Scan(&name)
+	query := `SELECT name FROM groups WHERE id=$1 AND subscription_type='subscription' AND status='active' AND deleted_at IS NULL AND monthly_limit_usd>0 AND monthly_limit_usd<10000000000 AND (daily_limit_usd IS NULL OR (daily_limit_usd>=0 AND daily_limit_usd<10000000000)) AND (weekly_limit_usd IS NULL OR (weekly_limit_usd>=0 AND weekly_limit_usd<10000000000))`
+	if lock {
+		query += " FOR SHARE"
+	}
+	e := q.QueryRowContext(ctx, query, id).Scan(&name)
 	if e == sql.ErrNoRows {
 		return "", ErrInvalid
 	}

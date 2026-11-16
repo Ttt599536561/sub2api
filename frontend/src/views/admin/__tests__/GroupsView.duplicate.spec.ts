@@ -328,6 +328,35 @@ describe('GroupsView duplicate action', () => {
     wrapper.unmount()
   })
 
+  it.each([
+    ['GROUP_WELFARE_REFERENCED', 'welfareRedeem.errors.groupReferenced'],
+    ['GROUP_WRITE_RETRY_REQUIRED', 'welfareRedeem.errors.groupWriteRetry']
+  ])('explains %s when editing a protected welfare group', async (reason, message) => {
+    updateGroup.mockRejectedValueOnce({ status: 409, code: 409, reason, message: 'English backend message' })
+    const wrapper = mountView()
+    await flushPromises()
+    await wrapper.findAll('button').find(button => button.text() === 'common.edit')!.trigger('click')
+    await flushPromises()
+    await wrapper.get('#edit-group-form').trigger('submit')
+    await flushPromises()
+    expect(showError).toHaveBeenCalledWith(message)
+    expect(wrapper.find('#edit-group-form').exists()).toBe(true)
+    wrapper.unmount()
+  })
+
+  it('explains the welfare reference protection when deleting a group', async () => {
+    vi.mocked(adminAPI.groups.delete).mockRejectedValueOnce({ status: 409, reason: 'GROUP_WELFARE_REFERENCED' })
+    const wrapper = mountView()
+    await flushPromises()
+    await wrapper.findAll('button').find(button => button.text() === 'common.delete')!.trigger('click')
+    await wrapper.findComponent({ name: 'ConfirmDialog' }).vm.$emit('confirm')
+    await flushPromises()
+    expect(adminAPI.groups.delete).toHaveBeenCalledWith(42)
+    expect(showError).toHaveBeenCalledWith('welfareRedeem.errors.groupReferenced')
+    expect(showSuccess).not.toHaveBeenCalled()
+    wrapper.unmount()
+  })
+
   it('loads and submits the monthly reset permission through the group edit checkbox', async () => {
     listGroups.mockResolvedValue({ items: [{
       ...sourceGroup, subscription_type: 'subscription', daily_limit_usd: 100,

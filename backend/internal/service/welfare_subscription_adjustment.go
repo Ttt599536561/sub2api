@@ -105,6 +105,16 @@ func (s *SubscriptionService) AdjustWelfareSubscription(ctx context.Context, id 
 	if err != nil {
 		return nil, err
 	}
+	if input.MonthlyLimitUSD != nil {
+		// Keep the subscription -> projection lock order used by supplement
+		// redemption and QQ revocation. An administrative cut is permanent;
+		// later QQ grants must not recreate protection from old receipts.
+		_, err = tx.ExecContext(txCtx, `UPDATE user_welfare_subscription_supplement_quota
+ SET protected_quota_usd=LEAST(protected_quota_usd,$2::numeric) WHERE subscription_id=$1`, id, quota)
+		if err != nil {
+			return nil, err
+		}
+	}
 	_, err = tx.ExecContext(txCtx, `INSERT INTO user_welfare_subscription_adjustments
 	 (subscription_id,user_id,group_id,actor_id,actor_key_id,reason,before_monthly_limit_usd,after_monthly_limit_usd,
 	 before_expires_at,after_expires_at,before_status,after_status,before_version,after_version,welfare_grant_count)

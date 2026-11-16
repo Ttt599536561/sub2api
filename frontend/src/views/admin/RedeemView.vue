@@ -129,7 +129,12 @@
           </template>
 
           <template #cell-value="{ value, row }">
-            <span class="text-sm font-medium text-gray-900 dark:text-white">
+            <WelfareRedeemSummary
+              v-if="row.subscription_effect"
+              :details="row"
+              :group-name="row.group?.name"
+            />
+            <span v-else class="text-sm font-medium text-gray-900 dark:text-white">
               <template v-if="row.type === 'balance'">${{ value.toFixed(2) }}</template>
               <template v-else-if="row.type === 'subscription'">
                 {{ row.validity_days || 30 }} {{ t('admin.redeem.days') }}
@@ -274,137 +279,19 @@
 
     <!-- Generate Codes Dialog -->
     <Teleport to="body">
-      <div v-if="showGenerateDialog" class="fixed inset-0 z-50 flex items-center justify-center">
+      <div v-show="showGenerateDialog" class="fixed inset-0 z-50 flex items-center justify-center p-4">
         <div class="fixed inset-0 bg-black/50" @click="showGenerateDialog = false"></div>
         <div
-          class="relative z-10 w-full max-w-md rounded-xl bg-white p-6 shadow-xl dark:bg-dark-800"
+          class="relative z-10 max-h-[calc(100dvh-2rem)] w-full max-w-lg overflow-y-auto rounded-xl bg-white p-6 shadow-xl dark:bg-dark-800"
         >
           <h2 class="mb-4 text-lg font-semibold text-gray-900 dark:text-white">
             {{ t('admin.redeem.generateCodesTitle') }}
           </h2>
-          <form @submit.prevent="handleGenerateCodes" class="space-y-4">
-            <div>
-              <label class="input-label">{{ t('admin.redeem.codeType') }}</label>
-              <Select v-model="generateForm.type" :options="typeOptions" />
-            </div>
-            <!-- 余额/并发类型：显示数值输入 -->
-            <div v-if="generateForm.type !== 'subscription' && generateForm.type !== 'invitation'">
-              <label class="input-label">
-                {{
-                  generateForm.type === 'balance'
-                    ? t('admin.redeem.amount')
-                    : t('admin.redeem.columns.value')
-                }}
-              </label>
-              <input
-                v-model.number="generateForm.value"
-                type="number"
-                :step="generateForm.type === 'balance' ? '0.01' : '1'"
-                :min="generateForm.type === 'balance' ? '0.01' : '1'"
-                required
-                class="input"
-              />
-            </div>
-            <!-- 邀请码类型：显示提示信息 -->
-            <div v-if="generateForm.type === 'invitation'" class="rounded-lg bg-blue-50 p-3 dark:bg-blue-900/20">
-              <p class="text-sm text-blue-700 dark:text-blue-300">
-                {{ t('admin.redeem.invitationHint') }}
-              </p>
-            </div>
-            <!-- 订阅类型：显示分组选择和有效天数 -->
-            <template v-if="generateForm.type === 'subscription'">
-              <div>
-                <label class="input-label">{{ t('admin.redeem.selectGroup') }}</label>
-                <Select
-                  v-model="generateForm.group_id"
-                  :options="subscriptionGroupOptions"
-                  :placeholder="t('admin.redeem.selectGroupPlaceholder')"
-                >
-                  <template #selected="{ option }">
-                    <GroupBadge
-                      v-if="option"
-                      :name="(option as unknown as GroupOption).label"
-                      :platform="(option as unknown as GroupOption).platform"
-                      :subscription-type="(option as unknown as GroupOption).subscriptionType"
-                      :rate-multiplier="(option as unknown as GroupOption).rate"
-                    />
-                    <span v-else class="text-gray-400">{{
-                      t('admin.redeem.selectGroupPlaceholder')
-                    }}</span>
-                  </template>
-                  <template #option="{ option, selected }">
-                    <GroupOptionItem
-                      :name="(option as unknown as GroupOption).label"
-                      :platform="(option as unknown as GroupOption).platform"
-                      :subscription-type="(option as unknown as GroupOption).subscriptionType"
-                      :rate-multiplier="(option as unknown as GroupOption).rate"
-                      :description="(option as unknown as GroupOption).description"
-                      :selected="selected"
-                    />
-                  </template>
-                </Select>
-              </div>
-              <div>
-                <label class="input-label">{{ t('admin.redeem.validityDays') }}</label>
-                <input
-                  v-model.number="generateForm.validity_days"
-                  type="number"
-                  min="1"
-                  max="36500"
-                  required
-                  class="input"
-                />
-              </div>
-            </template>
-            <div>
-              <label class="input-label">{{ t('admin.redeem.codeExpiry') }}</label>
-              <div class="grid grid-cols-2 gap-2 sm:grid-cols-5">
-                <button
-                  v-for="option in redeemCodeExpiryOptions"
-                  :key="option.value"
-                  type="button"
-                  @click="generateForm.expiry_option = option.value"
-                  :class="[
-                    'rounded-lg border px-3 py-2 text-sm transition-colors',
-                    generateForm.expiry_option === option.value
-                      ? 'border-primary-500 bg-primary-50 text-primary-700 dark:border-primary-400 dark:bg-primary-900/20 dark:text-primary-300'
-                      : 'border-gray-200 text-gray-700 hover:bg-gray-50 dark:border-dark-600 dark:text-gray-300 dark:hover:bg-dark-700'
-                  ]"
-                >
-                  {{ option.label }}
-                </button>
-              </div>
-              <input
-                v-if="generateForm.expiry_option === 'custom'"
-                v-model.number="generateForm.custom_expiry_days"
-                type="number"
-                min="1"
-                max="3650"
-                required
-                class="input mt-2"
-                :placeholder="t('admin.redeem.customExpiryDays')"
-              />
-            </div>
-            <div>
-              <label class="input-label">{{ t('admin.redeem.count') }}</label>
-              <input
-                v-model.number="generateForm.count"
-                type="number"
-                min="1"
-                max="100"
-                required
-                class="input"
-              />
-            </div>
-            <div class="flex justify-end gap-3 pt-2">
-              <button type="button" @click="showGenerateDialog = false" class="btn btn-secondary">
-                {{ t('common.cancel') }}
-              </button>
-              <button type="submit" :disabled="generating" class="btn btn-primary">
-                {{ generating ? t('admin.redeem.generating') : t('admin.redeem.generate') }}
-              </button>
-            </div>
-          </form>
+          <RedeemGenerateForm
+            :groups="subscriptionGroups"
+            @cancel="showGenerateDialog = false"
+            @generated="handleCodesGenerated"
+          />
         </div>
       </div>
     </Teleport>
@@ -611,7 +498,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
 import { useClipboard } from '@/composables/useClipboard'
@@ -627,8 +514,6 @@ import type {
   RedeemCode,
   RedeemCodeType,
   Group,
-  GroupPlatform,
-  SubscriptionType,
   BatchUpdateRedeemCodeFields
 } from '@/types'
 import type { Column } from '@/components/common/types'
@@ -638,23 +523,14 @@ import DataTable from '@/components/common/DataTable.vue'
 import Pagination from '@/components/common/Pagination.vue'
 import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
 import Select from '@/components/common/Select.vue'
-import GroupBadge from '@/components/common/GroupBadge.vue'
-import GroupOptionItem from '@/components/common/GroupOptionItem.vue'
 import Icon from '@/components/icons/Icon.vue'
+import RedeemGenerateForm from '@/components/admin/RedeemGenerateForm.vue'
+import WelfareRedeemSummary from '@/components/common/WelfareRedeemSummary.vue'
 
 const { t } = useI18n()
 const appStore = useAppStore()
 const { copyToClipboard: clipboardCopy } = useClipboard()
 const browserTimeZone = getBrowserTimeZone()
-
-interface GroupOption {
-  value: number
-  label: string
-  description: string | null
-  platform: GroupPlatform
-  subscriptionType: SubscriptionType
-  rate: number
-}
 
 const showGenerateDialog = ref(false)
 const showResultDialog = ref(false)
@@ -739,13 +615,6 @@ const columns = computed<Column[]>(() => [
   { key: 'actions', label: t('admin.redeem.columns.actions') }
 ])
 
-const typeOptions = computed(() => [
-  { value: 'balance', label: t('admin.redeem.balance') },
-  { value: 'concurrency', label: t('admin.redeem.concurrency') },
-  { value: 'subscription', label: t('admin.redeem.subscription') },
-  { value: 'invitation', label: t('admin.redeem.invitation') }
-])
-
 const filterTypeOptions = computed(() => [
   { value: '', label: t('admin.redeem.allTypes') },
   { value: 'balance', label: t('admin.redeem.balance') },
@@ -774,7 +643,6 @@ const batchExpiryModeOptions = computed(() => [
 
 const codes = ref<RedeemCode[]>([])
 const loading = ref(false)
-const generating = ref(false)
 const batchUpdating = ref(false)
 const searchQuery = ref('')
 const filters = reactive({
@@ -824,38 +692,6 @@ const batchUpdateForm = reactive({
   update_group_id: false,
   group_id: null as number | null
 })
-
-type RedeemCodeExpiryOption = 'never' | '1' | '3' | '7' | 'custom'
-
-const redeemCodeExpiryOptions = computed<{ value: RedeemCodeExpiryOption; label: string }[]>(() => [
-  { value: 'never', label: t('admin.redeem.neverExpires') },
-  { value: '1', label: t('admin.redeem.expiryPresetDays', { days: 1 }) },
-  { value: '3', label: t('admin.redeem.expiryPresetDays', { days: 3 }) },
-  { value: '7', label: t('admin.redeem.expiryPresetDays', { days: 7 }) },
-  { value: 'custom', label: t('admin.redeem.customExpiry') }
-])
-
-const generateForm = reactive({
-  type: 'balance' as RedeemCodeType,
-  value: 10,
-  count: 1,
-  group_id: null as number | null,
-  validity_days: 30,
-  expiry_option: 'never' as RedeemCodeExpiryOption,
-  custom_expiry_days: 7
-})
-
-// 监听类型变化，邀请码类型时自动设置 value 为 0
-watch(
-  () => generateForm.type,
-  (newType) => {
-    if (newType === 'invitation') {
-      generateForm.value = 0
-    } else if (generateForm.value === 0) {
-      generateForm.value = 10
-    }
-  }
-)
 
 const buildRedeemQueryFilters = () => ({
   type: (filters.type || undefined) as RedeemCodeType | undefined,
@@ -946,22 +782,6 @@ const toggleSelectAllVisible = (event: Event) => {
   toggleVisible(target.checked)
 }
 
-const getRedeemCodeExpiresInDays = () => {
-  if (generateForm.expiry_option === 'never') {
-    return undefined
-  }
-  if (generateForm.expiry_option === 'custom') {
-    if (
-      !Number.isFinite(generateForm.custom_expiry_days) ||
-      generateForm.custom_expiry_days < 1
-    ) {
-      return null
-    }
-    return Math.floor(generateForm.custom_expiry_days)
-  }
-  return Number(generateForm.expiry_option)
-}
-
 const toDatetimeLocalInputValue = (date: Date) => {
   const pad = (value: number) => String(value).padStart(2, '0')
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(
@@ -1025,44 +845,11 @@ const buildBatchUpdateFields = (): BatchUpdateRedeemCodeFields | null => {
   return Object.keys(fields).length > 0 ? fields : null
 }
 
-const handleGenerateCodes = async () => {
-  // 订阅类型必须选择分组
-  if (generateForm.type === 'subscription' && !generateForm.group_id) {
-    appStore.showError(t('admin.redeem.groupRequired'))
-    return
-  }
-
-  const expiresInDays = getRedeemCodeExpiresInDays()
-  if (expiresInDays === null) {
-    appStore.showError(t('admin.redeem.expiryDaysRequired'))
-    return
-  }
-
-  generating.value = true
-  try {
-    const result = await adminAPI.redeem.generate(
-      generateForm.count,
-      generateForm.type,
-      generateForm.value,
-      generateForm.type === 'subscription' ? generateForm.group_id : undefined,
-      generateForm.type === 'subscription' ? generateForm.validity_days : undefined,
-      expiresInDays
-    )
-    showGenerateDialog.value = false
-    generatedCodes.value = result
-    showResultDialog.value = true
-    // 重置表单
-    generateForm.group_id = null
-    generateForm.validity_days = 30
-    generateForm.expiry_option = 'never'
-    generateForm.custom_expiry_days = 7
-    loadCodes()
-  } catch (error: any) {
-    appStore.showError(error.response?.data?.detail || t('admin.redeem.failedToGenerate'))
-    console.error('Error generating codes:', error)
-  } finally {
-    generating.value = false
-  }
+const handleCodesGenerated = (result: RedeemCode[]) => {
+  showGenerateDialog.value = false
+  generatedCodes.value = result
+  showResultDialog.value = true
+  loadCodes()
 }
 
 const copyToClipboard = async (text: string) => {

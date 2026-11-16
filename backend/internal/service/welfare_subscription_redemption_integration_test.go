@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -71,6 +72,14 @@ CREATE TABLE user_welfare_subscription_grants (
  subscription_id BIGINT NOT NULL REFERENCES user_subscriptions(id),
  daily_limit_usd NUMERIC(20,10),weekly_limit_usd NUMERIC(20,10),monthly_limit_usd NUMERIC(20,10),
  granted_at TIMESTAMPTZ NOT NULL);`)
+	require.NoError(t, err)
+	// Legacy redemption/adjustment/revocation tests also need the current
+	// mutable attribution table; use the production DDL rather than a copy.
+	supplementMigration, err := os.ReadFile("../../migrations/259_welfare_redeem_supplements.sql")
+	require.NoError(t, err)
+	projectionStart := strings.Index(string(supplementMigration), "CREATE TABLE IF NOT EXISTS user_welfare_subscription_supplement_quota")
+	require.GreaterOrEqual(t, projectionStart, 0)
+	_, err = db.ExecContext(ctx, string(supplementMigration)[projectionStart:])
 	require.NoError(t, err)
 	u, err := client.User.Create().SetEmail("welfare@example.test").SetPasswordHash("test-only").Save(ctx)
 	require.NoError(t, err)

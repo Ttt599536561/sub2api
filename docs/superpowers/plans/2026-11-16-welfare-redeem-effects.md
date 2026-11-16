@@ -10,11 +10,11 @@
 
 ## Tasks and ownership
 
-- [ ] Backend supplement: schema/Ent, migration259, service/repository/DTO/admin generate and campaign-option route, redemption, independent receipts; Go unit and integration tests. New logic in focused welfare_redeem files; avoid group lifecycle files and frontend. Contract is the approved design document.
-- [ ] Group lifecycle: migration260, group repository/service/handler protection, qqinvite campaign/inventory integration and tests. Cooperate with supplement owner about schema and SQL locking. Do not edit supplement259 or Ent generated files.
-- [ ] Frontend: typed API contract, generation modal (ordinary vs welfare, campaign→read-only group, effect/amount/days), list/result/history and both locales; meaningful Vitest tests.
-- [ ] Integration: isolated local PostgreSQL and frontend dependencies on E drive, baseline then changed-code checks, migration upgrade and concurrency verification, independent spec/quality reviews, fix findings.
-- [ ] Documentation and delivery: changelog, dated change record and handoff with actual verification; local commit after checks. Keep production and remote publication untouched.
+- [x] Backend supplement: schema/Ent, migration259, service/repository/DTO/admin generate and campaign-option route, redemption, independent receipts; Go unit and integration tests. New logic in focused welfare_redeem files; avoid group lifecycle files and frontend. Contract is the approved design document.
+- [x] Group lifecycle: migration260, group repository/service/handler protection, qqinvite campaign/inventory integration and tests. Cooperate with supplement owner about schema and SQL locking. Do not edit supplement259 or Ent generated files.
+- [x] Frontend: typed API contract, generation modal (ordinary vs welfare, campaign→read-only group, effect/amount/days), list/result/history and both locales; meaningful Vitest tests.
+- [x] Integration: isolated local PostgreSQL and frontend dependencies on E drive, baseline then changed-code checks, migration upgrade and concurrency verification, independent spec/quality reviews, fix findings.
+- [x] Documentation and delivery: changelog, dated change record and handoff with actual verification; local commit after checks. Keep production and remote publication untouched.
 
 ## Commands and evidence
 

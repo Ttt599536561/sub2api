@@ -1957,7 +1957,40 @@ export interface UsageCleanupTask {
   updated_at: string
 }
 
-export interface RedeemCode {
+export type WelfareSubscriptionEffect = 'add_quota' | 'extend_duration'
+
+export interface WelfareRedeemResult {
+  subscription_id: number
+  monthly_limit_usd: number
+  monthly_usage_usd: number
+  remaining_usd: number
+  expires_at: string
+}
+
+export interface WelfareRedeemDetails {
+  subscription_effect?: WelfareSubscriptionEffect
+  welfare_campaign_id?: number
+  welfare_campaign_name?: string
+  quota_amount_usd?: number
+  welfare_result?: WelfareRedeemResult
+}
+
+export type WelfareRedeemGenerateOptions = {
+  welfare_campaign_id: number
+} & (
+  | { subscription_effect: 'add_quota'; quota_amount_usd: number }
+  | { subscription_effect: 'extend_duration' }
+)
+
+export interface WelfareRedeemCampaign {
+  id: number
+  name: string
+  version: number
+  subscription_group_id: number
+  group_name: string
+}
+
+export interface RedeemCode extends WelfareRedeemDetails {
   id: number
   code: string
   type: RedeemCodeType
@@ -1983,6 +2016,9 @@ export interface GenerateRedeemCodesRequest {
   validity_days?: number // 订阅类型专用
   expires_at?: string | null
   expires_in_days?: number
+  subscription_effect?: WelfareSubscriptionEffect
+  welfare_campaign_id?: number
+  quota_amount_usd?: number
 }
 
 export interface BatchUpdateRedeemCodeFields {

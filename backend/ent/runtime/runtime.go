@@ -1792,8 +1792,16 @@ func init() {
 	redeemcodeDescCreatedAt := redeemcodeFields[7].Descriptor()
 	// redeemcode.DefaultCreatedAt holds the default value on creation for the created_at field.
 	redeemcode.DefaultCreatedAt = redeemcodeDescCreatedAt.Default.(func() time.Time)
+	// redeemcodeDescSubscriptionEffect is the schema descriptor for subscription_effect field.
+	redeemcodeDescSubscriptionEffect := redeemcodeFields[10].Descriptor()
+	// redeemcode.DefaultSubscriptionEffect holds the default value on creation for the subscription_effect field.
+	redeemcode.DefaultSubscriptionEffect = redeemcodeDescSubscriptionEffect.Default.(string)
+	// redeemcodeDescWelfareCampaignName is the schema descriptor for welfare_campaign_name field.
+	redeemcodeDescWelfareCampaignName := redeemcodeFields[13].Descriptor()
+	// redeemcode.DefaultWelfareCampaignName holds the default value on creation for the welfare_campaign_name field.
+	redeemcode.DefaultWelfareCampaignName = redeemcodeDescWelfareCampaignName.Default.(string)
 	// redeemcodeDescValidityDays is the schema descriptor for validity_days field.
-	redeemcodeDescValidityDays := redeemcodeFields[10].Descriptor()
+	redeemcodeDescValidityDays := redeemcodeFields[15].Descriptor()
 	// redeemcode.DefaultValidityDays holds the default value on creation for the validity_days field.
 	redeemcode.DefaultValidityDays = redeemcodeDescValidityDays.Default.(int)
 	securitysecretMixin := schema.SecuritySecret{}.Mixin()

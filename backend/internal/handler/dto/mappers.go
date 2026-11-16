@@ -646,6 +646,8 @@ func RedeemCodeFromServiceAdmin(rc *service.RedeemCode) *AdminRedeemCode {
 
 func redeemCodeFromServiceBase(rc *service.RedeemCode) RedeemCode {
 	out := RedeemCode{
+		SubscriptionEffect: rc.SubscriptionEffect, WelfareCampaignID: rc.WelfareCampaignID,
+		WelfareCampaignName: rc.WelfareCampaignName, QuotaAmountUSD: rc.QuotaAmountUSD, WelfareResult: rc.WelfareResult,
 		ID:           rc.ID,
 		Code:         rc.Code,
 		Type:         rc.Type,

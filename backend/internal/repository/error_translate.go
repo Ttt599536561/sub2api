@@ -3,11 +3,13 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"strings"
 
 	dbent "github.com/Wei-Shaw/sub2api/ent"
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
+	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/lib/pq"
 )
 
@@ -51,6 +53,15 @@ func translatePersistenceError(err error, notFound, conflict *infraerrors.Applic
 	if err == nil {
 		return nil
 	}
+	var groupError *pq.Error
+	if errors.As(err, &groupError) && groupError != nil {
+		switch groupError.Constraint {
+		case "welfare_group_referenced":
+			return service.ErrGroupWelfareReferenced.WithCause(err).WithMetadata(welfareGroupErrorMetadata(groupError.Detail))
+		case "welfare_group_write_requires_read_committed":
+			return service.ErrGroupWriteRetryRequired.WithCause(err).WithMetadata(welfareGroupErrorMetadata(groupError.Detail))
+		}
+	}
 
 	// 兼容 Ent ORM 和标准 database/sql 的 NotFound 行为。
 	// Ent 使用自定义的 NotFoundError，而标准库使用 sql.ErrNoRows。
@@ -66,6 +77,20 @@ func translatePersistenceError(err error, notFound, conflict *infraerrors.Applic
 
 	// 未匹配任何规则，返回原始错误
 	return err
+}
+
+func welfareGroupErrorMetadata(detail string) map[string]string {
+	var values map[string]json.Number
+	if json.Unmarshal([]byte(detail), &values) != nil {
+		return nil
+	}
+	metadata := make(map[string]string)
+	for _, key := range []string{"group_id", "campaign_count", "supplement_code_count", "unused_supplement_count", "welfare_subscription_count", "welfare_history_count"} {
+		if value, ok := values[key]; ok {
+			metadata[key] = value.String()
+		}
+	}
+	return metadata
 }
 
 // isUniqueConstraintViolation 判断错误是否为唯一约束冲突。

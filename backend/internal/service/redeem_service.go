@@ -566,6 +566,12 @@ func (s *RedeemService) redeem(ctx context.Context, userID int64, code string, r
 		}).Only(txCtx); err != nil {
 			return nil, fmt.Errorf("lock user for subscription redemption: %w", err)
 		}
+		if redeemCode.SubscriptionEffect != "" {
+			if err := s.applyWelfareSupplement(txCtx, tx, userID, redeemCode); err != nil {
+				return nil, err
+			}
+			break
+		}
 		welfareCode, err := isAssignedWelfareSubscriptionCode(txCtx, tx, redeemCode.ID)
 		if err != nil {
 			return nil, fmt.Errorf("verify welfare subscription provenance: %w", err)

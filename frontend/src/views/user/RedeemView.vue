@@ -105,6 +105,11 @@
                       {{ t('redeem.added') }}: {{ redeemResult.value }}
                       {{ t('redeem.concurrentRequests') }}
                     </p>
+                    <WelfareRedeemSummary
+                      v-else-if="redeemResult.subscription_effect"
+                      :details="redeemResult"
+                      :group-name="redeemResult.group_name"
+                    />
                     <p v-else-if="redeemResult.type === 'subscription'" class="font-medium">
                       {{ t('redeem.subscriptionAssigned') }}
                       <span v-if="redeemResult.group_name"> - {{ redeemResult.group_name }}</span>
@@ -230,7 +235,7 @@
             <div
               v-for="item in history"
               :key="item.id"
-              class="flex items-center justify-between rounded-xl bg-gray-50 p-4 dark:bg-dark-800"
+              class="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-gray-50 p-4 dark:bg-dark-800"
             >
               <div class="flex items-center gap-4">
                 <div
@@ -287,7 +292,9 @@
                 </div>
               </div>
               <div class="text-right">
+                <WelfareRedeemSummary v-if="item.subscription_effect" :details="item" :group-name="item.group?.name" />
                 <p
+                  v-else
                   :class="[
                     'text-sm font-semibold',
                     isBalanceType(item.type)
@@ -374,6 +381,9 @@ import { useSubscriptionStore } from '@/stores/subscriptions'
 import { redeemAPI, authAPI, type RedeemHistoryItem } from '@/api'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import Icon from '@/components/icons/Icon.vue'
+import WelfareRedeemSummary from '@/components/common/WelfareRedeemSummary.vue'
+import type { RedeemResult } from '@/api/redeem'
+import { welfareErrorMessage } from '@/utils/welfareRedeemError'
 import { formatDateTime } from '@/utils/format'
 
 const { t } = useI18n()
@@ -385,15 +395,7 @@ const user = computed(() => authStore.user)
 
 const redeemCode = ref('')
 const submitting = ref(false)
-const redeemResult = ref<{
-  message: string
-  type: string
-  value: number
-  new_balance?: number
-  new_concurrency?: number
-  group_name?: string
-  validity_days?: number
-} | null>(null)
+const redeemResult = ref<RedeemResult | null>(null)
 const errorMessage = ref('')
 
 // History data
@@ -420,6 +422,7 @@ const isAdminAdjustment = (type: string) => {
 }
 
 const getHistoryItemTitle = (item: RedeemHistoryItem) => {
+  if (item.subscription_effect) return t('welfareRedeem.' + item.subscription_effect)
   if (item.type === 'balance') {
     return t('redeem.balanceAddedRedeem')
   } else if (item.type === 'admin_balance') {
@@ -513,10 +516,7 @@ const handleRedeem = async () => {
     // Show success toast
     appStore.showSuccess(t('redeem.codeRedeemSuccess'))
   } catch (error: any) {
-    const reason = error.reason || error.response?.data?.reason || error.code
-    errorMessage.value = reason === 'REDEEM_CODE_CANCELLED'
-      ? t('redeem.codeCancelled')
-      : error.response?.data?.detail || t('redeem.failedToRedeem')
+    errorMessage.value = welfareErrorMessage(error, t, 'redeem.failedToRedeem')
 
     appStore.showError(t('redeem.redeemFailed'))
   } finally {

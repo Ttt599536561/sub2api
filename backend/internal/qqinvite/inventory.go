@@ -6,6 +6,8 @@ import (
 	"errors"
 	"strings"
 	"time"
+
+	"github.com/lib/pq"
 )
 
 func (s *Store) PreviewCodes(ctx context.Context, id int64, codes []string) (CodePreview, error) {
@@ -30,24 +32,24 @@ func previewCodes(ctx context.Context, tx *sql.Tx, id int64, codes []string, loc
 	if e != nil {
 		return out, e
 	}
-	if _, e = subscriptionName(ctx, tx, c.SubscriptionGroupID); e != nil {
+	if _, e = readSubscriptionName(ctx, tx, c.SubscriptionGroupID, lock); e != nil {
 		return out, e
 	}
 	seen := map[string]bool{}
 	for i, raw := range codes {
 		code := strings.TrimSpace(raw)
 		it := CodePreviewItem{Index: i, CodeHint: hint(code)}
-		var typ, status string
+		var typ, status, effect string
 		var group sql.NullInt64
 		var days int
 		var expiry sql.NullTime
 		var used sql.NullInt64
 		var pool bool
-		query := `SELECT type,status,group_id,validity_days,expires_at,used_by,EXISTS(SELECT 1 FROM qq_invite_code_pool p WHERE p.redeem_code_id=r.id) FROM redeem_codes r WHERE code=$1`
+		query := `SELECT type,status,group_id,validity_days,expires_at,used_by,EXISTS(SELECT 1 FROM qq_invite_code_pool p WHERE p.redeem_code_id=r.id),subscription_effect FROM redeem_codes r WHERE code=$1`
 		if lock {
 			query += " FOR UPDATE"
 		}
-		e := tx.QueryRowContext(ctx, query, code).Scan(&typ, &status, &group, &days, &expiry, &used, &pool)
+		e := tx.QueryRowContext(ctx, query, code).Scan(&typ, &status, &group, &days, &expiry, &used, &pool, &effect)
 		switch {
 		case seen[code]:
 			it.Reason = "duplicate"
@@ -55,6 +57,8 @@ func previewCodes(ctx context.Context, tx *sql.Tx, id int64, codes []string, loc
 			it.Reason = "not_found"
 		case e != nil:
 			return out, e
+		case effect != "":
+			it.Reason = "welfare_supplement_not_allowed"
 		case typ != "subscription" || !group.Valid || group.Int64 != c.SubscriptionGroupID || days != 30:
 			it.Reason = "not_monthly_subscription"
 		case status != "unused" || used.Valid:
@@ -83,6 +87,34 @@ func (s *Store) ImportCodes(ctx context.Context, id int64, codes []string, actor
 	}
 	defer func() { _ = tx.Rollback() }()
 	if _, e = tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock(81425303)`); e != nil {
+		return CodePreview{}, e
+	}
+	// Redemption locks code before campaign. Take all existing candidates in ID
+	// order before previewCodes locks the campaign, including invalid supplements;
+	// otherwise an import that will be rejected can deadlock a valid redemption.
+	if len(codes) == 0 || len(codes) > 500 {
+		return CodePreview{}, ErrInvalid
+	}
+	trimmed := make([]string, len(codes))
+	for i, code := range codes {
+		trimmed[i] = strings.TrimSpace(code)
+	}
+	rows, e := tx.QueryContext(ctx, `SELECT id FROM redeem_codes WHERE code=ANY($1) ORDER BY id FOR UPDATE`, pq.Array(trimmed))
+	if e != nil {
+		return CodePreview{}, e
+	}
+	for rows.Next() {
+		var codeID int64
+		if e = rows.Scan(&codeID); e != nil {
+			_ = rows.Close()
+			return CodePreview{}, e
+		}
+	}
+	if e = rows.Err(); e != nil {
+		_ = rows.Close()
+		return CodePreview{}, e
+	}
+	if e = rows.Close(); e != nil {
 		return CodePreview{}, e
 	}
 	out, e := previewCodes(ctx, tx, id, codes, true)
@@ -119,7 +151,7 @@ func (s *Store) GenerateCodes(ctx context.Context, id int64, count int, actor in
 	if e != nil {
 		return out, e
 	}
-	if _, e = subscriptionName(ctx, tx, c.SubscriptionGroupID); e != nil {
+	if _, e = subscriptionNameForWrite(ctx, tx, c.SubscriptionGroupID); e != nil {
 		return out, e
 	}
 	for i := 0; i < count; i++ {

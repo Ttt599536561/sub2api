@@ -34,6 +34,16 @@ const (
 	FieldExpiresAt = "expires_at"
 	// FieldGroupID holds the string denoting the group_id field in the database.
 	FieldGroupID = "group_id"
+	// FieldSubscriptionEffect holds the string denoting the subscription_effect field in the database.
+	FieldSubscriptionEffect = "subscription_effect"
+	// FieldWelfareCampaignID holds the string denoting the welfare_campaign_id field in the database.
+	FieldWelfareCampaignID = "welfare_campaign_id"
+	// FieldWelfareCampaignVersion holds the string denoting the welfare_campaign_version field in the database.
+	FieldWelfareCampaignVersion = "welfare_campaign_version"
+	// FieldWelfareCampaignName holds the string denoting the welfare_campaign_name field in the database.
+	FieldWelfareCampaignName = "welfare_campaign_name"
+	// FieldQuotaAmountUsd holds the string denoting the quota_amount_usd field in the database.
+	FieldQuotaAmountUsd = "quota_amount_usd"
 	// FieldValidityDays holds the string denoting the validity_days field in the database.
 	FieldValidityDays = "validity_days"
 	// EdgeUser holds the string denoting the user edge name in mutations.
@@ -71,6 +81,11 @@ var Columns = []string{
 	FieldCreatedAt,
 	FieldExpiresAt,
 	FieldGroupID,
+	FieldSubscriptionEffect,
+	FieldWelfareCampaignID,
+	FieldWelfareCampaignVersion,
+	FieldWelfareCampaignName,
+	FieldQuotaAmountUsd,
 	FieldValidityDays,
 }
 
@@ -99,6 +114,10 @@ var (
 	StatusValidator func(string) error
 	// DefaultCreatedAt holds the default value on creation for the "created_at" field.
 	DefaultCreatedAt func() time.Time
+	// DefaultSubscriptionEffect holds the default value on creation for the "subscription_effect" field.
+	DefaultSubscriptionEffect string
+	// DefaultWelfareCampaignName holds the default value on creation for the "welfare_campaign_name" field.
+	DefaultWelfareCampaignName string
 	// DefaultValidityDays holds the default value on creation for the "validity_days" field.
 	DefaultValidityDays int
 )
@@ -159,6 +178,31 @@ func ByExpiresAt(opts ...sql.OrderTermOption) OrderOption {
 // ByGroupID orders the results by the group_id field.
 func ByGroupID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldGroupID, opts...).ToFunc()
+}
+
+// BySubscriptionEffect orders the results by the subscription_effect field.
+func BySubscriptionEffect(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldSubscriptionEffect, opts...).ToFunc()
+}
+
+// ByWelfareCampaignID orders the results by the welfare_campaign_id field.
+func ByWelfareCampaignID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldWelfareCampaignID, opts...).ToFunc()
+}
+
+// ByWelfareCampaignVersion orders the results by the welfare_campaign_version field.
+func ByWelfareCampaignVersion(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldWelfareCampaignVersion, opts...).ToFunc()
+}
+
+// ByWelfareCampaignName orders the results by the welfare_campaign_name field.
+func ByWelfareCampaignName(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldWelfareCampaignName, opts...).ToFunc()
+}
+
+// ByQuotaAmountUsd orders the results by the quota_amount_usd field.
+func ByQuotaAmountUsd(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldQuotaAmountUsd, opts...).ToFunc()
 }
 
 // ByValidityDays orders the results by the validity_days field.

@@ -270,21 +270,23 @@ func TestCampaignGroupChangeWaitsForImport(t *testing.T) {
 			c := draftCampaignFixture(t, s)
 			_, err := s.db.ExecContext(ctx, `INSERT INTO redeem_codes(code,type,group_id) VALUES('old-code','subscription',1)`)
 			must(t, err)
-			codeBarrier, err := s.db.BeginTx(ctx, nil)
+			groupBarrier, err := s.db.BeginTx(ctx, nil)
 			must(t, err)
-			defer func() { _ = codeBarrier.Rollback() }()
-			_, err = codeBarrier.ExecContext(ctx, `SELECT id FROM redeem_codes WHERE code='old-code' FOR UPDATE`)
+			defer func() { _ = groupBarrier.Rollback() }()
+			// Imports lock code before campaign, then group. Pause at the last
+			// lock so the campaign is already held while its editor starts.
+			_, err = groupBarrier.ExecContext(ctx, `SELECT id FROM groups WHERE id=1 FOR UPDATE`)
 			must(t, err)
-			var codePID int
-			must(t, codeBarrier.QueryRowContext(ctx, `SELECT pg_backend_pid()`).Scan(&codePID))
+			var groupPID int
+			must(t, groupBarrier.QueryRowContext(ctx, `SELECT pg_backend_pid()`).Scan(&groupPID))
 			imported := make(chan error, 1)
 			go func() { _, err := s.ImportCodes(ctx, c.ID, []string{"old-code"}, 1); imported <- err }()
-			importPID := waitCampaignLockWaiter(t, ctx, s.db, codePID, codePID, 0)
+			importPID := waitCampaignLockWaiter(t, ctx, s.db, groupPID, groupPID, 0)
 			c.SubscriptionGroupID = 2
 			saved := make(chan error, 1)
 			go func() { _, err := s.SaveCampaign(ctx, c, 1); saved <- err }()
 			waitCampaignLockWaiter(t, ctx, s.db, importPID, importPID, 0)
-			must(t, codeBarrier.Commit())
+			must(t, groupBarrier.Commit())
 			must(t, <-imported)
 			if err = <-saved; !errors.Is(err, ErrCampaignGroupLocked) {
 				t.Fatalf("group change must observe imported stock after waiting: %v", err)

@@ -1267,6 +1267,12 @@ func (s *adminServiceImpl) GetRedeemCode(ctx context.Context, id int64) (*Redeem
 }
 
 func (s *adminServiceImpl) GenerateRedeemCodes(ctx context.Context, input *GenerateRedeemCodesInput) ([]RedeemCode, error) {
+	if input == nil {
+		return nil, ErrWelfareSupplementInvalid
+	}
+	if input.SubscriptionEffect != "" || input.WelfareCampaignID != nil || input.QuotaAmountUSD != nil {
+		return generateWelfareSupplementCodes(ctx, s.entClient, s.redeemCodeRepo, input)
+	}
 	if input.ExpiresAt != nil && !input.ExpiresAt.After(time.Now()) {
 		return nil, ErrRedeemCodeExpired
 	}

@@ -34,13 +34,16 @@ func NewRedeemHandler(adminService service.AdminService, redeemService *service.
 
 // GenerateRedeemCodesRequest represents generate redeem codes request
 type GenerateRedeemCodesRequest struct {
-	Count         int        `json:"count" binding:"required,min=1,max=100"`
-	Type          string     `json:"type" binding:"required,oneof=balance concurrency subscription invitation"`
-	Value         float64    `json:"value"`
-	GroupID       *int64     `json:"group_id"`      // 订阅类型必填
-	ValidityDays  int        `json:"validity_days"` // 订阅类型使用，正数增加/负数退款扣减
-	ExpiresAt     *time.Time `json:"expires_at"`
-	ExpiresInDays *int       `json:"expires_in_days" binding:"omitempty,min=1,max=3650"`
+	SubscriptionEffect string     `json:"subscription_effect"`
+	WelfareCampaignID  *int64     `json:"welfare_campaign_id"`
+	QuotaAmountUSD     *float64   `json:"quota_amount_usd"`
+	Count              int        `json:"count" binding:"required,min=1,max=100"`
+	Type               string     `json:"type" binding:"required,oneof=balance concurrency subscription invitation"`
+	Value              float64    `json:"value"`
+	GroupID            *int64     `json:"group_id"`      // 订阅类型必填
+	ValidityDays       int        `json:"validity_days"` // 订阅类型使用，正数增加/负数退款扣减
+	ExpiresAt          *time.Time `json:"expires_at"`
+	ExpiresInDays      *int       `json:"expires_in_days" binding:"omitempty,min=1,max=3650"`
 }
 
 // CreateAndRedeemCodeRequest represents creating a fixed code and redeeming it for a target user.
@@ -144,12 +147,15 @@ func (h *RedeemHandler) Generate(c *gin.Context) {
 
 	executeAdminIdempotentJSON(c, "admin.redeem_codes.generate", req, service.DefaultWriteIdempotencyTTL(), func(ctx context.Context) (any, error) {
 		codes, execErr := h.adminService.GenerateRedeemCodes(ctx, &service.GenerateRedeemCodesInput{
-			Count:        req.Count,
-			Type:         req.Type,
-			Value:        req.Value,
-			GroupID:      req.GroupID,
-			ValidityDays: req.ValidityDays,
-			ExpiresAt:    expiresAt,
+			SubscriptionEffect: req.SubscriptionEffect,
+			WelfareCampaignID:  req.WelfareCampaignID,
+			QuotaAmountUSD:     req.QuotaAmountUSD,
+			Count:              req.Count,
+			Type:               req.Type,
+			Value:              req.Value,
+			GroupID:            req.GroupID,
+			ValidityDays:       req.ValidityDays,
+			ExpiresAt:          expiresAt,
 		})
 		if execErr != nil {
 			return nil, execErr

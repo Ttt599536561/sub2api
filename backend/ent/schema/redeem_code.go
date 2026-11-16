@@ -70,6 +70,11 @@ func (RedeemCode) Fields() []ent.Field {
 		field.Int64("group_id").
 			Optional().
 			Nillable(),
+		field.String("subscription_effect").Default(""),
+		field.Int64("welfare_campaign_id").Optional().Nillable(),
+		field.Int64("welfare_campaign_version").Optional().Nillable(),
+		field.String("welfare_campaign_name").Default(""),
+		field.Float("quota_amount_usd").Optional().Nillable().SchemaType(map[string]string{dialect.Postgres: "numeric(20,10)"}),
 		field.Int("validity_days").
 			Default(30),
 	}

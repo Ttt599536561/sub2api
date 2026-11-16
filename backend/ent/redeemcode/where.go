@@ -105,6 +105,31 @@ func GroupID(v int64) predicate.RedeemCode {
 	return predicate.RedeemCode(sql.FieldEQ(FieldGroupID, v))
 }
 
+// SubscriptionEffect applies equality check predicate on the "subscription_effect" field. It's identical to SubscriptionEffectEQ.
+func SubscriptionEffect(v string) predicate.RedeemCode {
+	return predicate.RedeemCode(sql.FieldEQ(FieldSubscriptionEffect, v))
+}
+
+// WelfareCampaignID applies equality check predicate on the "welfare_campaign_id" field. It's identical to WelfareCampaignIDEQ.
+func WelfareCampaignID(v int64) predicate.RedeemCode {
+	return predicate.RedeemCode(sql.FieldEQ(FieldWelfareCampaignID, v))
+}
+
+// WelfareCampaignVersion applies equality check predicate on the "welfare_campaign_version" field. It's identical to WelfareCampaignVersionEQ.
+func WelfareCampaignVersion(v int64) predicate.RedeemCode {
+	return predicate.RedeemCode(sql.FieldEQ(FieldWelfareCampaignVersion, v))
+}
+
+// WelfareCampaignName applies equality check predicate on the "welfare_campaign_name" field. It's identical to WelfareCampaignNameEQ.
+func WelfareCampaignName(v string) predicate.RedeemCode {
+	return predicate.RedeemCode(sql.FieldEQ(FieldWelfareCampaignName, v))
+}
+
+// QuotaAmountUsd applies equality check predicate on the "quota_amount_usd" field. It's identical to QuotaAmountUsdEQ.
+func QuotaAmountUsd(v float64) predicate.RedeemCode {
+	return predicate.RedeemCode(sql.FieldEQ(FieldQuotaAmountUsd, v))
+}
+
 // ValidityDays applies equality check predicate on the "validity_days" field. It's identical to ValidityDaysEQ.
 func ValidityDays(v int) predicate.RedeemCode {
 	return predicate.RedeemCode(sql.FieldEQ(FieldValidityDays, v))
@@ -618,6 +643,286 @@ func GroupIDIsNil() predicate.RedeemCode {
 // GroupIDNotNil applies the NotNil predicate on the "group_id" field.
 func GroupIDNotNil() predicate.RedeemCode {
 	return predicate.RedeemCode(sql.FieldNotNull(FieldGroupID))
+}
+
+// SubscriptionEffectEQ applies the EQ predicate on the "subscription_effect" field.
+func SubscriptionEffectEQ(v string) predicate.RedeemCode {
+	return predicate.RedeemCode(sql.FieldEQ(FieldSubscriptionEffect, v))
+}
+
+// SubscriptionEffectNEQ applies the NEQ predicate on the "subscription_effect" field.
+func SubscriptionEffectNEQ(v string) predicate.RedeemCode {
+	return predicate.RedeemCode(sql.FieldNEQ(FieldSubscriptionEffect, v))
+}
+
+// SubscriptionEffectIn applies the In predicate on the "subscription_effect" field.
+func SubscriptionEffectIn(vs ...string) predicate.RedeemCode {
+	return predicate.RedeemCode(sql.FieldIn(FieldSubscriptionEffect, vs...))
+}
+
+// SubscriptionEffectNotIn applies the NotIn predicate on the "subscription_effect" field.
+func SubscriptionEffectNotIn(vs ...string) predicate.RedeemCode {
+	return predicate.RedeemCode(sql.FieldNotIn(FieldSubscriptionEffect, vs...))
+}
+
+// SubscriptionEffectGT applies the GT predicate on the "subscription_effect" field.
+func SubscriptionEffectGT(v string) predicate.RedeemCode {
+	return predicate.RedeemCode(sql.FieldGT(FieldSubscriptionEffect, v))
+}
+
+// SubscriptionEffectGTE applies the GTE predicate on the "subscription_effect" field.
+func SubscriptionEffectGTE(v string) predicate.RedeemCode {
+	return predicate.RedeemCode(sql.FieldGTE(FieldSubscriptionEffect, v))
+}
+
+// SubscriptionEffectLT applies the LT predicate on the "subscription_effect" field.
+func SubscriptionEffectLT(v string) predicate.RedeemCode {
+	return predicate.RedeemCode(sql.FieldLT(FieldSubscriptionEffect, v))
+}
+
+// SubscriptionEffectLTE applies the LTE predicate on the "subscription_effect" field.
+func SubscriptionEffectLTE(v string) predicate.RedeemCode {
+	return predicate.RedeemCode(sql.FieldLTE(FieldSubscriptionEffect, v))
+}
+
+// SubscriptionEffectContains applies the Contains predicate on the "subscription_effect" field.
+func SubscriptionEffectContains(v string) predicate.RedeemCode {
+	return predicate.RedeemCode(sql.FieldContains(FieldSubscriptionEffect, v))
+}
+
+// SubscriptionEffectHasPrefix applies the HasPrefix predicate on the "subscription_effect" field.
+func SubscriptionEffectHasPrefix(v string) predicate.RedeemCode {
+	return predicate.RedeemCode(sql.FieldHasPrefix(FieldSubscriptionEffect, v))
+}
+
+// SubscriptionEffectHasSuffix applies the HasSuffix predicate on the "subscription_effect" field.
+func SubscriptionEffectHasSuffix(v string) predicate.RedeemCode {
+	return predicate.RedeemCode(sql.FieldHasSuffix(FieldSubscriptionEffect, v))
+}
+
+// SubscriptionEffectEqualFold applies the EqualFold predicate on the "subscription_effect" field.
+func SubscriptionEffectEqualFold(v string) predicate.RedeemCode {
+	return predicate.RedeemCode(sql.FieldEqualFold(FieldSubscriptionEffect, v))
+}
+
+// SubscriptionEffectContainsFold applies the ContainsFold predicate on the "subscription_effect" field.
+func SubscriptionEffectContainsFold(v string) predicate.RedeemCode {
+	return predicate.RedeemCode(sql.FieldContainsFold(FieldSubscriptionEffect, v))
+}
+
+// WelfareCampaignIDEQ applies the EQ predicate on the "welfare_campaign_id" field.
+func WelfareCampaignIDEQ(v int64) predicate.RedeemCode {
+	return predicate.RedeemCode(sql.FieldEQ(FieldWelfareCampaignID, v))
+}
+
+// WelfareCampaignIDNEQ applies the NEQ predicate on the "welfare_campaign_id" field.
+func WelfareCampaignIDNEQ(v int64) predicate.RedeemCode {
+	return predicate.RedeemCode(sql.FieldNEQ(FieldWelfareCampaignID, v))
+}
+
+// WelfareCampaignIDIn applies the In predicate on the "welfare_campaign_id" field.
+func WelfareCampaignIDIn(vs ...int64) predicate.RedeemCode {
+	return predicate.RedeemCode(sql.FieldIn(FieldWelfareCampaignID, vs...))
+}
+
+// WelfareCampaignIDNotIn applies the NotIn predicate on the "welfare_campaign_id" field.
+func WelfareCampaignIDNotIn(vs ...int64) predicate.RedeemCode {
+	return predicate.RedeemCode(sql.FieldNotIn(FieldWelfareCampaignID, vs...))
+}
+
+// WelfareCampaignIDGT applies the GT predicate on the "welfare_campaign_id" field.
+func WelfareCampaignIDGT(v int64) predicate.RedeemCode {
+	return predicate.RedeemCode(sql.FieldGT(FieldWelfareCampaignID, v))
+}
+
+// WelfareCampaignIDGTE applies the GTE predicate on the "welfare_campaign_id" field.
+func WelfareCampaignIDGTE(v int64) predicate.RedeemCode {
+	return predicate.RedeemCode(sql.FieldGTE(FieldWelfareCampaignID, v))
+}
+
+// WelfareCampaignIDLT applies the LT predicate on the "welfare_campaign_id" field.
+func WelfareCampaignIDLT(v int64) predicate.RedeemCode {
+	return predicate.RedeemCode(sql.FieldLT(FieldWelfareCampaignID, v))
+}
+
+// WelfareCampaignIDLTE applies the LTE predicate on the "welfare_campaign_id" field.
+func WelfareCampaignIDLTE(v int64) predicate.RedeemCode {
+	return predicate.RedeemCode(sql.FieldLTE(FieldWelfareCampaignID, v))
+}
+
+// WelfareCampaignIDIsNil applies the IsNil predicate on the "welfare_campaign_id" field.
+func WelfareCampaignIDIsNil() predicate.RedeemCode {
+	return predicate.RedeemCode(sql.FieldIsNull(FieldWelfareCampaignID))
+}
+
+// WelfareCampaignIDNotNil applies the NotNil predicate on the "welfare_campaign_id" field.
+func WelfareCampaignIDNotNil() predicate.RedeemCode {
+	return predicate.RedeemCode(sql.FieldNotNull(FieldWelfareCampaignID))
+}
+
+// WelfareCampaignVersionEQ applies the EQ predicate on the "welfare_campaign_version" field.
+func WelfareCampaignVersionEQ(v int64) predicate.RedeemCode {
+	return predicate.RedeemCode(sql.FieldEQ(FieldWelfareCampaignVersion, v))
+}
+
+// WelfareCampaignVersionNEQ applies the NEQ predicate on the "welfare_campaign_version" field.
+func WelfareCampaignVersionNEQ(v int64) predicate.RedeemCode {
+	return predicate.RedeemCode(sql.FieldNEQ(FieldWelfareCampaignVersion, v))
+}
+
+// WelfareCampaignVersionIn applies the In predicate on the "welfare_campaign_version" field.
+func WelfareCampaignVersionIn(vs ...int64) predicate.RedeemCode {
+	return predicate.RedeemCode(sql.FieldIn(FieldWelfareCampaignVersion, vs...))
+}
+
+// WelfareCampaignVersionNotIn applies the NotIn predicate on the "welfare_campaign_version" field.
+func WelfareCampaignVersionNotIn(vs ...int64) predicate.RedeemCode {
+	return predicate.RedeemCode(sql.FieldNotIn(FieldWelfareCampaignVersion, vs...))
+}
+
+// WelfareCampaignVersionGT applies the GT predicate on the "welfare_campaign_version" field.
+func WelfareCampaignVersionGT(v int64) predicate.RedeemCode {
+	return predicate.RedeemCode(sql.FieldGT(FieldWelfareCampaignVersion, v))
+}
+
+// WelfareCampaignVersionGTE applies the GTE predicate on the "welfare_campaign_version" field.
+func WelfareCampaignVersionGTE(v int64) predicate.RedeemCode {
+	return predicate.RedeemCode(sql.FieldGTE(FieldWelfareCampaignVersion, v))
+}
+
+// WelfareCampaignVersionLT applies the LT predicate on the "welfare_campaign_version" field.
+func WelfareCampaignVersionLT(v int64) predicate.RedeemCode {
+	return predicate.RedeemCode(sql.FieldLT(FieldWelfareCampaignVersion, v))
+}
+
+// WelfareCampaignVersionLTE applies the LTE predicate on the "welfare_campaign_version" field.
+func WelfareCampaignVersionLTE(v int64) predicate.RedeemCode {
+	return predicate.RedeemCode(sql.FieldLTE(FieldWelfareCampaignVersion, v))
+}
+
+// WelfareCampaignVersionIsNil applies the IsNil predicate on the "welfare_campaign_version" field.
+func WelfareCampaignVersionIsNil() predicate.RedeemCode {
+	return predicate.RedeemCode(sql.FieldIsNull(FieldWelfareCampaignVersion))
+}
+
+// WelfareCampaignVersionNotNil applies the NotNil predicate on the "welfare_campaign_version" field.
+func WelfareCampaignVersionNotNil() predicate.RedeemCode {
+	return predicate.RedeemCode(sql.FieldNotNull(FieldWelfareCampaignVersion))
+}
+
+// WelfareCampaignNameEQ applies the EQ predicate on the "welfare_campaign_name" field.
+func WelfareCampaignNameEQ(v string) predicate.RedeemCode {
+	return predicate.RedeemCode(sql.FieldEQ(FieldWelfareCampaignName, v))
+}
+
+// WelfareCampaignNameNEQ applies the NEQ predicate on the "welfare_campaign_name" field.
+func WelfareCampaignNameNEQ(v string) predicate.RedeemCode {
+	return predicate.RedeemCode(sql.FieldNEQ(FieldWelfareCampaignName, v))
+}
+
+// WelfareCampaignNameIn applies the In predicate on the "welfare_campaign_name" field.
+func WelfareCampaignNameIn(vs ...string) predicate.RedeemCode {
+	return predicate.RedeemCode(sql.FieldIn(FieldWelfareCampaignName, vs...))
+}
+
+// WelfareCampaignNameNotIn applies the NotIn predicate on the "welfare_campaign_name" field.
+func WelfareCampaignNameNotIn(vs ...string) predicate.RedeemCode {
+	return predicate.RedeemCode(sql.FieldNotIn(FieldWelfareCampaignName, vs...))
+}
+
+// WelfareCampaignNameGT applies the GT predicate on the "welfare_campaign_name" field.
+func WelfareCampaignNameGT(v string) predicate.RedeemCode {
+	return predicate.RedeemCode(sql.FieldGT(FieldWelfareCampaignName, v))
+}
+
+// WelfareCampaignNameGTE applies the GTE predicate on the "welfare_campaign_name" field.
+func WelfareCampaignNameGTE(v string) predicate.RedeemCode {
+	return predicate.RedeemCode(sql.FieldGTE(FieldWelfareCampaignName, v))
+}
+
+// WelfareCampaignNameLT applies the LT predicate on the "welfare_campaign_name" field.
+func WelfareCampaignNameLT(v string) predicate.RedeemCode {
+	return predicate.RedeemCode(sql.FieldLT(FieldWelfareCampaignName, v))
+}
+
+// WelfareCampaignNameLTE applies the LTE predicate on the "welfare_campaign_name" field.
+func WelfareCampaignNameLTE(v string) predicate.RedeemCode {
+	return predicate.RedeemCode(sql.FieldLTE(FieldWelfareCampaignName, v))
+}
+
+// WelfareCampaignNameContains applies the Contains predicate on the "welfare_campaign_name" field.
+func WelfareCampaignNameContains(v string) predicate.RedeemCode {
+	return predicate.RedeemCode(sql.FieldContains(FieldWelfareCampaignName, v))
+}
+
+// WelfareCampaignNameHasPrefix applies the HasPrefix predicate on the "welfare_campaign_name" field.
+func WelfareCampaignNameHasPrefix(v string) predicate.RedeemCode {
+	return predicate.RedeemCode(sql.FieldHasPrefix(FieldWelfareCampaignName, v))
+}
+
+// WelfareCampaignNameHasSuffix applies the HasSuffix predicate on the "welfare_campaign_name" field.
+func WelfareCampaignNameHasSuffix(v string) predicate.RedeemCode {
+	return predicate.RedeemCode(sql.FieldHasSuffix(FieldWelfareCampaignName, v))
+}
+
+// WelfareCampaignNameEqualFold applies the EqualFold predicate on the "welfare_campaign_name" field.
+func WelfareCampaignNameEqualFold(v string) predicate.RedeemCode {
+	return predicate.RedeemCode(sql.FieldEqualFold(FieldWelfareCampaignName, v))
+}
+
+// WelfareCampaignNameContainsFold applies the ContainsFold predicate on the "welfare_campaign_name" field.
+func WelfareCampaignNameContainsFold(v string) predicate.RedeemCode {
+	return predicate.RedeemCode(sql.FieldContainsFold(FieldWelfareCampaignName, v))
+}
+
+// QuotaAmountUsdEQ applies the EQ predicate on the "quota_amount_usd" field.
+func QuotaAmountUsdEQ(v float64) predicate.RedeemCode {
+	return predicate.RedeemCode(sql.FieldEQ(FieldQuotaAmountUsd, v))
+}
+
+// QuotaAmountUsdNEQ applies the NEQ predicate on the "quota_amount_usd" field.
+func QuotaAmountUsdNEQ(v float64) predicate.RedeemCode {
+	return predicate.RedeemCode(sql.FieldNEQ(FieldQuotaAmountUsd, v))
+}
+
+// QuotaAmountUsdIn applies the In predicate on the "quota_amount_usd" field.
+func QuotaAmountUsdIn(vs ...float64) predicate.RedeemCode {
+	return predicate.RedeemCode(sql.FieldIn(FieldQuotaAmountUsd, vs...))
+}
+
+// QuotaAmountUsdNotIn applies the NotIn predicate on the "quota_amount_usd" field.
+func QuotaAmountUsdNotIn(vs ...float64) predicate.RedeemCode {
+	return predicate.RedeemCode(sql.FieldNotIn(FieldQuotaAmountUsd, vs...))
+}
+
+// QuotaAmountUsdGT applies the GT predicate on the "quota_amount_usd" field.
+func QuotaAmountUsdGT(v float64) predicate.RedeemCode {
+	return predicate.RedeemCode(sql.FieldGT(FieldQuotaAmountUsd, v))
+}
+
+// QuotaAmountUsdGTE applies the GTE predicate on the "quota_amount_usd" field.
+func QuotaAmountUsdGTE(v float64) predicate.RedeemCode {
+	return predicate.RedeemCode(sql.FieldGTE(FieldQuotaAmountUsd, v))
+}
+
+// QuotaAmountUsdLT applies the LT predicate on the "quota_amount_usd" field.
+func QuotaAmountUsdLT(v float64) predicate.RedeemCode {
+	return predicate.RedeemCode(sql.FieldLT(FieldQuotaAmountUsd, v))
+}
+
+// QuotaAmountUsdLTE applies the LTE predicate on the "quota_amount_usd" field.
+func QuotaAmountUsdLTE(v float64) predicate.RedeemCode {
+	return predicate.RedeemCode(sql.FieldLTE(FieldQuotaAmountUsd, v))
+}
+
+// QuotaAmountUsdIsNil applies the IsNil predicate on the "quota_amount_usd" field.
+func QuotaAmountUsdIsNil() predicate.RedeemCode {
+	return predicate.RedeemCode(sql.FieldIsNull(FieldQuotaAmountUsd))
+}
+
+// QuotaAmountUsdNotNil applies the NotNil predicate on the "quota_amount_usd" field.
+func QuotaAmountUsdNotNil() predicate.RedeemCode {
+	return predicate.RedeemCode(sql.FieldNotNull(FieldQuotaAmountUsd))
 }
 
 // ValidityDaysEQ applies the EQ predicate on the "validity_days" field.

@@ -4412,6 +4412,7 @@ import type { ChannelModelPricing } from "@/api/admin/channels";
 import { VueDraggable } from "vue-draggable-plus";
 import { createStableObjectKeyResolver } from "@/utils/stableObjectKey";
 import { extractApiErrorMessage } from "@/utils/apiError";
+import { welfareErrorMessage } from "@/utils/welfareRedeemError";
 import { useKeyedDebouncedSearch } from "@/composables/useKeyedDebouncedSearch";
 import { getPersistedPageSize } from "@/composables/usePersistedPageSize";
 import {
@@ -6535,7 +6536,7 @@ const handleUpdateGroup = async () => {
     loadGroups();
   } catch (error: any) {
     appStore.showError(
-      extractApiErrorMessage(error, t("admin.groups.failedToUpdate")),
+      welfareErrorMessage(error, t, "admin.groups.failedToUpdate"),
     );
     console.error("Error updating group:", error);
   } finally {
@@ -6794,7 +6795,7 @@ const confirmDelete = async () => {
     loadGroups();
   } catch (error: any) {
     appStore.showError(
-      error.response?.data?.detail || t("admin.groups.failedToDelete"),
+      welfareErrorMessage(error, t, "admin.groups.failedToDelete"),
     );
     console.error("Error deleting group:", error);
   }

@@ -39,6 +39,15 @@ describe('NapCat campaigns', () => {
   })
 })
 describe('NapCat stock', () => {
+  it('explains why a welfare supplement cannot be imported into reward inventory', async () => {
+    vi.mocked(qqInviteAPI.previewCodes).mockResolvedValue({ valid_count: 0, invalid_count: 1,
+      items: [{ index: 0, valid: false, reason: 'welfare_supplement_not_allowed', code_hint: 'CODE****' }] })
+    wrapper = mount(NapCatInventoryPanel, { props: { campaignId: 1 } }); await flushPromises()
+    await wrapper.get('textarea').setValue('WELFARE-CODE')
+    await wrapper.get('[data-test="preview"]').trigger('click'); await flushPromises()
+    expect(wrapper.text()).toContain('qqInvite.codeReasons.welfare_supplement_not_allowed')
+    expect(wrapper.get('[data-test="import"]').attributes('disabled')).toBeDefined()
+  })
   it('requires preflight for exact current input and invalidates it after edits', async () => {
     wrapper = mount(NapCatInventoryPanel, { props: { campaignId: 1 } }); await flushPromises()
     await wrapper.get('textarea').setValue('PRIVATE-CODE')
