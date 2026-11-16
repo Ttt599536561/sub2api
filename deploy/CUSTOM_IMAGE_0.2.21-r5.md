@@ -1,12 +1,22 @@
 # 0.2.21-r5 Linux镜像发布
 
-日期：2026-11-16，Asia/Shanghai。用户授权推送GitHub并构建公开镜像，服务器由用户自行替换；本轮不连接服务器、不构建macOS、不创建触发通用发行的v*标签。
+北京时间2026-11-16 19:55：公开镜像已发布并完成验收。用户授权推送GitHub并构建公开镜像，服务器由用户自行替换；本轮未连接服务器、未构建macOS、未创建触发通用发行的v*标签。
 
 ## 发布范围与当前状态
 
-目标镜像：`ghcr.io/ttt599536561/sub2api-custom:0.2.21-r5`，只包含原生linux/amd64和linux/arm64。当前为版本提交/发布准备阶段，尚未构建或发布，不应提前拉取。
+```text
+ghcr.io/ttt599536561/sub2api-custom:0.2.21-r5
+```
 
-已推送并固定应用源码：`8eb4fe13a3215248cbf67e35586df9aa692b51aa`。应用Security Scan已成功，完整CI正在执行；r5专用workflow固定该源码，发布控制提交随后单独验证。发布必须通过应用SHA及发布控制SHA各自最新的完整CI、Security Scan；随后双架构原生运行、版本/OCI/资源校验、五必要产物验证及匿名registry全部层验证。
+固定digest：`sha256:8fb77b84fcf4f90ca593b25725138b7da8ddffddf79afd2cb46ab50b7065a296`。仅原生linux/amd64和linux/arm64；已验证匿名可拉取。
+
+已推送并固定应用源码：`8eb4fe13a3215248cbf67e35586df9aa692b51aa`；发布控制：`f04d7f048396568158687a865ede4cb509bf0c25`。两SHA各自最新完整CI与Security Scan均成功，专用[发布运行43860688482](https://github.com/Ttt599536561/sub2api/actions/runs/43860688482)的gate、双架构构建/原生运行及publish全部success，attempt 1，19:52:58完成。
+
+原生容器版本/OCI来源、Go1.27.4、PostgreSQL客户端、模型价格资源、setup状态和首页静态资源均通过；迁移253–260、福利补充账本/额度归属/分组保护及UI标识齐全。五必要artifact的ZIP hash/size/CRC及精确文件集合通过，每架构provenance七文件；两份官方Docker辅助构建记录按精确run/source/control/metadata单独列入allowlist，不作为发布验收证据。
+
+匿名验收24层，共92,770,830字节；14层14,254,294字节复用缓存后重新hash及匿名HEAD，10层78,516,536字节下载校验。两平台config/manifest/index、Actions架构digest绑定、所有运行层可取及最终tag稳定复核全部通过，验证器exit0。
+
+门禁记录：[应用CI](https://github.com/Ttt599536561/sub2api/actions/runs/43857689086)、[应用Security](https://github.com/Ttt599536561/sub2api/actions/runs/43857689015)、[控制CI](https://github.com/Ttt599536561/sub2api/actions/runs/43858219452)、[控制Security](https://github.com/Ttt599536561/sub2api/actions/runs/43858219412)。四项均为attempt 1，最终复核于北京时间19:45:54成功。
 
 ## 功能和升级
 
@@ -20,4 +30,6 @@
 
 ## 证据位置
 
-本机工作和验收缓存：`.cache/publish-v0221-r5-20261116`；已有依赖与镜像层缓存复用E盘路径。关键最终摘要将在本文件归档，不依赖仅本机可见的原始日志。
+本机工作和验收缓存：`.cache/publish-v0221-r5-20261116`，最终摘要为`verification-0.2.21-r5/final-verification-summary.json`及关联provenance/registry摘要。验收器适配42项离线测试通过，发布控制通过独立只读审查；最终终审独立重算五产物及24层hash并核对GitHub jobs、来源和平台，结论通过。关键结论已归档本文。
+
+本轮仅使用GitHub Linux runner构建，本机所有验收产物、镜像层缓存实际留在E盘并复用旧缓存。296份原未跟踪文件经SHA256核对全部保全；没有服务器更新或真实业务操作。
