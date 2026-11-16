@@ -177,7 +177,7 @@ import type { Group, GroupPlatform, RedeemCode, RedeemCodeType, SubscriptionType
 import Select from '@/components/common/Select.vue'
 import GroupBadge from '@/components/common/GroupBadge.vue'
 import GroupOptionItem from '@/components/common/GroupOptionItem.vue'
-import { welfareErrorMessage } from '@/utils/welfareRedeemError'
+import { welfareErrorMessage, welfareErrorReason } from '@/utils/welfareRedeemError'
 
 const props = defineProps<{ groups: Group[] }>()
 const emit = defineEmits<{ generated: [codes: RedeemCode[]]; cancel: [] }>()
@@ -267,19 +267,22 @@ async function handleGenerateCodes() {
     return
   }
   let welfare: WelfareRedeemGenerateOptions | undefined
+  let groupId = generateForm.type === 'subscription' ? generateForm.group_id : undefined
   let days = generateForm.type === 'subscription' ? generateForm.validity_days : undefined
   if (isWelfare.value) {
-    if (loadingCampaigns.value || !selectedCampaign.value) return fail('welfareRedeem.campaignRequired')
+    const campaign = selectedCampaign.value
+    if (loadingCampaigns.value || !campaign) return fail('welfareRedeem.campaignRequired')
+    groupId = campaign.subscription_group_id
     if (effect.value === 'add_quota') {
       const amount = Number(quotaAmount.value)
       if (!Number.isFinite(amount) || amount <= 0 || amount >= 1e10 || Number(amount.toFixed(2)) !== amount) {
         return fail('welfareRedeem.quotaRequired')
       }
-      welfare = { subscription_effect: 'add_quota', welfare_campaign_id: selectedCampaign.value.id, quota_amount_usd: amount }
+      welfare = { subscription_effect: 'add_quota', welfare_campaign_id: campaign.id, quota_amount_usd: amount }
       days = undefined
     } else {
       days = extensionDays.value
-      welfare = { subscription_effect: 'extend_duration', welfare_campaign_id: selectedCampaign.value.id }
+      welfare = { subscription_effect: 'extend_duration', welfare_campaign_id: campaign.id }
     }
   } else if (generateForm.type === 'subscription' && !generateForm.group_id) {
     return fail('admin.redeem.groupRequired')
@@ -293,8 +296,7 @@ async function handleGenerateCodes() {
   generating.value = true
   try {
     const args = [generateForm.count, generateForm.type, isWelfare.value ? 0 : generateForm.value,
-      generateForm.type === 'subscription' && !isWelfare.value ? generateForm.group_id : undefined,
-      days, expiresInDays] as const
+      groupId, days, expiresInDays] as const
     const result = welfare
       ? await adminAPI.redeem.generate(...args, welfare)
       : await adminAPI.redeem.generate(...args)
@@ -308,6 +310,12 @@ async function handleGenerateCodes() {
   } catch (error) {
     errorMessage.value = welfareErrorMessage(error, t, 'admin.redeem.failedToGenerate')
     appStore.showError(errorMessage.value)
+    if (welfare && welfareErrorReason(error) === 'WELFARE_SUPPLEMENT_CAMPAIGN_INVALID') {
+      // Never retry against a silently changed group. Preserve the amount/days,
+      // refresh the choices, and require an explicit selection for this request.
+      if (campaignId.value === welfare.welfare_campaign_id) campaignId.value = null
+      await loadCampaigns()
+    }
   } finally {
     generating.value = false
   }

@@ -239,7 +239,7 @@ describe('admin RedeemView batch update', () => {
     await wrapper.get('[data-test="generate-expiry"]').setValue('14')
     await wrapper.get('form').trigger('submit')
     await flushPromises()
-    expect(generate).toHaveBeenCalledWith(3, 'subscription', 0, undefined, undefined, 14, {
+    expect(generate).toHaveBeenCalledWith(3, 'subscription', 0, 9, undefined, 14, {
       subscription_effect: 'add_quota', welfare_campaign_id: 7, quota_amount_usd: 12.5
     })
     wrapper.unmount()
@@ -258,7 +258,7 @@ describe('admin RedeemView batch update', () => {
     generate.mockRejectedValueOnce({ reason: 'WELFARE_SUPPLEMENT_CAMPAIGN_INVALID' })
     await wrapper.get('form').trigger('submit')
     await flushPromises()
-    expect(generate).toHaveBeenLastCalledWith(1, 'subscription', 0, undefined, 45, undefined, {
+    expect(generate).toHaveBeenLastCalledWith(1, 'subscription', 0, 9, 45, undefined, {
       subscription_effect: 'extend_duration', welfare_campaign_id: 7
     })
     expect(wrapper.text()).toContain('welfareRedeem.errors.campaignUnavailable')
@@ -281,6 +281,79 @@ describe('admin RedeemView batch update', () => {
     await wrapper.get('form').trigger('submit')
     expect(generate).not.toHaveBeenCalled()
     expect(wrapper.text()).toContain('welfareRedeem.quotaRequired')
+    wrapper.unmount()
+  })
+
+  it.each(['add_quota', 'extend_duration'] as const)(
+    'rejects the stale displayed group for %s and requires reselection after refreshing', async (effect) => {
+      const wrapper = await openGenerator()
+      await wrapper.get('[data-test="subscription-purpose"]').setValue('welfare')
+      await flushPromises()
+      await wrapper.get('[data-test="welfare-campaign"]').setValue('7')
+      await wrapper.get('[data-test="welfare-effect"]').setValue(effect)
+      if (effect === 'add_quota') await wrapper.get('[data-test="welfare-quota"]').setValue('12.50')
+      else await wrapper.get('[data-test="welfare-days"]').setValue('45')
+      await wrapper.findAll('form button').find(b => b.text() === 'common.cancel')!.trigger('click')
+
+      // Another administrator legally rebinds this unused draft while the dialog is closed.
+      welfareCampaigns.mockResolvedValue([{ id: 7, name: 'Rebound draft', version: 3, subscription_group_id: 10, group_name: 'New welfare group' }])
+      const createdGroups: number[] = []
+      generate.mockImplementation(async (_count, _type, _value, expectedGroup) => {
+        // Mirror the backend's optional GroupID comparison: omission silently accepts group 10.
+        if (expectedGroup !== undefined && expectedGroup !== 10) {
+          throw { response: { data: { reason: 'WELFARE_SUPPLEMENT_CAMPAIGN_INVALID' } } }
+        }
+        createdGroups.push(10)
+        return [{ id: 21, code: 'CORRECT-GROUP-CODE', group_id: 10 }]
+      })
+      await wrapper.findAll('button').find(b => b.text() === 'admin.redeem.generateCodes')!.trigger('click')
+      expect(wrapper.get('[data-test="welfare-group"]').text()).toContain('#9')
+      await wrapper.get('form').trigger('submit')
+      await flushPromises()
+
+      expect(createdGroups).toEqual([])
+      expect(generate).toHaveBeenCalledTimes(1)
+      expect(generate.mock.calls[0][3]).toBe(9)
+      expect(welfareCampaigns).toHaveBeenCalledTimes(2)
+      expect(wrapper.text()).toContain('welfareRedeem.errors.campaignUnavailable')
+      expect(wrapper.find('[data-test="welfare-group"]').exists()).toBe(false)
+      expect(wrapper.get('form button[type="submit"]').attributes('disabled')).toBeDefined()
+      const field = effect === 'add_quota' ? '[data-test="welfare-quota"]' : '[data-test="welfare-days"]'
+      expect(Number(wrapper.get(field).element.value)).toBe(effect === 'add_quota' ? 12.5 : 45)
+
+      // Only an explicit new selection and submission may generate for the changed group.
+      await wrapper.get('[data-test="welfare-campaign"]').setValue('7')
+      expect(wrapper.get('[data-test="welfare-group"]').text()).toContain('#10')
+      await wrapper.get('form').trigger('submit')
+      await flushPromises()
+      expect(createdGroups).toEqual([10])
+      expect(generate).toHaveBeenCalledTimes(2)
+      expect(generate.mock.calls[1][3]).toBe(10)
+      expect(wrapper.get('textarea').element.value).toBe('CORRECT-GROUP-CODE')
+      wrapper.unmount()
+    }
+  )
+
+  it('keeps generation blocked when refreshing an invalid campaign fails, then permits an explicit retry', async () => {
+    const wrapper = await openGenerator()
+    await wrapper.get('[data-test="subscription-purpose"]').setValue('welfare')
+    await flushPromises()
+    await wrapper.get('[data-test="welfare-campaign"]').setValue('7')
+    await wrapper.get('[data-test="welfare-quota"]').setValue('20')
+    generate.mockRejectedValueOnce({ reason: 'WELFARE_SUPPLEMENT_CAMPAIGN_INVALID' })
+    welfareCampaigns.mockRejectedValueOnce(new Error('offline'))
+    await wrapper.get('form').trigger('submit')
+    await flushPromises()
+    expect(generate).toHaveBeenCalledTimes(1)
+    expect(welfareCampaigns).toHaveBeenCalledTimes(2)
+    expect(wrapper.find('[data-test="welfare-group"]').exists()).toBe(false)
+    expect(wrapper.get('form button[type="submit"]').attributes('disabled')).toBeDefined()
+    expect(wrapper.get('[data-test="welfare-quota"]').element.value).toBe('20')
+    await wrapper.get('[data-test="welfare-retry"]').trigger('click')
+    await flushPromises()
+    expect(generate).toHaveBeenCalledTimes(1)
+    await wrapper.get('[data-test="welfare-campaign"]').setValue('7')
+    expect(wrapper.get('[data-test="welfare-group"]').text()).toContain('#9')
     wrapper.unmount()
   })
 

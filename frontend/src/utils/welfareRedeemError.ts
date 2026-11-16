@@ -8,13 +8,20 @@ const reasonKeys: Record<string, string> = {
   REDEEM_CODE_CANCELLED: 'redeem.codeCancelled'
 }
 
+type WelfareAPIError = {
+  reason?: string; code?: string; message?: string; metadata?: Record<string, unknown>
+  response?: { data?: { reason?: string; detail?: string; message?: string; metadata?: Record<string, unknown> } }
+}
+
+export function welfareErrorReason(error: unknown): string {
+  const apiError = error as WelfareAPIError | null
+  return apiError?.reason || apiError?.response?.data?.reason || apiError?.code || ''
+}
+
 export function welfareErrorMessage(error: unknown, t: (key: string, params?: Record<string, unknown>) => string, fallback: string): string {
-  const apiError = error as {
-    reason?: string; code?: string; message?: string; metadata?: Record<string, unknown>
-    response?: { data?: { reason?: string; detail?: string; message?: string; metadata?: Record<string, unknown> } }
-  } | null
+  const apiError = error as WelfareAPIError | null
   const data = apiError?.response?.data
-  const reason = apiError?.reason || data?.reason || apiError?.code || ''
+  const reason = welfareErrorReason(error)
   const key = reasonKeys[reason]
   if (reason === 'GROUP_WELFARE_REFERENCED') {
     const metadata = apiError?.metadata || data?.metadata

@@ -4,11 +4,14 @@ package service_test
 
 import (
 	"fmt"
+	"net/http"
 	"os"
 	"sync"
 	"testing"
 	"time"
 
+	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
+	"github.com/Wei-Shaw/sub2api/internal/qqinvite"
 	"github.com/Wei-Shaw/sub2api/internal/repository"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/stretchr/testify/require"
@@ -212,6 +215,104 @@ func TestWelfareSupplementGenerationDerivesAndSnapshotsCampaign(t *testing.T) {
 	options, err = f.redeemer(f.codes).ListWelfareRedeemCampaigns(f.ctx)
 	require.NoError(t, err)
 	require.Empty(t, options)
+}
+
+func TestWelfareSupplementGenerationRejectsStaleDraftCampaignGroup(t *testing.T) {
+	for _, effect := range []string{service.SubscriptionEffectAddQuota, service.SubscriptionEffectExtendDuration} {
+		t.Run(effect, func(t *testing.T) {
+			f := newWelfareInviteFixture(t)
+			installSupplementAdjustmentMigrations(t, f)
+			migration, err := os.ReadFile("../../migrations/260_welfare_group_lifecycle_guards.sql")
+			require.NoError(t, err)
+			_, err = f.db.ExecContext(f.ctx, string(migration))
+			require.NoError(t, err)
+			otherGroup, err := f.client.Group.Create().SetName("replacement monthly").SetStatus(service.StatusActive).
+				SetSubscriptionType(service.SubscriptionTypeSubscription).SetMonthlyLimitUsd(100).Save(f.ctx)
+			require.NoError(t, err)
+			draft, err := f.store.SaveCampaign(f.ctx, qqinvite.Campaign{Name: "supplement draft", GroupIDs: []string{"200"},
+				SubscriptionGroupID: f.group.ID, StartsAt: time.Now().Add(-time.Hour), EndsAt: time.Now().Add(time.Hour),
+				WelcomeTemplate: "Welcome {invitee}", PendingTemplate: "Pending {invitee}",
+				CongratulationTemplate: "Congratulations {inviter}", PrivateTemplate: "Code {code} {url}"}, f.userID)
+			require.NoError(t, err)
+			require.False(t, draft.Enabled)
+			loadOption := func() service.WelfareRedeemCampaign {
+				options, err := f.redeemer(f.codes).ListWelfareRedeemCampaigns(f.ctx)
+				require.NoError(t, err)
+				for _, option := range options {
+					if option.ID == draft.ID {
+						return option
+					}
+				}
+				t.Fatal("draft campaign missing from generation options")
+				return service.WelfareRedeemCampaign{}
+			}
+			displayed := loadOption()
+			require.Equal(t, f.group.ID, displayed.SubscriptionGroupID)
+
+			// Another admin may legally change a never-enabled draft before any
+			// inventory, invitation history or manual supplements exist.
+			draft.SubscriptionGroupID = otherGroup.ID
+			draft, err = f.store.SaveCampaign(f.ctx, draft, f.userID)
+			require.NoError(t, err)
+			require.Greater(t, draft.Version, displayed.Version)
+			admin := service.NewAdminService(nil, nil, repository.NewGroupRepository(f.client, f.db).(service.AdminGroupRepository), nil, nil, nil, f.codes, nil, nil, nil, nil, nil, nil, f.client, nil, nil, nil, nil, nil, nil, nil, nil, nil)
+			input := &service.GenerateRedeemCodesInput{Count: 2, Type: service.RedeemTypeSubscription,
+				SubscriptionEffect: effect, WelfareCampaignID: &displayed.ID, GroupID: &displayed.SubscriptionGroupID}
+			if effect == service.SubscriptionEffectAddQuota {
+				amount := 25.5
+				input.QuotaAmountUSD = &amount
+			} else {
+				input.ValidityDays = 3
+			}
+			codes, err := admin.GenerateRedeemCodes(f.ctx, input)
+			require.ErrorIs(t, err, service.ErrWelfareSupplementCampaignInvalid)
+			status, _ := infraerrors.ToHTTP(err)
+			require.Equal(t, http.StatusConflict, status)
+			require.Empty(t, codes)
+			count, err := f.client.RedeemCode.Query().Count(f.ctx)
+			require.NoError(t, err)
+			require.Zero(t, count, "stale group rejection must not persist any codes")
+
+			refreshed := loadOption()
+			require.Equal(t, otherGroup.ID, refreshed.SubscriptionGroupID)
+			input.GroupID = &refreshed.SubscriptionGroupID
+			codes, err = admin.GenerateRedeemCodes(f.ctx, input)
+			require.NoError(t, err)
+			require.Len(t, codes, input.Count)
+			for _, code := range codes {
+				stored, err := f.codes.GetByID(f.ctx, code.ID)
+				require.NoError(t, err)
+				require.Equal(t, otherGroup.ID, *stored.GroupID)
+				require.Equal(t, draft.ID, *stored.WelfareCampaignID)
+				require.Equal(t, draft.Version, *stored.WelfareCampaignVersion)
+			}
+
+			// Generating the first supplements fixes the draft's group binding.
+			changed := draft
+			changed.SubscriptionGroupID = displayed.SubscriptionGroupID
+			_, err = f.store.SaveCampaign(f.ctx, changed, f.userID)
+			require.ErrorIs(t, err, qqinvite.ErrCampaignGroupLocked)
+			storedDraft, err := f.store.GetCampaign(f.ctx, draft.ID)
+			require.NoError(t, err)
+			require.Equal(t, draft.SubscriptionGroupID, storedDraft.SubscriptionGroupID)
+			require.Equal(t, draft.Version, storedDraft.Version)
+
+			// A metadata-only edit advances the campaign version but does not
+			// invalidate a form that still displays the same subscription group.
+			draft.Name = "renamed supplement draft"
+			draft, err = f.store.SaveCampaign(f.ctx, draft, f.userID)
+			require.NoError(t, err)
+			require.Greater(t, draft.Version, refreshed.Version)
+			codes, err = admin.GenerateRedeemCodes(f.ctx, input)
+			require.NoError(t, err)
+			require.Len(t, codes, input.Count)
+			for _, code := range codes {
+				require.Equal(t, refreshed.SubscriptionGroupID, *code.GroupID)
+				require.Equal(t, draft.Version, *code.WelfareCampaignVersion)
+				require.Equal(t, draft.Name, code.WelfareCampaignName)
+			}
+		})
+	}
 }
 
 func TestWelfareSupplementAdvancesAdjustmentVersion(t *testing.T) {

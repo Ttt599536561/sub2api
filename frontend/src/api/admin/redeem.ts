@@ -83,12 +83,13 @@ export async function generate(
 
   // 订阅类型专用字段
   if (type === 'subscription') {
+    // For welfare codes this is the displayed binding assertion. The server
+    // still derives the actual group from the campaign and rejects a mismatch.
+    payload.group_id = groupId
     if (welfare) {
       payload.subscription_effect = welfare.subscription_effect
       payload.welfare_campaign_id = welfare.welfare_campaign_id
       if (welfare.subscription_effect === 'add_quota') payload.quota_amount_usd = welfare.quota_amount_usd
-    } else {
-      payload.group_id = groupId
     }
     if (welfare?.subscription_effect !== 'add_quota' && validityDays && validityDays > 0) {
       payload.validity_days = validityDays
