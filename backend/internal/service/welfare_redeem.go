@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"math"
-	"strconv"
 	"time"
 
 	dbent "github.com/Wei-Shaw/sub2api/ent"
@@ -167,87 +166,4 @@ func generateWelfareSupplementCodes(ctx context.Context, client *dbent.Client, r
 		return nil, err
 	}
 	return codes, nil
-}
-
-// The caller already owns code -> user locks. This path never creates a cycle,
-// never touches QQ grants, and performs monetary arithmetic entirely in NUMERIC.
-func (s *RedeemService) applyWelfareSupplement(ctx context.Context, tx *dbent.Tx, userID int64, code *RedeemCode) error {
-	input := &GenerateRedeemCodesInput{Count: 1, Type: code.Type, SubscriptionEffect: code.SubscriptionEffect, WelfareCampaignID: code.WelfareCampaignID, QuotaAmountUSD: code.QuotaAmountUSD, ValidityDays: code.ValidityDays}
-	if err := validateWelfareSupplement(input); err != nil {
-		return err
-	}
-	if code.GroupID == nil || code.WelfareCampaignVersion == nil {
-		return ErrWelfareSupplementInvalid
-	}
-	campaign, err := lockWelfareRedeemCampaign(ctx, tx, *code.WelfareCampaignID)
-	if err != nil {
-		return err
-	}
-	if campaign.SubscriptionGroupID != *code.GroupID {
-		return ErrWelfareSupplementCampaignInvalid
-	}
-	rows, err := tx.QueryContext(ctx, `SELECT id,welfare_monthly_limit_usd::text,expires_at,daily_reset_version
- FROM user_subscriptions WHERE user_id=$1 AND group_id=$2 AND entitlement_kind='welfare'
- AND deleted_at IS NULL AND NOT welfare_cycle_closed AND status='active' AND expires_at>clock_timestamp() FOR UPDATE`, userID, *code.GroupID)
-	if err != nil {
-		return err
-	}
-	var id, version int64
-	var beforeQuota string
-	var beforeExpiry time.Time
-	if !rows.Next() {
-		err = rows.Err()
-		_ = rows.Close()
-		if err != nil {
-			return err
-		}
-		return ErrWelfareSupplementNoActiveCycle
-	}
-	err = rows.Scan(&id, &beforeQuota, &beforeExpiry, &version)
-	_ = rows.Close()
-	if err != nil {
-		return err
-	}
-	afterExpiry := beforeExpiry
-	amount := "0"
-	if code.SubscriptionEffect == SubscriptionEffectAddQuota {
-		amount = strconv.FormatFloat(*code.QuotaAmountUSD, 'f', 2, 64)
-	} else {
-		afterExpiry = beforeExpiry.AddDate(0, 0, code.ValidityDays)
-		if afterExpiry.After(MaxExpiresAt) {
-			return ErrWelfareSupplementLimitExceeded
-		}
-	}
-	// Check expiry again after acquiring the row lock; a concurrent administrator
-	// or a long lock wait must not revive an already expired entitlement.
-	result, err := tx.ExecContext(ctx, `UPDATE user_subscriptions SET welfare_monthly_limit_usd=welfare_monthly_limit_usd+$2::numeric,
- expires_at=$3,daily_reset_version=daily_reset_version+1,updated_at=now()
- WHERE id=$1 AND status='active' AND NOT welfare_cycle_closed AND deleted_at IS NULL AND expires_at>clock_timestamp()
- AND welfare_monthly_limit_usd+$2::numeric < 10000000000`, id, amount, afterExpiry)
-	if err != nil {
-		return err
-	}
-	affected, err := result.RowsAffected()
-	if err != nil {
-		return err
-	}
-	if affected != 1 {
-		return ErrWelfareSupplementLimitExceeded
-	}
-	if code.SubscriptionEffect == SubscriptionEffectAddQuota {
-		// The subscription row remains locked through both the projection and
-		// immutable receipt writes. A failed receipt rolls back all three.
-		_, err = tx.ExecContext(ctx, `INSERT INTO user_welfare_subscription_supplement_quota(subscription_id,protected_quota_usd)
- VALUES($1,$2::numeric) ON CONFLICT(subscription_id) DO UPDATE
- SET protected_quota_usd=user_welfare_subscription_supplement_quota.protected_quota_usd+EXCLUDED.protected_quota_usd`, id, amount)
-		if err != nil {
-			return err
-		}
-	}
-	_, err = tx.ExecContext(ctx, `INSERT INTO user_welfare_subscription_supplements
- (redeem_code_id,subscription_id,user_id,group_id,welfare_campaign_id,welfare_campaign_version,subscription_effect,quota_amount_usd,validity_days,
- before_monthly_limit_usd,after_monthly_limit_usd,monthly_usage_usd,before_expires_at,after_expires_at,before_version,after_version)
- SELECT $1,id,user_id,group_id,$3,$4,$5,$6,$7,$8::numeric,welfare_monthly_limit_usd,monthly_usage_usd,$9,expires_at,$10,daily_reset_version
- FROM user_subscriptions WHERE id=$2`, code.ID, id, *code.WelfareCampaignID, *code.WelfareCampaignVersion, code.SubscriptionEffect, code.QuotaAmountUSD, code.ValidityDays, beforeQuota, beforeExpiry, version)
-	return err
 }
