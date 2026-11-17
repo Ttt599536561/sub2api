@@ -32,10 +32,24 @@ func newDailyResetFixture(t *testing.T) (service.SubscriptionDailyResetRepositor
 		SetDailyUsageUsd(60).SetWeeklyUsageUsd(300).SetMonthlyUsageUsd(800).Save(ctx)
 	require.NoError(t, err)
 	t.Cleanup(func() {
-		_, _ = integrationDB.Exec("DELETE FROM subscription_daily_reset_events WHERE subscription_id = $1", sub.ID)
-		_, _ = integrationDB.Exec("DELETE FROM user_subscriptions WHERE id = $1", sub.ID)
-		_, _ = integrationDB.Exec("DELETE FROM groups WHERE id = $1", group.ID)
-		_, _ = integrationDB.Exec("DELETE FROM users WHERE id = $1", user.ID)
+		// Renewing a term creates supplement history even without a supplement code.
+		// Remove this fixture's dependent rows before its subscription and user.
+		for _, table := range []string{
+			"user_subscription_supplement_consumptions",
+			"user_subscription_supplement_reservations",
+			"user_subscription_supplements",
+			"user_subscription_supplement_balances",
+			"subscription_daily_reset_events",
+		} {
+			_, err := integrationDB.Exec("DELETE FROM "+table+" WHERE subscription_id = $1", sub.ID)
+			require.NoError(t, err, "cleanup %s", table)
+		}
+		_, err := integrationDB.Exec("DELETE FROM user_subscriptions WHERE id = $1", sub.ID)
+		require.NoError(t, err, "cleanup subscription")
+		_, err = integrationDB.Exec("DELETE FROM groups WHERE id = $1", group.ID)
+		require.NoError(t, err, "cleanup group")
+		_, err = integrationDB.Exec("DELETE FROM users WHERE id = $1", user.ID)
+		require.NoError(t, err, "cleanup user")
 	})
 	return NewSubscriptionDailyResetRepository(client, integrationDB), userSubscriptionEntityToService(sub), now
 }

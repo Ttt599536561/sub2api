@@ -4,7 +4,7 @@
 
 ## 固定来源与门禁
 
-- 最终应用来源：`a3dda81a022c559017715f2affe76dad53be2edd`，lint与契约样例修正后已单独推送main；镜像仅从该提交构建。
+- 前轮应用`a3dda81a022c559017715f2affe76dad53be2edd`、控制`f741ed3a73f42a58de7252fa1754f927c96ec9d7`完整unit、前端、lint、安全及锁/脱敏通过，但repository集成测试失败；尚未触发镜像构建。测试隔离修正后重新固定最终应用与控制。
 
 - lint修正应用：`345db4cb5a95ca4ddc45e2b842e62237ced5e578`已单独推送main；首轮完整unit另发现订阅响应契约样例缺三个新增补额零值字段，已同步样例，完整11项API契约子用例通过。最终应用来源已在上方固定。
 
@@ -26,6 +26,10 @@
 功能与本地验证详见[通用订阅补充码记录](../docs/changes/2026-11-17-subscription-supplements.md)。用户提供账号的线上具体数据未核实；本次镜像发布不操作服务器或真实用户余额。
 
 首轮unit仅`TestAPIContracts/GET_/api/v1/subscriptions`失败：预期样例缺少`supplement_granted_usd`、`supplement_remaining_usd`、`supplement_used_usd`三个零值字段。已运行的repository、service、migrations成功；集成阶段被阻断未运行。只同步契约样例，保留全部原字段断言。
+
+完整集成阶段[应用CI](https://github.com/Ttt599536561/sub2api/actions/runs/44074801518)和[控制CI](https://github.com/Ttt599536561/sub2api/actions/runs/44074888211)均在repository的同一3套件/23子用例失败，service集成通过。源头是`newDailyResetFixture`在续期触发261期次账本后，未清补额子表就DELETE订阅并吞错，导致后续用户列表/唯一性测试串扰。修正仅针对该夹具、按其订阅ID清理并断言错误，生产外键/触发器与业务逻辑保持。
+
+本机修复前同进程复现用户串扰；修复后完整repository集成1868 PASS事件、0失败、41既有跳过，109.464秒、exit0，独立复审通过。首次本地整包另有3个备份测试因PATH无sh失败，补上当前进程Git bin后整包通过；没有为环境问题改代码。测试容器前后6个、差集为空，自动清理完成。证据`repository-cleanup-red-green-summary.json`及对应日志。
 
 ## 验收范围与证据
 
