@@ -4,8 +4,10 @@
 
 ## 固定来源与门禁
 
+- lint修正应用：`345db4cb5a95ca4ddc45e2b842e62237ced5e578`已单独推送main；首轮完整unit另发现订阅响应契约样例缺三个新增补额零值字段，已同步样例，完整11项API契约子用例通过。最终应用来源将再次固定。
+
 - 镜像：`ghcr.io/ttt599536561/sub2api-custom:0.2.21-r6`，仅原生`linux/amd64`与`linux/arm64`。
-- 首轮应用：`b32ab38eb6670b5c9582920981f9cf48e4cddfc5`已单独推送main；完整CI发现废弃的`applyWelfareSupplement`未移除，现删除无调用实现及专用import，最终来源将在修正提交后固定。功能提交为`256b3b70f974a298644207a18a7c513c77bd933a`。
+- 首轮应用：`b32ab38eb6670b5c9582920981f9cf48e4cddfc5`已单独推送main；完整CI发现废弃的`applyWelfareSupplement`未移除，现删除无调用实现及专用import，最终来源以后续完整门禁为准。功能提交为`256b3b70f974a298644207a18a7c513c77bd933a`。
 - 首轮[CI](https://github.com/Ttt599536561/sub2api/actions/runs/44072726789)的unused错误不被忽略；[安全检查](https://github.com/Ttt599536561/sub2api/actions/runs/44072726812)已通过。本机完整生产lint（0 issues）、兑换专项及独立兼容性复审通过；修正后的应用SHA仍需重新通过全部门禁。
 - 发布工作流：`.github/workflows/publish-custom-v0221-r6.yml`；发布控制SHA在该工作流提交后记录。
 - 工作流要求应用SHA与控制SHA分别具备main分支最新成功的完整CI和Security Scan；不创建触发通用发行的`v*`标签，不覆盖已有正式镜像标签。
@@ -20,6 +22,8 @@
 - 新效果和账本投入使用后，不盲目回退不理解新数据的旧应用。既有异步扣费故障没有通用持久重试队列，预占不等于完整收费故障恢复。
 
 功能与本地验证详见[通用订阅补充码记录](../docs/changes/2026-11-17-subscription-supplements.md)。用户提供账号的线上具体数据未核实；本次镜像发布不操作服务器或真实用户余额。
+
+首轮unit仅`TestAPIContracts/GET_/api/v1/subscriptions`失败：预期样例缺少`supplement_granted_usd`、`supplement_remaining_usd`、`supplement_used_usd`三个零值字段。已运行的repository、service、migrations成功；集成阶段被阻断未运行。只同步契约样例，保留全部原字段断言。
 
 ## 验收范围与证据
 
