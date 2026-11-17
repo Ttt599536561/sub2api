@@ -2266,7 +2266,7 @@ func TestOpenAIStreamingPreambleKeepaliveUsesDownstreamIdle(t *testing.T) {
 	}
 	svc := &OpenAIGatewayService{cfg: cfg}
 
-	rec := httptest.NewRecorder()
+	rec := newOpenAIResponseFlushRecorder()
 	c, _ := gin.CreateTestContext(rec)
 	c.Request = httptest.NewRequest(http.MethodPost, "/", nil)
 
@@ -2279,14 +2279,28 @@ func TestOpenAIStreamingPreambleKeepaliveUsesDownstreamIdle(t *testing.T) {
 
 	go func() {
 		defer func() { _ = pw.Close() }()
-		// Emit preamble/progress quickly so clientOutputStarted is true, then
-		// leave a real downstream idle gap longer than keepaliveInterval so the
-		// ticker can write ":\n\n". Frequent upstream ticks used to refresh
-		// lastDownstreamWriteAt and flake on loaded CI runners.
+		// Emit preamble/progress, then wait for the actual downstream heartbeat.
+		// A fixed delay just over one interval can end before the second ticker
+		// tick when the first tick occurs before a full downstream idle interval.
 		_, _ = pw.Write([]byte("data: {\"type\":\"response.created\",\"response\":{\"id\":\"resp_1\"}}\n\n"))
 		time.Sleep(50 * time.Millisecond)
 		_, _ = pw.Write([]byte("data: {\"type\":\"response.in_progress\",\"response\":{\"id\":\"resp_1\"}}\n\n"))
-		time.Sleep(1300 * time.Millisecond)
+		heartbeatDeadline := time.NewTimer(5 * time.Second)
+		defer heartbeatDeadline.Stop()
+	waitForHeartbeat:
+		for {
+			select {
+			case <-rec.flushEvents:
+				body, _ := rec.snapshot()
+				if strings.Contains(body, ":\n\n") {
+					break waitForHeartbeat
+				}
+			case <-heartbeatDeadline.C:
+				// Finish the stream so the assertion below reports the missing
+				// heartbeat without leaving a blocked handler or pipe writer.
+				break waitForHeartbeat
+			}
+		}
 		_, _ = pw.Write([]byte("data: {\"type\":\"response.completed\",\"response\":{\"usage\":{\"input_tokens\":1,\"output_tokens\":2}}}\n\n"))
 	}()
 
@@ -2294,8 +2308,9 @@ func TestOpenAIStreamingPreambleKeepaliveUsesDownstreamIdle(t *testing.T) {
 	_ = pr.Close()
 	require.NoError(t, err)
 	require.NotNil(t, result)
-	require.Contains(t, rec.Body.String(), ":\n\n")
-	require.Contains(t, rec.Body.String(), "response.completed")
+	body, _ := rec.snapshot()
+	require.Contains(t, body, ":\n\n")
+	require.Contains(t, body, "response.completed")
 }
 
 func TestOpenAIStreamingNormalizesTerminalOutputFromDeltas(t *testing.T) {

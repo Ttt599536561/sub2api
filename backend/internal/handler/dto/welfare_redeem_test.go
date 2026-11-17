@@ -28,3 +28,18 @@ func TestRedeemCodeWelfareSupplementOptionalContract(t *testing.T) {
 	require.Contains(t, string(data), `"subscription_id":3`)
 	require.Contains(t, string(data), `"expires_at":"2026-12-01T00:00:00Z"`)
 }
+
+func TestSubscriptionSupplementPublicContract(t *testing.T) {
+	sub := UserSubscriptionFromService(&service.UserSubscription{ID: 3, EntitlementKind: "standard", SupplementGrantedUSD: 10, SupplementUsedUSD: 12})
+	data, err := json.Marshal(sub)
+	require.NoError(t, err)
+	require.Contains(t, string(data), `"supplement_granted_usd":10`)
+	require.Contains(t, string(data), `"supplement_used_usd":12`)
+	require.Contains(t, string(data), `"supplement_remaining_usd":0`)
+	code := RedeemCodeFromService(&service.RedeemCode{Type: service.RedeemTypeSubscription, SubscriptionEffect: service.SubscriptionEffectAddBalance,
+		SubscriptionSupplementResult: &service.SubscriptionSupplementResult{SubscriptionID: 3, GroupID: 2, EntitlementKind: "standard", SubscriptionEffect: service.SubscriptionEffectAddBalance, AmountUSD: 10, SupplementGrantedUSD: 10, SupplementRemainingUSD: 10}})
+	data, err = json.Marshal(code)
+	require.NoError(t, err)
+	require.Contains(t, string(data), `"subscription_supplement_result":{"subscription_id":3`)
+	require.NotContains(t, string(data), `"welfare_result"`)
+}

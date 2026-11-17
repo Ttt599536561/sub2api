@@ -345,7 +345,7 @@
                   </span>
                 </div>
                 <p v-if="row.entitlement_kind === 'welfare' && getMonthlyLimit(row) === 0" class="mt-1 text-xs text-amber-700 dark:text-amber-300">
-                  {{ t('userSubscriptions.welfareQuotaDisabled') }}
+                  {{ t((row.supplement_remaining_usd ?? 0) > 0 ? 'welfareRedeem.baseQuotaExhausted' : 'userSubscriptions.welfareQuotaDisabled') }}
                 </p>
                 <div class="reset-info" v-if="row.entitlement_kind === 'welfare' ? row.expires_at : row.monthly_window_start">
                   <svg
@@ -367,6 +367,7 @@
                 </div>
               </div>
 
+            <SubscriptionSupplementSummary :subscription="row" />
               <!-- No Limits - Unlimited badge -->
               <div
                 v-if="
@@ -866,6 +867,7 @@
 </template>
 
 <script setup lang="ts">
+import SubscriptionSupplementSummary from '@/components/common/SubscriptionSupplementSummary.vue'
 import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'

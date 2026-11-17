@@ -1958,6 +1958,20 @@ export interface UsageCleanupTask {
 }
 
 export type WelfareSubscriptionEffect = 'add_quota' | 'extend_duration'
+export type SubscriptionSupplementEffect = 'add_balance' | 'extend_subscription'
+
+export interface SubscriptionSupplementResult {
+  subscription_id: number
+  entitlement_kind: 'standard' | 'welfare'
+  group_id: number
+  subscription_effect: SubscriptionSupplementEffect
+  amount_usd: number
+  validity_days: number
+  supplement_granted_usd: number
+  supplement_used_usd: number
+  supplement_remaining_usd: number
+  expires_at: string
+}
 
 export interface WelfareRedeemResult {
   subscription_id: number
@@ -1968,19 +1982,17 @@ export interface WelfareRedeemResult {
 }
 
 export interface WelfareRedeemDetails {
-  subscription_effect?: WelfareSubscriptionEffect
+  subscription_effect?: WelfareSubscriptionEffect | SubscriptionSupplementEffect
   welfare_campaign_id?: number
   welfare_campaign_name?: string
   quota_amount_usd?: number
   welfare_result?: WelfareRedeemResult
+  subscription_supplement_result?: SubscriptionSupplementResult
 }
 
-export type WelfareRedeemGenerateOptions = {
-  welfare_campaign_id: number
-} & (
-  | { subscription_effect: 'add_quota'; quota_amount_usd: number }
-  | { subscription_effect: 'extend_duration' }
-)
+export type SubscriptionSupplementGenerateOptions =
+  | { subscription_effect: 'add_balance'; quota_amount_usd: number }
+  | { subscription_effect: 'extend_subscription' }
 
 export interface WelfareRedeemCampaign {
   id: number
@@ -2016,7 +2028,7 @@ export interface GenerateRedeemCodesRequest {
   validity_days?: number // 订阅类型专用
   expires_at?: string | null
   expires_in_days?: number
-  subscription_effect?: WelfareSubscriptionEffect
+  subscription_effect?: WelfareSubscriptionEffect | SubscriptionSupplementEffect
   welfare_campaign_id?: number
   quota_amount_usd?: number
 }
@@ -2238,6 +2250,9 @@ export interface UserSubscription {
   welfare_adjustment_version?: number
   welfare_cycle_closed?: boolean
   welfare_monthly_limit_usd?: number | null
+  supplement_granted_usd?: number
+  supplement_used_usd?: number
+  supplement_remaining_usd?: number
   status: 'active' | 'expired' | 'revoked' | 'suspended'
   starts_at: string
   daily_usage_usd: number

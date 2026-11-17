@@ -79,6 +79,52 @@ describe('RedeemView refresh after redemption', () => {
     wrapper.unmount()
   })
 
+  it.each(['standard', 'welfare'])('shows the actual %s target and separate supplement receipt', async kind => {
+    const supplement = {
+      type: 'subscription', value: 0, message: 'Applied', subscription_effect: 'add_balance',
+      quota_amount_usd: 12.5, group_name: 'Selected group',
+      subscription_supplement_result: { subscription_id: 55, entitlement_kind: kind, group_id: 8,
+        subscription_effect: 'add_balance', amount_usd: 12.5, validity_days: 0,
+        supplement_granted_usd: 32.5, supplement_used_usd: 10, supplement_remaining_usd: 22.5,
+        expires_at: '2027-01-01T00:00:00Z' }
+    }
+    redeem.mockResolvedValue(supplement)
+    getHistory.mockResolvedValue({ items: [{ ...supplement, id: 1, code: 'SUPPLEMENT', used_at: '2026-11-17T00:00:00Z' }], total: 1 })
+    const wrapper = await submitCode()
+    expect(wrapper.text()).toContain('+$12.50')
+    expect(wrapper.text()).toContain('welfareRedeem.target' + (kind === 'welfare' ? 'Welfare' : 'Standard'))
+    expect(wrapper.text()).toContain('#55')
+    expect(wrapper.text()).toContain('$32.50')
+    expect(wrapper.text()).toContain('$10.00')
+    expect(wrapper.text()).toContain('$22.50')
+    expect(wrapper.text()).not.toContain('welfareRedeem.monthlyLimit')
+    expect(wrapper.text()).not.toContain('redeem.subscriptionAssigned')
+    wrapper.unmount()
+  })
+
+  it('shows added days and the preserved supplementary balance for a generic extension', async () => {
+    redeem.mockResolvedValue({ type: 'subscription', value: 0, subscription_effect: 'extend_subscription', validity_days: 45,
+      subscription_supplement_result: { subscription_id: 55, entitlement_kind: 'standard', group_id: 8,
+        subscription_effect: 'extend_subscription', amount_usd: 0, validity_days: 45,
+        supplement_granted_usd: 32.5, supplement_used_usd: 10, supplement_remaining_usd: 22.5,
+        expires_at: '2027-01-01T00:00:00Z' } })
+    const wrapper = await submitCode()
+    expect(wrapper.text()).toContain('+45')
+    expect(wrapper.text()).toContain('$22.50')
+    expect(wrapper.text()).not.toContain('+$0.00')
+    expect(wrapper.text()).toContain('welfareRedeem.targetStandard')
+    wrapper.unmount()
+  })
+
+  it('explains a missing active subscription without consuming or clearing the code', async () => {
+    redeem.mockRejectedValue({ reason: 'SUBSCRIPTION_SUPPLEMENT_NO_ACTIVE_SUBSCRIPTION' })
+    const wrapper = await submitCode()
+    expect(wrapper.text()).toContain('welfareRedeem.errors.activeSubscriptionRequired')
+    expect(wrapper.get('input#code').element.value).toBe(' REDEEM-CODE ')
+    expect(refreshUser).not.toHaveBeenCalled()
+    wrapper.unmount()
+  })
+
   it('explains an inactive welfare entitlement and preserves the failed code', async () => {
     redeem.mockRejectedValue({ status: 400, reason: 'WELFARE_SUPPLEMENT_NO_ACTIVE_CYCLE', message: 'unavailable' })
     const wrapper = await submitCode()

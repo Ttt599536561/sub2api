@@ -32,7 +32,13 @@ func (r *usageBillingRepository) Apply(ctx context.Context, cmd *service.UsageBi
 		return nil, service.ErrUsageBillingRequestIDRequired
 	}
 
-	tx, err := r.db.BeginTx(ctx, nil)
+	var options *sql.TxOptions
+	if cmd.SubscriptionID != nil && cmd.SubscriptionTermStartsAt != nil {
+		// Waiters on the entitlement lock must see the winner's committed
+		// allocation even when a deployment defaults to Repeatable Read.
+		options = &sql.TxOptions{Isolation: sql.LevelReadCommitted}
+	}
+	tx, err := r.db.BeginTx(ctx, options)
 	if err != nil {
 		return nil, err
 	}
@@ -47,11 +53,24 @@ func (r *usageBillingRepository) Apply(ctx context.Context, cmd *service.UsageBi
 		return nil, err
 	}
 	if !applied {
+		if cmd.SubscriptionReservationID == "" {
+			return &service.UsageBillingApplyResult{Applied: false}, nil
+		}
+		if err := completeSubscriptionSupplementHold(ctx, tx, cmd); err != nil {
+			return nil, err
+		}
+		if err := tx.Commit(); err != nil {
+			return nil, err
+		}
+		tx = nil
 		return &service.UsageBillingApplyResult{Applied: false}, nil
 	}
 
 	result := &service.UsageBillingApplyResult{Applied: true}
 	if err := r.applyUsageBillingEffects(ctx, tx, cmd, result); err != nil {
+		return nil, err
+	}
+	if err := completeSubscriptionSupplementHold(ctx, tx, cmd); err != nil {
 		return nil, err
 	}
 
@@ -177,7 +196,7 @@ func (r *usageBillingRepository) applyBatchImageBalanceHold(
 
 func (r *usageBillingRepository) applyUsageBillingEffects(ctx context.Context, tx *sql.Tx, cmd *service.UsageBillingCommand, result *service.UsageBillingApplyResult) error {
 	if cmd.SubscriptionCost > 0 && cmd.SubscriptionID != nil {
-		if err := incrementUsageBillingSubscription(ctx, tx, *cmd.SubscriptionID, cmd.SubscriptionCost); err != nil {
+		if err := allocateUsageBillingSubscription(ctx, tx, cmd, result); err != nil {
 			return err
 		}
 	}

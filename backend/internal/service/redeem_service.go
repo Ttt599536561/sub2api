@@ -567,7 +567,7 @@ func (s *RedeemService) redeem(ctx context.Context, userID int64, code string, r
 			return nil, fmt.Errorf("lock user for subscription redemption: %w", err)
 		}
 		if redeemCode.SubscriptionEffect != "" {
-			if err := s.applyWelfareSupplement(txCtx, tx, userID, redeemCode); err != nil {
+			if err := s.applySubscriptionSupplement(txCtx, tx, userID, redeemCode); err != nil {
 				return nil, err
 			}
 			break

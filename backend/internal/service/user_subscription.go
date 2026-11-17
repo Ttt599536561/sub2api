@@ -1,6 +1,7 @@
 package service
 
 import (
+	"math"
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/pkg/timezone"
@@ -24,6 +25,11 @@ type UserSubscription struct {
 	WelfareMonthlyLimitUSD *float64
 	WelfareGrantCount      int64
 	WelfareCycleClosed     bool
+
+	// One-time credit belongs to this subscription's StartsAt term. It never
+	// resets with daily/weekly/monthly usage and may retain settled overuse.
+	SupplementGrantedUSD float64
+	SupplementUsedUSD    float64
 
 	StartsAt  time.Time
 	ExpiresAt time.Time
@@ -255,6 +261,9 @@ func (s *UserSubscription) CheckDailyLimit(group *Group, additionalCost float64)
 	if !group.HasDailyLimit() {
 		return true
 	}
+	if s.SupplementRemainingUSD() > 0 {
+		return additionalCost <= math.Max(0, *group.DailyLimitUSD-s.DailyUsageUSD)+s.SupplementRemainingUSD()
+	}
 	return s.DailyUsageUSD+additionalCost <= *group.DailyLimitUSD
 }
 
@@ -263,10 +272,17 @@ func (s *UserSubscription) CheckWeeklyLimit(group *Group, additionalCost float64
 	if !group.HasWeeklyLimit() {
 		return true
 	}
+	if s.SupplementRemainingUSD() > 0 {
+		return additionalCost <= math.Max(0, *group.WeeklyLimitUSD-s.WeeklyUsageUSD)+s.SupplementRemainingUSD()
+	}
 	return s.WeeklyUsageUSD+additionalCost <= *group.WeeklyLimitUSD
 }
 
 func (s *UserSubscription) CheckMonthlyLimit(group *Group, additionalCost float64) bool {
+	group = s.EffectiveGroup(group)
+	if (s.IsWelfare() || group.HasMonthlyLimit()) && group.MonthlyLimitUSD != nil && s.SupplementRemainingUSD() > 0 {
+		return additionalCost <= math.Max(0, *group.MonthlyLimitUSD-s.MonthlyUsageUSD)+s.SupplementRemainingUSD()
+	}
 	if s.IsWelfare() {
 		// Zero is an exhausted finite welfare total, while ordinary groups retain
 		// their existing zero-means-unlimited convention.

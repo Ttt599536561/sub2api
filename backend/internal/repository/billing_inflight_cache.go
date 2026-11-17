@@ -201,8 +201,20 @@ func (c *billingCache) ReleaseInflightScope(ctx context.Context, scope, requestI
 	return releaseInflightBalanceScript.Run(ctx, c.rdb, []string{zkey, hkey}, requestID).Err()
 }
 
+func (c *billingCache) RenewInflightScope(ctx context.Context, scope, requestID string, ttl time.Duration) (bool, error) {
+	zkey, hkey := billingInflightScopeKeys(scope)
+	ttlMs := ttl.Milliseconds()
+	if ttlMs <= 0 {
+		ttlMs = 1
+	}
+	now := time.Now().UnixMilli()
+	n, err := renewInflightBalanceScript.Run(ctx, c.rdb, []string{zkey, hkey}, requestID, now+ttlMs, ttlMs, now).Int64()
+	return n == 1, err
+}
+
 var (
 	_ service.InflightBalanceReservationCache   = (*billingCache)(nil)
 	_ service.InflightBalanceReservationRenewer = (*billingCache)(nil)
 	_ service.InflightScopeReservationCache     = (*billingCache)(nil)
+	_ service.InflightScopeReservationRenewer   = (*billingCache)(nil)
 )

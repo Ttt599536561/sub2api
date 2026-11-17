@@ -36,6 +36,11 @@ type InflightScopeReservationCache interface {
 	ReleaseInflightScope(ctx context.Context, scope, requestID string) error
 }
 
+// Supplement credit is monetary state: its holds must survive long requests.
+type InflightScopeReservationRenewer interface {
+	RenewInflightScope(context.Context, string, string, time.Duration) (bool, error)
+}
+
 // InflightBalanceReservationRenewer 可选：续期仍存活的预留（流式长请求期间防止 TTL 过期）。
 type InflightBalanceReservationRenewer interface {
 	// RenewInflightBalance 若 requestID 仍存在则把其过期时间推迟到 now+ttl；返回是否仍存在。
@@ -71,6 +76,11 @@ type InflightReservation struct {
 	requestID string
 	amount    float64
 	ttl       time.Duration
+	// Supplement holds continue renewing while an async billing owner remains.
+	// Legacy cash reservations retain their existing handler-scoped renewal.
+	renewUntilReleased    bool
+	supplementHoldRepo    SubscriptionSupplementReservationRepository
+	supplementTransferred atomic.Bool
 	// scopes 是同一金额在订阅 / API Key 维度登记的预留（与余额维度共用 requestID），不续期。
 	scopeCache InflightScopeReservationCache
 	scopes     []string
@@ -116,7 +126,9 @@ func (r *InflightReservation) HandlerDone() {
 		return
 	}
 	r.stopOnce.Do(func() {
-		r.stopRenewal()
+		if !r.renewUntilReleased {
+			r.stopRenewal()
+		}
 		r.decRef()
 	})
 }
@@ -131,6 +143,11 @@ func (r *InflightReservation) Release() {
 		r.refs.Store(0)
 		relCtx, relCancel := context.WithTimeout(context.Background(), inflightReservationReleaseTimeout)
 		defer relCancel()
+		if r.supplementHoldRepo != nil && !r.supplementTransferred.Load() {
+			if err := r.supplementHoldRepo.ReleaseSubscriptionSupplementReservation(relCtx, r.requestID); err != nil {
+				logger.LegacyPrintf("service.billing_cache", "Warning: durable supplement hold release failed (expires by ttl): %v", err)
+			}
+		}
 		if r.cache != nil {
 			if err := r.cache.ReleaseInflightBalance(relCtx, r.userID, r.requestID); err != nil {
 				logger.LegacyPrintf("service.billing_cache", "Warning: inflight reservation release failed for user %d (expires by ttl): %v", r.userID, err)
@@ -159,6 +176,12 @@ func (r *InflightReservation) stopRenewal() {
 }
 
 func (r *InflightReservation) startRenewal(renewer InflightBalanceReservationRenewer) {
+	r.startRenewalCallback(func(ctx context.Context) (bool, error) {
+		return renewer.RenewInflightBalance(ctx, r.userID, r.requestID, r.ttl)
+	})
+}
+
+func (r *InflightReservation) startRenewalCallback(renew func(context.Context) (bool, error)) {
 	interval := r.ttl / 3
 	if interval < 10*time.Millisecond {
 		interval = 10 * time.Millisecond
@@ -175,7 +198,7 @@ func (r *InflightReservation) startRenewal(renewer InflightBalanceReservationRen
 				return
 			case <-ticker.C:
 				ctx, cancel := context.WithTimeout(context.Background(), inflightReservationRenewTimeout)
-				alive, err := renewer.RenewInflightBalance(ctx, r.userID, r.requestID, r.ttl)
+				alive, err := renew(ctx)
 				cancel()
 				if err != nil {
 					logger.LegacyPrintf("service.billing_cache", "Warning: inflight reservation renew failed for user %d: %v", r.userID, err)
@@ -196,7 +219,7 @@ func WithInflightReservation(ctx context.Context, r *InflightReservation) contex
 	if r == nil {
 		return ctx
 	}
-	return context.WithValue(ctx, inflightReservationCtxKey{}, r)
+	return WithSubscriptionSupplementHoldID(context.WithValue(ctx, inflightReservationCtxKey{}, r), r.SupplementHoldID())
 }
 
 // InflightReservationFromContext 读取 context 中的预留句柄（可能为 nil）。
@@ -298,6 +321,9 @@ func (s *BillingCacheService) reserveInflightScope(ctx context.Context, res *Inf
 }
 
 func (s *BillingCacheService) reserveInflight(ctx context.Context, user *User, group *Group, subscription *UserSubscription, estimate float64, renew, capped bool) (*InflightReservation, error) {
+	if s != nil && (s.cfg == nil || s.cfg.RunMode != config.RunModeSimple) && group != nil && group.IsSubscriptionType() && subscription.HasSubscriptionSupplement() {
+		return s.reserveSubscriptionSupplement(ctx, user, group, subscription, estimate)
+	}
 	cfg, ok := s.inflightReservationConfig()
 	if !ok || user == nil {
 		return nil, nil

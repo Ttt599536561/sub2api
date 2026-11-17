@@ -31,45 +31,6 @@
   <!-- 订阅类型：显示分组选择和有效天数 -->
   <template v-if="generateForm.type === 'subscription'">
     <div>
-      <label for="subscription-purpose" class="input-label">{{ t('welfareRedeem.purpose') }}</label>
-      <Select id="subscription-purpose" v-model="purpose" data-test="subscription-purpose" :options="purposeOptions" />
-    </div>
-    <template v-if="purpose === 'welfare'">
-      <div>
-        <label for="welfare-campaign" class="input-label">{{ t('welfareRedeem.campaign') }}</label>
-        <Select
-          id="welfare-campaign" v-model="campaignId" data-test="welfare-campaign"
-          :options="campaignOptions" :disabled="loadingCampaigns" :placeholder="t('welfareRedeem.chooseCampaign')"
-        />
-        <p v-if="loadingCampaigns" role="status" class="input-hint">{{ t('common.loading') }}</p>
-        <p v-else-if="campaignError" role="alert" class="mt-2 text-sm text-red-600 dark:text-red-400">{{ campaignError }}</p>
-        <p v-else-if="campaignsLoaded && !campaigns.length" class="input-hint">{{ t('welfareRedeem.noCampaigns') }}</p>
-        <button v-if="campaignError || (campaignsLoaded && !campaigns.length)" type="button" data-test="welfare-retry" class="btn btn-secondary mt-2" @click="loadCampaigns">
-          {{ t('common.refresh') }}
-        </button>
-      </div>
-      <div v-if="selectedCampaign" data-test="welfare-group" class="rounded-lg bg-gray-50 p-3 dark:bg-dark-700">
-        <p class="text-sm font-medium">{{ t('welfareRedeem.boundGroup') }}: {{ selectedCampaign.group_name }} <span class="font-mono">#{{ selectedCampaign.subscription_group_id }}</span></p>
-        <p class="input-hint">{{ t('welfareRedeem.groupHint') }}</p>
-      </div>
-      <div>
-        <label for="welfare-effect" class="input-label">{{ t('welfareRedeem.effect') }}</label>
-        <Select id="welfare-effect" v-model="effect" data-test="welfare-effect" :options="effectOptions" />
-      </div>
-      <div v-if="effect === 'add_quota'">
-        <label for="welfare-quota" class="input-label">{{ t('welfareRedeem.quotaAmount') }}</label>
-        <input id="welfare-quota" v-model.number="quotaAmount" data-test="welfare-quota" type="number" min="0.01" max="9999999999.99" step="0.01" required class="input" />
-        <p class="input-hint">{{ t('welfareRedeem.quotaHint') }}</p>
-      </div>
-      <div v-else>
-        <label for="welfare-days" class="input-label">{{ t('welfareRedeem.extensionDays') }}</label>
-        <input id="welfare-days" v-model.number="extensionDays" data-test="welfare-days" type="number" min="1" max="36500" step="1" required class="input" />
-        <p class="input-hint">{{ t('welfareRedeem.durationHint') }}</p>
-      </div>
-      <p class="rounded-lg bg-blue-50 p-3 text-sm text-blue-700 dark:bg-blue-900/20 dark:text-blue-300">{{ t('welfareRedeem.activeCycleHint') }}</p>
-    </template>
-    <template v-else>
-    <div>
       <label class="input-label">{{ t('admin.redeem.selectGroup') }}</label>
       <Select
         v-model="generateForm.group_id"
@@ -102,17 +63,26 @@
       </Select>
     </div>
     <div>
-      <label class="input-label">{{ t('admin.redeem.validityDays') }}</label>
-      <input
-        v-model.number="generateForm.validity_days"
-        type="number"
-        min="1"
-        max="36500"
-        required
-        class="input"
-      />
+      <label for="subscription-purpose" class="input-label">{{ t('welfareRedeem.purpose') }}</label>
+      <Select id="subscription-purpose" v-model="purpose" data-test="subscription-purpose" :options="purposeOptions" />
     </div>
+    <template v-if="purpose !== 'standard'">
+      <div v-if="purpose === 'add_balance'">
+        <label for="supplement-quota" class="input-label">{{ t('welfareRedeem.supplementQuotaAmount') }}</label>
+        <input id="supplement-quota" v-model.number="quotaAmount" data-test="supplement-quota" type="number" min="0.01" max="9999999999.99" step="0.01" required class="input" />
+        <p class="input-hint">{{ t('welfareRedeem.supplementQuotaHint') }}</p>
+      </div>
+      <div v-else>
+        <label for="supplement-days" class="input-label">{{ t('welfareRedeem.extensionDays') }}</label>
+        <input id="supplement-days" v-model.number="extensionDays" data-test="supplement-days" type="number" min="1" max="36500" step="1" required class="input" />
+        <p class="input-hint">{{ t('welfareRedeem.supplementDurationHint') }}</p>
+      </div>
+      <p class="rounded-lg bg-blue-50 p-3 text-sm text-blue-700 dark:bg-blue-900/20 dark:text-blue-300">{{ t('welfareRedeem.supplementTargetHint') }}</p>
     </template>
+    <div v-else>
+      <label class="input-label">{{ t('admin.redeem.validityDays') }}</label>
+      <input v-model.number="generateForm.validity_days" type="number" min="1" max="36500" required class="input" />
+    </div>
   </template>
   <div>
     <label class="input-label">{{ t('admin.redeem.codeExpiry') }}</label>
@@ -161,7 +131,7 @@
     <button type="button" @click="emit('cancel')" class="btn btn-secondary">
       {{ t('common.cancel') }}
     </button>
-    <button type="submit" :disabled="generating || (isWelfare && (loadingCampaigns || !selectedCampaign))" class="btn btn-primary">
+    <button type="submit" :disabled="generating" class="btn btn-primary">
       {{ generating ? t('admin.redeem.generating') : t('admin.redeem.generate') }}
     </button>
   </div>
@@ -173,11 +143,11 @@ import { computed, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { adminAPI } from '@/api/admin'
 import { useAppStore } from '@/stores/app'
-import type { Group, GroupPlatform, RedeemCode, RedeemCodeType, SubscriptionType, WelfareRedeemCampaign, WelfareRedeemGenerateOptions, WelfareSubscriptionEffect } from '@/types'
+import type { Group, GroupPlatform, RedeemCode, RedeemCodeType, SubscriptionType, SubscriptionSupplementGenerateOptions, SubscriptionSupplementEffect } from '@/types'
 import Select from '@/components/common/Select.vue'
 import GroupBadge from '@/components/common/GroupBadge.vue'
 import GroupOptionItem from '@/components/common/GroupOptionItem.vue'
-import { welfareErrorMessage, welfareErrorReason } from '@/utils/welfareRedeemError'
+import { welfareErrorMessage } from '@/utils/welfareRedeemError'
 
 const props = defineProps<{ groups: Group[] }>()
 const emit = defineEmits<{ generated: [codes: RedeemCode[]]; cancel: [] }>()
@@ -199,8 +169,7 @@ const subscriptionGroupOptions = computed(() => props.groups
 const typeOptions = computed(() => ['balance', 'concurrency', 'subscription', 'invitation'].map(value => ({
   value, label: t('admin.redeem.' + value)
 })))
-const purposeOptions = computed(() => ['standard', 'welfare'].map(value => ({ value, label: t('welfareRedeem.' + value) })))
-const effectOptions = computed(() => ['add_quota', 'extend_duration'].map(value => ({ value, label: t('welfareRedeem.' + value) })))
+const purposeOptions = computed(() => ['standard', 'add_balance', 'extend_subscription'].map(value => ({ value, label: t('welfareRedeem.' + (value === 'standard' ? 'openRenew' : value)) })))
 type RedeemCodeExpiryOption = 'never' | '1' | '3' | '7' | 'custom'
 const redeemCodeExpiryOptions = computed<{ value: RedeemCodeExpiryOption; label: string }[]>(() => [
   { value: 'never', label: t('admin.redeem.neverExpires') },
@@ -211,43 +180,13 @@ const generateForm = reactive({
   type: 'balance' as RedeemCodeType, value: 10, count: 1, group_id: null as number | null,
   validity_days: 30, expiry_option: 'never' as RedeemCodeExpiryOption, custom_expiry_days: 7
 })
-const purpose = ref<'standard' | 'welfare'>('standard')
-const effect = ref<WelfareSubscriptionEffect>('add_quota')
-const campaignId = ref<number | null>(null)
+const purpose = ref<'standard' | SubscriptionSupplementEffect>('standard')
 const quotaAmount = ref<number | ''>('')
 const extensionDays = ref(30)
 const generating = ref(false)
 const errorMessage = ref('')
-const campaigns = ref<WelfareRedeemCampaign[]>([])
-const loadingCampaigns = ref(false)
-const campaignsLoaded = ref(false)
-const campaignError = ref('')
-const isWelfare = computed(() => generateForm.type === 'subscription' && purpose.value === 'welfare')
-const selectedCampaign = computed(() => campaigns.value.find(campaign => campaign.id === campaignId.value))
-const campaignOptions = computed(() => campaigns.value.map(campaign => ({ value: campaign.id, label: campaign.name })))
-
-async function loadCampaigns() {
-  if (loadingCampaigns.value) return
-  loadingCampaigns.value = true
-  campaignError.value = ''
-  try {
-    campaigns.value = await adminAPI.redeem.welfareCampaigns()
-    campaignsLoaded.value = true
-    if (!selectedCampaign.value) campaignId.value = null
-  } catch (error) {
-    campaigns.value = []
-    campaignId.value = null
-    campaignError.value = welfareErrorMessage(error, t, 'welfareRedeem.campaignLoadFailed')
-  } finally {
-    loadingCampaigns.value = false
-  }
-}
-
-watch(isWelfare, active => {
-  errorMessage.value = ''
-  if (active && !campaignsLoaded.value) void loadCampaigns()
-})
-watch(effect, () => { errorMessage.value = '' })
+const isSupplement = computed(() => generateForm.type === 'subscription' && purpose.value !== 'standard')
+watch(purpose, () => { errorMessage.value = '' })
 watch(() => generateForm.type, newType => {
   errorMessage.value = ''
   if (newType === 'invitation') generateForm.value = 0
@@ -266,26 +205,24 @@ async function handleGenerateCodes() {
     fail('welfareRedeem.countRequired')
     return
   }
-  let welfare: WelfareRedeemGenerateOptions | undefined
-  let groupId = generateForm.type === 'subscription' ? generateForm.group_id : undefined
+  let supplement: SubscriptionSupplementGenerateOptions | undefined
+  const groupId = generateForm.type === 'subscription' ? generateForm.group_id : undefined
   let days = generateForm.type === 'subscription' ? generateForm.validity_days : undefined
-  if (isWelfare.value) {
-    const campaign = selectedCampaign.value
-    if (loadingCampaigns.value || !campaign) return fail('welfareRedeem.campaignRequired')
-    groupId = campaign.subscription_group_id
-    if (effect.value === 'add_quota') {
+  if (generateForm.type === 'subscription' && !subscriptionGroupOptions.value.some(group => group.value === groupId)) {
+    return fail('admin.redeem.groupRequired')
+  }
+  if (isSupplement.value) {
+    if (purpose.value === 'add_balance') {
       const amount = Number(quotaAmount.value)
       if (!Number.isFinite(amount) || amount <= 0 || amount >= 1e10 || Number(amount.toFixed(2)) !== amount) {
         return fail('welfareRedeem.quotaRequired')
       }
-      welfare = { subscription_effect: 'add_quota', welfare_campaign_id: campaign.id, quota_amount_usd: amount }
+      supplement = { subscription_effect: 'add_balance', quota_amount_usd: amount }
       days = undefined
     } else {
       days = extensionDays.value
-      welfare = { subscription_effect: 'extend_duration', welfare_campaign_id: campaign.id }
+      supplement = { subscription_effect: 'extend_subscription' }
     }
-  } else if (generateForm.type === 'subscription' && !generateForm.group_id) {
-    return fail('admin.redeem.groupRequired')
   }
   if (days !== undefined && (!Number.isInteger(days) || days < 1 || days > 36500)) return fail('welfareRedeem.daysRequired')
   const expiresInDays = generateForm.expiry_option === 'never' ? undefined
@@ -295,10 +232,10 @@ async function handleGenerateCodes() {
   }
   generating.value = true
   try {
-    const args = [generateForm.count, generateForm.type, isWelfare.value ? 0 : generateForm.value,
+    const args = [generateForm.count, generateForm.type, isSupplement.value ? 0 : generateForm.value,
       groupId, days, expiresInDays] as const
-    const result = welfare
-      ? await adminAPI.redeem.generate(...args, welfare)
+    const result = supplement
+      ? await adminAPI.redeem.generate(...args, supplement)
       : await adminAPI.redeem.generate(...args)
     generateForm.group_id = null
     generateForm.validity_days = 30
@@ -310,12 +247,6 @@ async function handleGenerateCodes() {
   } catch (error) {
     errorMessage.value = welfareErrorMessage(error, t, 'admin.redeem.failedToGenerate')
     appStore.showError(errorMessage.value)
-    if (welfare && welfareErrorReason(error) === 'WELFARE_SUPPLEMENT_CAMPAIGN_INVALID') {
-      // Never retry against a silently changed group. Preserve the amount/days,
-      // refresh the choices, and require an explicit selection for this request.
-      if (campaignId.value === welfare.welfare_campaign_id) campaignId.value = null
-      await loadCampaigns()
-    }
   } finally {
     generating.value = false
   }

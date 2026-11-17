@@ -50,6 +50,39 @@ describe('subscription daily reset controls', () => {
     sessionStorage.clear()
   })
 
+  it.each(['standard', 'welfare'] as const)('shows separate one-time supplement totals for %s', async kind => {
+    const item = { ...subscription(), entitlement_kind: kind,
+      supplement_granted_usd: 40, supplement_used_usd: 12.5, supplement_remaining_usd: 27.5 }
+    api.getMySubscriptions.mockResolvedValue([item])
+    const wrapper = mountView()
+    await flushPromises()
+    const summary = wrapper.get('[data-test="subscription-supplement"]')
+    expect(summary.text()).toContain('$40.00')
+    expect(summary.text()).toContain('$12.50')
+    expect(summary.text()).toContain('$27.50')
+    expect(summary.text()).toContain('welfareRedeem.supplementQuotaHint')
+    wrapper.unmount()
+  })
+
+  it('does not call all quota disabled when a zero-base welfare subscription has usable supplements', async () => {
+    const item = { ...subscription(), entitlement_kind: 'welfare',
+      group: { id: 1, monthly_limit_usd: 0 }, supplement_granted_usd: 10, supplement_used_usd: 0, supplement_remaining_usd: 10 }
+    api.getMySubscriptions.mockResolvedValue([item])
+    const wrapper = mountView()
+    await flushPromises()
+    expect(wrapper.text()).not.toContain('userSubscriptions.welfareQuotaDisabled')
+    expect(wrapper.text()).toContain('welfareRedeem.baseQuotaExhausted')
+    wrapper.unmount()
+  })
+
+  it('keeps old subscriptions without supplement fields uncluttered', async () => {
+    api.getMySubscriptions.mockResolvedValue([subscription()])
+    const wrapper = mountView()
+    await flushPromises()
+    expect(wrapper.find('[data-test="subscription-supplement"]').exists()).toBe(false)
+    wrapper.unmount()
+  })
+
   it.each(['welfare', 'standard'] as const)('shows zero monthly total correctly for %s', async kind => {
     const item = subscription()
     item.entitlement_kind = kind

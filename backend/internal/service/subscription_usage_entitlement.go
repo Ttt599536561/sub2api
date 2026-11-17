@@ -40,6 +40,9 @@ func (s *SubscriptionService) GetSubscriptionForUsage(ctx context.Context, userI
 			return nil, ErrSubscriptionInvalid
 		}
 		normalizeExpiredWindowsAt(candidates[i:i+1], s.now())
+		if err := loadSubscriptionSupplement(ctx, s.userSubRepo, sub); err != nil {
+			return nil, err
+		}
 		sub.Group = sub.EffectiveGroup(group)
 		err = checkAuthoritativeSubscriptionLimits(sub, sub.Group, s.now())
 		if err == nil {
@@ -53,6 +56,9 @@ func (s *SubscriptionService) GetSubscriptionForUsage(ctx context.Context, userI
 	standard, err := s.GetActiveSubscription(ctx, userID, groupID)
 	if errors.Is(err, ErrSubscriptionNotFound) && exhausted != nil {
 		return exhausted, nil
+	}
+	if err == nil && standard != nil {
+		err = loadSubscriptionSupplement(ctx, s.userSubRepo, standard)
 	}
 	return standard, err
 }

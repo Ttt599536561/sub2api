@@ -54,3 +54,26 @@ func TestWelfareSupplementValidation(t *testing.T) {
 	input.ValidityDays = 0
 	require.Error(t, validateWelfareSupplement(&input))
 }
+
+func TestGenericSubscriptionSupplementValidation(t *testing.T) {
+	groupID := int64(3)
+	amount := 12.34
+	valid := GenerateRedeemCodesInput{Count: 1, Type: RedeemTypeSubscription, GroupID: &groupID,
+		SubscriptionEffect: "add_balance", QuotaAmountUSD: &amount}
+	require.NoError(t, validateWelfareSupplement(&valid), "generic supplements need a group, not an invitation campaign")
+	for _, value := range []float64{0, -1, 1e10, 0.001, math.NaN(), math.Inf(1)} {
+		input := valid
+		input.QuotaAmountUSD = &value
+		require.Error(t, validateWelfareSupplement(&input))
+	}
+	input := valid
+	input.GroupID = nil
+	require.Error(t, validateWelfareSupplement(&input))
+	input = valid
+	input.SubscriptionEffect, input.QuotaAmountUSD, input.ValidityDays = "extend_subscription", nil, 45
+	require.NoError(t, validateWelfareSupplement(&input))
+	input.ValidityDays = 0
+	require.Error(t, validateWelfareSupplement(&input))
+	input.ValidityDays = MaxValidityDays + 1
+	require.Error(t, validateWelfareSupplement(&input))
+}

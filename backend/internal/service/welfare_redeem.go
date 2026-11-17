@@ -40,6 +40,9 @@ type WelfareRedeemCampaign struct {
 }
 
 func validateWelfareSupplement(input *GenerateRedeemCodesInput) error {
+	if input != nil && (input.SubscriptionEffect == SubscriptionEffectAddBalance || input.SubscriptionEffect == SubscriptionEffectExtendSubscription) {
+		return validateSubscriptionSupplement(input)
+	}
 	if input == nil || input.Type != RedeemTypeSubscription || input.Count < 1 || input.Count > 100 ||
 		input.WelfareCampaignID == nil || *input.WelfareCampaignID <= 0 || input.Value != 0 {
 		return ErrWelfareSupplementInvalid
@@ -153,7 +156,7 @@ func generateWelfareSupplementCodes(ctx context.Context, client *dbent.Client, r
 			return nil, err
 		}
 		code := RedeemCode{Code: text, Type: RedeemTypeSubscription, Status: StatusUnused, GroupID: &campaign.SubscriptionGroupID,
-			SubscriptionEffect: input.SubscriptionEffect, WelfareCampaignID: &campaign.ID, WelfareCampaignVersion: &campaign.Version,
+			SubscriptionEffect: normalizedSubscriptionSupplementEffect(input.SubscriptionEffect), WelfareCampaignID: &campaign.ID, WelfareCampaignVersion: &campaign.Version,
 			WelfareCampaignName: campaign.Name, QuotaAmountUSD: input.QuotaAmountUSD, ValidityDays: input.ValidityDays, ExpiresAt: input.ExpiresAt}
 		if err := repo.Create(txCtx, &code); err != nil {
 			return nil, err

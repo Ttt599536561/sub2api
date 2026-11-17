@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -120,11 +121,33 @@ func (s *grokMediaSlotsCache) assertReleased(t *testing.T) {
 
 type grokMediaSlotBindings struct {
 	testutil.StubGatewayCache
-	owner   int64
-	writes  int
-	key     string
-	billed  map[string]bool
-	pending map[string][]byte
+	service.UsageLogRepository
+	durable         map[string][]byte
+	durableStoreErr error
+	durableLoadErr  error
+	cacheLoadErr    error
+	owner           int64
+	writes          int
+	key             string
+	billed          map[string]bool
+	pending         map[string][]byte
+}
+
+func (s *grokMediaSlotBindings) Create(context.Context, *service.UsageLog) (bool, error) {
+	return true, nil
+}
+func (s *grokMediaSlotBindings) StoreGrokVideoBillingTask(_ context.Context, taskID string, userID, apiKeyID int64, payload []byte) error {
+	if s.durableStoreErr != nil {
+		return s.durableStoreErr
+	}
+	if s.durable == nil {
+		s.durable = make(map[string][]byte)
+	}
+	s.durable[fmt.Sprintf("%d:%d:%s", userID, apiKeyID, taskID)] = append([]byte(nil), payload...)
+	return nil
+}
+func (s *grokMediaSlotBindings) LoadGrokVideoBillingTask(_ context.Context, taskID string, userID, apiKeyID int64) ([]byte, error) {
+	return s.durable[fmt.Sprintf("%d:%d:%s", userID, apiKeyID, taskID)], s.durableLoadErr
 }
 
 func (s *grokMediaSlotBindings) SetGrokVideoPendingBilling(_ context.Context, key string, body []byte, _ time.Duration) error {
@@ -135,7 +158,7 @@ func (s *grokMediaSlotBindings) SetGrokVideoPendingBilling(_ context.Context, ke
 	return nil
 }
 func (s *grokMediaSlotBindings) GetGrokVideoPendingBilling(_ context.Context, key string) ([]byte, error) {
-	return s.pending[key], nil
+	return s.pending[key], s.cacheLoadErr
 }
 
 func (s *grokMediaSlotBindings) GetSessionAccountID(_ context.Context, groupID int64, key string) (int64, error) {
@@ -234,7 +257,7 @@ func newGrokMediaSlotHandler(t *testing.T, oauth, mismatch bool, platforms ...st
 		_, err := provider.GetAccessToken(context.Background(), &accounts[1])
 		require.NoError(t, err)
 	}
-	gateway := service.NewOpenAIGatewayService(repo, nil, nil, nil, nil, nil, bindings, cfg, nil, concurrency, nil, nil, nil, upstream, nil, nil, provider, nil, nil, nil, nil, nil)
+	gateway := service.NewOpenAIGatewayService(repo, bindings, nil, nil, nil, nil, bindings, cfg, nil, concurrency, nil, nil, nil, upstream, nil, nil, provider, nil, nil, nil, nil, nil)
 	groupID := int64(24)
 	require.NoError(t, gateway.BindGrokMediaVideoRequestAccount(context.Background(), &groupID, "task", 10, 20, 1))
 	bindings.writes = 0

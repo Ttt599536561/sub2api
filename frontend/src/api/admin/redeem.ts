@@ -10,7 +10,7 @@ import type {
   BatchUpdateRedeemCodeFields,
   RedeemCodeType,
   WelfareRedeemCampaign,
-  WelfareRedeemGenerateOptions,
+  SubscriptionSupplementGenerateOptions,
   PaginatedResponse
 } from '@/types'
 
@@ -73,7 +73,7 @@ export async function generate(
   groupId?: number | null,
   validityDays?: number,
   expiresInDays?: number | null,
-  welfare?: WelfareRedeemGenerateOptions
+  supplement?: SubscriptionSupplementGenerateOptions
 ): Promise<RedeemCode[]> {
   const payload: GenerateRedeemCodesRequest = {
     count,
@@ -83,18 +83,16 @@ export async function generate(
 
   // 订阅类型专用字段
   if (type === 'subscription') {
-    // For welfare codes this is the displayed binding assertion. The server
-    // still derives the actual group from the campaign and rejects a mismatch.
     payload.group_id = groupId
-    if (welfare) {
-      payload.subscription_effect = welfare.subscription_effect
-      payload.welfare_campaign_id = welfare.welfare_campaign_id
-      if (welfare.subscription_effect === 'add_quota') payload.quota_amount_usd = welfare.quota_amount_usd
+    if (supplement) {
+      payload.subscription_effect = supplement.subscription_effect
+      if (supplement.subscription_effect === 'add_balance') payload.quota_amount_usd = supplement.quota_amount_usd
     }
-    if (welfare?.subscription_effect !== 'add_quota' && validityDays && validityDays > 0) {
+    if (supplement?.subscription_effect !== 'add_balance' && validityDays && validityDays > 0) {
       payload.validity_days = validityDays
     }
   }
+
   if (expiresInDays && expiresInDays > 0) {
     payload.expires_in_days = expiresInDays
   }

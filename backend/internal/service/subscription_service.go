@@ -811,7 +811,11 @@ func (s *SubscriptionService) restoreSubscriptionDaysAfterRefund(ctx context.Con
 
 // GetByID 根据ID获取订阅
 func (s *SubscriptionService) GetByID(ctx context.Context, id int64) (*UserSubscription, error) {
-	return s.userSubRepo.GetByID(ctx, id)
+	sub, err := s.userSubRepo.GetByID(ctx, id)
+	if err == nil {
+		err = loadSubscriptionSupplement(ctx, s.userSubRepo, sub)
+	}
+	return sub, err
 }
 
 // GetActiveSubscription 获取用户对特定分组的有效订阅
@@ -863,6 +867,9 @@ func (s *SubscriptionService) ListUserSubscriptions(ctx context.Context, userID 
 	if err := s.attachDailyResetStates(ctx, userID, subs); err != nil {
 		return nil, err
 	}
+	if err := s.loadSubscriptionSupplements(ctx, subs); err != nil {
+		return nil, err
+	}
 	normalizeExpiredWindows(subs)
 	normalizeSubscriptionStatus(subs)
 	return subs, nil
@@ -875,6 +882,9 @@ func (s *SubscriptionService) ListActiveUserSubscriptions(ctx context.Context, u
 		return nil, err
 	}
 	if err := s.attachDailyResetStates(ctx, userID, subs); err != nil {
+		return nil, err
+	}
+	if err := s.loadSubscriptionSupplements(ctx, subs); err != nil {
 		return nil, err
 	}
 	subs = slices.DeleteFunc(subs, func(sub UserSubscription) bool {
@@ -891,6 +901,9 @@ func (s *SubscriptionService) ListGroupSubscriptions(ctx context.Context, groupI
 	if err != nil {
 		return nil, nil, err
 	}
+	if err := s.loadSubscriptionSupplements(ctx, subs); err != nil {
+		return nil, nil, err
+	}
 	normalizeExpiredWindows(subs)
 	normalizeSubscriptionStatus(subs)
 	return subs, pag, nil
@@ -901,6 +914,9 @@ func (s *SubscriptionService) List(ctx context.Context, page, pageSize int, user
 	params := pagination.PaginationParams{Page: page, PageSize: pageSize}
 	subs, pag, err := s.userSubRepo.List(ctx, params, userID, groupID, status, platform, sortBy, sortOrder)
 	if err != nil {
+		return nil, nil, err
+	}
+	if err := s.loadSubscriptionSupplements(ctx, subs); err != nil {
 		return nil, nil, err
 	}
 	normalizeExpiredWindows(subs)
@@ -1188,13 +1204,16 @@ func (s *SubscriptionService) RecordUsage(ctx context.Context, subscriptionID in
 
 // SubscriptionProgress 订阅进度
 type SubscriptionProgress struct {
-	ID            int64                `json:"id"`
-	GroupName     string               `json:"group_name"`
-	ExpiresAt     time.Time            `json:"expires_at"`
-	ExpiresInDays int                  `json:"expires_in_days"`
-	Daily         *UsageWindowProgress `json:"daily,omitempty"`
-	Weekly        *UsageWindowProgress `json:"weekly,omitempty"`
-	Monthly       *UsageWindowProgress `json:"monthly,omitempty"`
+	SupplementGrantedUSD   float64              `json:"supplement_granted_usd"`
+	SupplementUsedUSD      float64              `json:"supplement_used_usd"`
+	SupplementRemainingUSD float64              `json:"supplement_remaining_usd"`
+	ID                     int64                `json:"id"`
+	GroupName              string               `json:"group_name"`
+	ExpiresAt              time.Time            `json:"expires_at"`
+	ExpiresInDays          int                  `json:"expires_in_days"`
+	Daily                  *UsageWindowProgress `json:"daily,omitempty"`
+	Weekly                 *UsageWindowProgress `json:"weekly,omitempty"`
+	Monthly                *UsageWindowProgress `json:"monthly,omitempty"`
 }
 
 // UsageWindowProgress 使用窗口进度
@@ -1210,7 +1229,7 @@ type UsageWindowProgress struct {
 
 // GetSubscriptionProgress 获取订阅使用进度
 func (s *SubscriptionService) GetSubscriptionProgress(ctx context.Context, subscriptionID int64) (*SubscriptionProgress, error) {
-	sub, err := s.userSubRepo.GetByID(ctx, subscriptionID)
+	sub, err := s.GetByID(ctx, subscriptionID)
 	if err != nil {
 		return nil, ErrSubscriptionNotFound
 	}
@@ -1230,10 +1249,13 @@ func (s *SubscriptionService) GetSubscriptionProgress(ctx context.Context, subsc
 func (s *SubscriptionService) calculateProgress(sub *UserSubscription, group *Group) *SubscriptionProgress {
 	group = sub.EffectiveGroup(group)
 	progress := &SubscriptionProgress{
-		ID:            sub.ID,
-		GroupName:     group.Name,
-		ExpiresAt:     sub.ExpiresAt,
-		ExpiresInDays: sub.DaysRemaining(),
+		SupplementGrantedUSD:   sub.SupplementGrantedUSD,
+		SupplementUsedUSD:      sub.SupplementUsedUSD,
+		SupplementRemainingUSD: sub.SupplementRemainingUSD(),
+		ID:                     sub.ID,
+		GroupName:              group.Name,
+		ExpiresAt:              sub.ExpiresAt,
+		ExpiresInDays:          sub.DaysRemaining(),
 	}
 
 	// 日进度
@@ -1329,6 +1351,9 @@ func (s *SubscriptionService) GetUserSubscriptionsWithProgress(ctx context.Conte
 	// ListActiveByUserID 已使用 .WithGroup() eager-load Group 关联，1 次查询获取所有数据
 	subs, err := s.userSubRepo.ListActiveByUserID(ctx, userID)
 	if err != nil {
+		return nil, err
+	}
+	if err := s.loadSubscriptionSupplements(ctx, subs); err != nil {
 		return nil, err
 	}
 

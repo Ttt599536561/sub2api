@@ -1271,6 +1271,9 @@ func (s *adminServiceImpl) GenerateRedeemCodes(ctx context.Context, input *Gener
 		return nil, ErrWelfareSupplementInvalid
 	}
 	if input.SubscriptionEffect != "" || input.WelfareCampaignID != nil || input.QuotaAmountUSD != nil {
+		if input.SubscriptionEffect == SubscriptionEffectAddBalance || input.SubscriptionEffect == SubscriptionEffectExtendSubscription {
+			return generateSubscriptionSupplementCodes(ctx, s.entClient, s.redeemCodeRepo, input)
+		}
 		return generateWelfareSupplementCodes(ctx, s.entClient, s.redeemCodeRepo, input)
 	}
 	if input.ExpiresAt != nil && !input.ExpiresAt.After(time.Now()) {

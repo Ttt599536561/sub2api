@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"math"
 
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/gin-gonic/gin"
@@ -43,13 +44,13 @@ func responsesInflightEstimate(model string, body []byte) service.InflightEstima
 
 func inflightNoop() {}
 
-// reserveInflightBalance 在 CheckBillingEligibility 之后为余额模式请求登记在途预留。
+// reserveInflightBalance 在 CheckBillingEligibility 之后为现金或补充额度请求登记在途预留。
 //
 // 成功时把预留句柄挂到 c.Request 的 context 上：之后通过 submit*UsageRecordTask 提交的
 // 计费任务会接管一个引用，直到余额缓存实际扣减后才释放。返回的 done 必须 defer 调用
 // （停止续期并归还 handler 引用；没有提交计费任务时即刻释放）。
-// 开关关闭、订阅模式、Redis 故障时返回 no-op（fail-open）；无法定价时默认 fail-open，
-// 配置 fail_closed_on_unpriced=true 时返回 ErrInsufficientBalance。
+// 现金模式沿用原开关和无法定价策略；补充额度强制检查计费依赖和价格，
+// 仅明确免费时不预占，无补额订阅保持原有行为。
 func reserveInflightBalance(
 	c *gin.Context,
 	billing *service.BillingCacheService,
@@ -59,6 +60,9 @@ func reserveInflightBalance(
 	req service.InflightEstimateRequest,
 ) (func(), error) {
 	if c == nil || c.Request == nil {
+		if subscription != nil && subscription.HasSubscriptionSupplement() {
+			return inflightNoop, service.ErrBillingServiceUnavailable
+		}
 		return inflightNoop, nil
 	}
 	req.OpenAICompactPath = service.IsOpenAIResponsesCompactPath(c)
@@ -80,13 +84,26 @@ func reserveInflightBalanceCtx(
 	subscription *service.UserSubscription,
 	req service.InflightEstimateRequest,
 ) (context.Context, func(), error) {
-	if billing == nil || estimator == nil || apiKey == nil || apiKey.User == nil || !billing.InflightReservationEnabled() {
+	supplement := subscription != nil && subscription.HasSubscriptionSupplement()
+	if billing == nil || estimator == nil || apiKey == nil || apiKey.User == nil {
+		if supplement {
+			return ctx, inflightNoop, service.ErrBillingServiceUnavailable
+		}
 		return ctx, inflightNoop, nil
 	}
-	if apiKey.Group != nil && apiKey.Group.IsSubscriptionType() && subscription != nil {
+	if supplement && apiKey.Group == nil {
+		return ctx, inflightNoop, service.ErrBillingServiceUnavailable
+	}
+	if !billing.InflightReservationEnabled() && !supplement {
+		return ctx, inflightNoop, nil
+	}
+	if apiKey.Group != nil && apiKey.Group.IsSubscriptionType() && subscription != nil && !supplement {
 		return ctx, inflightNoop, nil
 	}
 	estimate, priced := estimator.EstimateInflightReservation(ctx, apiKey, req)
+	if supplement && (!priced || estimate < 0 || math.IsNaN(estimate) || math.IsInf(estimate, 0)) {
+		return ctx, inflightNoop, service.ErrBillingServiceUnavailable
+	}
 	if !priced && billing.InflightReservationFailClosedOnUnpriced() {
 		return ctx, inflightNoop, service.ErrInsufficientBalance
 	}

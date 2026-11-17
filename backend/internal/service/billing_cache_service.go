@@ -143,16 +143,63 @@ type selectedSubscriptionAdmissionService interface {
 }
 
 func (s *BillingCacheService) getSubscriptionForRequestAdmission(ctx context.Context, userID, groupID int64, selected *UserSubscription) (*UserSubscription, *Group, error) {
+	var sub *UserSubscription
+	var group *Group
+	var err error
 	if selected != nil {
 		if service, ok := s.subscriptionService.(selectedSubscriptionAdmissionService); ok {
-			return service.GetSubscriptionByIDForAdmission(ctx, userID, groupID, selected.ID)
+			sub, group, err = service.GetSubscriptionByIDForAdmission(ctx, userID, groupID, selected.ID)
+		} else {
+			sub, group, err = s.subscriptionService.GetSubscriptionForAdmission(ctx, userID, groupID)
 		}
+	} else {
+		sub, group, err = s.subscriptionService.GetSubscriptionForAdmission(ctx, userID, groupID)
 	}
-	sub, group, err := s.subscriptionService.GetSubscriptionForAdmission(ctx, userID, groupID)
-	if err == nil && selected != nil && (sub == nil || sub.ID != selected.ID) {
+	if err == nil && selected != nil && (sub == nil || sub.ID != selected.ID || (!selected.StartsAt.IsZero() && !selected.StartsAt.Equal(sub.StartsAt))) {
 		return nil, group, ErrSubscriptionInvalid
 	}
 	return sub, group, err
+}
+
+// RefreshSubscriptionForInflight returns a fresh, independent snapshot without
+// spending another RPM admission or replacing the term selected by a request.
+func (s *BillingCacheService) RefreshSubscriptionForInflight(ctx context.Context, selected *UserSubscription) (*UserSubscription, error) {
+	if selected == nil {
+		return nil, nil
+	}
+	if s == nil {
+		return nil, ErrBillingServiceUnavailable
+	}
+	if s.cfg != nil && s.cfg.RunMode == config.RunModeSimple {
+		copy := *selected
+		return &copy, nil
+	}
+	var sub *UserSubscription
+	var group *Group
+	var err error
+	if s.subscriptionService != nil {
+		sub, group, err = s.getSubscriptionForRequestAdmission(ctx, selected.UserID, selected.GroupID, selected)
+	} else if s.subRepo != nil {
+		sub, err = s.subRepo.GetByID(ctx, selected.ID)
+		if err == nil && sub != nil {
+			err = loadSubscriptionSupplement(ctx, s.subRepo, sub)
+			group = sub.Group
+		}
+	} else {
+		return nil, ErrBillingServiceUnavailable
+	}
+	if err != nil {
+		return nil, err
+	}
+	if sub == nil || sub.ID != selected.ID || sub.UserID != selected.UserID || sub.GroupID != selected.GroupID || (!selected.StartsAt.IsZero() && !sub.StartsAt.Equal(selected.StartsAt)) {
+		return nil, ErrSubscriptionInvalid
+	}
+	copy := *sub
+	copy.Group = copy.EffectiveGroup(group)
+	if err := checkAuthoritativeSubscriptionLimits(&copy, copy.Group, time.Now()); err != nil {
+		return nil, err
+	}
+	return &copy, nil
 }
 
 // SetSubscriptionService is called during service construction, before requests
@@ -972,6 +1019,9 @@ func (s *BillingCacheService) RevalidateSubscription(ctx context.Context, subscr
 // 返回的句柄可能为 nil（未登记任何预留）；调用方须在 handler 结束时调用 HandlerDone，预留在计费任务落库后释放。
 // 须在 CheckBillingEligibility 通过后调用；简易模式不校验。
 func (s *BillingCacheService) ReserveFixedCharge(ctx context.Context, user *User, apiKey *APIKey, group *Group, subscription *UserSubscription, amount float64) (*InflightReservation, error) {
+	if subscription.HasSubscriptionSupplement() && (user == nil || amount < 0 || math.IsNaN(amount) || math.IsInf(amount, 0)) {
+		return nil, ErrSubscriptionInvalid
+	}
 	if user == nil || amount <= 0 || math.IsNaN(amount) || math.IsInf(amount, 0) {
 		return nil, nil
 	}
@@ -1027,13 +1077,13 @@ func (s *BillingCacheService) ReserveFixedCharge(ctx context.Context, user *User
 		return nil, err
 	}
 	var subscriptionPending, apiKeyPending float64
-	if subscriptionBill && (group.HasDailyLimit() || group.HasWeeklyLimit() || group.HasMonthlyLimit()) {
+	if subscriptionBill && !subscription.HasSubscriptionSupplement() && (group.HasDailyLimit() || group.HasWeeklyLimit() || group.HasMonthlyLimit()) {
 		res, subscriptionPending = s.reserveInflightScope(ctx, res, user.ID, inflightSubscriptionScope(subscription.ID), amount)
 	}
 	if apiKey != nil && (apiKey.Quota > 0 || apiKey.HasRateLimits()) {
 		res, apiKeyPending = s.reserveInflightScope(ctx, res, user.ID, inflightAPIKeyScope(apiKey.ID), amount)
 	}
-	if subscriptionBill {
+	if subscriptionBill && !subscription.HasSubscriptionSupplement() {
 		err = s.checkFixedChargeSubscription(ctx, user.ID, group, amount+subscriptionPending, subscription)
 	}
 	if err == nil && apiKey != nil {
@@ -1059,6 +1109,9 @@ func (s *BillingCacheService) checkFixedChargeSubscription(ctx context.Context, 
 		}
 		if sub == nil || sub.ID != selected[0].ID || sub.UserID != userID || sub.GroupID != group.ID {
 			return ErrSubscriptionInvalid
+		}
+		if err := loadSubscriptionSupplement(ctx, s.subRepo, sub); err != nil {
+			return ErrBillingServiceUnavailable.WithCause(err)
 		}
 		group = sub.EffectiveGroup(group)
 		if err := checkAuthoritativeSubscriptionLimits(sub, group, time.Now()); err != nil {

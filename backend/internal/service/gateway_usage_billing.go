@@ -334,9 +334,13 @@ func buildUsageBillingCommand(requestID string, usageLog *UsageLog, p *postUsage
 	// user-specific) rate multiplier consumes subscription quota at the expected
 	// speed. TotalCost remains the raw (pre-multiplier) value; downstream guards
 	// on "> 0" still correctly skip free subscriptions (RateMultiplier == 0).
-	if p.IsSubscriptionBill && p.Subscription != nil && p.Cost.TotalCost > 0 {
+	if p.IsSubscriptionBill && p.Subscription != nil {
 		cmd.SubscriptionID = &p.Subscription.ID
-		cmd.SubscriptionCost = p.Cost.ActualCost
+		termStartsAt := p.Subscription.StartsAt
+		cmd.SubscriptionTermStartsAt = &termStartsAt
+		if p.Cost.TotalCost > 0 {
+			cmd.SubscriptionCost = p.Cost.ActualCost
+		}
 	} else if p.Cost.ActualCost > 0 {
 		cmd.BalanceCost = p.Cost.ActualCost
 	}
@@ -361,18 +365,25 @@ func applyUsageBilling(ctx context.Context, requestID string, usageLog *UsageLog
 	if p == nil || deps == nil {
 		return false, nil
 	}
-	if !p.SimpleModeKeyRateLimitOnly && repo == nil && requiresAtomicUsageBilling(deps.userRepo) {
+	requiresAtomic := requiresAtomicUsageBilling(deps.userRepo) || (p.IsSubscriptionBill && p.Subscription.HasSubscriptionSupplement())
+	if !p.SimpleModeKeyRateLimitOnly && repo == nil && requiresAtomic {
 		return false, ErrAtomicUsageBillingRequired
 	}
 
 	cmd := buildUsageBillingCommand(requestID, usageLog, p)
+	if cmd != nil {
+		cmd.SubscriptionReservationID = SubscriptionSupplementHoldIDFromContext(ctx)
+		if cmd.SubscriptionReservationID == "" {
+			cmd.SubscriptionReservationID = InflightReservationFromContext(ctx).SupplementHoldID()
+		}
+	}
 	if cmd == nil || cmd.RequestID == "" || repo == nil {
 		if p.SimpleModeKeyRateLimitOnly {
 			return false, ErrSimpleModeKeyRateLimitBillingUnavailable
 		}
 		// The legacy path is only a fallback for standard billing. Simple mode
 		// must retain request-id deduplication and never bill other balances.
-		if requiresAtomicUsageBilling(deps.userRepo) {
+		if requiresAtomic {
 			return false, ErrAtomicUsageBillingRequired
 		}
 		postUsageBilling(ctx, p, deps)

@@ -222,151 +222,75 @@ describe('admin RedeemView batch update', () => {
     wrapper.unmount()
   })
 
-  it('generates a fixed quota supplement for the selected campaign and shows its locked group', async () => {
+  it('generates one-time supplement for an explicitly selected group without a campaign', async () => {
     const wrapper = await openGenerator()
-    await wrapper.get('[data-test="subscription-purpose"]').setValue('welfare')
-    await flushPromises()
-    expect(generate).not.toHaveBeenCalled()
-    expect(wrapper.find('[data-test="subscription-group"]').exists()).toBe(false)
-    await wrapper.get('[data-test="welfare-campaign"]').setValue('7')
-    expect(wrapper.get('[data-test="welfare-group"]').text()).toContain('Welfare group')
-    expect(wrapper.get('[data-test="welfare-group"]').text()).toContain('#9')
-    expect(wrapper.get('[data-test="welfare-effect"]').element.value).toBe('add_quota')
-    expect(wrapper.text()).toContain('welfareRedeem.quotaHint')
-    await wrapper.get('[data-test="welfare-quota"]').setValue('12.50')
+    await wrapper.get('[data-test="subscription-purpose"]').setValue('add_balance')
+    expect(wrapper.find('[data-test="welfare-campaign"]').exists()).toBe(false)
+    expect(welfareCampaigns).not.toHaveBeenCalled()
+    await wrapper.get('[data-test="subscription-group"]').setValue('8')
+    await wrapper.get('[data-test="supplement-quota"]').setValue('12.50')
     await wrapper.get('[data-test="generate-count"]').setValue('3')
-    await wrapper.findAll('form button').find(b => b.text() === 'admin.redeem.customExpiry')!.trigger('click')
-    await wrapper.get('[data-test="generate-expiry"]').setValue('14')
+    expect(wrapper.text()).toContain('welfareRedeem.supplementQuotaHint')
     await wrapper.get('form').trigger('submit')
     await flushPromises()
-    expect(generate).toHaveBeenCalledWith(3, 'subscription', 0, 9, undefined, 14, {
-      subscription_effect: 'add_quota', welfare_campaign_id: 7, quota_amount_usd: 12.5
+    expect(generate).toHaveBeenCalledWith(3, 'subscription', 0, 8, undefined, undefined, {
+      subscription_effect: 'add_balance', quota_amount_usd: 12.5
     })
     wrapper.unmount()
   })
 
-  it('switches to duration without leaking quota and back to ordinary subscription without welfare fields', async () => {
+  it('switches to extension and then ordinary renewal without leaking supplement fields', async () => {
     const wrapper = await openGenerator()
-    await wrapper.get('[data-test="subscription-purpose"]').setValue('welfare')
-    await flushPromises()
-    await wrapper.get('[data-test="welfare-campaign"]').setValue('7')
-    await wrapper.get('[data-test="welfare-quota"]').setValue('99')
-    await wrapper.get('[data-test="welfare-effect"]').setValue('extend_duration')
-    expect(wrapper.find('[data-test="welfare-quota"]').exists()).toBe(false)
-    expect(wrapper.text()).toContain('welfareRedeem.durationHint')
-    await wrapper.get('[data-test="welfare-days"]').setValue('45')
-    generate.mockRejectedValueOnce({ reason: 'WELFARE_SUPPLEMENT_CAMPAIGN_INVALID' })
+    await wrapper.get('[data-test="subscription-group"]').setValue('8')
+    await wrapper.get('[data-test="subscription-purpose"]').setValue('add_balance')
+    await wrapper.get('[data-test="supplement-quota"]').setValue('99')
+    await wrapper.get('[data-test="subscription-purpose"]').setValue('extend_subscription')
+    expect(wrapper.find('[data-test="supplement-quota"]').exists()).toBe(false)
+    await wrapper.get('[data-test="supplement-days"]').setValue('45')
+    generate.mockRejectedValueOnce({ reason: 'SUBSCRIPTION_SUPPLEMENT_GROUP_INVALID' })
     await wrapper.get('form').trigger('submit')
     await flushPromises()
-    expect(generate).toHaveBeenLastCalledWith(1, 'subscription', 0, 9, 45, undefined, {
-      subscription_effect: 'extend_duration', welfare_campaign_id: 7
+    expect(generate).toHaveBeenLastCalledWith(1, 'subscription', 0, 8, 45, undefined, {
+      subscription_effect: 'extend_subscription'
     })
-    expect(wrapper.text()).toContain('welfareRedeem.errors.campaignUnavailable')
+    expect(wrapper.text()).toContain('welfareRedeem.errors.supplementGroupUnavailable')
     await wrapper.get('[data-test="subscription-purpose"]').setValue('standard')
-    await wrapper.get('[data-test="subscription-group"]').setValue('8')
     await wrapper.get('form').trigger('submit')
     await flushPromises()
     expect(generate).toHaveBeenLastCalledWith(1, 'subscription', 10, 8, 30, undefined)
     wrapper.unmount()
   })
 
-  it('blocks generation until a campaign and positive quota are supplied', async () => {
+  it('requires a selected group before generating supplements', async () => {
     const wrapper = await openGenerator()
-    await wrapper.get('[data-test="subscription-purpose"]').setValue('welfare')
-    await flushPromises()
+    await wrapper.get('[data-test="subscription-purpose"]').setValue('add_balance')
     await wrapper.get('form').trigger('submit')
     expect(generate).not.toHaveBeenCalled()
-    await wrapper.get('[data-test="welfare-campaign"]').setValue('7')
-    await wrapper.get('[data-test="welfare-quota"]').setValue('0')
-    await wrapper.get('form').trigger('submit')
-    expect(generate).not.toHaveBeenCalled()
-    expect(wrapper.text()).toContain('welfareRedeem.quotaRequired')
+    expect(wrapper.text()).toContain('admin.redeem.groupRequired')
     wrapper.unmount()
   })
 
-  it.each(['add_quota', 'extend_duration'] as const)(
-    'rejects the stale displayed group for %s and requires reselection after refreshing', async (effect) => {
+  it.each(['0', '-1', '0.0100001', '12.345', '10000000000'])(
+    'rejects invalid one-time quota %s', async amount => {
       const wrapper = await openGenerator()
-      await wrapper.get('[data-test="subscription-purpose"]').setValue('welfare')
-      await flushPromises()
-      await wrapper.get('[data-test="welfare-campaign"]').setValue('7')
-      await wrapper.get('[data-test="welfare-effect"]').setValue(effect)
-      if (effect === 'add_quota') await wrapper.get('[data-test="welfare-quota"]').setValue('12.50')
-      else await wrapper.get('[data-test="welfare-days"]').setValue('45')
-      await wrapper.findAll('form button').find(b => b.text() === 'common.cancel')!.trigger('click')
-
-      // Another administrator legally rebinds this unused draft while the dialog is closed.
-      welfareCampaigns.mockResolvedValue([{ id: 7, name: 'Rebound draft', version: 3, subscription_group_id: 10, group_name: 'New welfare group' }])
-      const createdGroups: number[] = []
-      generate.mockImplementation(async (_count, _type, _value, expectedGroup) => {
-        // Mirror the backend's optional GroupID comparison: omission silently accepts group 10.
-        if (expectedGroup !== undefined && expectedGroup !== 10) {
-          throw { response: { data: { reason: 'WELFARE_SUPPLEMENT_CAMPAIGN_INVALID' } } }
-        }
-        createdGroups.push(10)
-        return [{ id: 21, code: 'CORRECT-GROUP-CODE', group_id: 10 }]
-      })
-      await wrapper.findAll('button').find(b => b.text() === 'admin.redeem.generateCodes')!.trigger('click')
-      expect(wrapper.get('[data-test="welfare-group"]').text()).toContain('#9')
+      await wrapper.get('[data-test="subscription-group"]').setValue('8')
+      await wrapper.get('[data-test="subscription-purpose"]').setValue('add_balance')
+      await wrapper.get('[data-test="supplement-quota"]').setValue(amount)
       await wrapper.get('form').trigger('submit')
-      await flushPromises()
-
-      expect(createdGroups).toEqual([])
-      expect(generate).toHaveBeenCalledTimes(1)
-      expect(generate.mock.calls[0][3]).toBe(9)
-      expect(welfareCampaigns).toHaveBeenCalledTimes(2)
-      expect(wrapper.text()).toContain('welfareRedeem.errors.campaignUnavailable')
-      expect(wrapper.find('[data-test="welfare-group"]').exists()).toBe(false)
-      expect(wrapper.get('form button[type="submit"]').attributes('disabled')).toBeDefined()
-      const field = effect === 'add_quota' ? '[data-test="welfare-quota"]' : '[data-test="welfare-days"]'
-      expect(Number(wrapper.get(field).element.value)).toBe(effect === 'add_quota' ? 12.5 : 45)
-
-      // Only an explicit new selection and submission may generate for the changed group.
-      await wrapper.get('[data-test="welfare-campaign"]').setValue('7')
-      expect(wrapper.get('[data-test="welfare-group"]').text()).toContain('#10')
-      await wrapper.get('form').trigger('submit')
-      await flushPromises()
-      expect(createdGroups).toEqual([10])
-      expect(generate).toHaveBeenCalledTimes(2)
-      expect(generate.mock.calls[1][3]).toBe(10)
-      expect(wrapper.get('textarea').element.value).toBe('CORRECT-GROUP-CODE')
+      expect(generate).not.toHaveBeenCalled()
+      expect(wrapper.text()).toContain('welfareRedeem.quotaRequired')
       wrapper.unmount()
     }
   )
 
-  it('keeps generation blocked when refreshing an invalid campaign fails, then permits an explicit retry', async () => {
+  it.each(['0', '1.5', '36501'])('rejects invalid extension days %s', async days => {
     const wrapper = await openGenerator()
-    await wrapper.get('[data-test="subscription-purpose"]').setValue('welfare')
-    await flushPromises()
-    await wrapper.get('[data-test="welfare-campaign"]').setValue('7')
-    await wrapper.get('[data-test="welfare-quota"]').setValue('20')
-    generate.mockRejectedValueOnce({ reason: 'WELFARE_SUPPLEMENT_CAMPAIGN_INVALID' })
-    welfareCampaigns.mockRejectedValueOnce(new Error('offline'))
+    await wrapper.get('[data-test="subscription-group"]').setValue('8')
+    await wrapper.get('[data-test="subscription-purpose"]').setValue('extend_subscription')
+    await wrapper.get('[data-test="supplement-days"]').setValue(days)
     await wrapper.get('form').trigger('submit')
-    await flushPromises()
-    expect(generate).toHaveBeenCalledTimes(1)
-    expect(welfareCampaigns).toHaveBeenCalledTimes(2)
-    expect(wrapper.find('[data-test="welfare-group"]').exists()).toBe(false)
-    expect(wrapper.get('form button[type="submit"]').attributes('disabled')).toBeDefined()
-    expect(wrapper.get('[data-test="welfare-quota"]').element.value).toBe('20')
-    await wrapper.get('[data-test="welfare-retry"]').trigger('click')
-    await flushPromises()
-    expect(generate).toHaveBeenCalledTimes(1)
-    await wrapper.get('[data-test="welfare-campaign"]').setValue('7')
-    expect(wrapper.get('[data-test="welfare-group"]').text()).toContain('#9')
-    wrapper.unmount()
-  })
-
-  it.each(['0.0100001', '12.345', '10000000000'])('rejects quota %s outside the fixed two-decimal amount contract', async (amount) => {
-    const wrapper = await openGenerator()
-    await wrapper.get('[data-test="subscription-purpose"]').setValue('welfare')
-    await flushPromises()
-    await wrapper.get('[data-test="welfare-campaign"]').setValue('7')
-    await wrapper.get('[data-test="welfare-quota"]').setValue(amount)
-    await wrapper.get('form').trigger('submit')
-    await flushPromises()
     expect(generate).not.toHaveBeenCalled()
-    expect(wrapper.text()).toContain('welfareRedeem.quotaRequired')
+    expect(wrapper.text()).toContain('welfareRedeem.daysRequired')
     wrapper.unmount()
   })
 
@@ -394,19 +318,6 @@ describe('admin RedeemView batch update', () => {
     await flushPromises()
     expect(wrapper.text()).toContain('admin.redeem.generatedSuccessfully')
     expect(wrapper.get('textarea').element.value).toBe('FINISHED-CODE')
-    wrapper.unmount()
-  })
-
-  it('explains campaign loading failure and allows a retry', async () => {
-    welfareCampaigns.mockRejectedValueOnce({ reason: 'WELFARE_SUPPLEMENT_CAMPAIGN_INVALID' })
-    const wrapper = await openGenerator()
-    await wrapper.get('[data-test="subscription-purpose"]').setValue('welfare')
-    await flushPromises()
-    expect(wrapper.text()).toContain('welfareRedeem.errors.campaignUnavailable')
-    await wrapper.get('[data-test="welfare-retry"]').trigger('click')
-    await flushPromises()
-    await wrapper.get('[data-test="welfare-campaign"]').setValue('7')
-    expect(wrapper.get('[data-test="welfare-group"]').text()).toContain('Welfare group')
     wrapper.unmount()
   })
 

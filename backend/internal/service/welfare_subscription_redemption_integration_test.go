@@ -81,6 +81,10 @@ CREATE TABLE user_welfare_subscription_grants (
 	require.GreaterOrEqual(t, projectionStart, 0)
 	_, err = db.ExecContext(ctx, string(supplementMigration)[projectionStart:])
 	require.NoError(t, err)
+	balanceMigration, err := os.ReadFile("../../migrations/261_subscription_supplement_balances.sql")
+	require.NoError(t, err)
+	_, err = db.ExecContext(ctx, string(balanceMigration))
+	require.NoError(t, err)
 	u, err := client.User.Create().SetEmail("welfare@example.test").SetPasswordHash("test-only").Save(ctx)
 	require.NoError(t, err)
 	// Zero is a valid unlimited optional window and must not reject the card.

@@ -116,7 +116,7 @@ export default {
     welfareFixedExpiry: '以当前周期到期时间为准',
     welfareQuotaDisabled: '额度已停用（$0.00）',
     welfareQuotaExpiresAt: '额度到期：{time}',
-    welfareQuotaRule: '同一周期内再次兑换只叠加额度，不延长当前到期时间。管理员可调整本周期的总额度和有效期，已用额度不会清零；到期后再兑换开始新一期。付费订阅独立计算。',
+    welfareQuotaRule: '同一周期内再次兑换邀请奖励月卡只叠加基础额度，不延长当前到期时间。通用补充码可单独加额度或加时长。管理员可调整本周期的总额度和有效期，已用额度不会清零；到期后再兑换开始新一期。付费订阅独立计算。',
     resetDaily: '重置',
     autoDailyReset: '自动重置日额度',
     dailyResetCount: '今日已重置 {count}/{limit} 次',

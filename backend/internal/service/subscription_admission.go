@@ -118,6 +118,9 @@ func isSubscriptionQuotaExceeded(err error) bool {
 }
 
 func (s *SubscriptionService) prepareSubscriptionForAdmission(ctx context.Context, sub *UserSubscription, group *Group) (*UserSubscription, error) {
+	if err := loadSubscriptionSupplement(ctx, s.userSubRepo, sub); err != nil {
+		return nil, ErrBillingServiceUnavailable.WithCause(err)
+	}
 	group = sub.EffectiveGroup(group)
 	sub.Group = group
 	needsMaintenance, _ := s.ValidateAndCheckLimits(sub, group)
@@ -130,6 +133,9 @@ func (s *SubscriptionService) prepareSubscriptionForAdmission(ctx context.Contex
 		// A concurrent grant can change the welfare caps while a window is being
 		// maintained; use the refreshed subscription rather than its old caps.
 		sub.Group = sub.EffectiveGroup(group)
+		if err := loadSubscriptionSupplement(ctx, s.userSubRepo, sub); err != nil {
+			return nil, ErrBillingServiceUnavailable.WithCause(err)
+		}
 	}
 	return sub, checkAuthoritativeSubscriptionLimits(sub, sub.Group, s.now())
 }
@@ -157,6 +163,14 @@ func checkAuthoritativeSubscriptionLimits(sub *UserSubscription, group *Group, n
 	}
 	if sub.IsWelfare() && (group.MonthlyLimitUSD == nil || *group.MonthlyLimitUSD < 0) {
 		return ErrSubscriptionInvalid
+	}
+	for _, value := range []float64{sub.SupplementGrantedUSD, sub.SupplementUsedUSD} {
+		if math.IsNaN(value) || math.IsInf(value, 0) || value < 0 {
+			return ErrSubscriptionInvalid
+		}
+	}
+	if sub.SupplementRemainingUSD() > 0 {
+		return nil
 	}
 	if group.HasWeeklyLimit() && sub.WeeklyUsageUSD >= *group.WeeklyLimitUSD {
 		return ErrWeeklyLimitExceeded

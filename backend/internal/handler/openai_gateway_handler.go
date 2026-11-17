@@ -253,6 +253,7 @@ func usageRecordContext(parent context.Context, base context.Context) context.Co
 	if parent == nil {
 		return base
 	}
+	base = service.WithSubscriptionSupplementHoldID(base, service.SubscriptionSupplementHoldIDFromContext(parent))
 	if clientRequestID, _ := parent.Value(ctxkey.ClientRequestID).(string); strings.TrimSpace(clientRequestID) != "" {
 		base = context.WithValue(base, ctxkey.ClientRequestID, strings.TrimSpace(clientRequestID))
 	}
@@ -2755,16 +2756,38 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 	// Freeze the transport model rules before both reservation and selection.
 	ctx = h.gatewayService.WithOpenAIWSModelRouting(ctx, firstMessage)
 
-	// 余额模式在途预留（会话级）：按首帧估算一次，会话期间续期；每轮计费任务接管引用，
-	// 会话结束且所有轮次扣减落地后释放。
-	inflightCtx, inflightDone, inflightErr := reserveInflightBalanceCtx(ctx, h.billingCacheService, h.gatewayService, apiKey, subscription, tokenInflightEstimate(reqModel, firstMessage))
-	if inflightErr != nil {
-		reqLog.Info("openai.websocket_inflight_reservation_rejected", zap.Error(inflightErr))
-		closeOpenAIClientWS(wsConn, coderws.StatusPolicyViolation, "billing check failed")
-		return
+	// Ordinary balance requests retain their session reservation. Supplemental
+	// subscription credit must be reserved from each turn's own model and body.
+	perTurnSubscription := subscription != nil
+	var turnReservations openAIWSTurnReservations
+	defer turnReservations.releaseAll()
+	if !perTurnSubscription {
+		inflightCtx, inflightDone, inflightErr := reserveInflightBalanceCtx(ctx, h.billingCacheService, h.gatewayService, apiKey, subscription, tokenInflightEstimate(reqModel, firstMessage))
+		if inflightErr != nil {
+			reqLog.Info("openai.websocket_inflight_reservation_rejected", zap.Error(inflightErr))
+			closeOpenAIClientWS(wsConn, coderws.StatusPolicyViolation, "billing check failed")
+			return
+		}
+		defer inflightDone()
+		ctx = inflightCtx
 	}
-	defer inflightDone()
-	ctx = inflightCtx
+	reserveSupplementTurn := func(turn int, payload []byte, originalModel string) error {
+		if !perTurnSubscription {
+			return nil
+		}
+		model := strings.TrimSpace(originalModel)
+		if model == "" {
+			model = strings.TrimSpace(gjson.GetBytes(payload, "model").String())
+		}
+		if model == "" {
+			model = reqModel
+		}
+		if err := turnReservations.reserve(ctx, turn, h.billingCacheService, h.gatewayService, apiKey, subscription, model, payload); err != nil {
+			reqLog.Info("openai.websocket_turn_inflight_reservation_rejected", zap.Int("turn", turn), zap.Error(err))
+			return service.NewOpenAIWSClientCloseError(coderws.StatusPolicyViolation, "billing check failed", err)
+		}
+		return nil
+	}
 
 	// Recheck the first turn after its account wait and every later turn after
 	// acquiring fresh slots. Reuse financial admission without another RPM charge.
@@ -3070,7 +3093,7 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 					return service.NewOpenAIWSClientCloseError(coderws.StatusPolicyViolation, cyberSessionBlockedClientMsg, nil)
 				}
 				if turn == 1 {
-					return nil
+					return reserveSupplementTurn(turn, payload, originalModel)
 				}
 				if !gjson.ValidBytes(payload) {
 					return service.NewOpenAIWSClientCloseError(coderws.StatusPolicyViolation, "invalid websocket request payload", errors.New("invalid json"))
@@ -3097,7 +3120,7 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 					writeSecurityAuditWSError(ctx, wsConn, decision)
 					return service.NewOpenAIWSClientCloseError(securityAuditWSCloseStatus(decision), securityAuditWSCloseReason(decision), nil)
 				}
-				return nil
+				return reserveSupplementTurn(turn, payload, model)
 			},
 			MapRequestModel: func(turn int, originalModel string) (string, error) {
 				model := strings.TrimSpace(originalModel)
@@ -3174,6 +3197,9 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 				return revalidateTurnBilling()
 			},
 			AfterTurn: func(turn int, result *service.OpenAIForwardResult, turnErr error) {
+				turnUsageCtx, turnReservationDone := turnReservations.take(turn, ctx)
+				// Usage submission acquires its own reference before this handler releases.
+				defer turnReservationDone()
 				turnStart := getTurnStart(turn)
 				turnRecordPricingAt := turnPricing.currentOr(turnStart)
 				turnBillingAPIKey := turnBillingAPIKeys.forTurn(turn, apiKey)
@@ -3206,7 +3232,7 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 				}
 				turnUsageFields := turnMapping.ToUsageFields(turnRequestedModel, turnUpstreamModel)
 				cyberMarked := service.GetOpsCyberPolicy(c) != nil
-				h.recordCyberPolicyIfMarked(c, turnBillingAPIKey, account, subscription, turnRequestedModel, turnErr != nil, cyberBlockBody, turnUsageFields, requestPayloadHash, turnRecordPricingAt)
+				h.recordCyberPolicyIfMarked(c, turnBillingAPIKey, account, subscription, turnRequestedModel, turnErr != nil, cyberBlockBody, turnUsageFields, requestPayloadHash, turnRecordPricingAt, turnUsageCtx)
 				cyberBlockedThisConn, cyberBlockPendingAfterFailover = advanceOpenAIWSCyberBlockState(
 					cyberBlockedThisConn,
 					cyberBlockPendingAfterFailover,
@@ -3252,7 +3278,7 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 				quotaPlatform := service.QuotaPlatform(c.Request.Context(), apiKey)
 				sessionID := service.ExtractClientSessionID(c)
 				cyberBlocked := service.GetOpsCyberPolicy(c) != nil
-				h.submitOpenAIUsageRecordTask(ctx, result, func(taskCtx context.Context) {
+				h.submitOpenAIUsageRecordTask(turnUsageCtx, result, func(taskCtx context.Context) {
 					if err := h.gatewayService.RecordUsage(taskCtx, &service.OpenAIRecordUsageInput{
 						Result:             result,
 						APIKey:             turnBillingAPIKey,
@@ -3302,7 +3328,16 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 		}
 
 		for {
+			// All ingress implementations skip BeforeRequest for their first frame.
+			// Reserve its actual retry payload only after admission/audit has passed.
+			if err := reserveSupplementTurn(1, wsFirstMessage, ""); err != nil {
+				closeOpenAIClientWS(wsConn, coderws.StatusPolicyViolation, "billing check failed")
+				return
+			}
 			err := h.gatewayService.ProxyResponsesWebSocketFromClient(ctx, c, wsConn, account, token, wsFirstMessage, hooks)
+			// BeforeTurn/map/proxy failures may not produce AfterTurn. Drain only
+			// handler references; already queued usage tasks retain their own.
+			turnReservations.releaseAll()
 			if err == nil {
 				reqLog.Info("openai.websocket_ingress_closed", zap.Int64("account_id", account.ID))
 				return
@@ -4467,7 +4502,7 @@ func (h *OpenAIGatewayHandler) enqueueCyberSessionBlockedOpsEntry(c *gin.Context
 // 并在 forward 返回错误时按保留的请求元数据和真实用量结算。标记由服务层在透传 cyber 后设置；
 // 当前请求已发给用户，本方法只做事后记录，不影响响应。forwardErrored 为 true 时才写用量行，
 // 避免与正常 RecordUsage(forward 成功路径)重复。每请求至多记录一次。
-func (h *OpenAIGatewayHandler) recordCyberPolicyIfMarked(c *gin.Context, apiKey *service.APIKey, account *service.Account, subscription *service.UserSubscription, model string, forwardErrored bool, cyberBlockBody []byte, channelFields service.ChannelUsageFields, requestPayloadHash string, pricingAt time.Time) {
+func (h *OpenAIGatewayHandler) recordCyberPolicyIfMarked(c *gin.Context, apiKey *service.APIKey, account *service.Account, subscription *service.UserSubscription, model string, forwardErrored bool, cyberBlockBody []byte, channelFields service.ChannelUsageFields, requestPayloadHash string, pricingAt time.Time, reservationContexts ...context.Context) {
 	mark := service.GetOpsCyberPolicy(c)
 	if mark == nil {
 		return
@@ -4562,9 +4597,23 @@ func (h *OpenAIGatewayHandler) recordCyberPolicyIfMarked(c *gin.Context, apiKey 
 			cancel()
 		}
 	}
+	// Failed WS turns use a dedicated async cyber usage writer. It must retain
+	// this turn's reservation just like the normal usage worker does.
+	reservationDone := inflightNoop
+	reservationHoldID := ""
+	reservationContext := requestCtx
+	if len(reservationContexts) > 0 && reservationContexts[0] != nil {
+		reservationContext = reservationContexts[0]
+	}
+	if forwardErrored && gwSvc != nil && subscription != nil {
+		reservationDone = service.InflightReservationFromContext(reservationContext).Acquire()
+		reservationHoldID = service.SubscriptionSupplementHoldIDFromContext(reservationContext)
+	}
 	go func() {
+		defer reservationDone()
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
+		ctx = service.WithSubscriptionSupplementHoldID(ctx, reservationHoldID)
 		if cmSvc != nil {
 			cmSvc.RecordCyberPolicyEvent(ctx, service.CyberPolicyRecordInput{
 				LogOnly:         cyberLogOnly,

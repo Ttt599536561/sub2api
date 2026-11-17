@@ -334,7 +334,18 @@ func (s *OpenAIGatewayService) ResolveGrokMediaVideoRequestAccount(
 	if cacheKey == "" {
 		return 0, fmt.Errorf("grok video request binding is invalid")
 	}
-	return s.cache.GetSessionAccountID(ctx, derefGroupID(groupID), cacheKey)
+	accountID, cacheErr := s.cache.GetSessionAccountID(ctx, derefGroupID(groupID), cacheKey)
+	if cacheErr == nil && accountID > 0 {
+		return accountID, nil
+	}
+	pending, err := s.LoadGrokVideoPendingBilling(ctx, requestID, userID, apiKeyID)
+	if err != nil {
+		return 0, err
+	}
+	if pending != nil && pending.SubscriptionBinding != nil && pending.AccountID > 0 && pending.SubscriptionBinding.UserID == userID && pending.SubscriptionBinding.GroupID == derefGroupID(groupID) {
+		return pending.AccountID, nil
+	}
+	return 0, cacheErr
 }
 
 // SelectGrokMediaVideoRequestAccount only admits the already authenticated
@@ -377,12 +388,14 @@ func (s *OpenAIGatewayService) SelectMediaVideoRequestAccount(
 // first observes a completed video URL. Status may omit model/duration; we fall
 // back to this snapshot, then defaults.
 type GrokVideoPendingBilling struct {
-	Model                string `json:"model"`
-	BillingModel         string `json:"billing_model,omitempty"`
-	UpstreamModel        string `json:"upstream_model,omitempty"`
-	VideoResolution      string `json:"video_resolution,omitempty"`
-	VideoDurationSeconds int    `json:"video_duration_seconds,omitempty"`
-	OriginalModel        string `json:"original_model,omitempty"`
+	AccountID            int64                    `json:"account_id,omitempty"`
+	SubscriptionBinding  *GrokVideoBillingBinding `json:"subscription_binding,omitempty"`
+	Model                string                   `json:"model"`
+	BillingModel         string                   `json:"billing_model,omitempty"`
+	UpstreamModel        string                   `json:"upstream_model,omitempty"`
+	VideoResolution      string                   `json:"video_resolution,omitempty"`
+	VideoDurationSeconds int                      `json:"video_duration_seconds,omitempty"`
+	OriginalModel        string                   `json:"original_model,omitempty"`
 	// CreatedAt is when the gateway accepted the async create (RFC3339Nano UTC).
 	// duration_ms for deferred billing is measured from this instant until the
 	// first official done+video.url observation (status poll or content download),
@@ -475,6 +488,18 @@ func (s *OpenAIGatewayService) StoreGrokVideoPendingBilling(
 	if err != nil {
 		return err
 	}
+	if pending.SubscriptionBinding != nil {
+		store, ok := s.usageLogRepo.(GrokVideoBillingTaskStore)
+		if !ok {
+			return fmt.Errorf("durable video billing storage is unavailable")
+		}
+		if err := store.StoreGrokVideoBillingTask(ctx, requestID, userID, apiKeyID, payload); err != nil {
+			return err
+		}
+		// PostgreSQL is authoritative for new tasks. Cache loss cannot erase identity.
+		_ = s.cache.SetGrokVideoPendingBilling(ctx, key, payload, grokVideoPendingBillingTTL(s.cfg))
+		return nil
+	}
 	return s.cache.SetGrokVideoPendingBilling(ctx, key, payload, grokVideoPendingBillingTTL(s.cfg))
 }
 
@@ -491,6 +516,22 @@ func (s *OpenAIGatewayService) LoadGrokVideoPendingBilling(
 	if key == "" {
 		return nil, fmt.Errorf("grok video pending billing key is invalid")
 	}
+	if store, ok := s.usageLogRepo.(GrokVideoBillingTaskStore); ok {
+		payload, err := store.LoadGrokVideoBillingTask(ctx, requestID, userID, apiKeyID)
+		if err != nil {
+			return nil, err
+		}
+		if len(payload) > 0 {
+			var pending GrokVideoPendingBilling
+			if err := json.Unmarshal(payload, &pending); err != nil {
+				return nil, err
+			}
+			if pending.SubscriptionBinding == nil {
+				return nil, fmt.Errorf("durable video billing identity is missing")
+			}
+			return &pending, nil
+		}
+	}
 	payload, err := s.cache.GetGrokVideoPendingBilling(ctx, key)
 	if err != nil || len(payload) == 0 {
 		return nil, err
@@ -498,6 +539,9 @@ func (s *OpenAIGatewayService) LoadGrokVideoPendingBilling(
 	var pending GrokVideoPendingBilling
 	if err := json.Unmarshal(payload, &pending); err != nil {
 		return nil, err
+	}
+	if pending.SubscriptionBinding != nil {
+		return nil, fmt.Errorf("video billing identity missing from durable storage")
 	}
 	return &pending, nil
 }
@@ -779,23 +823,24 @@ func (s *OpenAIGatewayService) ForwardGrokMedia(
 		}
 	}
 	return &OpenAIForwardResult{
-		RequestID:            requestIDHeader,
-		UpstreamHeaders:      resp.Header,
-		ResponseID:           usage.ResponseID,
-		Usage:                usage.Usage,
-		Model:                resultModel,
-		BillingModel:         resultBillingModel,
-		UpstreamModel:        upstreamModel,
-		ResponseHeaders:      resp.Header.Clone(),
-		Duration:             time.Since(startTime),
-		ImageEndpoint:        usage.ImageCount > 0,
-		ImageCount:           usage.ImageCount,
-		ImageSize:            usage.ImageSize,
-		ImageInputSize:       usage.ImageInputSize,
-		ImageOutputSizes:     usage.ImageOutputSizes,
-		VideoCount:           usage.VideoCount,
-		VideoResolution:      usage.VideoResolution,
-		VideoDurationSeconds: usage.VideoDurationSeconds,
+		UpstreamTerminalEvent: strings.ToLower(strings.TrimSpace(gjson.GetBytes(respBody, "status").String())),
+		RequestID:             requestIDHeader,
+		UpstreamHeaders:       resp.Header,
+		ResponseID:            usage.ResponseID,
+		Usage:                 usage.Usage,
+		Model:                 resultModel,
+		BillingModel:          resultBillingModel,
+		UpstreamModel:         upstreamModel,
+		ResponseHeaders:       resp.Header.Clone(),
+		Duration:              time.Since(startTime),
+		ImageEndpoint:         usage.ImageCount > 0,
+		ImageCount:            usage.ImageCount,
+		ImageSize:             usage.ImageSize,
+		ImageInputSize:        usage.ImageInputSize,
+		ImageOutputSizes:      usage.ImageOutputSizes,
+		VideoCount:            usage.VideoCount,
+		VideoResolution:       usage.VideoResolution,
+		VideoDurationSeconds:  usage.VideoDurationSeconds,
 	}, nil
 }
 

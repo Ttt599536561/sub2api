@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"math"
 	"strings"
+	"time"
 
 	"github.com/shopspring/decimal"
 )
@@ -22,20 +23,24 @@ type UsageBillingCommand struct {
 	RequestFingerprint string
 	RequestPayloadHash string
 
-	UserID              int64
-	AccountID           int64
-	SubscriptionID      *int64
-	AccountType         string
-	Model               string
-	ServiceTier         string
-	ReasoningEffort     string
-	BillingType         int8
-	InputTokens         int
-	OutputTokens        int
-	CacheCreationTokens int
-	CacheReadTokens     int
-	ImageCount          int
-	MediaType           string
+	UserID         int64
+	AccountID      int64
+	SubscriptionID *int64
+	// Routing metadata for the entitlement chosen at admission. It deliberately
+	// does not change the established request fingerprint across upgrades.
+	SubscriptionTermStartsAt  *time.Time
+	SubscriptionReservationID string
+	AccountType               string
+	Model                     string
+	ServiceTier               string
+	ReasoningEffort           string
+	BillingType               int8
+	InputTokens               int
+	OutputTokens              int
+	CacheCreationTokens       int
+	CacheReadTokens           int
+	ImageCount                int
+	MediaType                 string
 
 	BalanceCost         float64
 	SubscriptionCost    float64
@@ -168,11 +173,13 @@ type AccountQuotaState struct {
 }
 
 type UsageBillingApplyResult struct {
-	Applied              bool
-	APIKeyQuotaExhausted bool
-	NewBalance           *float64           // post-deduction balance (nil = no balance deduction)
-	BalanceOverdrafted   bool               // true when the sufficient-balance guard missed and debt was still recorded
-	QuotaState           *AccountQuotaState // post-increment quota state (nil = no quota increment)
+	SubscriptionBaseCost       float64
+	SubscriptionSupplementCost float64
+	Applied                    bool
+	APIKeyQuotaExhausted       bool
+	NewBalance                 *float64           // post-deduction balance (nil = no balance deduction)
+	BalanceOverdrafted         bool               // true when the sufficient-balance guard missed and debt was still recorded
+	QuotaState                 *AccountQuotaState // post-increment quota state (nil = no quota increment)
 }
 
 // BatchImageBalanceHoldCommand describes an idempotent balance hold operation.

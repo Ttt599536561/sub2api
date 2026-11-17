@@ -45,7 +45,7 @@ const DataTableStub = {
   template: `
     <div>
       <div v-for="row in data" :key="row.id">
-        <slot name="cell-user" :row="row" />
+        <slot name="cell-user" :row="row" /><slot name="cell-usage" :row="row" />
       </div>
     </div>
   `
@@ -115,6 +115,18 @@ describe('admin subscription users', () => {
         Teleport: true
       }
     }
+  })
+
+  it('shows independent supplement amounts in the admin usage column', async () => {
+    listSubscriptions.mockResolvedValue({ items: [{ id: 9, user_id: 42, group_id: 3, status: 'active',
+      supplement_granted_usd: 40, supplement_used_usd: 12.5, supplement_remaining_usd: 27.5 }], total: 1, pages: 1 })
+    const wrapper = mountView()
+    await flushPromises()
+    const summary = wrapper.get('[data-test="subscription-supplement"]')
+    expect(summary.text()).toContain('$40.00')
+    expect(summary.text()).toContain('$12.50')
+    expect(summary.text()).toContain('$27.50')
+    wrapper.unmount()
   })
 
   it('searches current users when assigning a subscription', async () => {

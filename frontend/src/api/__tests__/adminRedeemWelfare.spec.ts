@@ -17,23 +17,23 @@ describe('admin welfare redeem API contract', () => {
     expect(get).toHaveBeenCalledWith('/admin/redeem-codes/welfare-campaigns')
   })
 
-  it('sends fixed USD quota with the displayed group as a binding assertion and no duration', async () => {
+  it('sends fixed USD quota with the selected subscription group without an invitation campaign and no duration', async () => {
     await redeemAPI.generate(3, 'subscription', 0, 9, undefined, 14, {
-      subscription_effect: 'add_quota', welfare_campaign_id: 7, quota_amount_usd: 12.5
+      subscription_effect: 'add_balance', quota_amount_usd: 12.5
     })
     expect(post).toHaveBeenCalledWith('/admin/redeem-codes/generate', {
       count: 3, type: 'subscription', value: 0, group_id: 9, expires_in_days: 14,
-      subscription_effect: 'add_quota', welfare_campaign_id: 7, quota_amount_usd: 12.5
+      subscription_effect: 'add_balance', quota_amount_usd: 12.5
     })
   })
 
   it('sends extension days without a quota amount', async () => {
     await redeemAPI.generate(1, 'subscription', 0, 9, 45, undefined, {
-      subscription_effect: 'extend_duration', welfare_campaign_id: 7
+      subscription_effect: 'extend_subscription'
     })
     expect(post).toHaveBeenCalledWith('/admin/redeem-codes/generate', {
       count: 1, type: 'subscription', value: 0, group_id: 9, validity_days: 45,
-      subscription_effect: 'extend_duration', welfare_campaign_id: 7
+      subscription_effect: 'extend_subscription'
     })
   })
 

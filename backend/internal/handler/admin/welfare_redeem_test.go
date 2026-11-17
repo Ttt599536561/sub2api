@@ -37,3 +37,22 @@ func TestGenerateWelfareSupplementPassesExplicitContract(t *testing.T) {
 	require.Equal(t, 12.34, *stub.input.QuotaAmountUSD)
 	require.Nil(t, stub.input.GroupID)
 }
+
+func TestGenerateSubscriptionSupplementAcceptsGroupWithoutCampaign(t *testing.T) {
+	for _, body := range []string{
+		`{"count":2,"type":"subscription","group_id":5,"subscription_effect":"add_balance","quota_amount_usd":12.34}`,
+		`{"count":2,"type":"subscription","group_id":5,"subscription_effect":"extend_subscription","validity_days":7}`,
+	} {
+		stub := &welfareGenerateAdmin{}
+		h := NewRedeemHandler(stub, nil)
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = httptest.NewRequest(http.MethodPost, "/api/v1/admin/redeem-codes/generate", bytes.NewBufferString(body))
+		c.Request.Header.Set("Content-Type", "application/json")
+		h.Generate(c)
+		require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+		require.NotNil(t, stub.input)
+		require.EqualValues(t, 5, *stub.input.GroupID)
+		require.Nil(t, stub.input.WelfareCampaignID)
+	}
+}

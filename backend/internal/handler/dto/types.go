@@ -514,20 +514,21 @@ type ProxyAccountSummary struct {
 }
 
 type RedeemCode struct {
-	SubscriptionEffect  string                           `json:"subscription_effect,omitempty"`
-	WelfareCampaignID   *int64                           `json:"welfare_campaign_id,omitempty"`
-	WelfareCampaignName string                           `json:"welfare_campaign_name,omitempty"`
-	QuotaAmountUSD      *float64                         `json:"quota_amount_usd,omitempty"`
-	WelfareResult       *service.WelfareSupplementResult `json:"welfare_result,omitempty"`
-	ID                  int64                            `json:"id"`
-	Code                string                           `json:"code"`
-	Type                string                           `json:"type"`
-	Value               float64                          `json:"value"`
-	Status              string                           `json:"status"`
-	UsedBy              *int64                           `json:"used_by"`
-	UsedAt              *time.Time                       `json:"used_at"`
-	CreatedAt           time.Time                        `json:"created_at"`
-	ExpiresAt           *time.Time                       `json:"expires_at,omitempty"`
+	SubscriptionEffect           string                                `json:"subscription_effect,omitempty"`
+	WelfareCampaignID            *int64                                `json:"welfare_campaign_id,omitempty"`
+	WelfareCampaignName          string                                `json:"welfare_campaign_name,omitempty"`
+	QuotaAmountUSD               *float64                              `json:"quota_amount_usd,omitempty"`
+	WelfareResult                *service.WelfareSupplementResult      `json:"welfare_result,omitempty"`
+	SubscriptionSupplementResult *service.SubscriptionSupplementResult `json:"subscription_supplement_result,omitempty"`
+	ID                           int64                                 `json:"id"`
+	Code                         string                                `json:"code"`
+	Type                         string                                `json:"type"`
+	Value                        float64                               `json:"value"`
+	Status                       string                                `json:"status"`
+	UsedBy                       *int64                                `json:"used_by"`
+	UsedAt                       *time.Time                            `json:"used_at"`
+	CreatedAt                    time.Time                             `json:"created_at"`
+	ExpiresAt                    *time.Time                            `json:"expires_at,omitempty"`
 
 	GroupID      *int64 `json:"group_id"`
 	ValidityDays int    `json:"validity_days"`
@@ -766,11 +767,14 @@ type Setting struct {
 }
 
 type UserSubscription struct {
-	ID                int64  `json:"id"`
-	UserID            int64  `json:"user_id"`
-	GroupID           int64  `json:"group_id"`
-	EntitlementKind   string `json:"entitlement_kind"`
-	WelfareGrantCount int64  `json:"welfare_grant_count"`
+	ID                     int64   `json:"id"`
+	UserID                 int64   `json:"user_id"`
+	GroupID                int64   `json:"group_id"`
+	EntitlementKind        string  `json:"entitlement_kind"`
+	WelfareGrantCount      int64   `json:"welfare_grant_count"`
+	SupplementGrantedUSD   float64 `json:"supplement_granted_usd"`
+	SupplementUsedUSD      float64 `json:"supplement_used_usd"`
+	SupplementRemainingUSD float64 `json:"supplement_remaining_usd"`
 
 	StartsAt  time.Time `json:"starts_at"`
 	ExpiresAt time.Time `json:"expires_at"`

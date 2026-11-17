@@ -18,14 +18,15 @@ type RedeemCode struct {
 	CreatedAt time.Time
 	ExpiresAt *time.Time
 
-	GroupID                *int64
-	ValidityDays           int
-	SubscriptionEffect     string
-	WelfareCampaignID      *int64
-	WelfareCampaignVersion *int64
-	WelfareCampaignName    string
-	QuotaAmountUSD         *float64
-	WelfareResult          *WelfareSupplementResult
+	GroupID                      *int64
+	ValidityDays                 int
+	SubscriptionEffect           string
+	WelfareCampaignID            *int64
+	WelfareCampaignVersion       *int64
+	WelfareCampaignName          string
+	QuotaAmountUSD               *float64
+	WelfareResult                *WelfareSupplementResult
+	SubscriptionSupplementResult *SubscriptionSupplementResult
 
 	User  *User
 	Group *Group

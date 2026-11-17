@@ -228,7 +228,7 @@
                 ></div>
               </div>
               <p v-if="subscription.entitlement_kind === 'welfare' && subscription.group?.monthly_limit_usd === 0" class="text-xs text-amber-700 dark:text-amber-300">
-                {{ t('userSubscriptions.welfareQuotaDisabled') }}
+                {{ t((subscription.supplement_remaining_usd ?? 0) > 0 ? 'welfareRedeem.baseQuotaExhausted' : 'userSubscriptions.welfareQuotaDisabled') }}
               </p>
               <p
                 v-if="subscription.entitlement_kind === 'welfare' ? subscription.expires_at : subscription.monthly_window_start"
@@ -244,6 +244,7 @@
               </p>
             </div>
 
+            <SubscriptionSupplementSummary :subscription="subscription" />
             <!-- No limits configured - Unlimited badge -->
             <div
               v-if="
@@ -312,6 +313,7 @@
 </template>
 
 <script setup lang="ts">
+import SubscriptionSupplementSummary from '@/components/common/SubscriptionSupplementSummary.vue'
 import { ref, onMounted, onUnmounted } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'

@@ -1,4 +1,8 @@
 const reasonKeys: Record<string, string> = {
+  SUBSCRIPTION_SUPPLEMENT_INVALID: 'welfareRedeem.errors.supplementInvalid',
+  SUBSCRIPTION_SUPPLEMENT_GROUP_INVALID: 'welfareRedeem.errors.supplementGroupUnavailable',
+  SUBSCRIPTION_SUPPLEMENT_NO_ACTIVE_SUBSCRIPTION: 'welfareRedeem.errors.activeSubscriptionRequired',
+  SUBSCRIPTION_SUPPLEMENT_LIMIT_EXCEEDED: 'welfareRedeem.errors.limitExceeded',
   WELFARE_SUPPLEMENT_INVALID: 'welfareRedeem.errors.invalid',
   WELFARE_SUPPLEMENT_CAMPAIGN_INVALID: 'welfareRedeem.errors.campaignUnavailable',
   WELFARE_SUPPLEMENT_NO_ACTIVE_CYCLE: 'welfareRedeem.errors.subscriptionRequired',
