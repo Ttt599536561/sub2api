@@ -4,7 +4,9 @@
 
 ## 固定来源与门禁
 
-- lint修正应用：`345db4cb5a95ca4ddc45e2b842e62237ced5e578`已单独推送main；首轮完整unit另发现订阅响应契约样例缺三个新增补额零值字段，已同步样例，完整11项API契约子用例通过。最终应用来源将再次固定。
+- 最终应用来源：`a3dda81a022c559017715f2affe76dad53be2edd`，lint与契约样例修正后已单独推送main；镜像仅从该提交构建。
+
+- lint修正应用：`345db4cb5a95ca4ddc45e2b842e62237ced5e578`已单独推送main；首轮完整unit另发现订阅响应契约样例缺三个新增补额零值字段，已同步样例，完整11项API契约子用例通过。最终应用来源已在上方固定。
 
 - 镜像：`ghcr.io/ttt599536561/sub2api-custom:0.2.21-r6`，仅原生`linux/amd64`与`linux/arm64`。
 - 首轮应用：`b32ab38eb6670b5c9582920981f9cf48e4cddfc5`已单独推送main；完整CI发现废弃的`applyWelfareSupplement`未移除，现删除无调用实现及专用import，最终来源以后续完整门禁为准。功能提交为`256b3b70f974a298644207a18a7c513c77bd933a`。

@@ -6,6 +6,8 @@
 
 ## 2026-11-17
 
+- **r6发布控制**：最终应用固定`a3dda81a0`并已单独推送，专用Linux工作流和八文件provenance绑定该SHA；发布前要求应用/控制两SHA各自最新CI/Security成功。已修复首轮全量门禁发现的unused函数及契约样例问题，最终结果见[r6发布记录](deploy/CUSTOM_IMAGE_0.2.21-r6.md)。
+
 - **r6订阅契约样例同步**：`GET /api/v1/subscriptions`严格JSON预期补齐三个新增补额零值字段；生产DTO不变，保留原字段和敏感信息断言。完整11项API契约子用例通过；最终应用需重新通过全量CI。
 
 - **r6发布来源固定**：lint修正应用`345db4cb5`已单独推送main；首轮完整unit另发现订阅响应契约样例缺三个新增补额零值字段，已同步该样例并将重新固定最终源码，仍要求应用和发布控制两SHA完整CI/Security成功后才构建、发布；最终状态见[r6记录](deploy/CUSTOM_IMAGE_0.2.21-r6.md)。
