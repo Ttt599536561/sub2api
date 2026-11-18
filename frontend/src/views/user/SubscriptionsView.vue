@@ -107,6 +107,8 @@
               }}</span>
             </div>
 
+            <SubscriptionSupplementSummary :subscription="subscription" :monthly-base-remaining="getMonthlyBaseRemaining(subscription)" />
+
             <!-- Daily Usage -->
             <div v-if="subscription.group?.daily_limit_usd" class="space-y-2">
               <div class="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
@@ -244,7 +246,6 @@
               </p>
             </div>
 
-            <SubscriptionSupplementSummary :subscription="subscription" />
             <!-- No limits configured - Unlimited badge -->
             <div
               v-if="
@@ -418,6 +419,13 @@ async function refreshSubscriptions() {
   } catch {
     // Keep the current cards during a transient polling failure.
   }
+}
+
+function getMonthlyBaseRemaining(subscription: UserSubscription): number | undefined {
+  const limit = subscription.group?.monthly_limit_usd
+  if (subscription.status !== 'active' || limit == null) return undefined
+  if (limit <= 0 && subscription.entitlement_kind !== 'welfare') return undefined
+  return Math.max(0, limit - subscription.monthly_usage_usd)
 }
 
 function getProgressWidth(used: number | undefined, limit: number | null | undefined): string {
