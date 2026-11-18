@@ -116,9 +116,10 @@ func saveResetSubscription(ctx context.Context, tx *sql.Tx, s *service.UserSubsc
 	_, err := tx.ExecContext(ctx, `UPDATE user_subscriptions SET daily_usage_usd = $2,
 		weekly_usage_usd = $3, monthly_usage_usd = $4, daily_window_start = $5,
 		weekly_window_start = $6, monthly_window_start = $7, expires_at = $8,
-		daily_reset_version = $9, preserve_calendar_daily_reset = $10, updated_at = $11 WHERE id = $1`,
+		daily_reset_version = $9, preserve_calendar_daily_reset = $10, updated_at = $11,
+		paid_monthly_limit_usd = $12 WHERE id = $1`,
 		s.ID, s.DailyUsageUSD, s.WeeklyUsageUSD, s.MonthlyUsageUSD, s.DailyWindowStart,
-		s.WeeklyWindowStart, s.MonthlyWindowStart, s.ExpiresAt, s.DailyResetVersion, s.PreserveCalendarDailyReset, now)
+		s.WeeklyWindowStart, s.MonthlyWindowStart, s.ExpiresAt, s.DailyResetVersion, s.PreserveCalendarDailyReset, now, s.PaidMonthlyLimitUSD)
 	return err
 }
 

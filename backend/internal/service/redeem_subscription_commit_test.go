@@ -13,6 +13,7 @@ import (
 	entsql "entgo.io/ent/dialect/sql"
 	"github.com/DATA-DOG/go-sqlmock"
 	dbent "github.com/Wei-Shaw/sub2api/ent"
+	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 	"github.com/dgraph-io/ristretto"
 	"github.com/stretchr/testify/require"
 )
@@ -166,4 +167,31 @@ func TestRedeemSubscriptionCommittedAuthInvalidationSurvivesCancellation(t *test
 	groupID := int64(13)
 	svc.invalidateRedeemCaches(ctx, 11, &RedeemCode{Type: RedeemTypeSubscription, GroupID: &groupID})
 	require.Equal(t, []error{nil}, auth.ctxErrs)
+}
+
+type redeemedCodeWithoutGroupRepo struct {
+	*redeemRejectRepo
+}
+
+func (r *redeemedCodeWithoutGroupRepo) Use(ctx context.Context, id, userID int64) error {
+	r.code.GroupID = nil
+	return r.redeemRejectRepo.Use(ctx, id, userID)
+}
+
+func TestRedeemSubscriptionUsesClaimedGroup(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+	client := dbent.NewClient(dbent.Driver(entsql.OpenDB(dialect.Postgres, db)))
+	mock.ExpectBegin()
+	mock.ExpectRollback()
+
+	groupID := int64(13)
+	repo := &redeemedCodeWithoutGroupRepo{redeemRejectRepo: &redeemRejectRepo{code: RedeemCode{
+		ID: 1, Code: "MONTH-EDITED", Type: RedeemTypeSubscription, Status: StatusUnused, GroupID: &groupID,
+	}}}
+	svc := NewRedeemService(repo, &mockUserRepo{getByIDUser: &User{ID: 11}}, nil, nil, nil, client, nil, nil)
+	_, err = svc.Redeem(context.Background(), 11, repo.code.Code)
+	require.Equal(t, "REDEEM_CODE_INVALID", infraerrors.Reason(err))
+	require.NoError(t, mock.ExpectationsWereMet())
 }

@@ -29,6 +29,17 @@ describe('WelfareSettingsView', () => {
     fetchPublicSettings.mockResolvedValue({ welfare_enabled: true })
   })
   afterEach(() => { localStorage.clear() })
+  it('keeps the welfare and QQ image tabs after retiring invitation rewards', async () => {
+    const wrapper = mount(WelfareSettingsView, {
+      global: { stubs: { AppLayout: { template: '<div><slot /></div>' }, WelfareStatisticsPanel: true, QQImagePanel: true } }
+    })
+    await flushPromises()
+    expect(wrapper.findAll('[role="tab"]').map(tab => tab.attributes('data-test')))
+      .toEqual(['tab-statistics', 'tab-settings', 'tab-qq'])
+    await wrapper.get('[data-test="tab-qq"]').trigger('click')
+    expect(wrapper.get('#welfare-panel-qq').isVisible()).toBe(true)
+    wrapper.unmount()
+  })
   it('saves the rewards switch and refreshes public availability', async () => {
     const wrapper = mount(WelfareSettingsView, { global: { stubs: { AppLayout: { template: '<div><slot /></div>' } } } })
     await flushPromises()

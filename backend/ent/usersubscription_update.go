@@ -215,6 +215,80 @@ func (_u *UserSubscriptionUpdate) SetNillableWelfareCycleClosed(v *bool) *UserSu
 	return _u
 }
 
+// SetPaidMonthlyLimitUsd sets the "paid_monthly_limit_usd" field.
+func (_u *UserSubscriptionUpdate) SetPaidMonthlyLimitUsd(v float64) *UserSubscriptionUpdate {
+	_u.mutation.ResetPaidMonthlyLimitUsd()
+	_u.mutation.SetPaidMonthlyLimitUsd(v)
+	return _u
+}
+
+// SetNillablePaidMonthlyLimitUsd sets the "paid_monthly_limit_usd" field if the given value is not nil.
+func (_u *UserSubscriptionUpdate) SetNillablePaidMonthlyLimitUsd(v *float64) *UserSubscriptionUpdate {
+	if v != nil {
+		_u.SetPaidMonthlyLimitUsd(*v)
+	}
+	return _u
+}
+
+// AddPaidMonthlyLimitUsd adds value to the "paid_monthly_limit_usd" field.
+func (_u *UserSubscriptionUpdate) AddPaidMonthlyLimitUsd(v float64) *UserSubscriptionUpdate {
+	_u.mutation.AddPaidMonthlyLimitUsd(v)
+	return _u
+}
+
+// ClearPaidMonthlyLimitUsd clears the value of the "paid_monthly_limit_usd" field.
+func (_u *UserSubscriptionUpdate) ClearPaidMonthlyLimitUsd() *UserSubscriptionUpdate {
+	_u.mutation.ClearPaidMonthlyLimitUsd()
+	return _u
+}
+
+// SetPaidMonthlyLegacyLimitUsd sets the "paid_monthly_legacy_limit_usd" field.
+func (_u *UserSubscriptionUpdate) SetPaidMonthlyLegacyLimitUsd(v float64) *UserSubscriptionUpdate {
+	_u.mutation.ResetPaidMonthlyLegacyLimitUsd()
+	_u.mutation.SetPaidMonthlyLegacyLimitUsd(v)
+	return _u
+}
+
+// SetNillablePaidMonthlyLegacyLimitUsd sets the "paid_monthly_legacy_limit_usd" field if the given value is not nil.
+func (_u *UserSubscriptionUpdate) SetNillablePaidMonthlyLegacyLimitUsd(v *float64) *UserSubscriptionUpdate {
+	if v != nil {
+		_u.SetPaidMonthlyLegacyLimitUsd(*v)
+	}
+	return _u
+}
+
+// AddPaidMonthlyLegacyLimitUsd adds value to the "paid_monthly_legacy_limit_usd" field.
+func (_u *UserSubscriptionUpdate) AddPaidMonthlyLegacyLimitUsd(v float64) *UserSubscriptionUpdate {
+	_u.mutation.AddPaidMonthlyLegacyLimitUsd(v)
+	return _u
+}
+
+// ClearPaidMonthlyLegacyLimitUsd clears the value of the "paid_monthly_legacy_limit_usd" field.
+func (_u *UserSubscriptionUpdate) ClearPaidMonthlyLegacyLimitUsd() *UserSubscriptionUpdate {
+	_u.mutation.ClearPaidMonthlyLegacyLimitUsd()
+	return _u
+}
+
+// SetPaidMonthlyLegacyExpiresAt sets the "paid_monthly_legacy_expires_at" field.
+func (_u *UserSubscriptionUpdate) SetPaidMonthlyLegacyExpiresAt(v time.Time) *UserSubscriptionUpdate {
+	_u.mutation.SetPaidMonthlyLegacyExpiresAt(v)
+	return _u
+}
+
+// SetNillablePaidMonthlyLegacyExpiresAt sets the "paid_monthly_legacy_expires_at" field if the given value is not nil.
+func (_u *UserSubscriptionUpdate) SetNillablePaidMonthlyLegacyExpiresAt(v *time.Time) *UserSubscriptionUpdate {
+	if v != nil {
+		_u.SetPaidMonthlyLegacyExpiresAt(*v)
+	}
+	return _u
+}
+
+// ClearPaidMonthlyLegacyExpiresAt clears the value of the "paid_monthly_legacy_expires_at" field.
+func (_u *UserSubscriptionUpdate) ClearPaidMonthlyLegacyExpiresAt() *UserSubscriptionUpdate {
+	_u.mutation.ClearPaidMonthlyLegacyExpiresAt()
+	return _u
+}
+
 // SetStartsAt sets the "starts_at" field.
 func (_u *UserSubscriptionUpdate) SetStartsAt(v time.Time) *UserSubscriptionUpdate {
 	_u.mutation.SetStartsAt(v)
@@ -699,6 +773,30 @@ func (_u *UserSubscriptionUpdate) sqlSave(ctx context.Context) (_node int, err e
 	if value, ok := _u.mutation.WelfareCycleClosed(); ok {
 		_spec.SetField(usersubscription.FieldWelfareCycleClosed, field.TypeBool, value)
 	}
+	if value, ok := _u.mutation.PaidMonthlyLimitUsd(); ok {
+		_spec.SetField(usersubscription.FieldPaidMonthlyLimitUsd, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedPaidMonthlyLimitUsd(); ok {
+		_spec.AddField(usersubscription.FieldPaidMonthlyLimitUsd, field.TypeFloat64, value)
+	}
+	if _u.mutation.PaidMonthlyLimitUsdCleared() {
+		_spec.ClearField(usersubscription.FieldPaidMonthlyLimitUsd, field.TypeFloat64)
+	}
+	if value, ok := _u.mutation.PaidMonthlyLegacyLimitUsd(); ok {
+		_spec.SetField(usersubscription.FieldPaidMonthlyLegacyLimitUsd, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedPaidMonthlyLegacyLimitUsd(); ok {
+		_spec.AddField(usersubscription.FieldPaidMonthlyLegacyLimitUsd, field.TypeFloat64, value)
+	}
+	if _u.mutation.PaidMonthlyLegacyLimitUsdCleared() {
+		_spec.ClearField(usersubscription.FieldPaidMonthlyLegacyLimitUsd, field.TypeFloat64)
+	}
+	if value, ok := _u.mutation.PaidMonthlyLegacyExpiresAt(); ok {
+		_spec.SetField(usersubscription.FieldPaidMonthlyLegacyExpiresAt, field.TypeTime, value)
+	}
+	if _u.mutation.PaidMonthlyLegacyExpiresAtCleared() {
+		_spec.ClearField(usersubscription.FieldPaidMonthlyLegacyExpiresAt, field.TypeTime)
+	}
 	if value, ok := _u.mutation.StartsAt(); ok {
 		_spec.SetField(usersubscription.FieldStartsAt, field.TypeTime, value)
 	}
@@ -1098,6 +1196,80 @@ func (_u *UserSubscriptionUpdateOne) SetNillableWelfareCycleClosed(v *bool) *Use
 	if v != nil {
 		_u.SetWelfareCycleClosed(*v)
 	}
+	return _u
+}
+
+// SetPaidMonthlyLimitUsd sets the "paid_monthly_limit_usd" field.
+func (_u *UserSubscriptionUpdateOne) SetPaidMonthlyLimitUsd(v float64) *UserSubscriptionUpdateOne {
+	_u.mutation.ResetPaidMonthlyLimitUsd()
+	_u.mutation.SetPaidMonthlyLimitUsd(v)
+	return _u
+}
+
+// SetNillablePaidMonthlyLimitUsd sets the "paid_monthly_limit_usd" field if the given value is not nil.
+func (_u *UserSubscriptionUpdateOne) SetNillablePaidMonthlyLimitUsd(v *float64) *UserSubscriptionUpdateOne {
+	if v != nil {
+		_u.SetPaidMonthlyLimitUsd(*v)
+	}
+	return _u
+}
+
+// AddPaidMonthlyLimitUsd adds value to the "paid_monthly_limit_usd" field.
+func (_u *UserSubscriptionUpdateOne) AddPaidMonthlyLimitUsd(v float64) *UserSubscriptionUpdateOne {
+	_u.mutation.AddPaidMonthlyLimitUsd(v)
+	return _u
+}
+
+// ClearPaidMonthlyLimitUsd clears the value of the "paid_monthly_limit_usd" field.
+func (_u *UserSubscriptionUpdateOne) ClearPaidMonthlyLimitUsd() *UserSubscriptionUpdateOne {
+	_u.mutation.ClearPaidMonthlyLimitUsd()
+	return _u
+}
+
+// SetPaidMonthlyLegacyLimitUsd sets the "paid_monthly_legacy_limit_usd" field.
+func (_u *UserSubscriptionUpdateOne) SetPaidMonthlyLegacyLimitUsd(v float64) *UserSubscriptionUpdateOne {
+	_u.mutation.ResetPaidMonthlyLegacyLimitUsd()
+	_u.mutation.SetPaidMonthlyLegacyLimitUsd(v)
+	return _u
+}
+
+// SetNillablePaidMonthlyLegacyLimitUsd sets the "paid_monthly_legacy_limit_usd" field if the given value is not nil.
+func (_u *UserSubscriptionUpdateOne) SetNillablePaidMonthlyLegacyLimitUsd(v *float64) *UserSubscriptionUpdateOne {
+	if v != nil {
+		_u.SetPaidMonthlyLegacyLimitUsd(*v)
+	}
+	return _u
+}
+
+// AddPaidMonthlyLegacyLimitUsd adds value to the "paid_monthly_legacy_limit_usd" field.
+func (_u *UserSubscriptionUpdateOne) AddPaidMonthlyLegacyLimitUsd(v float64) *UserSubscriptionUpdateOne {
+	_u.mutation.AddPaidMonthlyLegacyLimitUsd(v)
+	return _u
+}
+
+// ClearPaidMonthlyLegacyLimitUsd clears the value of the "paid_monthly_legacy_limit_usd" field.
+func (_u *UserSubscriptionUpdateOne) ClearPaidMonthlyLegacyLimitUsd() *UserSubscriptionUpdateOne {
+	_u.mutation.ClearPaidMonthlyLegacyLimitUsd()
+	return _u
+}
+
+// SetPaidMonthlyLegacyExpiresAt sets the "paid_monthly_legacy_expires_at" field.
+func (_u *UserSubscriptionUpdateOne) SetPaidMonthlyLegacyExpiresAt(v time.Time) *UserSubscriptionUpdateOne {
+	_u.mutation.SetPaidMonthlyLegacyExpiresAt(v)
+	return _u
+}
+
+// SetNillablePaidMonthlyLegacyExpiresAt sets the "paid_monthly_legacy_expires_at" field if the given value is not nil.
+func (_u *UserSubscriptionUpdateOne) SetNillablePaidMonthlyLegacyExpiresAt(v *time.Time) *UserSubscriptionUpdateOne {
+	if v != nil {
+		_u.SetPaidMonthlyLegacyExpiresAt(*v)
+	}
+	return _u
+}
+
+// ClearPaidMonthlyLegacyExpiresAt clears the value of the "paid_monthly_legacy_expires_at" field.
+func (_u *UserSubscriptionUpdateOne) ClearPaidMonthlyLegacyExpiresAt() *UserSubscriptionUpdateOne {
+	_u.mutation.ClearPaidMonthlyLegacyExpiresAt()
 	return _u
 }
 
@@ -1614,6 +1786,30 @@ func (_u *UserSubscriptionUpdateOne) sqlSave(ctx context.Context) (_node *UserSu
 	}
 	if value, ok := _u.mutation.WelfareCycleClosed(); ok {
 		_spec.SetField(usersubscription.FieldWelfareCycleClosed, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.PaidMonthlyLimitUsd(); ok {
+		_spec.SetField(usersubscription.FieldPaidMonthlyLimitUsd, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedPaidMonthlyLimitUsd(); ok {
+		_spec.AddField(usersubscription.FieldPaidMonthlyLimitUsd, field.TypeFloat64, value)
+	}
+	if _u.mutation.PaidMonthlyLimitUsdCleared() {
+		_spec.ClearField(usersubscription.FieldPaidMonthlyLimitUsd, field.TypeFloat64)
+	}
+	if value, ok := _u.mutation.PaidMonthlyLegacyLimitUsd(); ok {
+		_spec.SetField(usersubscription.FieldPaidMonthlyLegacyLimitUsd, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedPaidMonthlyLegacyLimitUsd(); ok {
+		_spec.AddField(usersubscription.FieldPaidMonthlyLegacyLimitUsd, field.TypeFloat64, value)
+	}
+	if _u.mutation.PaidMonthlyLegacyLimitUsdCleared() {
+		_spec.ClearField(usersubscription.FieldPaidMonthlyLegacyLimitUsd, field.TypeFloat64)
+	}
+	if value, ok := _u.mutation.PaidMonthlyLegacyExpiresAt(); ok {
+		_spec.SetField(usersubscription.FieldPaidMonthlyLegacyExpiresAt, field.TypeTime, value)
+	}
+	if _u.mutation.PaidMonthlyLegacyExpiresAtCleared() {
+		_spec.ClearField(usersubscription.FieldPaidMonthlyLegacyExpiresAt, field.TypeTime)
 	}
 	if value, ok := _u.mutation.StartsAt(); ok {
 		_spec.SetField(usersubscription.FieldStartsAt, field.TypeTime, value)

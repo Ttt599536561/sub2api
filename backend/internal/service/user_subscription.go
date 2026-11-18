@@ -7,7 +7,10 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/pkg/timezone"
 )
 
-const subscriptionDayDuration = 24 * time.Hour
+const (
+	subscriptionDayDuration   = 24 * time.Hour
+	subscriptionMonthDuration = 30 * subscriptionDayDuration
+)
 
 const (
 	SubscriptionEntitlementStandard = "standard"
@@ -25,6 +28,12 @@ type UserSubscription struct {
 	WelfareMonthlyLimitUSD *float64
 	WelfareGrantCount      int64
 	WelfareCycleClosed     bool
+
+	// Paid quota belongs to this term. The legacy horizon records the time
+	// already covered before the first upfront monthly renewal.
+	PaidMonthlyLimitUSD        *float64
+	PaidMonthlyLegacyExpiresAt *time.Time
+	PaidMonthlyLegacyLimitUSD  *float64
 
 	// One-time credit belongs to this subscription's StartsAt term. It never
 	// resets with daily/weekly/monthly usage and may retain settled overuse.
@@ -65,17 +74,38 @@ func (s *UserSubscription) IsWelfare() bool {
 	return s != nil && s.EntitlementKind == SubscriptionEntitlementWelfare
 }
 
-// EffectiveGroup keeps welfare quota snapshots local to this entitlement;
-// callers must never replace limits on the shared group or a paid entitlement.
+// EffectiveGroup keeps entitlement-specific limits local to this request.
 func (s *UserSubscription) EffectiveGroup(group *Group) *Group {
-	if !s.IsWelfare() || group == nil {
+	if group == nil || s == nil || (!s.IsWelfare() && s.PaidMonthlyLimitUSD == nil) {
 		return group
 	}
 	effective := *group
-	effective.DailyLimitUSD = s.WelfareDailyLimitUSD
-	effective.WeeklyLimitUSD = s.WelfareWeeklyLimitUSD
-	effective.MonthlyLimitUSD = s.WelfareMonthlyLimitUSD
+	if s.IsWelfare() {
+		effective.DailyLimitUSD = s.WelfareDailyLimitUSD
+		effective.WeeklyLimitUSD = s.WelfareWeeklyLimitUSD
+	}
+	effective.MonthlyLimitUSD = s.EffectiveMonthlyLimitUSD(group)
 	return &effective
+}
+
+func (s *UserSubscription) EffectiveMonthlyLimitUSD(group *Group) *float64 {
+	if s.IsWelfare() {
+		return s.WelfareMonthlyLimitUSD
+	}
+	if s != nil && s.PaidMonthlyLimitUSD != nil {
+		return s.PaidMonthlyLimitUSD
+	}
+	if group == nil {
+		return nil
+	}
+	return group.MonthlyLimitUSD
+}
+
+// HasFiniteMonthlyLimit distinguishes a zero paid or welfare cap from an
+// ordinary group whose zero configuration means unrestricted monthly usage.
+func (s *UserSubscription) HasFiniteMonthlyLimit(group *Group) bool {
+	return s.IsWelfare() || (s != nil && s.PaidMonthlyLimitUSD != nil) ||
+		(group != nil && group.HasMonthlyLimit())
 }
 
 func (s *UserSubscription) IsActive() bool {
@@ -105,6 +135,15 @@ func (s *UserSubscription) daysRemainingAt(now time.Time) int {
 
 func (s *UserSubscription) IsWindowActivated() bool {
 	return s.DailyWindowStart != nil || s.WeeklyWindowStart != nil || s.MonthlyWindowStart != nil
+}
+
+func (s *UserSubscription) needsWindowActivation(group *Group) bool {
+	if !s.IsWindowActivated() {
+		return true
+	}
+	group = s.EffectiveGroup(group)
+	return (group != nil && (group.HasDailyLimit() && s.DailyWindowStart == nil || group.HasWeeklyLimit() && s.WeeklyWindowStart == nil)) ||
+		(s.HasFiniteMonthlyLimit(group) && s.MonthlyWindowStart == nil)
 }
 
 func (s *UserSubscription) HasOneTimeDailyQuota() bool {
@@ -142,7 +181,11 @@ func (s *UserSubscription) NeedsMonthlyResetAt(now time.Time) bool {
 	if s.IsWelfare() || s.MonthlyWindowStart == nil {
 		return false
 	}
-	return !now.Before(s.MonthlyWindowStart.Add(30 * 24 * time.Hour))
+	if s.PaidMonthlyLimitUSD != nil {
+		_, _, ok := s.MonthlyWindowAdvanceAt(now)
+		return ok
+	}
+	return !now.Before(s.MonthlyWindowStart.Add(subscriptionMonthDuration))
 }
 
 func (s *UserSubscription) canAutomaticallyResetDailyAt(now time.Time) bool {
@@ -174,8 +217,42 @@ func (s *UserSubscription) canAutomaticallyResetWeeklyAt(now time.Time) bool {
 }
 
 func (s *UserSubscription) canAutomaticallyResetMonthlyAt(now time.Time) bool {
-	_, ok := s.automaticWindowStartAt(s.MonthlyWindowStart, 30*24*time.Hour, now)
+	_, _, ok := s.MonthlyWindowAdvanceAt(now)
 	return ok
+}
+
+// MonthlyWindowAdvanceAt returns the new anchor and any allowance still due
+// for legacy months. An ordinary window reset has zero allowance.
+func (s *UserSubscription) MonthlyWindowAdvanceAt(now time.Time) (time.Time, float64, bool) {
+	start, ok := s.automaticWindowStartAt(s.MonthlyWindowStart, subscriptionMonthDuration, now)
+	if !ok || s.PaidMonthlyLimitUSD == nil {
+		return start, 0, ok
+	}
+	periods := start.Sub(s.windowResetAnchor(*s.MonthlyWindowStart)) / subscriptionMonthDuration
+	return start, QuantizeUsageBillingAmount(float64(periods) * *s.PaidMonthlyLegacyLimitUSD), true
+}
+
+func (s *UserSubscription) ApplyMonthlyWindowAdvance(start time.Time, paidAllowanceUSD float64) {
+	s.MonthlyWindowStart = &start
+	if s.PaidMonthlyLimitUSD == nil {
+		s.MonthlyUsageUSD = 0
+		return
+	}
+	limit := QuantizeUsageBillingAmount(*s.PaidMonthlyLimitUSD + paidAllowanceUSD)
+	s.PaidMonthlyLimitUSD = &limit
+}
+
+func (s *UserSubscription) monthlyRolloverExpiry() time.Time {
+	if s.PaidMonthlyLimitUSD == nil {
+		return s.ExpiresAt
+	}
+	if s.PaidMonthlyLegacyExpiresAt == nil || s.PaidMonthlyLegacyLimitUSD == nil {
+		return time.Time{}
+	}
+	if s.PaidMonthlyLegacyExpiresAt.Before(s.ExpiresAt) {
+		return *s.PaidMonthlyLegacyExpiresAt
+	}
+	return s.ExpiresAt
 }
 
 // windowResetAnchor 返回周/月窗口实际推进所依据的锚点。
@@ -201,21 +278,25 @@ func (s *UserSubscription) automaticWindowStartAt(previous *time.Time, period ti
 	// term. An administrator may extend that term without issuing another grant.
 	// Keep this guard at the shared primitive so every maintenance path preserves
 	// consumed quota, including locked daily-reset maintenance and list views.
-	if s.IsWelfare() && period == 30*24*time.Hour {
+	if s.IsWelfare() && period == subscriptionMonthDuration {
 		return time.Time{}, false
 	}
 	if previous == nil {
 		return time.Time{}, false
 	}
 
+	expiresAt := s.ExpiresAt
+	if period == subscriptionMonthDuration {
+		expiresAt = s.monthlyRolloverExpiry()
+	}
 	anchor := s.windowResetAnchor(*previous)
 	next := anchor.Add(period)
-	if now.Before(next) || !next.Before(s.ExpiresAt) {
+	if now.Before(next) || !next.Before(expiresAt) {
 		return time.Time{}, false
 	}
 
 	periods := now.Sub(anchor) / period
-	lastPeriodBeforeExpiry := (s.ExpiresAt.Sub(anchor) - 1) / period
+	lastPeriodBeforeExpiry := (expiresAt.Sub(anchor) - 1) / period
 	if periods > lastPeriodBeforeExpiry {
 		periods = lastPeriodBeforeExpiry
 	}
@@ -244,6 +325,16 @@ func (s *UserSubscription) WeeklyResetTime() *time.Time {
 }
 
 func (s *UserSubscription) MonthlyResetTime() *time.Time {
+	if s.PaidMonthlyLimitUSD != nil {
+		if s.MonthlyWindowStart != nil {
+			next := s.windowResetAnchor(*s.MonthlyWindowStart).Add(subscriptionMonthDuration)
+			if next.Before(s.monthlyRolloverExpiry()) {
+				return &next
+			}
+		}
+		expiresAt := s.ExpiresAt
+		return &expiresAt
+	}
 	if s.MonthlyWindowStart == nil {
 		return nil
 	}
@@ -252,7 +343,7 @@ func (s *UserSubscription) MonthlyResetTime() *time.Time {
 		t := s.ExpiresAt
 		return &t
 	}
-	t := s.windowResetAnchor(*s.MonthlyWindowStart).Add(30 * 24 * time.Hour)
+	t := s.windowResetAnchor(*s.MonthlyWindowStart).Add(subscriptionMonthDuration)
 	return &t
 }
 
@@ -279,21 +370,17 @@ func (s *UserSubscription) CheckWeeklyLimit(group *Group, additionalCost float64
 }
 
 func (s *UserSubscription) CheckMonthlyLimit(group *Group, additionalCost float64) bool {
-	group = s.EffectiveGroup(group)
-	if (s.IsWelfare() || group.HasMonthlyLimit()) && group.MonthlyLimitUSD != nil && s.SupplementRemainingUSD() > 0 {
-		return additionalCost <= math.Max(0, *group.MonthlyLimitUSD-s.MonthlyUsageUSD)+s.SupplementRemainingUSD()
-	}
-	if s.IsWelfare() {
-		// Zero is an exhausted finite welfare total, while ordinary groups retain
-		// their existing zero-means-unlimited convention.
-		return s.WelfareMonthlyLimitUSD != nil && *s.WelfareMonthlyLimitUSD > 0 &&
-			s.MonthlyUsageUSD+additionalCost <= *s.WelfareMonthlyLimitUSD
-	}
-	group = s.EffectiveGroup(group)
-	if !group.HasMonthlyLimit() {
+	if !s.HasFiniteMonthlyLimit(group) {
 		return true
 	}
-	return s.MonthlyUsageUSD+additionalCost <= *group.MonthlyLimitUSD
+	limit := s.EffectiveMonthlyLimitUSD(group)
+	if limit == nil {
+		return false
+	}
+	if supplement := s.SupplementRemainingUSD(); supplement > 0 {
+		return additionalCost <= math.Max(0, *limit-s.MonthlyUsageUSD)+supplement
+	}
+	return *limit > 0 && s.MonthlyUsageUSD+additionalCost <= *limit
 }
 
 func (s *UserSubscription) CheckAllLimits(group *Group, additionalCost float64) (daily, weekly, monthly bool) {

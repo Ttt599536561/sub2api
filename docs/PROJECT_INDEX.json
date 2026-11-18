@@ -242,27 +242,22 @@
     },
     "qq-invite": {
       "repository": "sub2api",
-      "kind": "embedded_business_module_with_sidecar",
+      "kind": "retired_invitation_issuance",
       "source": [
-        "backend/internal/napcat",
         "backend/internal/qqinvite",
-        "backend/internal/handler/qq_invite_handler.go",
-        "frontend/src/components/admin/NapCatWelfarePanel.vue"
+        "backend/internal/service/welfare_subscription.go"
       ],
       "owns": [
-        "NapCat普通福利QQ账号接入",
-        "无QQ等级门槛的邀请奖励与机器人账号核验",
-        "活动内跨群邀请奖励去重",
-        "月卡码池及消息投递",
-        "管理员扫码登录"
+        "历史邀请奖励与码池来源",
+        "已发旧码及福利订阅历史兼容"
       ],
-      "deployment_unit": "Sub2 application plus separate NapCat Docker service on the same server",
+      "deployment_unit": "Historical deployments only",
       "data": "Sub2 PostgreSQL; NapCat independent QQ session/config volumes",
       "evidence": [
         "docs/changes/2026-11-10-napcat-invite.md",
         "deploy/NAPCAT_SETUP.md"
       ],
-      "status_note": "Implemented in Sub2; publication and live login must be verified separately from HANDOFF and release evidence",
+      "status_note": "Invitation events, automatic issuance and its admin panel are removed from local v0.2.21-r7. Existing welfare terms and legacy data remain available. Check HANDOFF for actual deployment.",
       "not": "Does not replace the official qq-image or qq-menu-iq bot; ordinary QQ identity is a separate namespace"
     }
   },

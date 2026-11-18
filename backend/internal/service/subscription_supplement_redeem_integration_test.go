@@ -217,3 +217,36 @@ func TestSubscriptionSupplementKeepsUsedLegacyReceiptReadable(t *testing.T) {
 	require.Equal(t, 10.0, granted)
 	require.Zero(t, used)
 }
+
+func TestSubscriptionCodeManagementPreservesHistoricalReceipt(t *testing.T) {
+	f := newWelfareRedemptionFixture(t)
+	campaign := prepareSupplementFixture(t, f)
+	now := time.Now().UTC()
+	sub, err := f.client.UserSubscription.Create().SetUserID(f.userID).SetGroupID(f.group.ID).
+		SetEntitlementKind("welfare").SetWelfareGrantCount(1).SetWelfareMonthlyLimitUsd(120).
+		SetStartsAt(now.Add(-time.Hour)).SetExpiresAt(now.Add(24 * time.Hour)).Save(f.ctx)
+	require.NoError(t, err)
+
+	version, amount := int64(1), 20.0
+	historical := &service.RedeemCode{Code: "IMPORTED-RECEIPT", Type: service.RedeemTypeSubscription,
+		Status: service.StatusExpired, GroupID: &f.group.ID, SubscriptionEffect: "add_quota",
+		WelfareCampaignID: &campaign, WelfareCampaignVersion: &version, QuotaAmountUSD: &amount}
+	require.NoError(t, f.codes.Create(f.ctx, historical))
+	_, err = f.db.ExecContext(f.ctx, `INSERT INTO user_welfare_subscription_supplements(redeem_code_id,subscription_id,user_id,group_id,welfare_campaign_id,welfare_campaign_version,subscription_effect,quota_amount_usd,validity_days,before_monthly_limit_usd,after_monthly_limit_usd,monthly_usage_usd,before_expires_at,after_expires_at,before_version,after_version)
+ SELECT $1,id,user_id,group_id,$2,1,'add_quota',20,0,100,120,37,expires_at,expires_at,0,1 FROM user_subscriptions WHERE id=$3`, historical.ID, campaign, sub.ID)
+	require.NoError(t, err)
+
+	available := genericSupplementCode(t, f, service.SubscriptionEffectAddBalance, 10, 0)
+	disabled := service.StatusDisabled
+	fields := service.RedeemCodeBatchUpdateFields{Status: &disabled}
+	count, err := f.codes.BatchUpdate(f.ctx, []int64{available.ID}, fields)
+	require.NoError(t, err)
+	require.Equal(t, int64(1), count)
+
+	_, err = f.codes.BatchUpdate(f.ctx, []int64{historical.ID}, fields)
+	require.ErrorIs(t, err, service.ErrRedeemCodeUsed)
+	require.ErrorIs(t, f.codes.Delete(f.ctx, historical.ID), service.ErrRedeemCodeDeleteUsed)
+	saved, err := f.codes.GetByID(f.ctx, historical.ID)
+	require.NoError(t, err)
+	require.Equal(t, service.StatusExpired, saved.Status)
+}

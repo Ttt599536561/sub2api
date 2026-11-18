@@ -1339,13 +1339,9 @@ func (s *adminServiceImpl) BatchDeleteRedeemCodes(ctx context.Context, ids []int
 }
 
 func (s *adminServiceImpl) ExpireRedeemCode(ctx context.Context, id int64) (*RedeemCode, error) {
-	code, err := s.redeemCodeRepo.GetByID(ctx, id)
-	if err != nil {
+	status := StatusExpired
+	if _, err := s.redeemCodeRepo.BatchUpdate(ctx, []int64{id}, RedeemCodeBatchUpdateFields{Status: &status}); err != nil {
 		return nil, err
 	}
-	code.Status = StatusExpired
-	if err := s.redeemCodeRepo.Update(ctx, code); err != nil {
-		return nil, err
-	}
-	return code, nil
+	return s.redeemCodeRepo.GetByID(ctx, id)
 }

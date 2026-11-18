@@ -37,6 +37,12 @@ const (
 	FieldWelfareGrantCount = "welfare_grant_count"
 	// FieldWelfareCycleClosed holds the string denoting the welfare_cycle_closed field in the database.
 	FieldWelfareCycleClosed = "welfare_cycle_closed"
+	// FieldPaidMonthlyLimitUsd holds the string denoting the paid_monthly_limit_usd field in the database.
+	FieldPaidMonthlyLimitUsd = "paid_monthly_limit_usd"
+	// FieldPaidMonthlyLegacyLimitUsd holds the string denoting the paid_monthly_legacy_limit_usd field in the database.
+	FieldPaidMonthlyLegacyLimitUsd = "paid_monthly_legacy_limit_usd"
+	// FieldPaidMonthlyLegacyExpiresAt holds the string denoting the paid_monthly_legacy_expires_at field in the database.
+	FieldPaidMonthlyLegacyExpiresAt = "paid_monthly_legacy_expires_at"
 	// FieldStartsAt holds the string denoting the starts_at field in the database.
 	FieldStartsAt = "starts_at"
 	// FieldExpiresAt holds the string denoting the expires_at field in the database.
@@ -121,6 +127,9 @@ var Columns = []string{
 	FieldWelfareMonthlyLimitUsd,
 	FieldWelfareGrantCount,
 	FieldWelfareCycleClosed,
+	FieldPaidMonthlyLimitUsd,
+	FieldPaidMonthlyLegacyLimitUsd,
+	FieldPaidMonthlyLegacyExpiresAt,
 	FieldStartsAt,
 	FieldExpiresAt,
 	FieldStatus,
@@ -253,6 +262,21 @@ func ByWelfareGrantCount(opts ...sql.OrderTermOption) OrderOption {
 // ByWelfareCycleClosed orders the results by the welfare_cycle_closed field.
 func ByWelfareCycleClosed(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldWelfareCycleClosed, opts...).ToFunc()
+}
+
+// ByPaidMonthlyLimitUsd orders the results by the paid_monthly_limit_usd field.
+func ByPaidMonthlyLimitUsd(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldPaidMonthlyLimitUsd, opts...).ToFunc()
+}
+
+// ByPaidMonthlyLegacyLimitUsd orders the results by the paid_monthly_legacy_limit_usd field.
+func ByPaidMonthlyLegacyLimitUsd(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldPaidMonthlyLegacyLimitUsd, opts...).ToFunc()
+}
+
+// ByPaidMonthlyLegacyExpiresAt orders the results by the paid_monthly_legacy_expires_at field.
+func ByPaidMonthlyLegacyExpiresAt(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldPaidMonthlyLegacyExpiresAt, opts...).ToFunc()
 }
 
 // ByStartsAt orders the results by the starts_at field.

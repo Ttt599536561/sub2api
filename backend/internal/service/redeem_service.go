@@ -22,6 +22,7 @@ var (
 	ErrPaymentRedeemCodeReserved = infraerrors.Forbidden("PAYMENT_REDEEM_CODE_RESERVED", "payment recharge codes are reserved for payment fulfillment")
 	ErrRedeemCodeNotFound        = infraerrors.NotFound("REDEEM_CODE_NOT_FOUND", "redeem code not found")
 	ErrRedeemCodeUsed            = infraerrors.Conflict("REDEEM_CODE_USED", "redeem code already used")
+	ErrRedeemCodeDeleteUsed      = infraerrors.Conflict("REDEEM_CODE_DELETE_USED", "cannot delete used redeem code")
 	ErrRedeemCodeCancelled       = infraerrors.Conflict("REDEEM_CODE_CANCELLED", "redeem code cancelled")
 	ErrRedeemCodeExpired         = infraerrors.Conflict("REDEEM_CODE_EXPIRED", "redeem code expired")
 	ErrInsufficientBalance       = infraerrors.BadRequest("INSUFFICIENT_BALANCE", "insufficient balance")
@@ -510,8 +511,8 @@ func (s *RedeemService) redeem(ctx context.Context, userID int64, code string, r
 	// 将事务放入 context，使 repository 方法能够使用同一事务
 	txCtx := dbent.NewTxContext(ctx, tx)
 
-	// 【关键】先标记兑换码为已使用，确保并发安全
-	// 利用数据库乐观锁（WHERE status = 'unused'）保证原子性
+	// Claim the current row before applying any rights. The repository checks
+	// status and expiry under the row lock retained by this transaction.
 	if err := s.redeemRepo.Use(txCtx, redeemCode.ID, userID); err != nil {
 		if errors.Is(err, ErrRedeemCodeNotFound) || errors.Is(err, ErrRedeemCodeUsed) {
 			// A departure can cancel the code after the initial lookup. The
@@ -526,7 +527,16 @@ func (s *RedeemService) redeem(ctx context.Context, userID int64, code string, r
 		return nil, fmt.Errorf("mark code as used: %w", err)
 	}
 
-	// 执行兑换逻辑（兑换码已被锁定，此时可安全操作）
+	// Reload the claimed row in the same transaction. A committed
+	// administrator edit may have changed the code since the initial lookup.
+	redeemCode, err = s.redeemRepo.GetByID(txCtx, redeemCode.ID)
+	if err != nil {
+		return nil, fmt.Errorf("reload claimed redeem code: %w", err)
+	}
+	if redeemCode.WelfareResult != nil || redeemCode.SubscriptionSupplementResult != nil {
+		return nil, ErrRedeemCodeUsed
+	}
+
 	switch redeemCode.Type {
 	case RedeemTypeBalance:
 		amount := redeemCode.Value
@@ -555,6 +565,9 @@ func (s *RedeemService) redeem(ctx context.Context, userID int64, code string, r
 		}
 
 	case RedeemTypeSubscription:
+		if redeemCode.GroupID == nil {
+			return nil, infraerrors.BadRequest("REDEEM_CODE_INVALID", "invalid subscription redeem code: missing group_id")
+		}
 		// Different unused codes do not share the code lock. Serialize them on
 		// the durable user row before checking whether the subscription exists;
 		// an absent subscription has no row that could be locked yet. Keep the
@@ -731,7 +744,7 @@ func (s *RedeemService) Delete(ctx context.Context, id int64) error {
 
 	// 不允许删除已使用的兑换码
 	if code.IsUsed() {
-		return infraerrors.Conflict("REDEEM_CODE_DELETE_USED", "cannot delete used redeem code")
+		return ErrRedeemCodeDeleteUsed
 	}
 
 	if err := s.redeemRepo.Delete(ctx, id); err != nil {
@@ -796,12 +809,13 @@ func (s *RedeemService) reduceOrCancelSubscription(ctx context.Context, userID, 
 			return fmt.Errorf("cancel subscription: %w", err)
 		}
 		// 设置过期时间为当前时间
-		if err := s.subscriptionService.userSubRepo.ExtendExpiry(ctx, sub.ID, now); err != nil {
+		sub.Status = SubscriptionStatusExpired
+		if err := s.subscriptionService.extendWithLegacyMonthlyCoverage(ctx, sub, now); err != nil {
 			return fmt.Errorf("set subscription expiry: %w", err)
 		}
 	} else {
 		// 缩短天数
-		if err := s.subscriptionService.userSubRepo.ExtendExpiry(ctx, sub.ID, newExpiresAt); err != nil {
+		if err := s.subscriptionService.extendWithLegacyMonthlyCoverage(ctx, sub, newExpiresAt); err != nil {
 			return fmt.Errorf("reduce subscription: %w", err)
 		}
 	}

@@ -45,14 +45,17 @@ func supplementBillingDB(t *testing.T) (*sql.DB, time.Time) {
 	t.Cleanup(func() { _ = db.Close(); _, _ = admin.Exec("DROP SCHEMA " + schema + " CASCADE"); _ = admin.Close() })
 	_, err = db.Exec(`CREATE TABLE groups(id BIGINT PRIMARY KEY,deleted_at TIMESTAMPTZ,status TEXT NOT NULL DEFAULT 'active',subscription_type TEXT NOT NULL DEFAULT 'subscription',daily_limit_usd NUMERIC(20,10),weekly_limit_usd NUMERIC(20,10),monthly_limit_usd NUMERIC(20,10));
 CREATE TABLE user_subscriptions(id BIGINT PRIMARY KEY,user_id BIGINT NOT NULL,group_id BIGINT NOT NULL REFERENCES groups(id),entitlement_kind TEXT NOT NULL DEFAULT 'standard',starts_at TIMESTAMPTZ NOT NULL,expires_at TIMESTAMPTZ NOT NULL,status TEXT NOT NULL DEFAULT 'active',welfare_cycle_closed BOOLEAN NOT NULL DEFAULT false,deleted_at TIMESTAMPTZ,updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),daily_usage_usd NUMERIC(20,10) NOT NULL DEFAULT 0,weekly_usage_usd NUMERIC(20,10) NOT NULL DEFAULT 0,monthly_usage_usd NUMERIC(20,10) NOT NULL DEFAULT 0,welfare_daily_limit_usd NUMERIC(20,10),welfare_weekly_limit_usd NUMERIC(20,10),welfare_monthly_limit_usd NUMERIC(20,10));
+CREATE TABLE payment_orders(id BIGINT PRIMARY KEY);
 CREATE TABLE usage_billing_dedup(id BIGSERIAL PRIMARY KEY,request_id TEXT NOT NULL,api_key_id BIGINT NOT NULL,request_fingerprint TEXT NOT NULL,UNIQUE(request_id,api_key_id));
 CREATE TABLE usage_billing_dedup_archive(request_id TEXT NOT NULL,api_key_id BIGINT NOT NULL,request_fingerprint TEXT NOT NULL);
 INSERT INTO groups(id,daily_limit_usd,weekly_limit_usd,monthly_limit_usd) VALUES(2,10,20,50);`)
 	require.NoError(t, err)
-	migration, err := os.ReadFile("../../migrations/261_subscription_supplement_balances.sql")
-	require.NoError(t, err)
-	_, err = db.Exec(string(migration))
-	require.NoError(t, err)
+	for _, name := range []string{"261_subscription_supplement_balances.sql", "264_paid_subscription_monthly_renewals.sql"} {
+		migration, err := os.ReadFile("../../migrations/" + name)
+		require.NoError(t, err)
+		_, err = db.Exec(string(migration))
+		require.NoError(t, err)
+	}
 	start := time.Now().UTC().Truncate(time.Microsecond).Add(-time.Hour)
 	_, err = db.Exec(`INSERT INTO user_subscriptions(id,user_id,group_id,starts_at,expires_at,daily_usage_usd,weekly_usage_usd,monthly_usage_usd) VALUES(3,1,2,$1,$1::timestamptz+interval '30 days',8,19,40)`, start)
 	require.NoError(t, err)
@@ -100,6 +103,50 @@ func TestSubscriptionSupplementBillingLateTermLeavesNewEntitlementUntouched(t *t
 	require.Zero(t, usage)
 	require.Equal(t, 2.0, oldUsed)
 	require.Zero(t, newUsed)
+}
+
+func TestPaidMonthlyQuotaAppliesToSupplementReservationAndSettlement(t *testing.T) {
+	db, start := supplementBillingDB(t)
+	_, err := db.Exec(`UPDATE groups SET daily_limit_usd=NULL,weekly_limit_usd=NULL WHERE id=2;
+UPDATE user_subscriptions SET paid_monthly_limit_usd=90,paid_monthly_legacy_expires_at=expires_at,paid_monthly_legacy_limit_usd=50 WHERE id=3`)
+	require.NoError(t, err)
+	ctx := context.Background()
+	client := dbent.NewClient(dbent.Driver(entsql.OpenDB(dialect.Postgres, db)))
+	repo := &userSubscriptionRepository{client: client}
+	hold := &service.SubscriptionSupplementReservation{ID: "paid-term-hold", SubscriptionID: 3, UserID: 1, GroupID: 2, TermStartsAt: start, AmountUSD: 20, TTL: time.Minute}
+	require.NoError(t, repo.ReserveSubscriptionSupplement(ctx, hold))
+
+	id := int64(3)
+	result, err := (&usageBillingRepository{db: db}).Apply(ctx, &service.UsageBillingCommand{RequestID: "paid-term", APIKeyID: 7, UserID: 1,
+		SubscriptionID: &id, SubscriptionTermStartsAt: &start, SubscriptionReservationID: hold.ID, SubscriptionCost: 53})
+	require.NoError(t, err)
+	require.Equal(t, 50.0, result.SubscriptionBaseCost)
+	require.Equal(t, 3.0, result.SubscriptionSupplementCost)
+	var monthly float64
+	require.NoError(t, db.QueryRow(`SELECT monthly_usage_usd FROM user_subscriptions WHERE id=3`).Scan(&monthly))
+	require.Equal(t, 90.0, monthly)
+}
+
+func TestPaidMonthlyQuotaFreezesOnlyThePriorTermForLateSettlement(t *testing.T) {
+	db, start := supplementBillingDB(t)
+	_, err := db.Exec(`UPDATE groups SET daily_limit_usd=NULL,weekly_limit_usd=NULL WHERE id=2;
+UPDATE user_subscriptions SET paid_monthly_limit_usd=90,paid_monthly_legacy_expires_at=expires_at,paid_monthly_legacy_limit_usd=50 WHERE id=3`)
+	require.NoError(t, err)
+	newStart := start.Add(31 * 24 * time.Hour)
+	_, err = db.Exec(`UPDATE user_subscriptions SET starts_at=$1,expires_at=$1::timestamptz+interval '30 days',monthly_usage_usd=0,
+		paid_monthly_limit_usd=NULL,paid_monthly_legacy_expires_at=NULL,paid_monthly_legacy_limit_usd=NULL WHERE id=3`, newStart)
+	require.NoError(t, err)
+	id := int64(3)
+	result, err := (&usageBillingRepository{db: db}).Apply(context.Background(), &service.UsageBillingCommand{RequestID: "paid-closed-term",
+		APIKeyID: 7, UserID: 1, SubscriptionID: &id, SubscriptionTermStartsAt: &start, SubscriptionCost: 20})
+	require.NoError(t, err)
+	require.Equal(t, 20.0, result.SubscriptionBaseCost)
+	require.Zero(t, result.SubscriptionSupplementCost)
+	var remaining, monthly float64
+	require.NoError(t, db.QueryRow(`SELECT closed_base_remaining_usd FROM user_subscription_supplement_balances WHERE subscription_id=3 AND term_starts_at=$1`, start).Scan(&remaining))
+	require.Equal(t, 30.0, remaining)
+	require.NoError(t, db.QueryRow(`SELECT monthly_usage_usd FROM user_subscriptions WHERE id=3`).Scan(&monthly))
+	require.Zero(t, monthly)
 }
 
 func TestSubscriptionSupplementBillingRecordsActualOveruse(t *testing.T) {

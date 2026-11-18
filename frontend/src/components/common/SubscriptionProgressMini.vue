@@ -136,7 +136,7 @@
 
                 <template v-if="monthlyBalance !== undefined">
                   <div class="flex items-baseline justify-between gap-2 text-xs">
-                    <span class="text-gray-500 dark:text-dark-400">{{ t('welfareRedeem.monthlyRemainingWithSupplement') }}</span>
+                    <span class="text-gray-500 dark:text-dark-400">{{ t(hasMonthlySupplement(subscription) ? 'welfareRedeem.monthlyRemainingWithSupplement' : 'userSubscriptions.monthlyBalance') }}</span>
                     <span class="shrink-0 font-medium tabular-nums text-gray-900 dark:text-white">${{ monthlyBalance.toFixed(2) }}</span>
                   </div>
                   <p v-if="(subscription.group?.daily_limit_usd ?? 0) > 0 || (subscription.group?.weekly_limit_usd ?? 0) > 0" class="text-[10px] text-gray-500 dark:text-dark-400">
@@ -202,7 +202,7 @@ import Icon from '@/components/icons/Icon.vue'
 import { useSubscriptionStore } from '@/stores'
 import { FeatureFlags, isFeatureFlagEnabled } from '@/utils/featureFlags'
 import type { UserSubscription } from '@/types'
-import { getExpirationDateRelation, getSupplementedMonthlyBalance } from '@/utils/subscriptionQuota'
+import { getExpirationDateRelation, getMonthlyBalance, hasMonthlySupplement } from '@/utils/subscriptionQuota'
 
 const { t } = useI18n()
 
@@ -223,7 +223,7 @@ const displaySubscriptions = computed(() => {
     const aMax = getMaxUsagePercentage(a)
     const bMax = getMaxUsagePercentage(b)
     return bMax - aMax
-  }).map(subscription => ({ subscription, monthlyBalance: getSupplementedMonthlyBalance(subscription) }))
+  }).map(subscription => ({ subscription, monthlyBalance: getMonthlyBalance(subscription) }))
 })
 
 function getMaxUsagePercentage(sub: UserSubscription): number {

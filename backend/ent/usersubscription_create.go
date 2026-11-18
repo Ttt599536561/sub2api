@@ -163,6 +163,48 @@ func (_c *UserSubscriptionCreate) SetNillableWelfareCycleClosed(v *bool) *UserSu
 	return _c
 }
 
+// SetPaidMonthlyLimitUsd sets the "paid_monthly_limit_usd" field.
+func (_c *UserSubscriptionCreate) SetPaidMonthlyLimitUsd(v float64) *UserSubscriptionCreate {
+	_c.mutation.SetPaidMonthlyLimitUsd(v)
+	return _c
+}
+
+// SetNillablePaidMonthlyLimitUsd sets the "paid_monthly_limit_usd" field if the given value is not nil.
+func (_c *UserSubscriptionCreate) SetNillablePaidMonthlyLimitUsd(v *float64) *UserSubscriptionCreate {
+	if v != nil {
+		_c.SetPaidMonthlyLimitUsd(*v)
+	}
+	return _c
+}
+
+// SetPaidMonthlyLegacyLimitUsd sets the "paid_monthly_legacy_limit_usd" field.
+func (_c *UserSubscriptionCreate) SetPaidMonthlyLegacyLimitUsd(v float64) *UserSubscriptionCreate {
+	_c.mutation.SetPaidMonthlyLegacyLimitUsd(v)
+	return _c
+}
+
+// SetNillablePaidMonthlyLegacyLimitUsd sets the "paid_monthly_legacy_limit_usd" field if the given value is not nil.
+func (_c *UserSubscriptionCreate) SetNillablePaidMonthlyLegacyLimitUsd(v *float64) *UserSubscriptionCreate {
+	if v != nil {
+		_c.SetPaidMonthlyLegacyLimitUsd(*v)
+	}
+	return _c
+}
+
+// SetPaidMonthlyLegacyExpiresAt sets the "paid_monthly_legacy_expires_at" field.
+func (_c *UserSubscriptionCreate) SetPaidMonthlyLegacyExpiresAt(v time.Time) *UserSubscriptionCreate {
+	_c.mutation.SetPaidMonthlyLegacyExpiresAt(v)
+	return _c
+}
+
+// SetNillablePaidMonthlyLegacyExpiresAt sets the "paid_monthly_legacy_expires_at" field if the given value is not nil.
+func (_c *UserSubscriptionCreate) SetNillablePaidMonthlyLegacyExpiresAt(v *time.Time) *UserSubscriptionCreate {
+	if v != nil {
+		_c.SetPaidMonthlyLegacyExpiresAt(*v)
+	}
+	return _c
+}
+
 // SetStartsAt sets the "starts_at" field.
 func (_c *UserSubscriptionCreate) SetStartsAt(v time.Time) *UserSubscriptionCreate {
 	_c.mutation.SetStartsAt(v)
@@ -639,6 +681,18 @@ func (_c *UserSubscriptionCreate) createSpec() (*UserSubscription, *sqlgraph.Cre
 		_spec.SetField(usersubscription.FieldWelfareCycleClosed, field.TypeBool, value)
 		_node.WelfareCycleClosed = value
 	}
+	if value, ok := _c.mutation.PaidMonthlyLimitUsd(); ok {
+		_spec.SetField(usersubscription.FieldPaidMonthlyLimitUsd, field.TypeFloat64, value)
+		_node.PaidMonthlyLimitUsd = &value
+	}
+	if value, ok := _c.mutation.PaidMonthlyLegacyLimitUsd(); ok {
+		_spec.SetField(usersubscription.FieldPaidMonthlyLegacyLimitUsd, field.TypeFloat64, value)
+		_node.PaidMonthlyLegacyLimitUsd = &value
+	}
+	if value, ok := _c.mutation.PaidMonthlyLegacyExpiresAt(); ok {
+		_spec.SetField(usersubscription.FieldPaidMonthlyLegacyExpiresAt, field.TypeTime, value)
+		_node.PaidMonthlyLegacyExpiresAt = &value
+	}
 	if value, ok := _c.mutation.StartsAt(); ok {
 		_spec.SetField(usersubscription.FieldStartsAt, field.TypeTime, value)
 		_node.StartsAt = value
@@ -979,6 +1033,72 @@ func (u *UserSubscriptionUpsert) SetWelfareCycleClosed(v bool) *UserSubscription
 // UpdateWelfareCycleClosed sets the "welfare_cycle_closed" field to the value that was provided on create.
 func (u *UserSubscriptionUpsert) UpdateWelfareCycleClosed() *UserSubscriptionUpsert {
 	u.SetExcluded(usersubscription.FieldWelfareCycleClosed)
+	return u
+}
+
+// SetPaidMonthlyLimitUsd sets the "paid_monthly_limit_usd" field.
+func (u *UserSubscriptionUpsert) SetPaidMonthlyLimitUsd(v float64) *UserSubscriptionUpsert {
+	u.Set(usersubscription.FieldPaidMonthlyLimitUsd, v)
+	return u
+}
+
+// UpdatePaidMonthlyLimitUsd sets the "paid_monthly_limit_usd" field to the value that was provided on create.
+func (u *UserSubscriptionUpsert) UpdatePaidMonthlyLimitUsd() *UserSubscriptionUpsert {
+	u.SetExcluded(usersubscription.FieldPaidMonthlyLimitUsd)
+	return u
+}
+
+// AddPaidMonthlyLimitUsd adds v to the "paid_monthly_limit_usd" field.
+func (u *UserSubscriptionUpsert) AddPaidMonthlyLimitUsd(v float64) *UserSubscriptionUpsert {
+	u.Add(usersubscription.FieldPaidMonthlyLimitUsd, v)
+	return u
+}
+
+// ClearPaidMonthlyLimitUsd clears the value of the "paid_monthly_limit_usd" field.
+func (u *UserSubscriptionUpsert) ClearPaidMonthlyLimitUsd() *UserSubscriptionUpsert {
+	u.SetNull(usersubscription.FieldPaidMonthlyLimitUsd)
+	return u
+}
+
+// SetPaidMonthlyLegacyLimitUsd sets the "paid_monthly_legacy_limit_usd" field.
+func (u *UserSubscriptionUpsert) SetPaidMonthlyLegacyLimitUsd(v float64) *UserSubscriptionUpsert {
+	u.Set(usersubscription.FieldPaidMonthlyLegacyLimitUsd, v)
+	return u
+}
+
+// UpdatePaidMonthlyLegacyLimitUsd sets the "paid_monthly_legacy_limit_usd" field to the value that was provided on create.
+func (u *UserSubscriptionUpsert) UpdatePaidMonthlyLegacyLimitUsd() *UserSubscriptionUpsert {
+	u.SetExcluded(usersubscription.FieldPaidMonthlyLegacyLimitUsd)
+	return u
+}
+
+// AddPaidMonthlyLegacyLimitUsd adds v to the "paid_monthly_legacy_limit_usd" field.
+func (u *UserSubscriptionUpsert) AddPaidMonthlyLegacyLimitUsd(v float64) *UserSubscriptionUpsert {
+	u.Add(usersubscription.FieldPaidMonthlyLegacyLimitUsd, v)
+	return u
+}
+
+// ClearPaidMonthlyLegacyLimitUsd clears the value of the "paid_monthly_legacy_limit_usd" field.
+func (u *UserSubscriptionUpsert) ClearPaidMonthlyLegacyLimitUsd() *UserSubscriptionUpsert {
+	u.SetNull(usersubscription.FieldPaidMonthlyLegacyLimitUsd)
+	return u
+}
+
+// SetPaidMonthlyLegacyExpiresAt sets the "paid_monthly_legacy_expires_at" field.
+func (u *UserSubscriptionUpsert) SetPaidMonthlyLegacyExpiresAt(v time.Time) *UserSubscriptionUpsert {
+	u.Set(usersubscription.FieldPaidMonthlyLegacyExpiresAt, v)
+	return u
+}
+
+// UpdatePaidMonthlyLegacyExpiresAt sets the "paid_monthly_legacy_expires_at" field to the value that was provided on create.
+func (u *UserSubscriptionUpsert) UpdatePaidMonthlyLegacyExpiresAt() *UserSubscriptionUpsert {
+	u.SetExcluded(usersubscription.FieldPaidMonthlyLegacyExpiresAt)
+	return u
+}
+
+// ClearPaidMonthlyLegacyExpiresAt clears the value of the "paid_monthly_legacy_expires_at" field.
+func (u *UserSubscriptionUpsert) ClearPaidMonthlyLegacyExpiresAt() *UserSubscriptionUpsert {
+	u.SetNull(usersubscription.FieldPaidMonthlyLegacyExpiresAt)
 	return u
 }
 
@@ -1454,6 +1574,83 @@ func (u *UserSubscriptionUpsertOne) SetWelfareCycleClosed(v bool) *UserSubscript
 func (u *UserSubscriptionUpsertOne) UpdateWelfareCycleClosed() *UserSubscriptionUpsertOne {
 	return u.Update(func(s *UserSubscriptionUpsert) {
 		s.UpdateWelfareCycleClosed()
+	})
+}
+
+// SetPaidMonthlyLimitUsd sets the "paid_monthly_limit_usd" field.
+func (u *UserSubscriptionUpsertOne) SetPaidMonthlyLimitUsd(v float64) *UserSubscriptionUpsertOne {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.SetPaidMonthlyLimitUsd(v)
+	})
+}
+
+// AddPaidMonthlyLimitUsd adds v to the "paid_monthly_limit_usd" field.
+func (u *UserSubscriptionUpsertOne) AddPaidMonthlyLimitUsd(v float64) *UserSubscriptionUpsertOne {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.AddPaidMonthlyLimitUsd(v)
+	})
+}
+
+// UpdatePaidMonthlyLimitUsd sets the "paid_monthly_limit_usd" field to the value that was provided on create.
+func (u *UserSubscriptionUpsertOne) UpdatePaidMonthlyLimitUsd() *UserSubscriptionUpsertOne {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.UpdatePaidMonthlyLimitUsd()
+	})
+}
+
+// ClearPaidMonthlyLimitUsd clears the value of the "paid_monthly_limit_usd" field.
+func (u *UserSubscriptionUpsertOne) ClearPaidMonthlyLimitUsd() *UserSubscriptionUpsertOne {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.ClearPaidMonthlyLimitUsd()
+	})
+}
+
+// SetPaidMonthlyLegacyLimitUsd sets the "paid_monthly_legacy_limit_usd" field.
+func (u *UserSubscriptionUpsertOne) SetPaidMonthlyLegacyLimitUsd(v float64) *UserSubscriptionUpsertOne {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.SetPaidMonthlyLegacyLimitUsd(v)
+	})
+}
+
+// AddPaidMonthlyLegacyLimitUsd adds v to the "paid_monthly_legacy_limit_usd" field.
+func (u *UserSubscriptionUpsertOne) AddPaidMonthlyLegacyLimitUsd(v float64) *UserSubscriptionUpsertOne {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.AddPaidMonthlyLegacyLimitUsd(v)
+	})
+}
+
+// UpdatePaidMonthlyLegacyLimitUsd sets the "paid_monthly_legacy_limit_usd" field to the value that was provided on create.
+func (u *UserSubscriptionUpsertOne) UpdatePaidMonthlyLegacyLimitUsd() *UserSubscriptionUpsertOne {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.UpdatePaidMonthlyLegacyLimitUsd()
+	})
+}
+
+// ClearPaidMonthlyLegacyLimitUsd clears the value of the "paid_monthly_legacy_limit_usd" field.
+func (u *UserSubscriptionUpsertOne) ClearPaidMonthlyLegacyLimitUsd() *UserSubscriptionUpsertOne {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.ClearPaidMonthlyLegacyLimitUsd()
+	})
+}
+
+// SetPaidMonthlyLegacyExpiresAt sets the "paid_monthly_legacy_expires_at" field.
+func (u *UserSubscriptionUpsertOne) SetPaidMonthlyLegacyExpiresAt(v time.Time) *UserSubscriptionUpsertOne {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.SetPaidMonthlyLegacyExpiresAt(v)
+	})
+}
+
+// UpdatePaidMonthlyLegacyExpiresAt sets the "paid_monthly_legacy_expires_at" field to the value that was provided on create.
+func (u *UserSubscriptionUpsertOne) UpdatePaidMonthlyLegacyExpiresAt() *UserSubscriptionUpsertOne {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.UpdatePaidMonthlyLegacyExpiresAt()
+	})
+}
+
+// ClearPaidMonthlyLegacyExpiresAt clears the value of the "paid_monthly_legacy_expires_at" field.
+func (u *UserSubscriptionUpsertOne) ClearPaidMonthlyLegacyExpiresAt() *UserSubscriptionUpsertOne {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.ClearPaidMonthlyLegacyExpiresAt()
 	})
 }
 
@@ -2134,6 +2331,83 @@ func (u *UserSubscriptionUpsertBulk) SetWelfareCycleClosed(v bool) *UserSubscrip
 func (u *UserSubscriptionUpsertBulk) UpdateWelfareCycleClosed() *UserSubscriptionUpsertBulk {
 	return u.Update(func(s *UserSubscriptionUpsert) {
 		s.UpdateWelfareCycleClosed()
+	})
+}
+
+// SetPaidMonthlyLimitUsd sets the "paid_monthly_limit_usd" field.
+func (u *UserSubscriptionUpsertBulk) SetPaidMonthlyLimitUsd(v float64) *UserSubscriptionUpsertBulk {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.SetPaidMonthlyLimitUsd(v)
+	})
+}
+
+// AddPaidMonthlyLimitUsd adds v to the "paid_monthly_limit_usd" field.
+func (u *UserSubscriptionUpsertBulk) AddPaidMonthlyLimitUsd(v float64) *UserSubscriptionUpsertBulk {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.AddPaidMonthlyLimitUsd(v)
+	})
+}
+
+// UpdatePaidMonthlyLimitUsd sets the "paid_monthly_limit_usd" field to the value that was provided on create.
+func (u *UserSubscriptionUpsertBulk) UpdatePaidMonthlyLimitUsd() *UserSubscriptionUpsertBulk {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.UpdatePaidMonthlyLimitUsd()
+	})
+}
+
+// ClearPaidMonthlyLimitUsd clears the value of the "paid_monthly_limit_usd" field.
+func (u *UserSubscriptionUpsertBulk) ClearPaidMonthlyLimitUsd() *UserSubscriptionUpsertBulk {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.ClearPaidMonthlyLimitUsd()
+	})
+}
+
+// SetPaidMonthlyLegacyLimitUsd sets the "paid_monthly_legacy_limit_usd" field.
+func (u *UserSubscriptionUpsertBulk) SetPaidMonthlyLegacyLimitUsd(v float64) *UserSubscriptionUpsertBulk {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.SetPaidMonthlyLegacyLimitUsd(v)
+	})
+}
+
+// AddPaidMonthlyLegacyLimitUsd adds v to the "paid_monthly_legacy_limit_usd" field.
+func (u *UserSubscriptionUpsertBulk) AddPaidMonthlyLegacyLimitUsd(v float64) *UserSubscriptionUpsertBulk {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.AddPaidMonthlyLegacyLimitUsd(v)
+	})
+}
+
+// UpdatePaidMonthlyLegacyLimitUsd sets the "paid_monthly_legacy_limit_usd" field to the value that was provided on create.
+func (u *UserSubscriptionUpsertBulk) UpdatePaidMonthlyLegacyLimitUsd() *UserSubscriptionUpsertBulk {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.UpdatePaidMonthlyLegacyLimitUsd()
+	})
+}
+
+// ClearPaidMonthlyLegacyLimitUsd clears the value of the "paid_monthly_legacy_limit_usd" field.
+func (u *UserSubscriptionUpsertBulk) ClearPaidMonthlyLegacyLimitUsd() *UserSubscriptionUpsertBulk {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.ClearPaidMonthlyLegacyLimitUsd()
+	})
+}
+
+// SetPaidMonthlyLegacyExpiresAt sets the "paid_monthly_legacy_expires_at" field.
+func (u *UserSubscriptionUpsertBulk) SetPaidMonthlyLegacyExpiresAt(v time.Time) *UserSubscriptionUpsertBulk {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.SetPaidMonthlyLegacyExpiresAt(v)
+	})
+}
+
+// UpdatePaidMonthlyLegacyExpiresAt sets the "paid_monthly_legacy_expires_at" field to the value that was provided on create.
+func (u *UserSubscriptionUpsertBulk) UpdatePaidMonthlyLegacyExpiresAt() *UserSubscriptionUpsertBulk {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.UpdatePaidMonthlyLegacyExpiresAt()
+	})
+}
+
+// ClearPaidMonthlyLegacyExpiresAt clears the value of the "paid_monthly_legacy_expires_at" field.
+func (u *UserSubscriptionUpsertBulk) ClearPaidMonthlyLegacyExpiresAt() *UserSubscriptionUpsertBulk {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.ClearPaidMonthlyLegacyExpiresAt()
 	})
 }
 

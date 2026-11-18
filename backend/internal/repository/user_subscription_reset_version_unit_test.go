@@ -52,4 +52,19 @@ func TestUserSubscriptionResetVersion_MutationsInvalidateOldRound(t *testing.T) 
 	require.EqualValues(t, 4, version())
 	require.NoError(t, r.UpdateStatus(ctx, s.ID, service.SubscriptionStatusSuspended))
 	require.EqualValues(t, 5, version())
+
+	// A manual daily reset may have initialized only one of the windows.
+	// First use fills the two missing anchors without erasing existing usage.
+	_, err = client.UserSubscription.UpdateOneID(s.ID).SetStatus(service.SubscriptionStatusActive).
+		SetDailyWindowStart(now).ClearWeeklyWindowStart().ClearMonthlyWindowStart().SetMonthlyUsageUsd(17).Save(ctx)
+	require.NoError(t, err)
+	firstUse := now.Add(time.Hour)
+	require.NoError(t, r.ActivateWindows(ctx, s.ID, firstUse, firstUse))
+	require.EqualValues(t, 6, version())
+	activated, err := r.GetByID(ctx, s.ID)
+	require.NoError(t, err)
+	require.True(t, activated.DailyWindowStart.Equal(now))
+	require.True(t, activated.WeeklyWindowStart.Equal(firstUse))
+	require.True(t, activated.MonthlyWindowStart.Equal(firstUse))
+	require.Equal(t, 17.0, activated.MonthlyUsageUSD)
 }

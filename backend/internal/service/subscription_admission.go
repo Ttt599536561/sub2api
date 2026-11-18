@@ -121,9 +121,8 @@ func (s *SubscriptionService) prepareSubscriptionForAdmission(ctx context.Contex
 	if err := loadSubscriptionSupplement(ctx, s.userSubRepo, sub); err != nil {
 		return nil, ErrBillingServiceUnavailable.WithCause(err)
 	}
-	group = sub.EffectiveGroup(group)
-	sub.Group = group
-	needsMaintenance, _ := s.ValidateAndCheckLimits(sub, group)
+	sub.Group = sub.EffectiveGroup(group)
+	needsMaintenance, _ := s.ValidateAndCheckLimits(sub, sub.Group)
 	if needsMaintenance {
 		var err error
 		sub, err = s.EnsureWindowMaintenance(ctx, sub)
@@ -161,7 +160,7 @@ func checkAuthoritativeSubscriptionLimits(sub *UserSubscription, group *Group, n
 			return ErrSubscriptionInvalid
 		}
 	}
-	if sub.IsWelfare() && (group.MonthlyLimitUSD == nil || *group.MonthlyLimitUSD < 0) {
+	if sub.HasFiniteMonthlyLimit(group) && (group.MonthlyLimitUSD == nil || *group.MonthlyLimitUSD < 0) {
 		return ErrSubscriptionInvalid
 	}
 	for _, value := range []float64{sub.SupplementGrantedUSD, sub.SupplementUsedUSD} {
@@ -175,7 +174,7 @@ func checkAuthoritativeSubscriptionLimits(sub *UserSubscription, group *Group, n
 	if group.HasWeeklyLimit() && sub.WeeklyUsageUSD >= *group.WeeklyLimitUSD {
 		return ErrWeeklyLimitExceeded
 	}
-	if (group.HasMonthlyLimit() || sub.IsWelfare()) && sub.MonthlyUsageUSD >= *group.MonthlyLimitUSD {
+	if sub.HasFiniteMonthlyLimit(group) && sub.MonthlyUsageUSD >= *group.MonthlyLimitUSD {
 		return ErrMonthlyLimitExceeded
 	}
 	if group.HasDailyLimit() && sub.DailyUsageUSD >= *group.DailyLimitUSD {

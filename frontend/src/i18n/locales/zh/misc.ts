@@ -144,6 +144,8 @@ export default {
     daily: '基础日额度',
     weekly: '基础周额度',
     monthly: '基础月额度',
+    monthlyBalance: '月额度剩余',
+    monthlyQuotaRefreshAt: '原订阅额度将于 {time} 发放',
     daysRemaining: '剩余 {days} 天',
     expiresOn: '{date} 到期',
     resetIn: '{time} 后重置',

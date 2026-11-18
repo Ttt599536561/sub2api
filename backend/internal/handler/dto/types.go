@@ -767,14 +767,16 @@ type Setting struct {
 }
 
 type UserSubscription struct {
-	ID                     int64   `json:"id"`
-	UserID                 int64   `json:"user_id"`
-	GroupID                int64   `json:"group_id"`
-	EntitlementKind        string  `json:"entitlement_kind"`
-	WelfareGrantCount      int64   `json:"welfare_grant_count"`
-	SupplementGrantedUSD   float64 `json:"supplement_granted_usd"`
-	SupplementUsedUSD      float64 `json:"supplement_used_usd"`
-	SupplementRemainingUSD float64 `json:"supplement_remaining_usd"`
+	ID                     int64      `json:"id"`
+	UserID                 int64      `json:"user_id"`
+	GroupID                int64      `json:"group_id"`
+	EntitlementKind        string     `json:"entitlement_kind"`
+	WelfareGrantCount      int64      `json:"welfare_grant_count"`
+	SupplementGrantedUSD   float64    `json:"supplement_granted_usd"`
+	SupplementUsedUSD      float64    `json:"supplement_used_usd"`
+	SupplementRemainingUSD float64    `json:"supplement_remaining_usd"`
+	PaidMonthlyQuota       bool       `json:"paid_monthly_quota,omitempty"`
+	MonthlyQuotaRefreshAt  *time.Time `json:"monthly_quota_refresh_at,omitempty"`
 
 	StartsAt  time.Time `json:"starts_at"`
 	ExpiresAt time.Time `json:"expires_at"`

@@ -147,6 +147,8 @@ export default {
     daily: 'Base daily quota',
     weekly: 'Base weekly quota',
     monthly: 'Base monthly quota',
+    monthlyBalance: 'Monthly quota remaining',
+    monthlyQuotaRefreshAt: 'Existing subscription quota is scheduled for {time}',
     daysRemaining: '{days} days remaining',
     expiresOn: 'Expires on {date}',
     resetIn: 'Resets in {time}',

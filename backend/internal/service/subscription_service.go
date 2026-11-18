@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"math/rand/v2"
@@ -238,6 +239,10 @@ func (s *SubscriptionService) AssignOrExtendSubscription(ctx context.Context, in
 }
 
 func (s *SubscriptionService) assignOrExtendSubscription(ctx context.Context, input *AssignSubscriptionInput, deferCacheInvalidation bool) (*UserSubscription, bool, error) {
+	return s.assignOrExtendSubscriptionWithGrant(ctx, input, deferCacheInvalidation, nil)
+}
+
+func (s *SubscriptionService) assignOrExtendSubscriptionWithGrant(ctx context.Context, input *AssignSubscriptionInput, deferCacheInvalidation bool, grant *PaidMonthlyRenewalGrant) (*UserSubscription, bool, error) {
 	// 检查分组是否存在且为订阅类型
 	group, err := s.groupRepo.GetByID(ctx, input.GroupID)
 	if err != nil {
@@ -249,9 +254,11 @@ func (s *SubscriptionService) assignOrExtendSubscription(ctx context.Context, in
 
 	// 查询是否已有订阅
 	existingSub, err := s.userSubRepo.GetByUserIDAndGroupID(ctx, input.UserID, input.GroupID)
-	if err != nil {
-		// 不存在记录是正常情况，其他错误需要返回
-		existingSub = nil
+	if err != nil && !errors.Is(err, ErrSubscriptionNotFound) {
+		return nil, false, err
+	}
+	if grant != nil && group.HasMonthlyLimit() {
+		grant.BaseMonthlyLimitUSD = *group.MonthlyLimitUSD
 	}
 
 	validityDays := input.ValidityDays
@@ -264,7 +271,7 @@ func (s *SubscriptionService) assignOrExtendSubscription(ctx context.Context, in
 
 	// 已有订阅，执行续期（在事务中完成所有更新）
 	if existingSub != nil {
-		if err := s.updateExistingSubscriptionTerm(ctx, existingSub.ID, validityDays, input.Notes, false); err != nil {
+		if err := s.updateExistingSubscriptionTerm(ctx, existingSub.ID, validityDays, input.Notes, false, grant); err != nil {
 			return nil, false, err
 		}
 
@@ -312,6 +319,7 @@ func (s *SubscriptionService) updateExistingSubscriptionTerm(
 	validityDays int,
 	notes string,
 	assignmentSemantics bool,
+	grant *PaidMonthlyRenewalGrant,
 ) error {
 	return s.withSubscriptionUpdateTx(ctx, func(txCtx context.Context) error {
 		existingSub, err := s.userSubRepo.GetByIDForUpdate(txCtx, subscriptionID)
@@ -353,8 +361,17 @@ func (s *SubscriptionService) updateExistingSubscriptionTerm(
 			return nil
 		}
 
-		// 更新过期时间
-		if err := s.userSubRepo.ExtendExpiry(txCtx, existingSub.ID, newExpiresAt); err != nil {
+		if grant != nil && existingSub.Status == SubscriptionStatusActive && !now.Before(existingSub.StartsAt) {
+			if existingSub.PaidMonthlyLimitUSD == nil && grant.BaseMonthlyLimitUSD <= 0 {
+				return errPaidMonthlyQuotaRemoved
+			}
+			if err := s.recordPaidMonthlyRenewal(txCtx, existingSub, *grant, now, newExpiresAt); err != nil {
+				return fmt.Errorf("record paid monthly renewal: %w", err)
+			}
+			if err := s.userSubRepo.ExtendExpiry(txCtx, existingSub.ID, newExpiresAt); err != nil {
+				return fmt.Errorf("extend paid subscription: %w", err)
+			}
+		} else if err := s.extendWithLegacyMonthlyCoverage(txCtx, existingSub, newExpiresAt); err != nil {
 			return fmt.Errorf("extend subscription: %w", err)
 		}
 
@@ -415,6 +432,9 @@ func renewedSubscriptionTerm(existingSub *UserSubscription, notes string, starts
 	renewed.DailyUsageUSD = 0
 	renewed.WeeklyUsageUSD = 0
 	renewed.MonthlyUsageUSD = 0
+	renewed.PaidMonthlyLimitUSD = nil
+	renewed.PaidMonthlyLegacyLimitUSD = nil
+	renewed.PaidMonthlyLegacyExpiresAt = nil
 	renewed.AutoDailyResetEnabled = false
 	renewed.PreserveCalendarDailyReset = false
 	renewed.Notes = appendSubscriptionNotes(existingSub.Notes, notes)
@@ -551,7 +571,7 @@ func (s *SubscriptionService) assignSubscriptionWithReuse(ctx context.Context, i
 		if sub.Status == SubscriptionStatusExpired ||
 			(sub.Status != SubscriptionStatusSuspended && !sub.ExpiresAt.After(now)) {
 			validityDays := normalizeAssignValidityDays(input.ValidityDays)
-			if err := s.updateExistingSubscriptionTerm(ctx, sub.ID, validityDays, input.Notes, true); err != nil {
+			if err := s.updateExistingSubscriptionTerm(ctx, sub.ID, validityDays, input.Notes, true, nil); err != nil {
 				return nil, false, err
 			}
 			s.maybeInvalidateAssignmentCaches(input.UserID, input.GroupID, false)
@@ -725,7 +745,7 @@ func (s *SubscriptionService) ExtendSubscription(ctx context.Context, subscripti
 				return err
 			}
 		} else {
-			if err := s.userSubRepo.ExtendExpiry(txCtx, subscriptionID, newExpiresAt); err != nil {
+			if err := s.extendWithLegacyMonthlyCoverage(txCtx, sub, newExpiresAt); err != nil {
 				return err
 			}
 			if sub.Status == SubscriptionStatusExpired {
@@ -781,7 +801,7 @@ func (s *SubscriptionService) restoreSubscriptionDaysAfterRefund(ctx context.Con
 		if newExpiresAt.After(MaxExpiresAt) {
 			newExpiresAt = MaxExpiresAt
 		}
-		if err := s.userSubRepo.ExtendExpiry(txCtx, subscriptionID, newExpiresAt); err != nil {
+		if err := s.extendWithLegacyMonthlyCoverage(txCtx, sub, newExpiresAt); err != nil {
 			return err
 		}
 		now := time.Now()
@@ -944,9 +964,13 @@ func normalizeExpiredWindowsAt(subs []UserSubscription, now time.Time) {
 			sub.WeeklyUsageUSD = 0
 		}
 		// 月窗口过期：清零展示数据
-		if sub.canAutomaticallyResetMonthlyAt(now) {
-			sub.MonthlyWindowStart = nil
-			sub.MonthlyUsageUSD = 0
+		if start, allowance, due := sub.MonthlyWindowAdvanceAt(now); due {
+			if sub.PaidMonthlyLimitUSD == nil {
+				sub.MonthlyWindowStart = nil
+				sub.MonthlyUsageUSD = 0
+			} else {
+				sub.ApplyMonthlyWindowAdvance(start, allowance)
+			}
 		}
 	}
 }
@@ -974,7 +998,7 @@ func (s *SubscriptionService) CheckAndActivateWindow(ctx context.Context, sub *U
 }
 
 func (s *SubscriptionService) checkAndActivateWindowAt(ctx context.Context, sub *UserSubscription, now time.Time) error {
-	if sub.IsWindowActivated() {
+	if !sub.needsWindowActivation(sub.Group) {
 		return nil
 	}
 
@@ -994,6 +1018,9 @@ func (s *SubscriptionService) AdminResetQuota(ctx context.Context, subscriptionI
 	}
 	if sub.IsWelfare() {
 		return nil, ErrWelfareSubscriptionFixed
+	}
+	if resetMonthly && sub.PaidMonthlyLimitUSD != nil {
+		return nil, ErrPaidMonthlyResetNotAllowed
 	}
 	now := s.now()
 	// 日窗口锚点取当天 0 点：手动重置只清空用量，不改变“每天 0 点刷新”的节奏。
@@ -1040,13 +1067,11 @@ func (s *SubscriptionService) CheckAndResetWindows(ctx context.Context, sub *Use
 	}
 
 	// 月窗口重置（30天）
-	if windowStart, ok := sub.automaticWindowStartAt(sub.MonthlyWindowStart, 30*24*time.Hour, now); ok {
-		expectedWindowStart := sub.MonthlyWindowStart
-		if err := s.userSubRepo.ResetMonthlyUsage(ctx, sub.ID, expectedWindowStart, windowStart); err != nil {
+	if windowStart, allowance, ok := sub.MonthlyWindowAdvanceAt(now); ok {
+		if err := s.persistMonthlyWindowAdvance(ctx, sub, windowStart, allowance); err != nil {
 			return err
 		}
-		sub.MonthlyWindowStart = &windowStart
-		sub.MonthlyUsageUSD = 0
+		sub.ApplyMonthlyWindowAdvance(windowStart, allowance)
 		needsInvalidateCache = true
 	}
 
@@ -1068,7 +1093,7 @@ func (s *SubscriptionService) EnsureWindowMaintenance(ctx context.Context, sub *
 	if sub == nil {
 		return nil, ErrSubscriptionNilInput
 	}
-	if !sub.IsWindowActivated() {
+	if sub.needsWindowActivation(sub.Group) {
 		if err := s.CheckAndActivateWindow(ctx, sub); err != nil {
 			return nil, err
 		}
@@ -1133,11 +1158,20 @@ func (s *SubscriptionService) ValidateAndCheckLimits(sub *UserSubscription, grou
 		sub.WeeklyUsageUSD = 0
 		needsMaintenance = true
 	}
-	if sub.canAutomaticallyResetMonthlyAt(now) {
-		sub.MonthlyUsageUSD = 0
+	if start, allowance, due := sub.MonthlyWindowAdvanceAt(now); due {
+		// The paid window anchor is needed for the subsequent CAS; only the
+		// authoritative database snapshot can advance its allowance.
+		if sub.PaidMonthlyLimitUSD == nil {
+			sub.MonthlyUsageUSD = 0
+		} else {
+			projected := *sub
+			projected.ApplyMonthlyWindowAdvance(start, allowance)
+			group = projected.EffectiveGroup(group)
+			sub = &projected
+		}
 		needsMaintenance = true
 	}
-	if !sub.IsWindowActivated() {
+	if sub.needsWindowActivation(group) {
 		needsMaintenance = true
 	}
 
@@ -1182,7 +1216,7 @@ func (s *SubscriptionService) doWindowMaintenance(sub *UserSubscription) {
 	defer cancel()
 
 	// 激活窗口（首次使用时）
-	if !sub.IsWindowActivated() {
+	if sub.needsWindowActivation(sub.Group) {
 		if err := s.CheckAndActivateWindow(ctx, sub); err != nil {
 			log.Printf("Failed to activate subscription windows: %v", err)
 		}
@@ -1313,7 +1347,7 @@ func (s *SubscriptionService) calculateProgress(sub *UserSubscription, group *Gr
 	}
 
 	// 月进度
-	if (group.HasMonthlyLimit() || sub.IsWelfare() && group.MonthlyLimitUSD != nil) && sub.MonthlyWindowStart != nil {
+	if sub.HasFiniteMonthlyLimit(group) && group.MonthlyLimitUSD != nil && sub.MonthlyWindowStart != nil {
 		limit := *group.MonthlyLimitUSD
 		percentage := 100.0
 		if limit > 0 {

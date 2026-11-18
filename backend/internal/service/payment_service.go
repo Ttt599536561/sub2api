@@ -134,6 +134,9 @@ type RefundPlan struct {
 	BalanceToDeduct float64
 	SubDaysToDeduct int
 	SubscriptionID  int64
+	// The term snapshot keeps a prepared deduction tied to the original assignment.
+	subscriptionTermStartsAt           *time.Time
+	subscriptionCompensationSuperseded bool
 	// Set only when this attempt revoked the subscription instead of shortening it.
 	revokedSubscription *dbent.UserSubscription
 	// deductionHeld 表示扣减已在进入 REFUND_PENDING 前执行并保留，终态收敛时不再重复扣减。

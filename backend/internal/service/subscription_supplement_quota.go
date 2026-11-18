@@ -50,7 +50,7 @@ func (s *UserSubscription) BaseQuotaRemaining(group *Group) float64 {
 	if group.HasWeeklyLimit() {
 		remaining = math.Min(remaining, math.Max(0, *group.WeeklyLimitUSD-s.WeeklyUsageUSD))
 	}
-	if group.HasMonthlyLimit() || s.IsWelfare() {
+	if s.HasFiniteMonthlyLimit(group) {
 		if group.MonthlyLimitUSD == nil {
 			return 0
 		}

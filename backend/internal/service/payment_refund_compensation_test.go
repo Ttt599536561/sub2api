@@ -192,8 +192,15 @@ func TestRefundShorteningCompensationPreservesConcurrentChanges(t *testing.T) {
 				}
 				actual, err := svc.entClient.UserSubscription.Get(ctx, original.ID)
 				require.NoError(t, err)
-				assertRefundCompensationTerm(t, concurrent, actual, concurrent.ExpiresAt.AddDate(0, 0, 7))
-				require.Greater(t, actual.DailyResetVersion, concurrent.DailyResetVersion)
+				if change == "expired_renewal" {
+					assertRefundCompensationTerm(t, concurrent, actual, concurrent.ExpiresAt)
+					require.Equal(t, concurrent.DailyResetVersion, actual.DailyResetVersion)
+					require.True(t, svc.hasAuditLog(ctx, order.ID, "REFUND_ROLLBACK_SUCCEEDED"))
+					require.False(t, svc.hasAuditLog(ctx, order.ID, "REFUND_ROLLBACK_FAILED"))
+				} else {
+					assertRefundCompensationTerm(t, concurrent, actual, concurrent.ExpiresAt.AddDate(0, 0, 7))
+					require.Greater(t, actual.DailyResetVersion, concurrent.DailyResetVersion)
+				}
 			})
 		}
 	}

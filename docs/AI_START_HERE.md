@@ -15,7 +15,7 @@
 - **两个源码仓库**：`sub2api` 与 `ai-check`。
 - **QQ生图是Sub2内的业务模块**：`qq-image`，不是第三个源码仓库；已合并主目录，旧 QQ 工作树不再是默认入口。
 - **现有官方QQ机器人，两个独立接收服务**：Sub2 的生图接收器，与检测仓的 `oneapi-observer-qq` 菜单/智商接收器。单个连接健康不能证明整条机器人链路健康。
-- **定位对象**：Sub2应用、官方QQ生图、检测站与相关Worker，以及新增NapCat邀请福利。qq-invite另接普通福利QQ账号和独立NapCat容器；模块与部署单元不是一一对应。
+- **定位对象**：Sub2 应用、官方 QQ 生图、检测站与相关 Worker。`qq-invite` 是已退役的邀请发码功能标识，用于定位历史福利月卡和旧版本运维记录。
 - **测试环境不是检测项目**：`qq-test.tangguo.xin` 是Sub2独立验收实例；智商检测站是独立产品，域名含sub2也不属于Sub2部署。
 
 ## 路由优先级与防混淆
@@ -27,7 +27,7 @@
 | 裸 @、/菜单、/帮助 没有回复 | ai-check/cloudflare-qq | 不先改余额或Sub2邮箱 |
 | /智商 查询、截图、分组错误 | cloudflare-qq + ai-site | 截图只读已有作品，不是新生图 |
 | /绑定、确认绑定、邮件验证码 | sub2api 的 qqimage/auth/email/UI | 不用检测站管理员密码或CF管理令牌 |
-| 邀请入群送月卡、QQ等级、NapCat扫码重登 | sub2api/qq-invite + 同机NapCat独立服务 | 普通福利QQ账号，不是官方生图/智商OpenID；部署状态单独查交接 |
+| 历史邀请月卡、已发老码、旧 NapCat 记录 | sub2api 福利订阅与兑换历史，旧版 `qq-invite` 交接 | 新版已移除自动处理与发码，历史权益和运营记录仍由 Sub2 保存 |
 | /生图、余额、价格、订单、重发 | sub2api 的 qqimage | 不是 oneapi-observer-generation |
 | 指令归属/重复回复/紧邻提示词 | 两侧命令解析 | CF静默让出，不是HTTP代理到Go；共同保留边界 |
 | 回复文案编辑/同步 | Sub2模板后台 + CF六键读取 | 内容编辑、默认模板和同步协议是不同任务 |

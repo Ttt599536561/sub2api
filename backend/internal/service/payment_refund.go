@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"entgo.io/ent/dialect"
 	"entgo.io/ent/dialect/sql"
 	dbent "github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/ent/paymentauditlog"
@@ -280,8 +281,14 @@ func (s *PaymentService) PrepareRefund(ctx context.Context, oid int64, amt float
 		return held, nil, nil
 	}
 	if deduct {
-		if er := s.prepDeduct(ctx, o, p, force); er != nil {
-			return nil, er, nil
+		paidRenewal, err := s.preparePaidMonthlyRenewalRefund(ctx, o, p)
+		if err != nil {
+			return nil, nil, err
+		}
+		if !paidRenewal {
+			if er := s.prepDeduct(ctx, o, p, force); er != nil {
+				return nil, er, nil
+			}
 		}
 	}
 	return p, nil, nil
@@ -291,12 +298,13 @@ func (s *PaymentService) prepDeduct(ctx context.Context, o *dbent.PaymentOrder, 
 	if o.OrderType == payment.OrderTypeSubscription {
 		p.DeductionType = payment.DeductionTypeSubscription
 		if o.SubscriptionGroupID != nil && o.SubscriptionDays != nil {
-			p.SubDaysToDeduct = *o.SubscriptionDays
 			sub, err := s.subscriptionSvc.GetActiveSubscription(ctx, o.UserID, *o.SubscriptionGroupID)
-			if err == nil && sub != nil {
+			if err == nil && s.refundPlanMatchesSubscriptionTerm(ctx, p, sub) {
+				p.SubDaysToDeduct = *o.SubscriptionDays
 				p.SubscriptionID = sub.ID
+				p.subscriptionTermStartsAt = &sub.StartsAt
 			} else if !force {
-				return &RefundResult{Success: false, Warning: "cannot find active subscription for deduction, use force", RequireForce: true}
+				return &RefundResult{Success: false, Warning: "cannot identify the original active subscription term for deduction, use force for a cash-only refund", RequireForce: true}
 			}
 		}
 		return nil
@@ -378,7 +386,7 @@ func (s *PaymentService) ExecuteRefund(ctx context.Context, p *RefundPlan) (*Ref
 		}
 	}
 	if !p.deductionHeld && p.DeductionType == payment.DeductionTypeSubscription && p.SubDaysToDeduct > 0 && p.SubscriptionID > 0 {
-		_, err := s.subscriptionSvc.ExtendSubscription(ctx, p.SubscriptionID, -p.SubDaysToDeduct)
+		err := s.shortenRefundSubscription(ctx, p)
 		if err != nil {
 			if errors.Is(err, ErrAdjustWouldExpire) {
 				// Deduction would expire the subscription — revoke it entirely
@@ -548,6 +556,7 @@ func (s *PaymentService) refundFailurePlan(o *dbent.PaymentOrder, detail refundP
 
 func (s *PaymentService) finalizeConfirmedPendingRefund(ctx context.Context, o *dbent.PaymentOrder, pendingDetail refundPendingAuditDetail, resp *payment.RefundResponse) (*RefundResult, error) {
 	plan := s.refundFinalizePlan(o)
+	plan.subscriptionTermStartsAt = pendingDetail.SubscriptionTermStartsAt
 	plan.DeductBalance = pendingDetail.shouldDeduct()
 	if !plan.DeductBalance {
 		plan.DeductionType = payment.DeductionTypeNone
@@ -560,8 +569,14 @@ func (s *PaymentService) finalizeConfirmedPendingRefund(ctx context.Context, o *
 		plan.BalanceToDeduct = 0
 		plan.SubDaysToDeduct = 0
 	} else if o.OrderType == payment.OrderTypeSubscription {
-		if early := s.prepDeduct(ctx, o, plan, true); early != nil {
-			return early, nil
+		paidRenewal, err := s.preparePaidMonthlyRenewalRefund(ctx, o, plan)
+		if err != nil {
+			return nil, err
+		}
+		if !paidRenewal {
+			if early := s.prepDeduct(ctx, o, plan, true); early != nil {
+				return early, nil
+			}
 		}
 	}
 	result, err := s.finalizePendingRefundSuccess(ctx, plan)
@@ -596,6 +611,12 @@ func (s *PaymentService) finalizePendingRefundSuccess(ctx context.Context, p *Re
 		return nil, infraerrors.Conflict("CONFLICT", "order status changed")
 	}
 
+	if !p.deductionHeld && p.DeductionType == payment.DeductionTypeSubscription && p.SubDaysToDeduct > 0 &&
+		s.welfarePaymentRepo != nil && paymentAuditDialect(s.entClient) == dialect.Postgres {
+		if err := lockUserForSubscriptionPayment(txCtx, tx, p.Order.UserID); err != nil {
+			return nil, fmt.Errorf("lock user for subscription refund: %w", err)
+		}
+	}
 	if err := s.applyRefundFinalDeduction(txCtx, p); err != nil {
 		return nil, err
 	}
@@ -609,11 +630,11 @@ func (s *PaymentService) finalizePendingRefundSuccess(ctx context.Context, p *Re
 	if p.DeductionType == payment.DeductionTypeBalance && p.BalanceToDeduct > 0 {
 		s.invalidateRefundBalanceCaches(ctx, p.Order.UserID)
 	}
-	if p.DeductionType == payment.DeductionTypeSubscription && p.SubscriptionID > 0 && p.Order.SubscriptionGroupID != nil {
+	if result.SubDaysDeducted > 0 && p.Order.SubscriptionGroupID != nil {
 		// Deduction invalidates inside this transaction. Readers can refill the
 		// old committed entitlement before commit, so evict it again afterward.
 		if cacheErr := s.subscriptionSvc.invalidateSubscriptionCaches(p.Order.UserID, *p.Order.SubscriptionGroupID); cacheErr != nil {
-			slog.Warn("invalidate committed pending refund subscription cache", "subID", p.SubscriptionID, "error", cacheErr)
+			slog.Warn("invalidate committed pending refund subscription cache", "orderID", p.OrderID, "error", cacheErr)
 		}
 	}
 	return result, nil
@@ -656,9 +677,9 @@ func (s *PaymentService) applyRefundFinalDeduction(ctx context.Context, p *Refun
 		p.BalanceToDeduct = deducted
 	}
 	if p.DeductionType == payment.DeductionTypeSubscription && p.SubDaysToDeduct > 0 && p.SubscriptionID > 0 {
-		if _, err := s.subscriptionSvc.ExtendSubscription(ctx, p.SubscriptionID, -p.SubDaysToDeduct); err != nil {
+		if err := s.shortenRefundSubscription(ctx, p); err != nil {
 			if errors.Is(err, ErrAdjustWouldExpire) {
-				if revokeErr := s.subscriptionSvc.RevokeSubscription(ctx, p.SubscriptionID); revokeErr != nil {
+				if revokeErr := s.revokeRefundSubscription(ctx, p); revokeErr != nil {
 					return fmt.Errorf("revoke subscription: %w", revokeErr)
 				}
 			} else {
@@ -828,20 +849,22 @@ func refundRevocationSnapshot(sub *dbent.UserSubscription) *refundSubscriptionRe
 // refundPendingAuditDetail 记录在 REFUND_PENDING 审计日志中。DeductionHeld 为 true 表示
 // 进入 pending 时扣减被保留；旧记录没有该字段，扣减已在 pending 时归还（DeductionRollbackOK）。
 type refundPendingAuditDetail struct {
-	RevokedSubscription *refundSubscriptionRevocation `json:"revokedSubscription,omitempty"`
-	GatewayConfirmed    bool                          `json:"gatewayConfirmed"`
-	GatewayFailure      string                        `json:"gatewayFailure,omitempty"`
-	DeductBalance       *bool                         `json:"deductBalance,omitempty"`
-	RefundID            string                        `json:"refundID"`
-	RefundAmount        float64                       `json:"refundAmount"`
-	Reason              string                        `json:"reason"`
-	Force               bool                          `json:"force"`
-	DeductionRollbackOK bool                          `json:"deductionRollbackOK,omitempty"`
-	DeductionHeld       bool                          `json:"deductionHeld,omitempty"`
-	DeductionType       string                        `json:"deductionType,omitempty"`
-	BalanceDeducted     float64                       `json:"balanceDeducted"`
-	SubDaysDeducted     int                           `json:"subDaysDeducted"`
-	SubscriptionID      int64                         `json:"subscriptionID,omitempty"`
+	RevokedSubscription                *refundSubscriptionRevocation `json:"revokedSubscription,omitempty"`
+	GatewayConfirmed                   bool                          `json:"gatewayConfirmed"`
+	GatewayFailure                     string                        `json:"gatewayFailure,omitempty"`
+	DeductBalance                      *bool                         `json:"deductBalance,omitempty"`
+	RefundID                           string                        `json:"refundID"`
+	RefundAmount                       float64                       `json:"refundAmount"`
+	Reason                             string                        `json:"reason"`
+	Force                              bool                          `json:"force"`
+	DeductionRollbackOK                bool                          `json:"deductionRollbackOK,omitempty"`
+	DeductionHeld                      bool                          `json:"deductionHeld,omitempty"`
+	DeductionType                      string                        `json:"deductionType,omitempty"`
+	BalanceDeducted                    float64                       `json:"balanceDeducted"`
+	SubDaysDeducted                    int                           `json:"subDaysDeducted"`
+	SubscriptionID                     int64                         `json:"subscriptionID,omitempty"`
+	SubscriptionTermStartsAt           *time.Time                    `json:"subscriptionTermStartsAt,omitempty"`
+	SubscriptionCompensationSuperseded bool                          `json:"subscriptionCompensationSuperseded,omitempty"`
 	// requestedAt 取自审计记录的创建时间，不参与序列化。
 	requestedAt time.Time
 }
@@ -855,6 +878,7 @@ func (d refundPendingAuditDetail) applyTo(p *RefundPlan) {
 	p.BalanceToDeduct = d.BalanceDeducted
 	p.SubDaysToDeduct = d.SubDaysDeducted
 	p.SubscriptionID = d.SubscriptionID
+	p.subscriptionTermStartsAt = d.SubscriptionTermStartsAt
 	if sub := d.RevokedSubscription; sub != nil {
 		p.revokedSubscription = &dbent.UserSubscription{ID: sub.ID, UserID: sub.UserID, GroupID: sub.GroupID,
 			DeletedAt: sub.DeletedAt, UpdatedAt: sub.UpdatedAt, DailyResetVersion: sub.DailyResetVersion}
@@ -958,6 +982,9 @@ func (s *PaymentService) heldRefundRetryPlan(ctx context.Context, o *dbent.Payme
 		if sub.UserID != o.UserID || sub.GroupID != *o.SubscriptionGroupID || (sub.DeletedAt != nil && detail.RevokedSubscription == nil) {
 			return invalid()
 		}
+		if detail.SubscriptionTermStartsAt != nil && !detail.SubscriptionTermStartsAt.Equal(sub.StartsAt) {
+			return invalid()
+		}
 		if revoked := detail.RevokedSubscription; revoked != nil && (revoked.ID != sub.ID || revoked.UserID != sub.UserID || revoked.GroupID != sub.GroupID || revoked.DeletedAt == nil) {
 			return invalid()
 		}
@@ -985,7 +1012,9 @@ func refundHeldAuditDetail(p *RefundPlan) refundPendingAuditDetail {
 		RefundAmount: p.RefundAmount, Reason: p.Reason, Force: p.Force,
 		DeductBalance: &deduct, DeductionHeld: true, DeductionType: p.DeductionType,
 		BalanceDeducted: p.BalanceToDeduct, SubDaysDeducted: p.SubDaysToDeduct,
-		SubscriptionID: p.SubscriptionID, RevokedSubscription: refundRevocationSnapshot(p.revokedSubscription),
+		SubscriptionID: p.SubscriptionID, SubscriptionTermStartsAt: p.subscriptionTermStartsAt,
+		SubscriptionCompensationSuperseded: p.subscriptionCompensationSuperseded,
+		RevokedSubscription:                refundRevocationSnapshot(p.revokedSubscription),
 	}
 }
 
@@ -1080,6 +1109,11 @@ func (s *PaymentService) markRefundOk(ctx context.Context, p *RefundPlan) (*Refu
 	if err := tx.Commit(); err != nil {
 		return nil, fmt.Errorf("commit refund finalization: %w", err)
 	}
+	if isPostgresMonthlySubscriptionOrder(s.entClient, p.Order) && result.SubDaysDeducted > 0 && p.Order.SubscriptionGroupID != nil {
+		if err := s.subscriptionSvc.invalidateSubscriptionCaches(p.Order.UserID, *p.Order.SubscriptionGroupID); err != nil {
+			slog.Warn("invalidate confirmed monthly refund subscription cache", "orderID", p.OrderID, "error", err)
+		}
+	}
 	return result, nil
 }
 
@@ -1110,6 +1144,12 @@ func (s *PaymentService) markRefundOkTx(ctx context.Context, client *dbent.Clien
 			return nil, fmt.Errorf("reverse subscription welfare: %w", err)
 		}
 	}
+	// Welfare reversal can lock the user. Keep user -> subscription lock order
+	// consistent with payment assignment and other entitlement writes.
+	paidDaysDeducted, err := settlePaidMonthlyRenewalRefund(ctx, client, p)
+	if err != nil {
+		return nil, err
+	}
 	detail, err := json.Marshal(map[string]any{"refundAmount": p.RefundAmount, "reason": p.Reason, "balanceDeducted": p.BalanceToDeduct, "force": p.Force})
 	if err != nil {
 		return nil, fmt.Errorf("marshal refund audit: %w", err)
@@ -1122,7 +1162,7 @@ func (s *PaymentService) markRefundOkTx(ctx context.Context, client *dbent.Clien
 		Save(ctx); err != nil {
 		return nil, fmt.Errorf("write refund audit: %w", err)
 	}
-	return &RefundResult{Success: true, BalanceDeducted: p.BalanceToDeduct, SubDaysDeducted: p.SubDaysToDeduct}, nil
+	return &RefundResult{Success: true, BalanceDeducted: p.BalanceToDeduct, SubDaysDeducted: p.SubDaysToDeduct + paidDaysDeducted}, nil
 }
 
 func (s *PaymentService) recoverConfirmedRefund(ctx context.Context, p *RefundPlan, resp *payment.RefundResponse, finalizeErr error, pendingDetail *refundPendingAuditDetail) (*RefundResult, error) {
@@ -1192,9 +1232,10 @@ func (s *PaymentService) preserveConfirmedRefund(ctx context.Context, p *RefundP
 		"reason": p.Reason, "force": p.Force,
 		"gatewayConfirmed": true, "deductionRollbackOK": deductionRollbackOK,
 		"deductionHeld": deductionHeld, "subscriptionID": p.SubscriptionID,
-		"revokedSubscription": refundRevocationSnapshot(p.revokedSubscription),
-		"deductBalance":       deductBalance,
-		"deductionType":       p.DeductionType, "balanceDeducted": balanceDeducted,
+		"subscriptionTermStartsAt": p.subscriptionTermStartsAt,
+		"revokedSubscription":      refundRevocationSnapshot(p.revokedSubscription),
+		"deductBalance":            deductBalance,
+		"deductionType":            p.DeductionType, "balanceDeducted": balanceDeducted,
 		"subDaysDeducted": subDaysDeducted, "finalizationError": psErrMsg(finalizeErr),
 	})
 	if err != nil {
@@ -1290,15 +1331,25 @@ func refundResponseID(resp *payment.RefundResponse) string {
 // Keep the revocation and its persisted version in one transaction. A later
 // rollback may restore this exact revocation, never a concurrent admin action.
 func (s *PaymentService) revokeRefundSubscription(ctx context.Context, p *RefundPlan) error {
-	tx, err := s.entClient.Tx(ctx)
-	if err != nil {
-		return err
+	tx := dbent.TxFromContext(ctx)
+	ownsTx := tx == nil
+	if ownsTx {
+		var err error
+		tx, err = s.entClient.Tx(ctx)
+		if err != nil {
+			return err
+		}
+		defer func() { _ = tx.Rollback() }()
 	}
-	defer func() { _ = tx.Rollback() }()
 	txCtx := dbent.NewTxContext(ctx, tx)
 	sub, err := tx.UserSubscription.Get(txCtx, p.SubscriptionID)
 	if err != nil {
 		return err
+	}
+	if !s.refundPlanMatchesSubscriptionTerm(txCtx, p, &UserSubscription{
+		ID: sub.ID, UserID: sub.UserID, GroupID: sub.GroupID, StartsAt: sub.StartsAt,
+	}) {
+		return infraerrors.Conflict("SUBSCRIPTION_REFUND_TERM_CHANGED", "the original subscription term is no longer current")
 	}
 	now := time.Now()
 	// A renewal may have committed after ExtendSubscription rejected the
@@ -1307,7 +1358,7 @@ func (s *PaymentService) revokeRefundSubscription(ctx context.Context, p *Refund
 		return infraerrors.Conflict("CONFLICT", "subscription changed before refund revocation")
 	}
 	claimed, err := tx.UserSubscription.Update().Where(
-		usersubscription.IDEQ(sub.ID), usersubscription.DeletedAtIsNil(),
+		usersubscription.IDEQ(sub.ID), usersubscription.DeletedAtIsNil(), usersubscription.StartsAtEQ(sub.StartsAt),
 		usersubscription.UpdatedAtEQ(sub.UpdatedAt),
 		usersubscription.DailyResetVersionEQ(sub.DailyResetVersion),
 	).SetUpdatedAt(now).Save(txCtx)
@@ -1320,22 +1371,33 @@ func (s *PaymentService) revokeRefundSubscription(ctx context.Context, p *Refund
 	if err := s.subscriptionSvc.RevokeSubscription(txCtx, sub.ID); err != nil {
 		return err
 	}
-	revoked, err := tx.UserSubscription.Get(mixins.SkipSoftDelete(txCtx), sub.ID)
-	if err != nil {
-		return err
+	if ownsTx {
+		revoked, err := tx.UserSubscription.Get(mixins.SkipSoftDelete(txCtx), sub.ID)
+		if err != nil {
+			return err
+		}
+		if err := tx.Commit(); err != nil {
+			return err
+		}
+		p.revokedSubscription = revoked
+		s.invalidateRefundSubscriptionCaches(revoked)
 	}
-	if err := tx.Commit(); err != nil {
-		return err
-	}
-	p.revokedSubscription = revoked
-	s.invalidateRefundSubscriptionCaches(revoked)
 	return nil
 }
 
 func (s *PaymentService) restoreRefundSubscription(ctx context.Context, p *RefundPlan) error {
 	revoked := p.revokedSubscription
 	if revoked == nil {
-		_, err := s.subscriptionSvc.restoreSubscriptionDaysAfterRefund(ctx, p.SubscriptionID, p.SubDaysToDeduct)
+		p.subscriptionCompensationSuperseded = false
+		err := s.withOriginalRefundSubscriptionTerm(ctx, p, true, func(txCtx context.Context) error {
+			_, err := s.subscriptionSvc.restoreSubscriptionDaysAfterRefund(txCtx, p.SubscriptionID, p.SubDaysToDeduct)
+			return err
+		})
+		if err == nil && dbent.TxFromContext(ctx) == nil && p.Order.SubscriptionGroupID != nil {
+			if cacheErr := s.subscriptionSvc.invalidateSubscriptionCaches(p.Order.UserID, *p.Order.SubscriptionGroupID); cacheErr != nil {
+				slog.Warn("invalidate committed refund compensation cache", "orderID", p.OrderID, "error", cacheErr)
+			}
+		}
 		return err
 	}
 	if revoked.DeletedAt == nil {

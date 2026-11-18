@@ -110,6 +110,21 @@ func WelfareCycleClosed(v bool) predicate.UserSubscription {
 	return predicate.UserSubscription(sql.FieldEQ(FieldWelfareCycleClosed, v))
 }
 
+// PaidMonthlyLimitUsd applies equality check predicate on the "paid_monthly_limit_usd" field. It's identical to PaidMonthlyLimitUsdEQ.
+func PaidMonthlyLimitUsd(v float64) predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldEQ(FieldPaidMonthlyLimitUsd, v))
+}
+
+// PaidMonthlyLegacyLimitUsd applies equality check predicate on the "paid_monthly_legacy_limit_usd" field. It's identical to PaidMonthlyLegacyLimitUsdEQ.
+func PaidMonthlyLegacyLimitUsd(v float64) predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldEQ(FieldPaidMonthlyLegacyLimitUsd, v))
+}
+
+// PaidMonthlyLegacyExpiresAt applies equality check predicate on the "paid_monthly_legacy_expires_at" field. It's identical to PaidMonthlyLegacyExpiresAtEQ.
+func PaidMonthlyLegacyExpiresAt(v time.Time) predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldEQ(FieldPaidMonthlyLegacyExpiresAt, v))
+}
+
 // StartsAt applies equality check predicate on the "starts_at" field. It's identical to StartsAtEQ.
 func StartsAt(v time.Time) predicate.UserSubscription {
 	return predicate.UserSubscription(sql.FieldEQ(FieldStartsAt, v))
@@ -618,6 +633,156 @@ func WelfareCycleClosedEQ(v bool) predicate.UserSubscription {
 // WelfareCycleClosedNEQ applies the NEQ predicate on the "welfare_cycle_closed" field.
 func WelfareCycleClosedNEQ(v bool) predicate.UserSubscription {
 	return predicate.UserSubscription(sql.FieldNEQ(FieldWelfareCycleClosed, v))
+}
+
+// PaidMonthlyLimitUsdEQ applies the EQ predicate on the "paid_monthly_limit_usd" field.
+func PaidMonthlyLimitUsdEQ(v float64) predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldEQ(FieldPaidMonthlyLimitUsd, v))
+}
+
+// PaidMonthlyLimitUsdNEQ applies the NEQ predicate on the "paid_monthly_limit_usd" field.
+func PaidMonthlyLimitUsdNEQ(v float64) predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldNEQ(FieldPaidMonthlyLimitUsd, v))
+}
+
+// PaidMonthlyLimitUsdIn applies the In predicate on the "paid_monthly_limit_usd" field.
+func PaidMonthlyLimitUsdIn(vs ...float64) predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldIn(FieldPaidMonthlyLimitUsd, vs...))
+}
+
+// PaidMonthlyLimitUsdNotIn applies the NotIn predicate on the "paid_monthly_limit_usd" field.
+func PaidMonthlyLimitUsdNotIn(vs ...float64) predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldNotIn(FieldPaidMonthlyLimitUsd, vs...))
+}
+
+// PaidMonthlyLimitUsdGT applies the GT predicate on the "paid_monthly_limit_usd" field.
+func PaidMonthlyLimitUsdGT(v float64) predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldGT(FieldPaidMonthlyLimitUsd, v))
+}
+
+// PaidMonthlyLimitUsdGTE applies the GTE predicate on the "paid_monthly_limit_usd" field.
+func PaidMonthlyLimitUsdGTE(v float64) predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldGTE(FieldPaidMonthlyLimitUsd, v))
+}
+
+// PaidMonthlyLimitUsdLT applies the LT predicate on the "paid_monthly_limit_usd" field.
+func PaidMonthlyLimitUsdLT(v float64) predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldLT(FieldPaidMonthlyLimitUsd, v))
+}
+
+// PaidMonthlyLimitUsdLTE applies the LTE predicate on the "paid_monthly_limit_usd" field.
+func PaidMonthlyLimitUsdLTE(v float64) predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldLTE(FieldPaidMonthlyLimitUsd, v))
+}
+
+// PaidMonthlyLimitUsdIsNil applies the IsNil predicate on the "paid_monthly_limit_usd" field.
+func PaidMonthlyLimitUsdIsNil() predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldIsNull(FieldPaidMonthlyLimitUsd))
+}
+
+// PaidMonthlyLimitUsdNotNil applies the NotNil predicate on the "paid_monthly_limit_usd" field.
+func PaidMonthlyLimitUsdNotNil() predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldNotNull(FieldPaidMonthlyLimitUsd))
+}
+
+// PaidMonthlyLegacyLimitUsdEQ applies the EQ predicate on the "paid_monthly_legacy_limit_usd" field.
+func PaidMonthlyLegacyLimitUsdEQ(v float64) predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldEQ(FieldPaidMonthlyLegacyLimitUsd, v))
+}
+
+// PaidMonthlyLegacyLimitUsdNEQ applies the NEQ predicate on the "paid_monthly_legacy_limit_usd" field.
+func PaidMonthlyLegacyLimitUsdNEQ(v float64) predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldNEQ(FieldPaidMonthlyLegacyLimitUsd, v))
+}
+
+// PaidMonthlyLegacyLimitUsdIn applies the In predicate on the "paid_monthly_legacy_limit_usd" field.
+func PaidMonthlyLegacyLimitUsdIn(vs ...float64) predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldIn(FieldPaidMonthlyLegacyLimitUsd, vs...))
+}
+
+// PaidMonthlyLegacyLimitUsdNotIn applies the NotIn predicate on the "paid_monthly_legacy_limit_usd" field.
+func PaidMonthlyLegacyLimitUsdNotIn(vs ...float64) predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldNotIn(FieldPaidMonthlyLegacyLimitUsd, vs...))
+}
+
+// PaidMonthlyLegacyLimitUsdGT applies the GT predicate on the "paid_monthly_legacy_limit_usd" field.
+func PaidMonthlyLegacyLimitUsdGT(v float64) predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldGT(FieldPaidMonthlyLegacyLimitUsd, v))
+}
+
+// PaidMonthlyLegacyLimitUsdGTE applies the GTE predicate on the "paid_monthly_legacy_limit_usd" field.
+func PaidMonthlyLegacyLimitUsdGTE(v float64) predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldGTE(FieldPaidMonthlyLegacyLimitUsd, v))
+}
+
+// PaidMonthlyLegacyLimitUsdLT applies the LT predicate on the "paid_monthly_legacy_limit_usd" field.
+func PaidMonthlyLegacyLimitUsdLT(v float64) predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldLT(FieldPaidMonthlyLegacyLimitUsd, v))
+}
+
+// PaidMonthlyLegacyLimitUsdLTE applies the LTE predicate on the "paid_monthly_legacy_limit_usd" field.
+func PaidMonthlyLegacyLimitUsdLTE(v float64) predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldLTE(FieldPaidMonthlyLegacyLimitUsd, v))
+}
+
+// PaidMonthlyLegacyLimitUsdIsNil applies the IsNil predicate on the "paid_monthly_legacy_limit_usd" field.
+func PaidMonthlyLegacyLimitUsdIsNil() predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldIsNull(FieldPaidMonthlyLegacyLimitUsd))
+}
+
+// PaidMonthlyLegacyLimitUsdNotNil applies the NotNil predicate on the "paid_monthly_legacy_limit_usd" field.
+func PaidMonthlyLegacyLimitUsdNotNil() predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldNotNull(FieldPaidMonthlyLegacyLimitUsd))
+}
+
+// PaidMonthlyLegacyExpiresAtEQ applies the EQ predicate on the "paid_monthly_legacy_expires_at" field.
+func PaidMonthlyLegacyExpiresAtEQ(v time.Time) predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldEQ(FieldPaidMonthlyLegacyExpiresAt, v))
+}
+
+// PaidMonthlyLegacyExpiresAtNEQ applies the NEQ predicate on the "paid_monthly_legacy_expires_at" field.
+func PaidMonthlyLegacyExpiresAtNEQ(v time.Time) predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldNEQ(FieldPaidMonthlyLegacyExpiresAt, v))
+}
+
+// PaidMonthlyLegacyExpiresAtIn applies the In predicate on the "paid_monthly_legacy_expires_at" field.
+func PaidMonthlyLegacyExpiresAtIn(vs ...time.Time) predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldIn(FieldPaidMonthlyLegacyExpiresAt, vs...))
+}
+
+// PaidMonthlyLegacyExpiresAtNotIn applies the NotIn predicate on the "paid_monthly_legacy_expires_at" field.
+func PaidMonthlyLegacyExpiresAtNotIn(vs ...time.Time) predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldNotIn(FieldPaidMonthlyLegacyExpiresAt, vs...))
+}
+
+// PaidMonthlyLegacyExpiresAtGT applies the GT predicate on the "paid_monthly_legacy_expires_at" field.
+func PaidMonthlyLegacyExpiresAtGT(v time.Time) predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldGT(FieldPaidMonthlyLegacyExpiresAt, v))
+}
+
+// PaidMonthlyLegacyExpiresAtGTE applies the GTE predicate on the "paid_monthly_legacy_expires_at" field.
+func PaidMonthlyLegacyExpiresAtGTE(v time.Time) predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldGTE(FieldPaidMonthlyLegacyExpiresAt, v))
+}
+
+// PaidMonthlyLegacyExpiresAtLT applies the LT predicate on the "paid_monthly_legacy_expires_at" field.
+func PaidMonthlyLegacyExpiresAtLT(v time.Time) predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldLT(FieldPaidMonthlyLegacyExpiresAt, v))
+}
+
+// PaidMonthlyLegacyExpiresAtLTE applies the LTE predicate on the "paid_monthly_legacy_expires_at" field.
+func PaidMonthlyLegacyExpiresAtLTE(v time.Time) predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldLTE(FieldPaidMonthlyLegacyExpiresAt, v))
+}
+
+// PaidMonthlyLegacyExpiresAtIsNil applies the IsNil predicate on the "paid_monthly_legacy_expires_at" field.
+func PaidMonthlyLegacyExpiresAtIsNil() predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldIsNull(FieldPaidMonthlyLegacyExpiresAt))
+}
+
+// PaidMonthlyLegacyExpiresAtNotNil applies the NotNil predicate on the "paid_monthly_legacy_expires_at" field.
+func PaidMonthlyLegacyExpiresAtNotNil() predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldNotNull(FieldPaidMonthlyLegacyExpiresAt))
 }
 
 // StartsAtEQ applies the EQ predicate on the "starts_at" field.

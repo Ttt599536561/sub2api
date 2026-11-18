@@ -202,7 +202,9 @@
             <div v-if="subscription.group?.monthly_limit_usd || (subscription.entitlement_kind === 'welfare' && subscription.group?.monthly_limit_usd === 0)" data-test="subscription-monthly-quota" class="space-y-2">
               <div class="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
                 <span class="text-sm font-medium text-gray-700 dark:text-gray-300">
-                  {{ t(monthlyBalances[subscription.id] === undefined ? 'userSubscriptions.monthly' : 'welfareRedeem.monthlyRemainingWithSupplement') }}
+                  {{ t(monthlyBalances[subscription.id] === undefined
+                    ? 'userSubscriptions.monthly'
+                    : hasMonthlySupplement(subscription) ? 'welfareRedeem.monthlyRemainingWithSupplement' : 'userSubscriptions.monthlyBalance') }}
                 </span>
                 <strong v-if="monthlyBalances[subscription.id] !== undefined" class="text-lg tabular-nums text-gray-900 dark:text-white" data-test="monthly-remaining-with-supplement">
                   ${{ monthlyBalances[subscription.id]?.toFixed(2) }}
@@ -230,21 +232,23 @@
                   }"
                 ></div>
               </div>
-              <p v-if="monthlyBalances[subscription.id] !== undefined" class="text-xs text-gray-500 dark:text-dark-400">
+              <p v-if="monthlyBalances[subscription.id] !== undefined && hasMonthlySupplement(subscription)" class="text-xs text-gray-500 dark:text-dark-400">
                 {{ t('welfareRedeem.monthlySupplementExpiry') }}
-                <template v-if="(subscription.group.daily_limit_usd ?? 0) > 0 || (subscription.group.weekly_limit_usd ?? 0) > 0">
-                  {{ t('welfareRedeem.monthlySupplementWindowHint') }}
-                </template>
               </p>
-              <p v-else-if="subscription.entitlement_kind === 'welfare' && subscription.group?.monthly_limit_usd === 0" class="text-xs text-amber-700 dark:text-amber-300">
+              <p v-if="monthlyBalances[subscription.id] !== undefined && ((subscription.group.daily_limit_usd ?? 0) > 0 || (subscription.group.weekly_limit_usd ?? 0) > 0)" class="text-xs text-gray-500 dark:text-dark-400">
+                  {{ t('welfareRedeem.monthlySupplementWindowHint') }}
+              </p>
+              <p v-if="monthlyBalances[subscription.id] === undefined && subscription.entitlement_kind === 'welfare' && subscription.group?.monthly_limit_usd === 0" class="text-xs text-amber-700 dark:text-amber-300">
                 {{ t('userSubscriptions.welfareQuotaDisabled') }}
               </p>
               <p
-                v-if="subscription.entitlement_kind === 'welfare' ? subscription.expires_at : subscription.monthly_window_start"
+                v-if="subscription.monthly_quota_refresh_at || (!subscription.paid_monthly_quota && (subscription.entitlement_kind === 'welfare' ? subscription.expires_at : subscription.monthly_window_start))"
                 class="text-xs text-gray-500 dark:text-dark-400"
               >
                 {{
-                  subscription.entitlement_kind === 'welfare'
+                  subscription.monthly_quota_refresh_at
+                    ? t('userSubscriptions.monthlyQuotaRefreshAt', { time: formatDateTimeToMinute(subscription.monthly_quota_refresh_at) })
+                    : subscription.entitlement_kind === 'welfare'
                     ? t('userSubscriptions.welfareQuotaExpiresAt', { time: formatDateTimeToMinute(subscription.expires_at!) })
                     : t('userSubscriptions.resetIn', {
                     time: formatResetTime(subscription.monthly_window_start, 720)
@@ -339,7 +343,8 @@ import { platformBorderClass, platformBadgeClass, platformButtonClass, platformL
 import {
   getExpirationDateRelation,
   getRemainingDurationParts,
-  getSupplementedMonthlyBalance,
+  getMonthlyBalance,
+  hasMonthlySupplement,
   isOneTimeDailyQuota,
   type RemainingDurationParts
 } from '@/utils/subscriptionQuota'
@@ -361,7 +366,7 @@ const subscriptionStore = useSubscriptionStore()
 
 const { subscriptions, pendingDailyResets } = storeToRefs(subscriptionStore)
 const monthlyBalances = computed(() => Object.fromEntries(
-  subscriptions.value.map(subscription => [subscription.id, getSupplementedMonthlyBalance(subscription)])
+  subscriptions.value.map(subscription => [subscription.id, getMonthlyBalance(subscription)])
 ))
 const loading = ref(true)
 let refreshInterval: ReturnType<typeof setInterval> | null = null

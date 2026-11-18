@@ -595,7 +595,8 @@ func TestWelfareRefundQuerySuccessFailureRecoversWithExactlyOneEntitlementDeduct
 	sub, err := client.UserSubscription.Create().SetUserID(order.UserID).SetGroupID(group.ID).
 		SetStartsAt(time.Now().UTC()).SetExpiresAt(expiry).Save(ctx)
 	require.NoError(t, err)
-	_, err = client.PaymentOrder.UpdateOneID(order.ID).SetSubscriptionGroupID(group.ID).SetSubscriptionDays(7).Save(ctx)
+	_, err = client.PaymentOrder.UpdateOneID(order.ID).SetSubscriptionGroupID(group.ID).SetSubscriptionDays(7).
+		SetCompletedAt(time.Now().UTC()).Save(ctx)
 	require.NoError(t, err)
 	prov := &refundWelfareCountingProvider{}
 	restore := replacePaymentProviderFactoryForTest(t, prov)

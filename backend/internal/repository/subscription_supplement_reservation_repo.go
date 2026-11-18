@@ -60,14 +60,14 @@ func (r *userSubscriptionRepository) ReserveSubscriptionSupplement(ctx context.C
  SELECT s.*,b.granted_usd,b.used_usd,p.amount AS pending,
  CASE WHEN s.entitlement_kind='welfare' THEN s.welfare_daily_limit_usd ELSE g.daily_limit_usd END AS daily_limit,
  CASE WHEN s.entitlement_kind='welfare' THEN s.welfare_weekly_limit_usd ELSE g.weekly_limit_usd END AS weekly_limit,
- CASE WHEN s.entitlement_kind='welfare' THEN s.welfare_monthly_limit_usd ELSE g.monthly_limit_usd END AS monthly_limit
+ CASE WHEN s.entitlement_kind='welfare' THEN s.welfare_monthly_limit_usd ELSE COALESCE(s.paid_monthly_limit_usd,g.monthly_limit_usd) END AS monthly_limit
  FROM user_subscriptions s JOIN groups g ON g.id=s.group_id AND g.deleted_at IS NULL AND g.status='active' AND g.subscription_type='subscription'
  JOIN user_subscription_supplement_balances b ON b.subscription_id=s.id AND b.term_starts_at=$2 AND b.closed_at IS NULL CROSS JOIN pending p WHERE s.id=$1
 )
 SELECT $3::numeric+pending<=LEAST($3::numeric+pending,
  CASE WHEN daily_limit>0 THEN GREATEST(0,daily_limit-daily_usage_usd) ELSE $3::numeric+pending END,
  CASE WHEN weekly_limit>0 THEN GREATEST(0,weekly_limit-weekly_usage_usd) ELSE $3::numeric+pending END,
- CASE WHEN monthly_limit>0 OR entitlement_kind='welfare' THEN GREATEST(0,COALESCE(monthly_limit,0)-monthly_usage_usd) ELSE $3::numeric+pending END)+GREATEST(0,granted_usd-used_usd)
+ CASE WHEN monthly_limit>0 OR entitlement_kind='welfare' OR paid_monthly_limit_usd IS NOT NULL THEN GREATEST(0,COALESCE(monthly_limit,0)-monthly_usage_usd) ELSE $3::numeric+pending END)+GREATEST(0,granted_usd-used_usd)
 FROM limits`, []any{hold.SubscriptionID, hold.TermStartsAt, hold.AmountUSD}, &allowed)
 	if errors.Is(err, sql.ErrNoRows) {
 		return service.ErrSubscriptionInvalid

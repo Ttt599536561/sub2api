@@ -1077,7 +1077,7 @@ func (s *BillingCacheService) ReserveFixedCharge(ctx context.Context, user *User
 		return nil, err
 	}
 	var subscriptionPending, apiKeyPending float64
-	if subscriptionBill && !subscription.HasSubscriptionSupplement() && (group.HasDailyLimit() || group.HasWeeklyLimit() || group.HasMonthlyLimit()) {
+	if subscriptionBill && !subscription.HasSubscriptionSupplement() && (group.HasDailyLimit() || group.HasWeeklyLimit() || subscription.HasFiniteMonthlyLimit(group)) {
 		res, subscriptionPending = s.reserveInflightScope(ctx, res, user.ID, inflightSubscriptionScope(subscription.ID), amount)
 	}
 	if apiKey != nil && (apiKey.Quota > 0 || apiKey.HasRateLimits()) {
@@ -1107,7 +1107,8 @@ func (s *BillingCacheService) checkFixedChargeSubscription(ctx context.Context, 
 		if err != nil {
 			return ErrBillingServiceUnavailable.WithCause(err)
 		}
-		if sub == nil || sub.ID != selected[0].ID || sub.UserID != userID || sub.GroupID != group.ID {
+		if sub == nil || sub.ID != selected[0].ID || sub.UserID != userID || sub.GroupID != group.ID ||
+			(!selected[0].StartsAt.IsZero() && !sub.StartsAt.Equal(selected[0].StartsAt)) {
 			return ErrSubscriptionInvalid
 		}
 		if err := loadSubscriptionSupplement(ctx, s.subRepo, sub); err != nil {

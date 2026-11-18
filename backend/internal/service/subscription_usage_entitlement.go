@@ -58,6 +58,11 @@ func (s *SubscriptionService) GetSubscriptionForUsage(ctx context.Context, userI
 		return exhausted, nil
 	}
 	if err == nil && standard != nil {
+		// Project current windows on a copy instead of writing to the shared
+		// cache or reporting a previously expired window's usage.
+		current := []UserSubscription{*standard}
+		normalizeExpiredWindowsAt(current, s.now())
+		standard = &current[0]
 		err = loadSubscriptionSupplement(ctx, s.userSubRepo, standard)
 	}
 	return standard, err

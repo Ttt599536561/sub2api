@@ -148,6 +148,52 @@ func TestRefundRevocationRollbackPreservesSubscription(t *testing.T) {
 	}
 }
 
+func TestRefundOfPriorSubscriptionTermDoesNotDeductReplacement(t *testing.T) {
+	ctx := context.Background()
+	svc, order, replacement, _ := refundRevocationFixture(t)
+	oldTermTime := replacement.StartsAt.AddDate(0, 0, -90)
+	_, err := svc.entClient.PaymentOrder.UpdateOneID(order.ID).SetPaidAt(oldTermTime).SetCompletedAt(oldTermTime).Save(ctx)
+	require.NoError(t, err)
+
+	plan, early, err := svc.PrepareRefund(ctx, order.ID, order.Amount, "prior subscription term", false, true)
+	require.NoError(t, err)
+	require.Nil(t, plan)
+	require.NotNil(t, early)
+	require.True(t, early.RequireForce)
+
+	plan, early, err = svc.PrepareRefund(ctx, order.ID, order.Amount, "prior subscription term", true, true)
+	require.NoError(t, err)
+	require.Nil(t, early)
+	require.Zero(t, plan.SubscriptionID)
+	require.Zero(t, plan.SubDaysToDeduct)
+}
+
+func TestPreparedSubscriptionRefundRejectsReplacementOnSameRow(t *testing.T) {
+	ctx := context.Background()
+	svc, order, prior, provider := refundRevocationFixture(t)
+	purchasedAt := prior.StartsAt.Add(5 * time.Minute)
+	_, err := svc.entClient.PaymentOrder.UpdateOneID(order.ID).SetPaidAt(purchasedAt).Save(ctx)
+	require.NoError(t, err)
+	plan, early, err := svc.PrepareRefund(ctx, order.ID, order.Amount, "subscription term changed", false, true)
+	require.NoError(t, err)
+	require.Nil(t, early)
+	require.Equal(t, prior.ID, plan.SubscriptionID)
+	provider.beforeReturn = func() { t.Error("a changed term must stop the refund before calling the gateway") }
+
+	newStart := prior.StartsAt.Add(15 * time.Minute)
+	replacement, err := svc.entClient.UserSubscription.UpdateOneID(prior.ID).
+		SetStartsAt(newStart).SetExpiresAt(newStart.AddDate(0, 0, 30)).Save(ctx)
+	require.NoError(t, err)
+	_, err = svc.ExecuteRefund(ctx, plan)
+	require.ErrorContains(t, err, "original subscription term is no longer current")
+	persisted, err := svc.entClient.UserSubscription.Get(ctx, prior.ID)
+	require.NoError(t, err)
+	require.Equal(t, replacement.ExpiresAt, persisted.ExpiresAt)
+	updated, err := svc.entClient.PaymentOrder.Get(ctx, order.ID)
+	require.NoError(t, err)
+	require.Equal(t, OrderStatusCompleted, updated.Status)
+}
+
 func TestRefundRevocationRollbackDoesNotRestoreAdminRevocation(t *testing.T) {
 	ctx := context.Background()
 	svc, order, original, provider := refundRevocationFixture(t)

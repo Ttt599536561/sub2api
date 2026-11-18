@@ -104,8 +104,8 @@ func (s *UserSubscription) MaintainUsageWindowsAt(now time.Time) bool {
 		s.WeeklyWindowStart, s.WeeklyUsageUSD = &start, 0
 		changed = true
 	}
-	if start, ok := s.automaticWindowStartAt(s.MonthlyWindowStart, 30*24*time.Hour, now); ok {
-		s.MonthlyWindowStart, s.MonthlyUsageUSD = &start, 0
+	if start, paidAllowance, ok := s.MonthlyWindowAdvanceAt(now); ok {
+		s.ApplyMonthlyWindowAdvance(start, paidAllowance)
 		changed = true
 	}
 	if changed {
@@ -120,7 +120,7 @@ func ValidateDailyReset(s *UserSubscription, now time.Time, count int, automatic
 		!s.ExpiresAt.After(now) || !s.Group.IsSubscriptionType() || !s.Group.AllowSubscriptionDayReset {
 		return ErrResetNotAllowed
 	}
-	g := s.Group
+	g := s.EffectiveGroup(s.Group)
 	if g.DailyLimitUSD == nil || *g.DailyLimitUSD <= 0 {
 		return ErrResetNotAllowed
 	}
@@ -142,7 +142,7 @@ func ValidateDailyReset(s *UserSubscription, now time.Time, count int, automatic
 	if g.HasWeeklyLimit() && s.WeeklyUsageUSD >= *g.WeeklyLimitUSD {
 		return ErrResetWeeklyLimit
 	}
-	if g.HasMonthlyLimit() && s.MonthlyUsageUSD >= *g.MonthlyLimitUSD {
+	if s.HasFiniteMonthlyLimit(g) && s.MonthlyUsageUSD >= *g.MonthlyLimitUSD {
 		return ErrResetMonthlyLimit
 	}
 	if s.DailyUsageUSD <= 0 || (automatic && s.DailyUsageUSD < *g.DailyLimitUSD) {

@@ -57850,53 +57850,58 @@ func (m *UserPlatformQuotaMutation) ResetEdge(name string) error {
 // UserSubscriptionMutation represents an operation that mutates the UserSubscription nodes in the graph.
 type UserSubscriptionMutation struct {
 	config
-	op                            Op
-	typ                           string
-	id                            *int64
-	created_at                    *time.Time
-	updated_at                    *time.Time
-	deleted_at                    *time.Time
-	entitlement_kind              *string
-	welfare_daily_limit_usd       *float64
-	addwelfare_daily_limit_usd    *float64
-	welfare_weekly_limit_usd      *float64
-	addwelfare_weekly_limit_usd   *float64
-	welfare_monthly_limit_usd     *float64
-	addwelfare_monthly_limit_usd  *float64
-	welfare_grant_count           *int64
-	addwelfare_grant_count        *int64
-	welfare_cycle_closed          *bool
-	starts_at                     *time.Time
-	expires_at                    *time.Time
-	status                        *string
-	auto_daily_reset_enabled      *bool
-	daily_reset_version           *int64
-	adddaily_reset_version        *int64
-	preserve_calendar_daily_reset *bool
-	daily_window_start            *time.Time
-	weekly_window_start           *time.Time
-	monthly_window_start          *time.Time
-	daily_usage_usd               *float64
-	adddaily_usage_usd            *float64
-	weekly_usage_usd              *float64
-	addweekly_usage_usd           *float64
-	monthly_usage_usd             *float64
-	addmonthly_usage_usd          *float64
-	assigned_at                   *time.Time
-	notes                         *string
-	clearedFields                 map[string]struct{}
-	user                          *int64
-	cleareduser                   bool
-	group                         *int64
-	clearedgroup                  bool
-	assigned_by_user              *int64
-	clearedassigned_by_user       bool
-	usage_logs                    map[int64]struct{}
-	removedusage_logs             map[int64]struct{}
-	clearedusage_logs             bool
-	done                          bool
-	oldValue                      func(context.Context) (*UserSubscription, error)
-	predicates                    []predicate.UserSubscription
+	op                               Op
+	typ                              string
+	id                               *int64
+	created_at                       *time.Time
+	updated_at                       *time.Time
+	deleted_at                       *time.Time
+	entitlement_kind                 *string
+	welfare_daily_limit_usd          *float64
+	addwelfare_daily_limit_usd       *float64
+	welfare_weekly_limit_usd         *float64
+	addwelfare_weekly_limit_usd      *float64
+	welfare_monthly_limit_usd        *float64
+	addwelfare_monthly_limit_usd     *float64
+	welfare_grant_count              *int64
+	addwelfare_grant_count           *int64
+	welfare_cycle_closed             *bool
+	paid_monthly_limit_usd           *float64
+	addpaid_monthly_limit_usd        *float64
+	paid_monthly_legacy_limit_usd    *float64
+	addpaid_monthly_legacy_limit_usd *float64
+	paid_monthly_legacy_expires_at   *time.Time
+	starts_at                        *time.Time
+	expires_at                       *time.Time
+	status                           *string
+	auto_daily_reset_enabled         *bool
+	daily_reset_version              *int64
+	adddaily_reset_version           *int64
+	preserve_calendar_daily_reset    *bool
+	daily_window_start               *time.Time
+	weekly_window_start              *time.Time
+	monthly_window_start             *time.Time
+	daily_usage_usd                  *float64
+	adddaily_usage_usd               *float64
+	weekly_usage_usd                 *float64
+	addweekly_usage_usd              *float64
+	monthly_usage_usd                *float64
+	addmonthly_usage_usd             *float64
+	assigned_at                      *time.Time
+	notes                            *string
+	clearedFields                    map[string]struct{}
+	user                             *int64
+	cleareduser                      bool
+	group                            *int64
+	clearedgroup                     bool
+	assigned_by_user                 *int64
+	clearedassigned_by_user          bool
+	usage_logs                       map[int64]struct{}
+	removedusage_logs                map[int64]struct{}
+	clearedusage_logs                bool
+	done                             bool
+	oldValue                         func(context.Context) (*UserSubscription, error)
+	predicates                       []predicate.UserSubscription
 }
 
 var _ ent.Mutation = (*UserSubscriptionMutation)(nil)
@@ -58526,6 +58531,195 @@ func (m *UserSubscriptionMutation) OldWelfareCycleClosed(ctx context.Context) (v
 // ResetWelfareCycleClosed resets all changes to the "welfare_cycle_closed" field.
 func (m *UserSubscriptionMutation) ResetWelfareCycleClosed() {
 	m.welfare_cycle_closed = nil
+}
+
+// SetPaidMonthlyLimitUsd sets the "paid_monthly_limit_usd" field.
+func (m *UserSubscriptionMutation) SetPaidMonthlyLimitUsd(f float64) {
+	m.paid_monthly_limit_usd = &f
+	m.addpaid_monthly_limit_usd = nil
+}
+
+// PaidMonthlyLimitUsd returns the value of the "paid_monthly_limit_usd" field in the mutation.
+func (m *UserSubscriptionMutation) PaidMonthlyLimitUsd() (r float64, exists bool) {
+	v := m.paid_monthly_limit_usd
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPaidMonthlyLimitUsd returns the old "paid_monthly_limit_usd" field's value of the UserSubscription entity.
+// If the UserSubscription object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UserSubscriptionMutation) OldPaidMonthlyLimitUsd(ctx context.Context) (v *float64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPaidMonthlyLimitUsd is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPaidMonthlyLimitUsd requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPaidMonthlyLimitUsd: %w", err)
+	}
+	return oldValue.PaidMonthlyLimitUsd, nil
+}
+
+// AddPaidMonthlyLimitUsd adds f to the "paid_monthly_limit_usd" field.
+func (m *UserSubscriptionMutation) AddPaidMonthlyLimitUsd(f float64) {
+	if m.addpaid_monthly_limit_usd != nil {
+		*m.addpaid_monthly_limit_usd += f
+	} else {
+		m.addpaid_monthly_limit_usd = &f
+	}
+}
+
+// AddedPaidMonthlyLimitUsd returns the value that was added to the "paid_monthly_limit_usd" field in this mutation.
+func (m *UserSubscriptionMutation) AddedPaidMonthlyLimitUsd() (r float64, exists bool) {
+	v := m.addpaid_monthly_limit_usd
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearPaidMonthlyLimitUsd clears the value of the "paid_monthly_limit_usd" field.
+func (m *UserSubscriptionMutation) ClearPaidMonthlyLimitUsd() {
+	m.paid_monthly_limit_usd = nil
+	m.addpaid_monthly_limit_usd = nil
+	m.clearedFields[usersubscription.FieldPaidMonthlyLimitUsd] = struct{}{}
+}
+
+// PaidMonthlyLimitUsdCleared returns if the "paid_monthly_limit_usd" field was cleared in this mutation.
+func (m *UserSubscriptionMutation) PaidMonthlyLimitUsdCleared() bool {
+	_, ok := m.clearedFields[usersubscription.FieldPaidMonthlyLimitUsd]
+	return ok
+}
+
+// ResetPaidMonthlyLimitUsd resets all changes to the "paid_monthly_limit_usd" field.
+func (m *UserSubscriptionMutation) ResetPaidMonthlyLimitUsd() {
+	m.paid_monthly_limit_usd = nil
+	m.addpaid_monthly_limit_usd = nil
+	delete(m.clearedFields, usersubscription.FieldPaidMonthlyLimitUsd)
+}
+
+// SetPaidMonthlyLegacyLimitUsd sets the "paid_monthly_legacy_limit_usd" field.
+func (m *UserSubscriptionMutation) SetPaidMonthlyLegacyLimitUsd(f float64) {
+	m.paid_monthly_legacy_limit_usd = &f
+	m.addpaid_monthly_legacy_limit_usd = nil
+}
+
+// PaidMonthlyLegacyLimitUsd returns the value of the "paid_monthly_legacy_limit_usd" field in the mutation.
+func (m *UserSubscriptionMutation) PaidMonthlyLegacyLimitUsd() (r float64, exists bool) {
+	v := m.paid_monthly_legacy_limit_usd
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPaidMonthlyLegacyLimitUsd returns the old "paid_monthly_legacy_limit_usd" field's value of the UserSubscription entity.
+// If the UserSubscription object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UserSubscriptionMutation) OldPaidMonthlyLegacyLimitUsd(ctx context.Context) (v *float64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPaidMonthlyLegacyLimitUsd is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPaidMonthlyLegacyLimitUsd requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPaidMonthlyLegacyLimitUsd: %w", err)
+	}
+	return oldValue.PaidMonthlyLegacyLimitUsd, nil
+}
+
+// AddPaidMonthlyLegacyLimitUsd adds f to the "paid_monthly_legacy_limit_usd" field.
+func (m *UserSubscriptionMutation) AddPaidMonthlyLegacyLimitUsd(f float64) {
+	if m.addpaid_monthly_legacy_limit_usd != nil {
+		*m.addpaid_monthly_legacy_limit_usd += f
+	} else {
+		m.addpaid_monthly_legacy_limit_usd = &f
+	}
+}
+
+// AddedPaidMonthlyLegacyLimitUsd returns the value that was added to the "paid_monthly_legacy_limit_usd" field in this mutation.
+func (m *UserSubscriptionMutation) AddedPaidMonthlyLegacyLimitUsd() (r float64, exists bool) {
+	v := m.addpaid_monthly_legacy_limit_usd
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearPaidMonthlyLegacyLimitUsd clears the value of the "paid_monthly_legacy_limit_usd" field.
+func (m *UserSubscriptionMutation) ClearPaidMonthlyLegacyLimitUsd() {
+	m.paid_monthly_legacy_limit_usd = nil
+	m.addpaid_monthly_legacy_limit_usd = nil
+	m.clearedFields[usersubscription.FieldPaidMonthlyLegacyLimitUsd] = struct{}{}
+}
+
+// PaidMonthlyLegacyLimitUsdCleared returns if the "paid_monthly_legacy_limit_usd" field was cleared in this mutation.
+func (m *UserSubscriptionMutation) PaidMonthlyLegacyLimitUsdCleared() bool {
+	_, ok := m.clearedFields[usersubscription.FieldPaidMonthlyLegacyLimitUsd]
+	return ok
+}
+
+// ResetPaidMonthlyLegacyLimitUsd resets all changes to the "paid_monthly_legacy_limit_usd" field.
+func (m *UserSubscriptionMutation) ResetPaidMonthlyLegacyLimitUsd() {
+	m.paid_monthly_legacy_limit_usd = nil
+	m.addpaid_monthly_legacy_limit_usd = nil
+	delete(m.clearedFields, usersubscription.FieldPaidMonthlyLegacyLimitUsd)
+}
+
+// SetPaidMonthlyLegacyExpiresAt sets the "paid_monthly_legacy_expires_at" field.
+func (m *UserSubscriptionMutation) SetPaidMonthlyLegacyExpiresAt(t time.Time) {
+	m.paid_monthly_legacy_expires_at = &t
+}
+
+// PaidMonthlyLegacyExpiresAt returns the value of the "paid_monthly_legacy_expires_at" field in the mutation.
+func (m *UserSubscriptionMutation) PaidMonthlyLegacyExpiresAt() (r time.Time, exists bool) {
+	v := m.paid_monthly_legacy_expires_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPaidMonthlyLegacyExpiresAt returns the old "paid_monthly_legacy_expires_at" field's value of the UserSubscription entity.
+// If the UserSubscription object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UserSubscriptionMutation) OldPaidMonthlyLegacyExpiresAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPaidMonthlyLegacyExpiresAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPaidMonthlyLegacyExpiresAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPaidMonthlyLegacyExpiresAt: %w", err)
+	}
+	return oldValue.PaidMonthlyLegacyExpiresAt, nil
+}
+
+// ClearPaidMonthlyLegacyExpiresAt clears the value of the "paid_monthly_legacy_expires_at" field.
+func (m *UserSubscriptionMutation) ClearPaidMonthlyLegacyExpiresAt() {
+	m.paid_monthly_legacy_expires_at = nil
+	m.clearedFields[usersubscription.FieldPaidMonthlyLegacyExpiresAt] = struct{}{}
+}
+
+// PaidMonthlyLegacyExpiresAtCleared returns if the "paid_monthly_legacy_expires_at" field was cleared in this mutation.
+func (m *UserSubscriptionMutation) PaidMonthlyLegacyExpiresAtCleared() bool {
+	_, ok := m.clearedFields[usersubscription.FieldPaidMonthlyLegacyExpiresAt]
+	return ok
+}
+
+// ResetPaidMonthlyLegacyExpiresAt resets all changes to the "paid_monthly_legacy_expires_at" field.
+func (m *UserSubscriptionMutation) ResetPaidMonthlyLegacyExpiresAt() {
+	m.paid_monthly_legacy_expires_at = nil
+	delete(m.clearedFields, usersubscription.FieldPaidMonthlyLegacyExpiresAt)
 }
 
 // SetStartsAt sets the "starts_at" field.
@@ -59395,7 +59589,7 @@ func (m *UserSubscriptionMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *UserSubscriptionMutation) Fields() []string {
-	fields := make([]string, 0, 26)
+	fields := make([]string, 0, 29)
 	if m.created_at != nil {
 		fields = append(fields, usersubscription.FieldCreatedAt)
 	}
@@ -59428,6 +59622,15 @@ func (m *UserSubscriptionMutation) Fields() []string {
 	}
 	if m.welfare_cycle_closed != nil {
 		fields = append(fields, usersubscription.FieldWelfareCycleClosed)
+	}
+	if m.paid_monthly_limit_usd != nil {
+		fields = append(fields, usersubscription.FieldPaidMonthlyLimitUsd)
+	}
+	if m.paid_monthly_legacy_limit_usd != nil {
+		fields = append(fields, usersubscription.FieldPaidMonthlyLegacyLimitUsd)
+	}
+	if m.paid_monthly_legacy_expires_at != nil {
+		fields = append(fields, usersubscription.FieldPaidMonthlyLegacyExpiresAt)
 	}
 	if m.starts_at != nil {
 		fields = append(fields, usersubscription.FieldStartsAt)
@@ -59504,6 +59707,12 @@ func (m *UserSubscriptionMutation) Field(name string) (ent.Value, bool) {
 		return m.WelfareGrantCount()
 	case usersubscription.FieldWelfareCycleClosed:
 		return m.WelfareCycleClosed()
+	case usersubscription.FieldPaidMonthlyLimitUsd:
+		return m.PaidMonthlyLimitUsd()
+	case usersubscription.FieldPaidMonthlyLegacyLimitUsd:
+		return m.PaidMonthlyLegacyLimitUsd()
+	case usersubscription.FieldPaidMonthlyLegacyExpiresAt:
+		return m.PaidMonthlyLegacyExpiresAt()
 	case usersubscription.FieldStartsAt:
 		return m.StartsAt()
 	case usersubscription.FieldExpiresAt:
@@ -59565,6 +59774,12 @@ func (m *UserSubscriptionMutation) OldField(ctx context.Context, name string) (e
 		return m.OldWelfareGrantCount(ctx)
 	case usersubscription.FieldWelfareCycleClosed:
 		return m.OldWelfareCycleClosed(ctx)
+	case usersubscription.FieldPaidMonthlyLimitUsd:
+		return m.OldPaidMonthlyLimitUsd(ctx)
+	case usersubscription.FieldPaidMonthlyLegacyLimitUsd:
+		return m.OldPaidMonthlyLegacyLimitUsd(ctx)
+	case usersubscription.FieldPaidMonthlyLegacyExpiresAt:
+		return m.OldPaidMonthlyLegacyExpiresAt(ctx)
 	case usersubscription.FieldStartsAt:
 		return m.OldStartsAt(ctx)
 	case usersubscription.FieldExpiresAt:
@@ -59680,6 +59895,27 @@ func (m *UserSubscriptionMutation) SetField(name string, value ent.Value) error 
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetWelfareCycleClosed(v)
+		return nil
+	case usersubscription.FieldPaidMonthlyLimitUsd:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPaidMonthlyLimitUsd(v)
+		return nil
+	case usersubscription.FieldPaidMonthlyLegacyLimitUsd:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPaidMonthlyLegacyLimitUsd(v)
+		return nil
+	case usersubscription.FieldPaidMonthlyLegacyExpiresAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPaidMonthlyLegacyExpiresAt(v)
 		return nil
 	case usersubscription.FieldStartsAt:
 		v, ok := value.(time.Time)
@@ -59806,6 +60042,12 @@ func (m *UserSubscriptionMutation) AddedFields() []string {
 	if m.addwelfare_grant_count != nil {
 		fields = append(fields, usersubscription.FieldWelfareGrantCount)
 	}
+	if m.addpaid_monthly_limit_usd != nil {
+		fields = append(fields, usersubscription.FieldPaidMonthlyLimitUsd)
+	}
+	if m.addpaid_monthly_legacy_limit_usd != nil {
+		fields = append(fields, usersubscription.FieldPaidMonthlyLegacyLimitUsd)
+	}
 	if m.adddaily_reset_version != nil {
 		fields = append(fields, usersubscription.FieldDailyResetVersion)
 	}
@@ -59834,6 +60076,10 @@ func (m *UserSubscriptionMutation) AddedField(name string) (ent.Value, bool) {
 		return m.AddedWelfareMonthlyLimitUsd()
 	case usersubscription.FieldWelfareGrantCount:
 		return m.AddedWelfareGrantCount()
+	case usersubscription.FieldPaidMonthlyLimitUsd:
+		return m.AddedPaidMonthlyLimitUsd()
+	case usersubscription.FieldPaidMonthlyLegacyLimitUsd:
+		return m.AddedPaidMonthlyLegacyLimitUsd()
 	case usersubscription.FieldDailyResetVersion:
 		return m.AddedDailyResetVersion()
 	case usersubscription.FieldDailyUsageUsd:
@@ -59878,6 +60124,20 @@ func (m *UserSubscriptionMutation) AddField(name string, value ent.Value) error 
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.AddWelfareGrantCount(v)
+		return nil
+	case usersubscription.FieldPaidMonthlyLimitUsd:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddPaidMonthlyLimitUsd(v)
+		return nil
+	case usersubscription.FieldPaidMonthlyLegacyLimitUsd:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddPaidMonthlyLegacyLimitUsd(v)
 		return nil
 	case usersubscription.FieldDailyResetVersion:
 		v, ok := value.(int64)
@@ -59927,6 +60187,15 @@ func (m *UserSubscriptionMutation) ClearedFields() []string {
 	if m.FieldCleared(usersubscription.FieldWelfareMonthlyLimitUsd) {
 		fields = append(fields, usersubscription.FieldWelfareMonthlyLimitUsd)
 	}
+	if m.FieldCleared(usersubscription.FieldPaidMonthlyLimitUsd) {
+		fields = append(fields, usersubscription.FieldPaidMonthlyLimitUsd)
+	}
+	if m.FieldCleared(usersubscription.FieldPaidMonthlyLegacyLimitUsd) {
+		fields = append(fields, usersubscription.FieldPaidMonthlyLegacyLimitUsd)
+	}
+	if m.FieldCleared(usersubscription.FieldPaidMonthlyLegacyExpiresAt) {
+		fields = append(fields, usersubscription.FieldPaidMonthlyLegacyExpiresAt)
+	}
 	if m.FieldCleared(usersubscription.FieldDailyWindowStart) {
 		fields = append(fields, usersubscription.FieldDailyWindowStart)
 	}
@@ -59967,6 +60236,15 @@ func (m *UserSubscriptionMutation) ClearField(name string) error {
 		return nil
 	case usersubscription.FieldWelfareMonthlyLimitUsd:
 		m.ClearWelfareMonthlyLimitUsd()
+		return nil
+	case usersubscription.FieldPaidMonthlyLimitUsd:
+		m.ClearPaidMonthlyLimitUsd()
+		return nil
+	case usersubscription.FieldPaidMonthlyLegacyLimitUsd:
+		m.ClearPaidMonthlyLegacyLimitUsd()
+		return nil
+	case usersubscription.FieldPaidMonthlyLegacyExpiresAt:
+		m.ClearPaidMonthlyLegacyExpiresAt()
 		return nil
 	case usersubscription.FieldDailyWindowStart:
 		m.ClearDailyWindowStart()
@@ -60023,6 +60301,15 @@ func (m *UserSubscriptionMutation) ResetField(name string) error {
 		return nil
 	case usersubscription.FieldWelfareCycleClosed:
 		m.ResetWelfareCycleClosed()
+		return nil
+	case usersubscription.FieldPaidMonthlyLimitUsd:
+		m.ResetPaidMonthlyLimitUsd()
+		return nil
+	case usersubscription.FieldPaidMonthlyLegacyLimitUsd:
+		m.ResetPaidMonthlyLegacyLimitUsd()
+		return nil
+	case usersubscription.FieldPaidMonthlyLegacyExpiresAt:
+		m.ResetPaidMonthlyLegacyExpiresAt()
 		return nil
 	case usersubscription.FieldStartsAt:
 		m.ResetStartsAt()

@@ -105,6 +105,22 @@ describe('subscription daily reset controls', () => {
     wrapper.unmount()
   })
 
+  it('shows the paid monthly balance immediately without advertising another refresh', async () => {
+    const item = {
+      ...subscription(), paid_monthly_quota: true, monthly_usage_usd: 820,
+      group: { ...subscription().group!, monthly_limit_usd: 2240 },
+      monthly_window_start: '2026-09-01T00:00:00Z'
+    }
+    api.getMySubscriptions.mockResolvedValue([item])
+    const wrapper = mountView()
+    await flushPromises()
+    const monthly = wrapper.get('[data-test="subscription-monthly-quota"]')
+    expect(monthly.text()).toContain('userSubscriptions.monthlyBalance')
+    expect(monthly.text()).toContain('$1420.00')
+    expect(monthly.text()).not.toContain('userSubscriptions.resetIn')
+    wrapper.unmount()
+  })
+
   it('does not call all quota disabled when a zero-base welfare subscription has usable supplements', async () => {
     const item = { ...subscription(), entitlement_kind: 'welfare',
       group: { id: 1, monthly_limit_usd: 0 }, supplement_granted_usd: 10, supplement_used_usd: 0, supplement_remaining_usd: 10 }

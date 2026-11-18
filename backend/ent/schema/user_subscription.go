@@ -46,6 +46,12 @@ func (UserSubscription) Fields() []ent.Field {
 			SchemaType(map[string]string{dialect.Postgres: "decimal(20,10)"}),
 		field.Int64("welfare_grant_count").Default(0),
 		field.Bool("welfare_cycle_closed").Default(false),
+		field.Float("paid_monthly_limit_usd").Optional().Nillable().
+			SchemaType(map[string]string{dialect.Postgres: "decimal(30,10)"}),
+		field.Float("paid_monthly_legacy_limit_usd").Optional().Nillable().
+			SchemaType(map[string]string{dialect.Postgres: "decimal(30,10)"}),
+		field.Time("paid_monthly_legacy_expires_at").Optional().Nillable().
+			SchemaType(map[string]string{dialect.Postgres: "timestamptz"}),
 
 		field.Time("starts_at").
 			SchemaType(map[string]string{dialect.Postgres: "timestamptz"}),

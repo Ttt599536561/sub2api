@@ -2253,6 +2253,8 @@ export interface UserSubscription {
   supplement_granted_usd?: number
   supplement_used_usd?: number
   supplement_remaining_usd?: number
+  paid_monthly_quota?: boolean
+  monthly_quota_refresh_at?: string
   status: 'active' | 'expired' | 'revoked' | 'suspended'
   starts_at: string
   daily_usage_usd: number

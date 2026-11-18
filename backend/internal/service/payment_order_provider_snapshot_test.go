@@ -6,10 +6,71 @@ import (
 	"context"
 	"strconv"
 	"testing"
+	"time"
 
+	dbent "github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/internal/payment"
+	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 	"github.com/stretchr/testify/require"
 )
+
+func TestCreateMonthlySubscriptionOrderSnapshotsGroupAllowance(t *testing.T) {
+	ctx := context.Background()
+	client := newPaymentConfigServiceTestClient(t)
+	user, err := client.User.Create().SetEmail("monthly-snapshot@example.test").SetPasswordHash("hash").Save(ctx)
+	require.NoError(t, err)
+	group, err := client.Group.Create().SetName("monthly-snapshot").SetMonthlyLimitUsd(1120).Save(ctx)
+	require.NoError(t, err)
+	svc := &PaymentService{entClient: client}
+	order, err := svc.createOrderInTx(ctx,
+		CreateOrderRequest{UserID: user.ID, PaymentType: payment.TypeAlipay, OrderType: payment.OrderTypeSubscription},
+		&User{ID: user.ID, Email: user.Email},
+		&dbent.SubscriptionPlan{ID: 1, GroupID: group.ID, ValidityDays: 1, ValidityUnit: "month"},
+		&PaymentConfig{}, 80, 80, 0, 80, 0, nil)
+	require.NoError(t, err)
+	require.Equal(t, float64(1120), order.ProviderSnapshot["subscription_monthly_allowance_usd"])
+	require.Nil(t, psOrderProviderSnapshot(order), "allowance-only metadata must preserve legacy provider lookup")
+}
+
+func TestCreateMonthlySubscriptionOrderRejectsTermThatCannotFit(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		expiry     time.Time
+		kind       string
+		wantReject bool
+	}{
+		{"exceeds_by_one_second", MaxExpiresAt.AddDate(0, 0, -30).Add(time.Second), SubscriptionEntitlementStandard, true},
+		{"fits_exactly", MaxExpiresAt.AddDate(0, 0, -30), SubscriptionEntitlementStandard, false},
+		{"existing_welfare", MaxExpiresAt.AddDate(0, 0, -15), SubscriptionEntitlementWelfare, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := context.Background()
+			client := newPaymentConfigServiceTestClient(t)
+			user, err := client.User.Create().SetEmail("monthly-max@example.test").SetPasswordHash("hash").Save(ctx)
+			require.NoError(t, err)
+			group, err := client.Group.Create().SetName("monthly-max").SetMonthlyLimitUsd(1120).Save(ctx)
+			require.NoError(t, err)
+			_, err = client.UserSubscription.Create().SetUserID(user.ID).SetGroupID(group.ID).
+				SetEntitlementKind(tc.kind).SetStatus(SubscriptionStatusActive).
+				SetStartsAt(time.Now().UTC().Add(-time.Hour)).SetExpiresAt(tc.expiry).Save(ctx)
+			require.NoError(t, err)
+			svc := &PaymentService{entClient: client}
+			order, err := svc.createOrderInTx(ctx,
+				CreateOrderRequest{UserID: user.ID, PaymentType: payment.TypeAlipay, OrderType: payment.OrderTypeSubscription},
+				&User{ID: user.ID, Email: user.Email},
+				&dbent.SubscriptionPlan{ID: 1, GroupID: group.ID, ValidityDays: 1, ValidityUnit: "month"},
+				&PaymentConfig{}, 80, 80, 0, 80, 0, nil)
+			if tc.wantReject {
+				require.Equal(t, "SUBSCRIPTION_RENEWAL_EXCEEDS_MAX_EXPIRY", infraerrors.Reason(err))
+				require.Nil(t, order)
+				require.Zero(t, client.PaymentOrder.Query().CountX(ctx))
+				return
+			}
+			require.NoError(t, err)
+			require.NotNil(t, order)
+		})
+	}
+}
 
 func TestBuildPaymentOrderProviderSnapshot_ExcludesSensitiveConfig(t *testing.T) {
 	t.Parallel()

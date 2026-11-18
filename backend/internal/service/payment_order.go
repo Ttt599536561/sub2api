@@ -13,6 +13,7 @@ import (
 
 	dbent "github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/ent/paymentorder"
+	"github.com/Wei-Shaw/sub2api/ent/usersubscription"
 	"github.com/Wei-Shaw/sub2api/internal/payment"
 	"github.com/Wei-Shaw/sub2api/internal/payment/provider"
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
@@ -21,6 +22,8 @@ import (
 )
 
 // --- Order Creation ---
+
+const paymentMonthlyAllowanceSnapshotKey = "subscription_monthly_allowance_usd"
 
 func (s *PaymentService) CreateOrder(ctx context.Context, req CreateOrderRequest) (*CreateOrderResponse, error) {
 	if req.OrderType == "" {
@@ -181,6 +184,41 @@ func (s *PaymentService) createOrderInTx(ctx context.Context, req CreateOrderReq
 		return nil, err
 	}
 	providerSnapshot := buildPaymentOrderProviderSnapshot(sel, req)
+	subscriptionDays := 0
+	if plan != nil {
+		subscriptionDays = psComputeValidityDays(plan.ValidityDays, plan.ValidityUnit)
+		if subscriptionDays == 30 {
+			group, err := tx.Group.Get(ctx, plan.GroupID)
+			if err != nil {
+				return nil, fmt.Errorf("snapshot subscription monthly allowance: %w", err)
+			}
+			if providerSnapshot == nil {
+				providerSnapshot = make(map[string]any)
+			}
+			// An explicit zero distinguishes a plan sold without a monthly cap
+			// from legacy orders that predate the allowance snapshot.
+			allowance := 0.0
+			if group.MonthlyLimitUsd != nil && isValidProviderAmount(*group.MonthlyLimitUsd) {
+				allowance = *group.MonthlyLimitUsd
+				now := time.Now()
+				exceedsMaxExpiry, err := tx.UserSubscription.Query().Where(
+					usersubscription.UserIDEQ(req.UserID), usersubscription.GroupIDEQ(plan.GroupID),
+					usersubscription.EntitlementKindEQ(SubscriptionEntitlementStandard),
+					usersubscription.StatusEQ(SubscriptionStatusActive),
+					usersubscription.StartsAtLTE(now), usersubscription.ExpiresAtGT(now),
+					usersubscription.ExpiresAtGT(MaxExpiresAt.AddDate(0, 0, -subscriptionDays)),
+				).Exist(ctx)
+				if err != nil {
+					return nil, fmt.Errorf("check monthly subscription renewal expiry: %w", err)
+				}
+				if exceedsMaxExpiry {
+					return nil, infraerrors.Conflict("SUBSCRIPTION_RENEWAL_EXCEEDS_MAX_EXPIRY",
+						"this subscription cannot be extended by the full 30 days")
+				}
+			}
+			providerSnapshot[paymentMonthlyAllowanceSnapshotKey] = allowance
+		}
+	}
 	selectedInstanceID := ""
 	selectedProviderKey := ""
 	if sel != nil {
@@ -218,7 +256,7 @@ func (s *PaymentService) createOrderInTx(ctx context.Context, req CreateOrderReq
 		b.SetProviderSnapshot(providerSnapshot)
 	}
 	if plan != nil {
-		b.SetPlanID(plan.ID).SetSubscriptionGroupID(plan.GroupID).SetSubscriptionDays(psComputeValidityDays(plan.ValidityDays, plan.ValidityUnit))
+		b.SetPlanID(plan.ID).SetSubscriptionGroupID(plan.GroupID).SetSubscriptionDays(subscriptionDays)
 	}
 	order, err := b.Save(ctx)
 	if err != nil {

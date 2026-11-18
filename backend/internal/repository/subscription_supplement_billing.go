@@ -44,13 +44,13 @@ func allocateUsageBillingSubscription(ctx context.Context, tx *sql.Tx, cmd *serv
  SELECT s.*,
  CASE WHEN s.entitlement_kind='welfare' THEN s.welfare_daily_limit_usd ELSE g.daily_limit_usd END AS daily_limit,
  CASE WHEN s.entitlement_kind='welfare' THEN s.welfare_weekly_limit_usd ELSE g.weekly_limit_usd END AS weekly_limit,
- CASE WHEN s.entitlement_kind='welfare' THEN s.welfare_monthly_limit_usd ELSE g.monthly_limit_usd END AS monthly_limit
+ CASE WHEN s.entitlement_kind='welfare' THEN s.welfare_monthly_limit_usd ELSE COALESCE(s.paid_monthly_limit_usd,g.monthly_limit_usd) END AS monthly_limit
  FROM user_subscriptions s JOIN groups g ON g.id=s.group_id AND g.deleted_at IS NULL WHERE s.id=$1
 ), allocation AS (
  SELECT LEAST($3::numeric,
  CASE WHEN daily_limit>0 THEN GREATEST(0,daily_limit-daily_usage_usd) ELSE $3::numeric END,
  CASE WHEN weekly_limit>0 THEN GREATEST(0,weekly_limit-weekly_usage_usd) ELSE $3::numeric END,
- CASE WHEN monthly_limit>0 OR entitlement_kind='welfare' THEN GREATEST(0,COALESCE(monthly_limit,0)-monthly_usage_usd) ELSE $3::numeric END) AS base_cost
+ CASE WHEN monthly_limit>0 OR entitlement_kind='welfare' OR paid_monthly_limit_usd IS NOT NULL THEN GREATEST(0,COALESCE(monthly_limit,0)-monthly_usage_usd) ELSE $3::numeric END) AS base_cost
  FROM limits
 ), base_update AS (
  UPDATE user_subscriptions s SET daily_usage_usd=s.daily_usage_usd+a.base_cost,

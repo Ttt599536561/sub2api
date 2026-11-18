@@ -41,6 +41,12 @@ type UserSubscription struct {
 	WelfareGrantCount int64 `json:"welfare_grant_count,omitempty"`
 	// WelfareCycleClosed holds the value of the "welfare_cycle_closed" field.
 	WelfareCycleClosed bool `json:"welfare_cycle_closed,omitempty"`
+	// PaidMonthlyLimitUsd holds the value of the "paid_monthly_limit_usd" field.
+	PaidMonthlyLimitUsd *float64 `json:"paid_monthly_limit_usd,omitempty"`
+	// PaidMonthlyLegacyLimitUsd holds the value of the "paid_monthly_legacy_limit_usd" field.
+	PaidMonthlyLegacyLimitUsd *float64 `json:"paid_monthly_legacy_limit_usd,omitempty"`
+	// PaidMonthlyLegacyExpiresAt holds the value of the "paid_monthly_legacy_expires_at" field.
+	PaidMonthlyLegacyExpiresAt *time.Time `json:"paid_monthly_legacy_expires_at,omitempty"`
 	// StartsAt holds the value of the "starts_at" field.
 	StartsAt time.Time `json:"starts_at,omitempty"`
 	// ExpiresAt holds the value of the "expires_at" field.
@@ -141,13 +147,13 @@ func (*UserSubscription) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case usersubscription.FieldWelfareCycleClosed, usersubscription.FieldAutoDailyResetEnabled, usersubscription.FieldPreserveCalendarDailyReset:
 			values[i] = new(sql.NullBool)
-		case usersubscription.FieldWelfareDailyLimitUsd, usersubscription.FieldWelfareWeeklyLimitUsd, usersubscription.FieldWelfareMonthlyLimitUsd, usersubscription.FieldDailyUsageUsd, usersubscription.FieldWeeklyUsageUsd, usersubscription.FieldMonthlyUsageUsd:
+		case usersubscription.FieldWelfareDailyLimitUsd, usersubscription.FieldWelfareWeeklyLimitUsd, usersubscription.FieldWelfareMonthlyLimitUsd, usersubscription.FieldPaidMonthlyLimitUsd, usersubscription.FieldPaidMonthlyLegacyLimitUsd, usersubscription.FieldDailyUsageUsd, usersubscription.FieldWeeklyUsageUsd, usersubscription.FieldMonthlyUsageUsd:
 			values[i] = new(sql.NullFloat64)
 		case usersubscription.FieldID, usersubscription.FieldUserID, usersubscription.FieldGroupID, usersubscription.FieldWelfareGrantCount, usersubscription.FieldDailyResetVersion, usersubscription.FieldAssignedBy:
 			values[i] = new(sql.NullInt64)
 		case usersubscription.FieldEntitlementKind, usersubscription.FieldStatus, usersubscription.FieldNotes:
 			values[i] = new(sql.NullString)
-		case usersubscription.FieldCreatedAt, usersubscription.FieldUpdatedAt, usersubscription.FieldDeletedAt, usersubscription.FieldStartsAt, usersubscription.FieldExpiresAt, usersubscription.FieldDailyWindowStart, usersubscription.FieldWeeklyWindowStart, usersubscription.FieldMonthlyWindowStart, usersubscription.FieldAssignedAt:
+		case usersubscription.FieldCreatedAt, usersubscription.FieldUpdatedAt, usersubscription.FieldDeletedAt, usersubscription.FieldPaidMonthlyLegacyExpiresAt, usersubscription.FieldStartsAt, usersubscription.FieldExpiresAt, usersubscription.FieldDailyWindowStart, usersubscription.FieldWeeklyWindowStart, usersubscription.FieldMonthlyWindowStart, usersubscription.FieldAssignedAt:
 			values[i] = new(sql.NullTime)
 		default:
 			values[i] = new(sql.UnknownType)
@@ -239,6 +245,27 @@ func (_m *UserSubscription) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field welfare_cycle_closed", values[i])
 			} else if value.Valid {
 				_m.WelfareCycleClosed = value.Bool
+			}
+		case usersubscription.FieldPaidMonthlyLimitUsd:
+			if value, ok := values[i].(*sql.NullFloat64); !ok {
+				return fmt.Errorf("unexpected type %T for field paid_monthly_limit_usd", values[i])
+			} else if value.Valid {
+				_m.PaidMonthlyLimitUsd = new(float64)
+				*_m.PaidMonthlyLimitUsd = value.Float64
+			}
+		case usersubscription.FieldPaidMonthlyLegacyLimitUsd:
+			if value, ok := values[i].(*sql.NullFloat64); !ok {
+				return fmt.Errorf("unexpected type %T for field paid_monthly_legacy_limit_usd", values[i])
+			} else if value.Valid {
+				_m.PaidMonthlyLegacyLimitUsd = new(float64)
+				*_m.PaidMonthlyLegacyLimitUsd = value.Float64
+			}
+		case usersubscription.FieldPaidMonthlyLegacyExpiresAt:
+			if value, ok := values[i].(*sql.NullTime); !ok {
+				return fmt.Errorf("unexpected type %T for field paid_monthly_legacy_expires_at", values[i])
+			} else if value.Valid {
+				_m.PaidMonthlyLegacyExpiresAt = new(time.Time)
+				*_m.PaidMonthlyLegacyExpiresAt = value.Time
 			}
 		case usersubscription.FieldStartsAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
@@ -431,6 +458,21 @@ func (_m *UserSubscription) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("welfare_cycle_closed=")
 	builder.WriteString(fmt.Sprintf("%v", _m.WelfareCycleClosed))
+	builder.WriteString(", ")
+	if v := _m.PaidMonthlyLimitUsd; v != nil {
+		builder.WriteString("paid_monthly_limit_usd=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
+	builder.WriteString(", ")
+	if v := _m.PaidMonthlyLegacyLimitUsd; v != nil {
+		builder.WriteString("paid_monthly_legacy_limit_usd=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
+	builder.WriteString(", ")
+	if v := _m.PaidMonthlyLegacyExpiresAt; v != nil {
+		builder.WriteString("paid_monthly_legacy_expires_at=")
+		builder.WriteString(v.Format(time.ANSIC))
+	}
 	builder.WriteString(", ")
 	builder.WriteString("starts_at=")
 	builder.WriteString(_m.StartsAt.Format(time.ANSIC))

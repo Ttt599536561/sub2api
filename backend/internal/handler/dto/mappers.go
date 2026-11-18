@@ -904,6 +904,12 @@ func userSubscriptionFromServiceBase(sub *service.UserSubscription) UserSubscrip
 	if sub.IsWelfare() {
 		entitlementKind = service.SubscriptionEntitlementWelfare
 	}
+	var monthlyQuotaRefreshAt *time.Time
+	if sub.PaidMonthlyLimitUSD != nil {
+		if next := sub.MonthlyResetTime(); next != nil && next.Before(sub.ExpiresAt) {
+			monthlyQuotaRefreshAt = next
+		}
+	}
 	return UserSubscription{
 		ID:                         sub.ID,
 		UserID:                     sub.UserID,
@@ -913,6 +919,8 @@ func userSubscriptionFromServiceBase(sub *service.UserSubscription) UserSubscrip
 		SupplementGrantedUSD:       sub.SupplementGrantedUSD,
 		SupplementUsedUSD:          sub.SupplementUsedUSD,
 		SupplementRemainingUSD:     sub.SupplementRemainingUSD(),
+		PaidMonthlyQuota:           sub.PaidMonthlyLimitUSD != nil,
+		MonthlyQuotaRefreshAt:      monthlyQuotaRefreshAt,
 		StartsAt:                   sub.StartsAt,
 		ExpiresAt:                  sub.ExpiresAt,
 		Status:                     sub.Status,

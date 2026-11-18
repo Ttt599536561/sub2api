@@ -2574,39 +2574,39 @@ func init() {
 	// usersubscription.DefaultWelfareCycleClosed holds the default value on creation for the welfare_cycle_closed field.
 	usersubscription.DefaultWelfareCycleClosed = usersubscriptionDescWelfareCycleClosed.Default.(bool)
 	// usersubscriptionDescStatus is the schema descriptor for status field.
-	usersubscriptionDescStatus := usersubscriptionFields[10].Descriptor()
+	usersubscriptionDescStatus := usersubscriptionFields[13].Descriptor()
 	// usersubscription.DefaultStatus holds the default value on creation for the status field.
 	usersubscription.DefaultStatus = usersubscriptionDescStatus.Default.(string)
 	// usersubscription.StatusValidator is a validator for the "status" field. It is called by the builders before save.
 	usersubscription.StatusValidator = usersubscriptionDescStatus.Validators[0].(func(string) error)
 	// usersubscriptionDescAutoDailyResetEnabled is the schema descriptor for auto_daily_reset_enabled field.
-	usersubscriptionDescAutoDailyResetEnabled := usersubscriptionFields[11].Descriptor()
+	usersubscriptionDescAutoDailyResetEnabled := usersubscriptionFields[14].Descriptor()
 	// usersubscription.DefaultAutoDailyResetEnabled holds the default value on creation for the auto_daily_reset_enabled field.
 	usersubscription.DefaultAutoDailyResetEnabled = usersubscriptionDescAutoDailyResetEnabled.Default.(bool)
 	// usersubscriptionDescDailyResetVersion is the schema descriptor for daily_reset_version field.
-	usersubscriptionDescDailyResetVersion := usersubscriptionFields[12].Descriptor()
+	usersubscriptionDescDailyResetVersion := usersubscriptionFields[15].Descriptor()
 	// usersubscription.DefaultDailyResetVersion holds the default value on creation for the daily_reset_version field.
 	usersubscription.DefaultDailyResetVersion = usersubscriptionDescDailyResetVersion.Default.(int64)
 	// usersubscription.DailyResetVersionValidator is a validator for the "daily_reset_version" field. It is called by the builders before save.
 	usersubscription.DailyResetVersionValidator = usersubscriptionDescDailyResetVersion.Validators[0].(func(int64) error)
 	// usersubscriptionDescPreserveCalendarDailyReset is the schema descriptor for preserve_calendar_daily_reset field.
-	usersubscriptionDescPreserveCalendarDailyReset := usersubscriptionFields[13].Descriptor()
+	usersubscriptionDescPreserveCalendarDailyReset := usersubscriptionFields[16].Descriptor()
 	// usersubscription.DefaultPreserveCalendarDailyReset holds the default value on creation for the preserve_calendar_daily_reset field.
 	usersubscription.DefaultPreserveCalendarDailyReset = usersubscriptionDescPreserveCalendarDailyReset.Default.(bool)
 	// usersubscriptionDescDailyUsageUsd is the schema descriptor for daily_usage_usd field.
-	usersubscriptionDescDailyUsageUsd := usersubscriptionFields[17].Descriptor()
+	usersubscriptionDescDailyUsageUsd := usersubscriptionFields[20].Descriptor()
 	// usersubscription.DefaultDailyUsageUsd holds the default value on creation for the daily_usage_usd field.
 	usersubscription.DefaultDailyUsageUsd = usersubscriptionDescDailyUsageUsd.Default.(float64)
 	// usersubscriptionDescWeeklyUsageUsd is the schema descriptor for weekly_usage_usd field.
-	usersubscriptionDescWeeklyUsageUsd := usersubscriptionFields[18].Descriptor()
+	usersubscriptionDescWeeklyUsageUsd := usersubscriptionFields[21].Descriptor()
 	// usersubscription.DefaultWeeklyUsageUsd holds the default value on creation for the weekly_usage_usd field.
 	usersubscription.DefaultWeeklyUsageUsd = usersubscriptionDescWeeklyUsageUsd.Default.(float64)
 	// usersubscriptionDescMonthlyUsageUsd is the schema descriptor for monthly_usage_usd field.
-	usersubscriptionDescMonthlyUsageUsd := usersubscriptionFields[19].Descriptor()
+	usersubscriptionDescMonthlyUsageUsd := usersubscriptionFields[22].Descriptor()
 	// usersubscription.DefaultMonthlyUsageUsd holds the default value on creation for the monthly_usage_usd field.
 	usersubscription.DefaultMonthlyUsageUsd = usersubscriptionDescMonthlyUsageUsd.Default.(float64)
 	// usersubscriptionDescAssignedAt is the schema descriptor for assigned_at field.
-	usersubscriptionDescAssignedAt := usersubscriptionFields[21].Descriptor()
+	usersubscriptionDescAssignedAt := usersubscriptionFields[24].Descriptor()
 	// usersubscription.DefaultAssignedAt holds the default value on creation for the assigned_at field.
 	usersubscription.DefaultAssignedAt = usersubscriptionDescAssignedAt.Default.(func() time.Time)
 }

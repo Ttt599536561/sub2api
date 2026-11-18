@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -12,10 +13,12 @@ import (
 	"time"
 
 	"entgo.io/ent/dialect"
+	entsql "entgo.io/ent/dialect/sql"
 
 	dbent "github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/ent/paymentauditlog"
 	"github.com/Wei-Shaw/sub2api/ent/paymentorder"
+	"github.com/Wei-Shaw/sub2api/ent/user"
 	"github.com/Wei-Shaw/sub2api/internal/payment"
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/servertiming"
@@ -617,7 +620,7 @@ func (s *PaymentService) doSub(ctx context.Context, o *dbent.PaymentOrder, lease
 	if err != nil || g.Status != payment.EntityStatusActive {
 		return fmt.Errorf("group %d no longer exists or inactive", gid)
 	}
-	if err := s.ensurePaymentSubscriptionAssigned(ctx, o, gid, days); err != nil {
+	if err := s.ensurePaymentSubscriptionAssigned(ctx, o, gid, days, paymentMonthlyRenewalAllowance(o, g)); err != nil {
 		return err
 	}
 	if err := s.applyAffiliateRebateForOrder(ctx, o); err != nil {
@@ -626,12 +629,38 @@ func (s *PaymentService) doSub(ctx context.Context, o *dbent.PaymentOrder, lease
 	return s.markCompleted(ctx, o, lease, "SUBSCRIPTION_SUCCESS")
 }
 
-func (s *PaymentService) ensurePaymentSubscriptionAssigned(ctx context.Context, o *dbent.PaymentOrder, groupID int64, days int) error {
+func paymentMonthlyRenewalAllowance(order *dbent.PaymentOrder, group *Group) float64 {
+	if order.SubscriptionDays == nil || *order.SubscriptionDays != 30 {
+		return 0
+	}
+	if value, exists := order.ProviderSnapshot[paymentMonthlyAllowanceSnapshotKey]; exists {
+		if allowance, ok := value.(float64); ok && isValidProviderAmount(allowance) {
+			return allowance
+		}
+		return 0
+	}
+	// Pending legacy orders did not capture an allowance at checkout.
+	if group.MonthlyLimitUSD != nil && isValidProviderAmount(*group.MonthlyLimitUSD) {
+		return *group.MonthlyLimitUSD
+	}
+	return 0
+}
+
+func (s *PaymentService) ensurePaymentSubscriptionAssigned(ctx context.Context, o *dbent.PaymentOrder, groupID int64, days int, monthlyAllowance float64) error {
 	if s.subscriptionSvc == nil {
 		return errors.New("subscription service is unavailable")
 	}
 
-	tx, err := s.entClient.Tx(ctx)
+	postgres := paymentAuditDialect(s.entClient) == dialect.Postgres
+	var tx *dbent.Tx
+	var err error
+	if postgres {
+		// A user waiting for a concurrent first purchase must see its
+		// committed subscription before deciding whether to create a row.
+		tx, err = s.entClient.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelReadCommitted})
+	} else {
+		tx, err = s.entClient.Tx(ctx)
+	}
 	if err != nil {
 		return fmt.Errorf("begin subscription fulfillment tx: %w", err)
 	}
@@ -639,12 +668,18 @@ func (s *PaymentService) ensurePaymentSubscriptionAssigned(ctx context.Context, 
 
 	txCtx := dbent.NewTxContext(ctx, tx)
 	txClient := tx.Client()
+	if postgres {
+		if err := lockUserForSubscriptionPayment(txCtx, tx, o.UserID); err != nil {
+			return fmt.Errorf("lock user for paid subscription assignment: %w", err)
+		}
+	}
 	alreadyAssigned, err := hasPaymentSubscriptionAssignmentAudit(txCtx, txClient, o.ID)
 	if err != nil {
 		return fmt.Errorf("check subscription assignment audit: %w", err)
 	}
 
 	recoveredFromNote := false
+	var assigned *UserSubscription
 	if !alreadyAssigned {
 		orderNote := paymentSubscriptionOrderNote(o.ID)
 		existing, lookupErr := s.subscriptionSvc.userSubRepo.GetByUserIDAndGroupID(txCtx, o.UserID, groupID)
@@ -654,22 +689,28 @@ func (s *PaymentService) ensurePaymentSubscriptionAssigned(ctx context.Context, 
 		case lookupErr != nil && !errors.Is(lookupErr, ErrSubscriptionNotFound):
 			return fmt.Errorf("check existing subscription assignment: %w", lookupErr)
 		default:
-			if _, _, err := s.subscriptionSvc.assignOrExtendSubscription(txCtx, &AssignSubscriptionInput{
+			assigned, _, err = s.subscriptionSvc.assignOrExtendPaidMonthlySubscription(txCtx, &AssignSubscriptionInput{
 				UserID:       o.UserID,
 				GroupID:      groupID,
 				ValidityDays: days,
 				AssignedBy:   0,
 				Notes:        orderNote,
-			}, true); err != nil {
+			}, o.ID, monthlyAllowance)
+			if err != nil {
 				return fmt.Errorf("assign subscription: %w", err)
 			}
 		}
 
-		detail, _ := json.Marshal(map[string]any{
+		assignment := map[string]any{
 			"groupID":           groupID,
 			"validityDays":      days,
 			"recoveredFromNote": recoveredFromNote,
-		})
+		}
+		if assigned != nil {
+			assignment["subscriptionID"] = assigned.ID
+			assignment["termStartsAt"] = assigned.StartsAt
+		}
+		detail, _ := json.Marshal(assignment)
 		if _, err := txClient.PaymentAuditLog.Create().
 			SetOrderID(strconv.FormatInt(o.ID, 10)).
 			SetAction("SUBSCRIPTION_ASSIGNED").
@@ -698,6 +739,13 @@ func (s *PaymentService) ensurePaymentSubscriptionAssigned(ctx context.Context, 
 		return fmt.Errorf("invalidate subscription cache after fulfillment: %w", err)
 	}
 	return nil
+}
+
+func lockUserForSubscriptionPayment(ctx context.Context, tx *dbent.Tx, userID int64) error {
+	_, err := tx.User.Query().Where(user.IDEQ(userID)).Select(user.FieldID).ForUpdate(func(options *entsql.LockOptions) {
+		options.Strength = entsql.LockNoKeyUpdate
+	}).Only(ctx)
+	return err
 }
 
 func hasPaymentSubscriptionAssignmentAudit(ctx context.Context, client *dbent.Client, orderID int64) (bool, error) {

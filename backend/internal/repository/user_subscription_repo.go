@@ -41,6 +41,9 @@ func (r *userSubscriptionRepository) Create(ctx context.Context, sub *service.Us
 		SetNillableWelfareMonthlyLimitUsd(sub.WelfareMonthlyLimitUSD).
 		SetWelfareGrantCount(sub.WelfareGrantCount).
 		SetWelfareCycleClosed(sub.WelfareCycleClosed).
+		SetNillablePaidMonthlyLimitUsd(sub.PaidMonthlyLimitUSD).
+		SetNillablePaidMonthlyLegacyLimitUsd(sub.PaidMonthlyLegacyLimitUSD).
+		SetNillablePaidMonthlyLegacyExpiresAt(sub.PaidMonthlyLegacyExpiresAt).
 		SetExpiresAt(sub.ExpiresAt).
 		SetNillableDailyWindowStart(sub.DailyWindowStart).
 		SetNillableWeeklyWindowStart(sub.WeeklyWindowStart).
@@ -188,6 +191,13 @@ func (r *userSubscriptionRepository) Update(ctx context.Context, sub *service.Us
 		builder.ClearWelfareMonthlyLimitUsd()
 	} else {
 		builder.SetWelfareMonthlyLimitUsd(*sub.WelfareMonthlyLimitUSD)
+	}
+	if sub.PaidMonthlyLimitUSD == nil {
+		builder.ClearPaidMonthlyLimitUsd().ClearPaidMonthlyLegacyLimitUsd().ClearPaidMonthlyLegacyExpiresAt()
+	} else {
+		builder.SetPaidMonthlyLimitUsd(*sub.PaidMonthlyLimitUSD).
+			SetNillablePaidMonthlyLegacyLimitUsd(sub.PaidMonthlyLegacyLimitUSD).
+			SetNillablePaidMonthlyLegacyExpiresAt(sub.PaidMonthlyLegacyExpiresAt)
 	}
 
 	updated, err := builder.Save(ctx)
@@ -411,24 +421,23 @@ func (r *userSubscriptionRepository) UpdateNotes(ctx context.Context, subscripti
 
 func (r *userSubscriptionRepository) ActivateWindows(ctx context.Context, id int64, dailyStart, periodicStart time.Time) error {
 	client := clientFromContext(ctx, r.client)
-	n, err := client.UserSubscription.Update().
-		Where(
-			usersubscription.IDEQ(id),
-			usersubscription.DailyWindowStartIsNil(),
-			usersubscription.WeeklyWindowStartIsNil(),
-			usersubscription.MonthlyWindowStartIsNil(),
-		).
-		SetDailyWindowStart(dailyStart).
-		SetWeeklyWindowStart(periodicStart).
-		SetMonthlyWindowStart(periodicStart).
-		AddDailyResetVersion(1).
-		Save(ctx)
-	return r.translateConditionalWindowReset(ctx, client, id, n, err)
+	result, err := client.ExecContext(ctx, `UPDATE user_subscriptions SET
+ daily_window_start=COALESCE(daily_window_start,$1),
+ weekly_window_start=COALESCE(weekly_window_start,$2),
+ monthly_window_start=COALESCE(monthly_window_start,$2),
+ daily_reset_version=daily_reset_version+1,updated_at=$3
+ WHERE id=$4 AND deleted_at IS NULL
+ AND (daily_window_start IS NULL OR weekly_window_start IS NULL OR monthly_window_start IS NULL)`, dailyStart, periodicStart, time.Now(), id)
+	if err != nil {
+		return err
+	}
+	n, err := result.RowsAffected()
+	return r.translateConditionalWindowReset(ctx, client, id, int(n), err)
 }
 
 func (r *userSubscriptionRepository) ResetUsageWindows(ctx context.Context, id int64, resetDaily, resetWeekly, resetMonthly bool, dailyStart, periodicStart time.Time) error {
 	client := clientFromContext(ctx, r.client)
-	update := client.UserSubscription.UpdateOneID(id)
+	update := client.UserSubscription.Update().Where(usersubscription.IDEQ(id))
 	if resetDaily {
 		update.SetDailyUsageUsd(0).SetDailyWindowStart(dailyStart)
 	}
@@ -436,13 +445,26 @@ func (r *userSubscriptionRepository) ResetUsageWindows(ctx context.Context, id i
 		update.SetWeeklyUsageUsd(0).SetWeeklyWindowStart(periodicStart)
 	}
 	if resetMonthly {
-		update.SetMonthlyUsageUsd(0).SetMonthlyWindowStart(periodicStart)
+		update.Where(usersubscription.PaidMonthlyLimitUsdIsNil()).SetMonthlyUsageUsd(0).SetMonthlyWindowStart(periodicStart)
 	}
 	if resetDaily || resetWeekly || resetMonthly {
 		update.AddDailyResetVersion(1)
 	}
-	_, err := update.Save(ctx)
-	return translatePersistenceError(err, service.ErrSubscriptionNotFound, nil)
+	n, err := update.Save(ctx)
+	if err != nil || n > 0 || !resetMonthly {
+		if err == nil && n == 0 {
+			return service.ErrSubscriptionNotFound
+		}
+		return translatePersistenceError(err, service.ErrSubscriptionNotFound, nil)
+	}
+	exists, err := client.UserSubscription.Query().Where(usersubscription.IDEQ(id)).Exist(ctx)
+	if err != nil {
+		return err
+	}
+	if exists {
+		return service.ErrPaidMonthlyResetNotAllowed
+	}
+	return service.ErrSubscriptionNotFound
 }
 
 func (r *userSubscriptionRepository) ResetDailyUsage(ctx context.Context, id int64, expectedWindowStart *time.Time, newWindowStart time.Time) error {
@@ -479,7 +501,7 @@ func (r *userSubscriptionRepository) ResetWeeklyUsage(ctx context.Context, id in
 
 func (r *userSubscriptionRepository) ResetMonthlyUsage(ctx context.Context, id int64, expectedWindowStart *time.Time, newWindowStart time.Time) error {
 	client := clientFromContext(ctx, r.client)
-	query := client.UserSubscription.Update().Where(usersubscription.IDEQ(id))
+	query := client.UserSubscription.Update().Where(usersubscription.IDEQ(id), usersubscription.PaidMonthlyLimitUsdIsNil())
 	if expectedWindowStart == nil {
 		query = query.Where(usersubscription.MonthlyWindowStartIsNil())
 	} else {
@@ -697,6 +719,9 @@ func userSubscriptionEntityToServiceWithStatusMapping(m *dbent.UserSubscription,
 		WelfareDailyLimitUSD:       m.WelfareDailyLimitUsd,
 		WelfareWeeklyLimitUSD:      m.WelfareWeeklyLimitUsd,
 		WelfareMonthlyLimitUSD:     m.WelfareMonthlyLimitUsd,
+		PaidMonthlyLimitUSD:        m.PaidMonthlyLimitUsd,
+		PaidMonthlyLegacyLimitUSD:  m.PaidMonthlyLegacyLimitUsd,
+		PaidMonthlyLegacyExpiresAt: m.PaidMonthlyLegacyExpiresAt,
 		WelfareGrantCount:          m.WelfareGrantCount,
 		WelfareCycleClosed:         m.WelfareCycleClosed,
 		StartsAt:                   m.StartsAt,
@@ -752,6 +777,9 @@ func applyUserSubscriptionEntityToService(dst *service.UserSubscription, src *db
 	dst.WelfareDailyLimitUSD = src.WelfareDailyLimitUsd
 	dst.WelfareWeeklyLimitUSD = src.WelfareWeeklyLimitUsd
 	dst.WelfareMonthlyLimitUSD = src.WelfareMonthlyLimitUsd
+	dst.PaidMonthlyLimitUSD = src.PaidMonthlyLimitUsd
+	dst.PaidMonthlyLegacyLimitUSD = src.PaidMonthlyLegacyLimitUsd
+	dst.PaidMonthlyLegacyExpiresAt = src.PaidMonthlyLegacyExpiresAt
 	dst.WelfareGrantCount = src.WelfareGrantCount
 	dst.WelfareCycleClosed = src.WelfareCycleClosed
 }

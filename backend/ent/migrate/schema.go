@@ -2066,6 +2066,9 @@ var (
 		{Name: "welfare_monthly_limit_usd", Type: field.TypeFloat64, Nullable: true, SchemaType: map[string]string{"postgres": "decimal(20,10)"}},
 		{Name: "welfare_grant_count", Type: field.TypeInt64, Default: 0},
 		{Name: "welfare_cycle_closed", Type: field.TypeBool, Default: false},
+		{Name: "paid_monthly_limit_usd", Type: field.TypeFloat64, Nullable: true, SchemaType: map[string]string{"postgres": "decimal(30,10)"}},
+		{Name: "paid_monthly_legacy_limit_usd", Type: field.TypeFloat64, Nullable: true, SchemaType: map[string]string{"postgres": "decimal(30,10)"}},
+		{Name: "paid_monthly_legacy_expires_at", Type: field.TypeTime, Nullable: true, SchemaType: map[string]string{"postgres": "timestamptz"}},
 		{Name: "starts_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
 		{Name: "expires_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
 		{Name: "status", Type: field.TypeString, Size: 20, Default: "active"},
@@ -2092,19 +2095,19 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "user_subscriptions_groups_subscriptions",
-				Columns:    []*schema.Column{UserSubscriptionsColumns[24]},
+				Columns:    []*schema.Column{UserSubscriptionsColumns[27]},
 				RefColumns: []*schema.Column{GroupsColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
 			{
 				Symbol:     "user_subscriptions_users_subscriptions",
-				Columns:    []*schema.Column{UserSubscriptionsColumns[25]},
+				Columns:    []*schema.Column{UserSubscriptionsColumns[28]},
 				RefColumns: []*schema.Column{UsersColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
 			{
 				Symbol:     "user_subscriptions_users_assigned_subscriptions",
-				Columns:    []*schema.Column{UserSubscriptionsColumns[26]},
+				Columns:    []*schema.Column{UserSubscriptionsColumns[29]},
 				RefColumns: []*schema.Column{UsersColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
@@ -2113,37 +2116,37 @@ var (
 			{
 				Name:    "usersubscription_user_id",
 				Unique:  false,
-				Columns: []*schema.Column{UserSubscriptionsColumns[25]},
+				Columns: []*schema.Column{UserSubscriptionsColumns[28]},
 			},
 			{
 				Name:    "usersubscription_group_id",
 				Unique:  false,
-				Columns: []*schema.Column{UserSubscriptionsColumns[24]},
+				Columns: []*schema.Column{UserSubscriptionsColumns[27]},
 			},
 			{
 				Name:    "usersubscription_status",
 				Unique:  false,
-				Columns: []*schema.Column{UserSubscriptionsColumns[12]},
+				Columns: []*schema.Column{UserSubscriptionsColumns[15]},
 			},
 			{
 				Name:    "usersubscription_expires_at",
 				Unique:  false,
-				Columns: []*schema.Column{UserSubscriptionsColumns[11]},
+				Columns: []*schema.Column{UserSubscriptionsColumns[14]},
 			},
 			{
 				Name:    "usersubscription_user_id_status_expires_at",
 				Unique:  false,
-				Columns: []*schema.Column{UserSubscriptionsColumns[25], UserSubscriptionsColumns[12], UserSubscriptionsColumns[11]},
+				Columns: []*schema.Column{UserSubscriptionsColumns[28], UserSubscriptionsColumns[15], UserSubscriptionsColumns[14]},
 			},
 			{
 				Name:    "usersubscription_assigned_by",
 				Unique:  false,
-				Columns: []*schema.Column{UserSubscriptionsColumns[26]},
+				Columns: []*schema.Column{UserSubscriptionsColumns[29]},
 			},
 			{
 				Name:    "user_subscriptions_user_group_kind_unique_active",
 				Unique:  true,
-				Columns: []*schema.Column{UserSubscriptionsColumns[25], UserSubscriptionsColumns[24], UserSubscriptionsColumns[4]},
+				Columns: []*schema.Column{UserSubscriptionsColumns[28], UserSubscriptionsColumns[27], UserSubscriptionsColumns[4]},
 				Annotation: &entsql.IndexAnnotation{
 					Where: "deleted_at IS NULL AND welfare_cycle_closed = false",
 				},
