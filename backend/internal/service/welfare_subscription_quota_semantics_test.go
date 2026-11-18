@@ -51,7 +51,8 @@ func TestExtendedWelfareTermKeepsTotalMonthlyUsageAcrossMaintenance(t *testing.T
 		Status: SubscriptionStatusActive, StartsAt: start, ExpiresAt: start.Add(90 * 24 * time.Hour),
 		MonthlyWindowStart: &start, MonthlyUsageUSD: 35, WelfareMonthlyLimitUSD: &limit}
 	require.False(t, original.NeedsMonthlyResetAt(now))
-	require.False(t, original.canAutomaticallyResetMonthlyAt(now))
+	_, _, advance := original.MonthlyWindowAdvanceAt(now)
+	require.False(t, advance)
 	require.Equal(t, original.ExpiresAt, *original.MonthlyResetTime())
 
 	locked := original

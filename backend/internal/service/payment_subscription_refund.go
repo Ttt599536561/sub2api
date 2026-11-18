@@ -30,8 +30,11 @@ func (s *PaymentService) preparePaidMonthlyRenewalRefund(ctx context.Context, or
 	if err != nil {
 		return false, fmt.Errorf("look up paid monthly renewal for refund: %w", err)
 	}
-	defer rows.Close()
-	if !rows.Next() {
+	found := rows.Next()
+	if err := rows.Close(); err != nil {
+		return false, fmt.Errorf("close paid monthly receipt lookup: %w", err)
+	}
+	if !found {
 		return false, rows.Err()
 	}
 	if plan.RefundAmount < order.Amount {
@@ -75,14 +78,15 @@ SELECT validity_days FROM affected`, plan.OrderID)
 	if err != nil {
 		return 0, fmt.Errorf("reverse paid monthly renewal: %w", err)
 	}
-	defer rows.Close()
-	var days int
-	if rows.Next() {
-		if err := rows.Scan(&days); err != nil {
-			return 0, fmt.Errorf("read reversed monthly renewal: %w", err)
-		}
+	defer func() { _ = rows.Close() }()
+	if !rows.Next() {
+		return 0, rows.Err()
 	}
-	return days, rows.Err()
+	var days int
+	if err := rows.Scan(&days); err != nil {
+		return 0, fmt.Errorf("read reversed monthly renewal: %w", err)
+	}
+	return days, rows.Close()
 }
 
 func (s *PaymentService) refundOrderMatchesSubscriptionTerm(ctx context.Context, order *dbent.PaymentOrder, sub *UserSubscription) bool {

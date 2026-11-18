@@ -67,7 +67,8 @@ func TestThirtyDaySubscriptionDoesNotResetMonthlyQuotaBeforeExpiry(t *testing.T)
 	require.Equal(t, startsAt, *renewed.MonthlyWindowStart)
 	require.False(t, renewed.NeedsMonthlyResetAt(expiresAt.Add(-time.Second)))
 	require.True(t, renewed.NeedsMonthlyResetAt(expiresAt))
-	require.False(t, renewed.canAutomaticallyResetMonthlyAt(expiresAt))
+	_, _, advance := renewed.MonthlyWindowAdvanceAt(expiresAt)
+	require.False(t, advance)
 	require.Equal(t, expiresAt, *renewed.MonthlyResetTime())
 }
 

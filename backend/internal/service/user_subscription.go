@@ -216,11 +216,6 @@ func (s *UserSubscription) canAutomaticallyResetWeeklyAt(now time.Time) bool {
 	return ok
 }
 
-func (s *UserSubscription) canAutomaticallyResetMonthlyAt(now time.Time) bool {
-	_, _, ok := s.MonthlyWindowAdvanceAt(now)
-	return ok
-}
-
 // MonthlyWindowAdvanceAt returns the new anchor and any allowance still due
 // for legacy months. An ordinary window reset has zero allowance.
 func (s *UserSubscription) MonthlyWindowAdvanceAt(now time.Time) (time.Time, float64, bool) {
