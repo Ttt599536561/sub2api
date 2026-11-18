@@ -79,14 +79,13 @@ SELECT validity_days FROM affected`, plan.OrderID)
 		return 0, fmt.Errorf("reverse paid monthly renewal: %w", err)
 	}
 	defer func() { _ = rows.Close() }()
-	if !rows.Next() {
-		return 0, rows.Err()
-	}
 	var days int
-	if err := rows.Scan(&days); err != nil {
-		return 0, fmt.Errorf("read reversed monthly renewal: %w", err)
+	for rows.Next() {
+		if err := rows.Scan(&days); err != nil {
+			return 0, fmt.Errorf("read reversed monthly renewal: %w", err)
+		}
 	}
-	return days, rows.Close()
+	return days, rows.Err()
 }
 
 func (s *PaymentService) refundOrderMatchesSubscriptionTerm(ctx context.Context, order *dbent.PaymentOrder, sub *UserSubscription) bool {
