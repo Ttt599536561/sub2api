@@ -122,7 +122,7 @@ func (r *redeemCodeRepository) Delete(ctx context.Context, id int64) error {
 	).Exec(ctx)
 	if err != nil {
 		var foreignKey *pq.Error
-		if errors.As(err, &foreignKey) && foreignKey.Code == "23503" {
+		if errors.As(err, &foreignKey) && (foreignKey.Code == "23001" || foreignKey.Code == "23503") {
 			switch foreignKey.Constraint {
 			case "user_welfare_subscription_grants_redeem_code_id_fkey",
 				"user_welfare_subscription_supplements_redeem_code_id_fkey",

@@ -56,7 +56,7 @@ func TestV217PendingRefundFailure_PostgresRestoresRevocationAtomically(t *testin
 		SetProviderInstanceID(strconv.FormatInt(instance.ID, 10)).
 		SetClientIP("127.0.0.1").SetSrcHost("localhost").
 		SetOrderType(payment.OrderTypeSubscription).SetSubscriptionGroupID(fixture.GroupID).
-		SetSubscriptionDays(7).SetStatus(service.OrderStatusCompleted).
+		SetSubscriptionDays(7).SetStatus(service.OrderStatusCompleted).SetPaidAt(now).SetCompletedAt(now).
 		SetExpiresAt(now.Add(time.Hour)).Save(ctx)
 	require.NoError(t, err)
 	t.Cleanup(func() {

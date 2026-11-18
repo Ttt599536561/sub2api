@@ -49,24 +49,27 @@ func migrationUpgradeExpectedGroupDefaults(t *testing.T, snapshot string) string
 	return string(expected)
 }
 
-// Add the six welfare defaults only to the expected historical rows. Keeping
-// the actual snapshot intact verifies every old field and every new default.
+// These fixtures predate welfare entitlements and paid renewal accounting.
+// Add their defaults to the expected snapshot so every migrated column is checked.
 func migrationUpgradeExpectedSubscriptionDefaults(t *testing.T, snapshot string) string {
 	t.Helper()
 	var subscriptions []map[string]json.RawMessage
 	require.NoError(t, json.Unmarshal([]byte(snapshot), &subscriptions))
 	require.NotEmpty(t, subscriptions, "the historical fixture must contain existing subscriptions")
 	defaults := map[string]json.RawMessage{
-		"entitlement_kind":          json.RawMessage(`"standard"`),
-		"welfare_daily_limit_usd":   json.RawMessage(`null`),
-		"welfare_weekly_limit_usd":  json.RawMessage(`null`),
-		"welfare_monthly_limit_usd": json.RawMessage(`null`),
-		"welfare_grant_count":       json.RawMessage(`0`),
-		"welfare_cycle_closed":      json.RawMessage(`false`),
+		"entitlement_kind":               json.RawMessage(`"standard"`),
+		"welfare_daily_limit_usd":        json.RawMessage(`null`),
+		"welfare_weekly_limit_usd":       json.RawMessage(`null`),
+		"welfare_monthly_limit_usd":      json.RawMessage(`null`),
+		"welfare_grant_count":            json.RawMessage(`0`),
+		"welfare_cycle_closed":           json.RawMessage(`false`),
+		"paid_monthly_limit_usd":         json.RawMessage(`null`),
+		"paid_monthly_legacy_expires_at": json.RawMessage(`null`),
+		"paid_monthly_legacy_limit_usd":  json.RawMessage(`null`),
 	}
 	for _, subscription := range subscriptions {
 		for field, value := range defaults {
-			require.NotContains(t, subscription, field, "the pinned source fixture must predate welfare entitlements")
+			require.NotContains(t, subscription, field, "the pinned source fixture must predate subscription field %s", field)
 			subscription[field] = value
 		}
 	}

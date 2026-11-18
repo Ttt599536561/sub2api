@@ -30,7 +30,7 @@ func TestPaymentRefundRevocationRollback_PostgresPreservesDailyResetEntitlement(
 		SetOutTradeNo(uuid.NewString()).SetPaymentType("alipay").SetPaymentTradeNo("test-only-no-provider").
 		SetClientIP("127.0.0.1").SetSrcHost("localhost").
 		SetOrderType(payment.OrderTypeSubscription).SetSubscriptionGroupID(fixture.GroupID).
-		SetSubscriptionDays(7).SetStatus(service.OrderStatusCompleted).
+		SetSubscriptionDays(7).SetStatus(service.OrderStatusCompleted).SetPaidAt(now).SetCompletedAt(now).
 		SetExpiresAt(now.Add(time.Hour)).Save(ctx)
 	require.NoError(t, err)
 	t.Cleanup(func() {
