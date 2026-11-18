@@ -14,7 +14,7 @@ export default {
   supplementUsed: "补充已用",
   supplementRemaining: "补充剩余",
   monthlyRemainingWithSupplement: '月额度剩余（含补充）',
-  monthlySupplementBreakdown: '基础月额度剩余 {base} + 一次性补充剩余 {supplement}',
+  monthlySupplementExpiry: '补额随本期订阅到期失效。',
   monthlySupplementWindowHint: '日或周基础额度更紧时，当前可用额度可能低于此合计。',
   subscriptionExpiresAt: "订阅到期时间",
   purpose: '用途',

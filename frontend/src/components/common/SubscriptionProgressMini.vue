@@ -11,10 +11,10 @@
         <!-- Combined progress indicator -->
         <div class="flex items-center gap-0.5">
           <div
-            v-for="sub in displaySubscriptions.slice(0, 3)"
-            :key="sub.id"
+            v-for="{ subscription } in displaySubscriptions.slice(0, 3)"
+            :key="subscription.id"
             class="h-2 w-2 rounded-full"
-            :class="getProgressDotClass(sub)"
+            :class="getProgressDotClass(subscription)"
           ></div>
         </div>
         <span class="text-xs font-medium text-purple-700 dark:text-purple-300">
@@ -40,7 +40,7 @@
 
         <div class="max-h-64 overflow-y-auto">
           <div
-            v-for="subscription in displaySubscriptions"
+            v-for="{ subscription, monthlyBalance } in displaySubscriptions"
             :key="subscription.id"
             class="border-b border-gray-50 p-3 last:border-b-0 dark:border-dark-700/50"
           >
@@ -134,7 +134,16 @@
                   </span>
                 </div>
 
-                <div v-if="subscription.group?.monthly_limit_usd || (subscription.entitlement_kind === 'welfare' && subscription.group?.monthly_limit_usd === 0)" class="flex items-center gap-2">
+                <template v-if="monthlyBalance !== undefined">
+                  <div class="flex items-baseline justify-between gap-2 text-xs">
+                    <span class="text-gray-500 dark:text-dark-400">{{ t('welfareRedeem.monthlyRemainingWithSupplement') }}</span>
+                    <span class="shrink-0 font-medium tabular-nums text-gray-900 dark:text-white">${{ monthlyBalance.toFixed(2) }}</span>
+                  </div>
+                  <p v-if="(subscription.group?.daily_limit_usd ?? 0) > 0 || (subscription.group?.weekly_limit_usd ?? 0) > 0" class="text-[10px] text-gray-500 dark:text-dark-400">
+                    {{ t('welfareRedeem.monthlySupplementWindowHint') }}
+                  </p>
+                </template>
+                <div v-else-if="subscription.group?.monthly_limit_usd || (subscription.entitlement_kind === 'welfare' && subscription.group?.monthly_limit_usd === 0)" class="flex items-center gap-2">
                   <span class="w-8 flex-shrink-0 text-[10px] text-gray-500">{{
                     t('subscriptionProgress.monthly')
                   }}</span>
@@ -164,7 +173,7 @@
                     }}
                   </span>
                 </div>
-                <p v-if="subscription.entitlement_kind === 'welfare' && subscription.group?.monthly_limit_usd === 0" class="text-[10px] text-amber-700 dark:text-amber-300">
+                <p v-if="monthlyBalance === undefined && subscription.entitlement_kind === 'welfare' && subscription.group?.monthly_limit_usd === 0" class="text-[10px] text-amber-700 dark:text-amber-300">
                   {{ t('userSubscriptions.welfareQuotaDisabled') }}
                 </p>
               </template>
@@ -193,7 +202,7 @@ import Icon from '@/components/icons/Icon.vue'
 import { useSubscriptionStore } from '@/stores'
 import { FeatureFlags, isFeatureFlagEnabled } from '@/utils/featureFlags'
 import type { UserSubscription } from '@/types'
-import { getExpirationDateRelation } from '@/utils/subscriptionQuota'
+import { getExpirationDateRelation, getSupplementedMonthlyBalance } from '@/utils/subscriptionQuota'
 
 const { t } = useI18n()
 
@@ -214,7 +223,7 @@ const displaySubscriptions = computed(() => {
     const aMax = getMaxUsagePercentage(a)
     const bMax = getMaxUsagePercentage(b)
     return bMax - aMax
-  })
+  }).map(subscription => ({ subscription, monthlyBalance: getSupplementedMonthlyBalance(subscription) }))
 })
 
 function getMaxUsagePercentage(sub: UserSubscription): number {

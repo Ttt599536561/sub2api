@@ -14,6 +14,16 @@ export interface RemainingDurationParts {
   minutes: number
 }
 
+export function getSupplementedMonthlyBalance(subscription: UserSubscription): number | undefined {
+  const limit = subscription.group?.monthly_limit_usd
+  const supplementRemaining = subscription.supplement_remaining_usd
+  if (subscription.status !== 'active' || limit == null || supplementRemaining == null) return undefined
+  if (limit <= 0 && subscription.entitlement_kind !== 'welfare') return undefined
+  if ((subscription.supplement_granted_usd ?? 0) <= 0 && (subscription.supplement_used_usd ?? 0) <= 0 && supplementRemaining <= 0) return undefined
+
+  return Math.max(0, limit - subscription.monthly_usage_usd) + supplementRemaining
+}
+
 export function isOneTimeDailyQuota(
   subscription: Pick<UserSubscription, 'starts_at' | 'expires_at' | 'preserve_calendar_daily_reset'>
 ): boolean {

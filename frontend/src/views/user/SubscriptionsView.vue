@@ -107,8 +107,6 @@
               }}</span>
             </div>
 
-            <SubscriptionSupplementSummary :subscription="subscription" :monthly-base-remaining="getMonthlyBaseRemaining(subscription)" />
-
             <!-- Daily Usage -->
             <div v-if="subscription.group?.daily_limit_usd" class="space-y-2">
               <div class="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
@@ -201,18 +199,21 @@
             </div>
 
             <!-- Monthly Usage -->
-            <div v-if="subscription.group?.monthly_limit_usd || (subscription.entitlement_kind === 'welfare' && subscription.group?.monthly_limit_usd === 0)" class="space-y-2">
-              <div class="flex items-center justify-between">
+            <div v-if="subscription.group?.monthly_limit_usd || (subscription.entitlement_kind === 'welfare' && subscription.group?.monthly_limit_usd === 0)" data-test="subscription-monthly-quota" class="space-y-2">
+              <div class="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
                 <span class="text-sm font-medium text-gray-700 dark:text-gray-300">
-                  {{ t('userSubscriptions.monthly') }}
+                  {{ t(monthlyBalances[subscription.id] === undefined ? 'userSubscriptions.monthly' : 'welfareRedeem.monthlyRemainingWithSupplement') }}
                 </span>
-                <span class="text-sm text-gray-500 dark:text-dark-400">
+                <strong v-if="monthlyBalances[subscription.id] !== undefined" class="text-lg tabular-nums text-gray-900 dark:text-white" data-test="monthly-remaining-with-supplement">
+                  ${{ monthlyBalances[subscription.id]?.toFixed(2) }}
+                </strong>
+                <span v-else class="text-sm text-gray-500 dark:text-dark-400">
                   ${{ (subscription.monthly_usage_usd || 0).toFixed(2) }} / ${{
                     subscription.group.monthly_limit_usd.toFixed(2)
                   }}
                 </span>
               </div>
-              <div class="relative h-2 overflow-hidden rounded-full bg-gray-200 dark:bg-dark-600">
+              <div v-if="monthlyBalances[subscription.id] === undefined" class="relative h-2 overflow-hidden rounded-full bg-gray-200 dark:bg-dark-600">
                 <div
                   class="absolute inset-y-0 left-0 rounded-full transition-all duration-300"
                   :class="
@@ -229,8 +230,14 @@
                   }"
                 ></div>
               </div>
-              <p v-if="subscription.entitlement_kind === 'welfare' && subscription.group?.monthly_limit_usd === 0" class="text-xs text-amber-700 dark:text-amber-300">
-                {{ t((subscription.supplement_remaining_usd ?? 0) > 0 ? 'welfareRedeem.baseQuotaExhausted' : 'userSubscriptions.welfareQuotaDisabled') }}
+              <p v-if="monthlyBalances[subscription.id] !== undefined" class="text-xs text-gray-500 dark:text-dark-400">
+                {{ t('welfareRedeem.monthlySupplementExpiry') }}
+                <template v-if="(subscription.group.daily_limit_usd ?? 0) > 0 || (subscription.group.weekly_limit_usd ?? 0) > 0">
+                  {{ t('welfareRedeem.monthlySupplementWindowHint') }}
+                </template>
+              </p>
+              <p v-else-if="subscription.entitlement_kind === 'welfare' && subscription.group?.monthly_limit_usd === 0" class="text-xs text-amber-700 dark:text-amber-300">
+                {{ t('userSubscriptions.welfareQuotaDisabled') }}
               </p>
               <p
                 v-if="subscription.entitlement_kind === 'welfare' ? subscription.expires_at : subscription.monthly_window_start"
@@ -246,6 +253,7 @@
               </p>
             </div>
 
+            <SubscriptionSupplementSummary v-if="subscription.status === 'active' && monthlyBalances[subscription.id] === undefined" :subscription="subscription" />
             <!-- No limits configured - Unlimited badge -->
             <div
               v-if="
@@ -315,7 +323,7 @@
 
 <script setup lang="ts">
 import SubscriptionSupplementSummary from '@/components/common/SubscriptionSupplementSummary.vue'
-import { ref, onMounted, onUnmounted } from 'vue'
+import { computed, ref, onMounted, onUnmounted } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
@@ -331,6 +339,7 @@ import { platformBorderClass, platformBadgeClass, platformButtonClass, platformL
 import {
   getExpirationDateRelation,
   getRemainingDurationParts,
+  getSupplementedMonthlyBalance,
   isOneTimeDailyQuota,
   type RemainingDurationParts
 } from '@/utils/subscriptionQuota'
@@ -351,6 +360,9 @@ const appStore = useAppStore()
 const subscriptionStore = useSubscriptionStore()
 
 const { subscriptions, pendingDailyResets } = storeToRefs(subscriptionStore)
+const monthlyBalances = computed(() => Object.fromEntries(
+  subscriptions.value.map(subscription => [subscription.id, getSupplementedMonthlyBalance(subscription)])
+))
 const loading = ref(true)
 let refreshInterval: ReturnType<typeof setInterval> | null = null
 
@@ -419,13 +431,6 @@ async function refreshSubscriptions() {
   } catch {
     // Keep the current cards during a transient polling failure.
   }
-}
-
-function getMonthlyBaseRemaining(subscription: UserSubscription): number | undefined {
-  const limit = subscription.group?.monthly_limit_usd
-  if (subscription.status !== 'active' || limit == null) return undefined
-  if (limit <= 0 && subscription.entitlement_kind !== 'welfare') return undefined
-  return Math.max(0, limit - subscription.monthly_usage_usd)
 }
 
 function getProgressWidth(used: number | undefined, limit: number | null | undefined): string {

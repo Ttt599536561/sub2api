@@ -14,7 +14,7 @@ export default {
   supplementUsed: "Supplement used",
   supplementRemaining: "Supplement remaining",
   monthlyRemainingWithSupplement: 'Monthly quota remaining (with supplement)',
-  monthlySupplementBreakdown: '{base} base monthly quota left + {supplement} one-time supplement left',
+  monthlySupplementExpiry: 'The supplement expires with this subscription term.',
   monthlySupplementWindowHint: 'Tighter base daily or weekly limits can reduce how much is available right now.',
   subscriptionExpiresAt: "Subscription expires at",
   purpose: 'Purpose',

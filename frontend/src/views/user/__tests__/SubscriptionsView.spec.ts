@@ -69,8 +69,9 @@ describe('subscription daily reset controls', () => {
     ['standard', null, 0, 0, 200, '$300.00'],
     ['standard', 20, 30, 25, 175, '$245.00'],
     ['welfare', 20, 120, 0, 200, '$200.00'],
-    ['standard', 20, 0.004, 0.004, 199.996, '$300.00']
-  ] as const)('shows the remaining monthly base plus the remaining supplement for %s', async (kind, dailyLimit, monthlyUsed, supplementUsed, supplementRemaining, total) => {
+    ['standard', 20, 0.004, 0.004, 199.996, '$299.99'],
+    ['standard', 20, 100, 200, 0, '$0.00']
+  ] as const)('shows one monthly balance including supplemental quota for %s', async (kind, dailyLimit, monthlyUsed, supplementUsed, supplementRemaining, total) => {
     const item = subscription()
     item.entitlement_kind = kind
     item.group = { ...item.group!, daily_limit_usd: dailyLimit, weekly_limit_usd: null, monthly_limit_usd: 100 }
@@ -81,17 +82,18 @@ describe('subscription daily reset controls', () => {
     api.getMySubscriptions.mockResolvedValue([item])
     const wrapper = mountView()
     await flushPromises()
-    const summary = wrapper.get('[data-test="subscription-supplement"]')
+    const summary = wrapper.get('[data-test="subscription-monthly-quota"]')
     expect(summary.text()).toContain('welfareRedeem.monthlyRemainingWithSupplement')
     expect(summary.get('[data-test="monthly-remaining-with-supplement"]').text()).toBe(total)
-    expect(summary.text()).toContain('welfareRedeem.monthlySupplementBreakdown')
+    expect(wrapper.find('[data-test="subscription-supplement"]').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('userSubscriptions.monthly')
     expect(summary.text().includes('welfareRedeem.monthlySupplementWindowHint')).toBe(dailyLimit !== null)
     wrapper.unmount()
   })
 
-  it('does not show a combined balance for an expired subscription', async () => {
+  it.each(['expired', 'suspended'] as const)('does not show a supplemental balance for a %s subscription', async status => {
     const item = subscription()
-    item.status = 'expired'
+    item.status = status
     item.group = { ...item.group!, monthly_limit_usd: 100 }
     item.supplement_granted_usd = 200
     item.supplement_remaining_usd = 200
@@ -99,6 +101,7 @@ describe('subscription daily reset controls', () => {
     const wrapper = mountView()
     await flushPromises()
     expect(wrapper.text()).not.toContain('welfareRedeem.monthlyRemainingWithSupplement')
+    expect(wrapper.find('[data-test="subscription-supplement"]').exists()).toBe(false)
     wrapper.unmount()
   })
 
@@ -109,8 +112,8 @@ describe('subscription daily reset controls', () => {
     const wrapper = mountView()
     await flushPromises()
     expect(wrapper.text()).not.toContain('userSubscriptions.welfareQuotaDisabled')
-    expect(wrapper.text()).toContain('welfareRedeem.baseQuotaExhausted')
-    expect(wrapper.get('[data-test="subscription-supplement"]').text()).toContain('welfareRedeem.monthlyRemainingWithSupplement')
+    expect(wrapper.get('[data-test="monthly-remaining-with-supplement"]').text()).toBe('$10.00')
+    expect(wrapper.find('[data-test="subscription-supplement"]').exists()).toBe(false)
     wrapper.unmount()
   })
 
