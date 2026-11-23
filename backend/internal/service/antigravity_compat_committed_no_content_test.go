@@ -14,7 +14,7 @@ import (
 
 // runCompatStreamToEnd drives the compat stream handler with an upstream that
 // sends nothing and closes after closeAfter.
-func runCompatStreamToEnd(t *testing.T, keepaliveInterval, maxWait, closeAfter time.Duration) error {
+func runCompatStreamToEnd(t *testing.T, keepaliveInterval, maxWait, closeAfter time.Duration, readError error) error {
 	t.Helper()
 	svc := newAntigravityCompatService(config.GatewayConfig{
 		MaxLineSize: defaultMaxLineSize, StreamDataIntervalTimeout: 30, StreamKeepaliveInterval: 0,
@@ -32,7 +32,7 @@ func runCompatStreamToEnd(t *testing.T, keepaliveInterval, maxWait, closeAfter t
 		done <- err
 	}()
 	time.Sleep(closeAfter)
-	_ = pipeWriter.Close()
+	_ = pipeWriter.CloseWithError(readError)
 	select {
 	case err := <-done:
 		return err
@@ -43,20 +43,20 @@ func runCompatStreamToEnd(t *testing.T, keepaliveInterval, maxWait, closeAfter t
 }
 
 func TestAntigravityCompatEmptyStreamAfterKeepaliveIsCommittedNoContent(t *testing.T) {
-	err := runCompatStreamToEnd(t, 10*time.Millisecond, time.Second, 50*time.Millisecond)
+	err := runCompatStreamToEnd(t, 10*time.Millisecond, time.Second, 50*time.Millisecond, nil)
 	require.Error(t, err)
 	require.True(t, IsAntigravityCompatCommittedNoContent(err), "got %v", err)
 }
 
 func TestAntigravityCompatPreContentTimeoutAfterKeepaliveIsCommittedNoContent(t *testing.T) {
-	err := runCompatStreamToEnd(t, 10*time.Millisecond, 40*time.Millisecond, 200*time.Millisecond)
+	err := runCompatStreamToEnd(t, 10*time.Millisecond, 40*time.Millisecond, 200*time.Millisecond, nil)
 	require.Error(t, err)
 	require.ErrorContains(t, err, "pre-content stream timeout")
 	require.True(t, IsAntigravityCompatCommittedNoContent(err), "got %v", err)
 }
 
 func TestAntigravityCompatEmptyStreamBeforeKeepaliveStaysFailover(t *testing.T) {
-	err := runCompatStreamToEnd(t, time.Second, 2*time.Second, 10*time.Millisecond)
+	err := runCompatStreamToEnd(t, time.Second, 2*time.Second, 10*time.Millisecond, nil)
 	var failoverErr *UpstreamFailoverError
 	require.True(t, errors.As(err, &failoverErr), "got %v", err)
 	require.False(t, IsAntigravityCompatCommittedNoContent(err))
@@ -95,4 +95,24 @@ func TestReleaseStickySessionAfterCommittedNoContent(t *testing.T) {
 		require.False(t, svc.ReleaseStickySessionAfterCommittedNoContent(ctx, &groupID, "", 5, committed))
 		require.Equal(t, int64(5), cache.sessionBindings["sess"])
 	})
+}
+
+func TestCommittedCompatReadErrorPreservesCause(t *testing.T) {
+	err := runCompatStreamToEnd(t, time.Millisecond, time.Second, 50*time.Millisecond, io.ErrUnexpectedEOF)
+	require.ErrorIs(t, err, io.ErrUnexpectedEOF)
+	require.True(t, IsAntigravityCompatCommittedNoContent(err))
+}
+
+type reboundStickyCache struct{ *stubGatewayCache }
+
+func (c *reboundStickyCache) GetSessionAccountID(ctx context.Context, gid int64, session string) (int64, error) {
+	// Model an old read completing just as another request installs the new owner.
+	return 5, nil
+}
+
+func TestCommittedCompatReleasePreservesConcurrentRebind(t *testing.T) {
+	cache := &reboundStickyCache{&stubGatewayCache{sessionBindings: map[string]int64{"sess": 6}}}
+	svc := &GatewayService{cache: cache}
+	require.False(t, svc.ReleaseStickySessionAfterCommittedNoContent(context.Background(), nil, "sess", 5, newAntigravityCompatCommittedNoContentError("empty")))
+	require.Equal(t, int64(6), cache.sessionBindings["sess"])
 }

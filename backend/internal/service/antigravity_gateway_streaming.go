@@ -144,6 +144,7 @@ func (s *AntigravityGatewayService) handleGeminiStreamingResponse(c *gin.Context
 	scanner.Buffer(scanBuf[:0], maxLineSize)
 	scanner.Split(newBoundedSSESplit(s.settingService.cfg, maxLineSize, nil))
 	usage := &ClaudeUsage{}
+	var statsMetadata antigravity.GeminiUsageMetadata
 	var firstTokenMs *int
 
 	type scanEvent struct {
@@ -275,7 +276,7 @@ func (s *AntigravityGatewayService) handleGeminiStreamingResponse(c *gin.Context
 				}
 
 				// 解析 usage
-				if u := extractGeminiUsage(inner); u != nil {
+				if u := extractGeminiUsageWithStats(inner, &statsMetadata); u != nil {
 					usage = u
 				}
 				var parsed map[string]any
@@ -942,13 +943,8 @@ returnResponse:
 	}
 
 	// 转换为 service.ClaudeUsage
-	usage := &ClaudeUsage{
-		InputTokens:              agUsage.InputTokens,
-		OutputTokens:             agUsage.OutputTokens,
-		CacheCreationInputTokens: agUsage.CacheCreationInputTokens,
-		CacheReadInputTokens:     agUsage.CacheReadInputTokens,
-		ImageOutputTokens:        agUsage.ImageOutputTokens,
-	}
+	usage := &ClaudeUsage{}
+	mergeAntigravityCompatUsage(usage, agUsage)
 
 	return claudeResp, &antigravityStreamResult{usage: usage, firstTokenMs: firstTokenMs}, nil
 }
@@ -1010,16 +1006,9 @@ func (s *AntigravityGatewayService) handleClaudeStreamingResponse(c *gin.Context
 
 	// 辅助函数：转换 antigravity.ClaudeUsage 到 service.ClaudeUsage
 	convertUsage := func(agUsage *antigravity.ClaudeUsage) *ClaudeUsage {
-		if agUsage == nil {
-			return &ClaudeUsage{}
-		}
-		return &ClaudeUsage{
-			InputTokens:              agUsage.InputTokens,
-			OutputTokens:             agUsage.OutputTokens,
-			CacheCreationInputTokens: agUsage.CacheCreationInputTokens,
-			CacheReadInputTokens:     agUsage.CacheReadInputTokens,
-			ImageOutputTokens:        agUsage.ImageOutputTokens,
-		}
+		usage := &ClaudeUsage{}
+		mergeAntigravityCompatUsage(usage, agUsage)
+		return usage
 	}
 
 	type scanEvent struct {

@@ -54,4 +54,25 @@ func TestUpstreamV0224MigrationFromR7(t *testing.T) {
 	}
 	require.NoError(t, applyMigrationsFS(ctx, db, target))
 	require.Equal(t, after, upstreamAC1B8F1History(t, ctx, db))
+	// Upgrade an existing r1 rule: the old price is unknown, never inferred.
+	var ruleID, channelID int64
+	require.NoError(t, db.QueryRowContext(ctx, "INSERT INTO channels(name) VALUES ('r1-test') RETURNING id").Scan(&channelID))
+	require.NoError(t, db.QueryRowContext(ctx, "INSERT INTO channel_account_stats_pricing_rules(channel_id) VALUES ($1) RETURNING id", channelID).Scan(&ruleID))
+	_, err = db.ExecContext(ctx, `INSERT INTO channel_account_stats_model_pricing(rule_id, models, input_price) VALUES ($1, '["test"]', 0.125)`, ruleID)
+	require.NoError(t, err)
+	const imagePriceMigration = "265_account_stats_image_input_price.sql"
+	content, err := migrations.FS.ReadFile(imagePriceMigration)
+	require.NoError(t, err)
+	target[imagePriceMigration] = &fstest.MapFile{Data: content}
+	require.NoError(t, applyMigrationsFS(ctx, db, target))
+	var inherited bool
+	require.NoError(t, db.QueryRowContext(ctx, "SELECT image_input_price IS NULL AND input_price = 0.125 FROM channel_account_stats_model_pricing WHERE rule_id = $1", ruleID).Scan(&inherited))
+	require.True(t, inherited)
+	updated := upstreamAC1B8F1History(t, ctx, db)
+	require.Len(t, updated, 329)
+	for name, row := range after {
+		require.Equal(t, row, updated[name])
+	}
+	require.NoError(t, applyMigrationsFS(ctx, db, target))
+	require.Equal(t, updated, upstreamAC1B8F1History(t, ctx, db))
 }

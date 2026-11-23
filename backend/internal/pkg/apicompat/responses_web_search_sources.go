@@ -42,7 +42,8 @@ func webSearchCallResults(item *ResponsesOutput) json.RawMessage {
 					results = append(results, newWebSearchResult(rawURL))
 				}
 			}
-		} else if action.Type == "open_page" {
+		}
+		if len(results) == 0 && action.Type == "open_page" {
 			var pageURL string
 			if json.Unmarshal(action.URL, &pageURL) == nil && pageURL != "" {
 				results = append(results, newWebSearchResult(pageURL))

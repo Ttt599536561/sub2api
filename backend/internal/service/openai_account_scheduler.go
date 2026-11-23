@@ -509,7 +509,7 @@ func (s *defaultOpenAIAccountScheduler) selectBySessionHash(
 	accountID := req.StickyAccountID
 	clearBinding := func() {
 		if !req.PreserveStickyBinding {
-			_ = s.service.deleteStickySessionAccountID(ctx, req.GroupID, sessionHash)
+			_ = s.service.deleteStickySessionAccountIfBound(ctx, req.GroupID, sessionHash, accountID)
 		}
 	}
 	if accountID <= 0 {
@@ -1298,13 +1298,13 @@ func (s *defaultOpenAIAccountScheduler) tryFallbackToWeightedSticky(
 		account = s.service.recheckSelectedOpenAIAccountFromDB(ctx, account, req.GroupID, req.Platform, req.RequestedModel, req.RequireCompact, req.RequiredCapability)
 		if account == nil {
 			if accountID == req.StickyAccountID && strings.TrimSpace(req.SessionHash) != "" {
-				_ = s.service.deleteStickySessionAccountID(ctx, req.GroupID, req.SessionHash)
+				_ = s.service.deleteStickySessionAccountIfBound(ctx, req.GroupID, req.SessionHash, accountID)
 			}
 			continue
 		}
 		if !s.service.openAIAccountMatchesSchedulingGroup(account, req.GroupID) {
 			if accountID == req.StickyAccountID && strings.TrimSpace(req.SessionHash) != "" {
-				_ = s.service.deleteStickySessionAccountID(ctx, req.GroupID, req.SessionHash)
+				_ = s.service.deleteStickySessionAccountIfBound(ctx, req.GroupID, req.SessionHash, accountID)
 			}
 			continue
 		}

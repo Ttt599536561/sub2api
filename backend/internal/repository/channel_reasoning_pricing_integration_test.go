@@ -134,6 +134,32 @@ func TestAccountStatsReasoningPricingRoundTrip(t *testing.T) {
 	require.JSONEq(t, `{}`, stored)
 }
 
+func TestAccountStatsImageInputPriceRoundTrip(t *testing.T) {
+	ctx := context.Background()
+	imagePrice := 0.0000025
+	channel := &service.Channel{AccountStatsPricingRules: []service.AccountStatsPricingRule{{
+		GroupIDs: []int64{}, AccountIDs: []int64{},
+		Pricing: []service.ChannelModelPricing{{Platform: service.PlatformOpenAI, Models: []string{"image-model"}, ImageInputPrice: &imagePrice}},
+	}}}
+	repo := newReasoningPricingIntegrationChannel(t, channel)
+	zero := 0.0
+	assertStored := func(expected *float64) *service.Channel {
+		t.Helper()
+		loaded, err := repo.GetByID(ctx, channel.ID)
+		require.NoError(t, err)
+		require.Len(t, loaded.AccountStatsPricingRules, 1)
+		require.Len(t, loaded.AccountStatsPricingRules[0].Pricing, 1)
+		require.Equal(t, expected, loaded.AccountStatsPricingRules[0].Pricing[0].ImageInputPrice)
+		return loaded
+	}
+	loaded := assertStored(&imagePrice)
+	for _, expected := range []*float64{&zero, nil} {
+		loaded.AccountStatsPricingRules[0].Pricing[0].ImageInputPrice = expected
+		require.NoError(t, repo.Update(ctx, loaded))
+		loaded = assertStored(expected)
+	}
+}
+
 func TestGroupReasoningPricingRoundTripAndBilling(t *testing.T) {
 	ctx := context.Background()
 	tx := testEntTx(t)

@@ -20,11 +20,22 @@ func NewUserGroupRateRepository(sqlDB *sql.DB) service.UserGroupRateRepository {
 	return &userGroupRateRepository{sql: sqlDB, db: sqlDB}
 }
 
-func (r *userGroupRateRepository) beginTx(ctx context.Context) (*sql.Tx, error) {
+func (r *userGroupRateRepository) beginGroupWrite(ctx context.Context, groupID int64) (*sql.Tx, error) {
 	if r == nil || r.db == nil {
 		return nil, fmt.Errorf("user group rate repository: database handle is not configured")
 	}
-	return r.db.BeginTx(ctx, nil)
+	// The scan after waiting for the group lock must see the previous writer.
+	tx, err := r.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelReadCommitted})
+	if err != nil {
+		return nil, err
+	}
+	// Serialize whole-list writes even when the group has no override rows yet.
+	// NO KEY UPDATE remains compatible with ordinary foreign-key checks.
+	if _, err := tx.ExecContext(ctx, "SELECT id FROM groups WHERE id = $1 FOR NO KEY UPDATE", groupID); err != nil {
+		_ = tx.Rollback()
+		return nil, err
+	}
+	return tx, nil
 }
 
 // dedupeGroupRateMultiplierEntries 按 user_id 去重，保留最后一次出现的值。
@@ -296,7 +307,7 @@ func (r *userGroupRateRepository) SyncGroupRateMultipliers(ctx context.Context, 
 		keepUserIDs = append(keepUserIDs, e.UserID)
 	}
 
-	tx, err := r.beginTx(ctx)
+	tx, err := r.beginGroupWrite(ctx, groupID)
 	if err != nil {
 		return err
 	}
@@ -372,7 +383,7 @@ func (r *userGroupRateRepository) SyncGroupRPMOverrides(ctx context.Context, gro
 		}
 	}
 
-	tx, err := r.beginTx(ctx)
+	tx, err := r.beginGroupWrite(ctx, groupID)
 	if err != nil {
 		return err
 	}
@@ -434,24 +445,20 @@ func (r *userGroupRateRepository) SyncGroupRPMOverrides(ctx context.Context, gro
 
 // ClearGroupRPMOverrides 清空指定分组所有行的 rpm_override。
 func (r *userGroupRateRepository) ClearGroupRPMOverrides(ctx context.Context, groupID int64) error {
-	if _, err := r.sql.ExecContext(ctx, `
-		UPDATE user_group_rate_multipliers
-		SET rpm_override = NULL, updated_at = NOW()
-		WHERE group_id = $1
-	`, groupID); err != nil {
-		return err
-	}
-	_, err := r.sql.ExecContext(ctx, `
-		DELETE FROM user_group_rate_multipliers
-		WHERE group_id = $1 AND rate_multiplier IS NULL AND rpm_override IS NULL
-	`, groupID)
-	return err
+	return r.SyncGroupRPMOverrides(ctx, groupID, nil)
 }
 
 // DeleteByGroupID 删除指定分组的所有用户专属条目
 func (r *userGroupRateRepository) DeleteByGroupID(ctx context.Context, groupID int64) error {
-	_, err := r.sql.ExecContext(ctx, `DELETE FROM user_group_rate_multipliers WHERE group_id = $1`, groupID)
-	return err
+	tx, err := r.beginGroupWrite(ctx, groupID)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	if _, err := tx.ExecContext(ctx, `DELETE FROM user_group_rate_multipliers WHERE group_id = $1`, groupID); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 // DeleteByUserID 删除指定用户的所有专属条目

@@ -857,6 +857,7 @@ func TestAntigravityGatewayService_ForwardGemini_ClearsStickySessionOnGeminiRate
 	require.Len(t, cache.deleteCalls, 1)
 	require.Equal(t, int64(77), cache.deleteCalls[0].groupID)
 	require.Equal(t, "gemini:sticky-runtime", cache.deleteCalls[0].sessionHash)
+	require.Equal(t, account.ID, cache.deleteCalls[0].accountID)
 }
 
 // TestAntigravityGatewayService_Forward_BillsWithMappedModel

@@ -468,3 +468,37 @@ func TestAccountRepositoryBatchUpdateLastUsed_DoesNotBlockForeignKeyShareLocks(t
 	require.NoError(t, integrationDB.QueryRowContext(ctx, "SELECT last_used_at FROM accounts WHERE id = $1", acc.ID).Scan(&lastUsed))
 	require.True(t, lastUsed.Valid)
 }
+
+// Drop the first successful response after the real database commit.
+type committedBillingAckLoss struct {
+	service.UsageBillingBatchRepository
+	attempts int
+}
+
+func (r *committedBillingAckLoss) Apply(ctx context.Context, cmd *service.UsageBillingCommand) (*service.UsageBillingApplyResult, error) {
+	r.attempts++
+	result, err := r.UsageBillingBatchRepository.Apply(ctx, cmd)
+	if err == nil && r.attempts == 1 {
+		return nil, context.DeadlineExceeded
+	}
+	return result, err
+}
+
+func TestBillingLaneLostAcknowledgementCommitsOneCharge(t *testing.T) {
+	ctx := context.Background()
+	client := testEntClient(t)
+	f := newBatchBillingFixture(t, client, 10)
+	repo := &committedBillingAckLoss{UsageBillingBatchRepository: NewUsageBillingRepository(client, integrationDB)}
+	lane := service.NewUsageBillingLaneCombiner(repo)
+	defer lane.Stop()
+	cmds := f.commands("lost-ack-"+uuid.NewString(), []batchBillingStep{{key: 'A', account: 'P', balance: 2, keyQuota: 2}})
+	result, err := lane.Apply(ctx, cmds[0])
+	require.NoError(t, err)
+	require.False(t, result.Applied)
+	require.Equal(t, 2, repo.attempts)
+	var balance, quotaUsed float64
+	require.NoError(t, integrationDB.QueryRowContext(ctx, "SELECT balance FROM users WHERE id=$1", f.userID).Scan(&balance))
+	require.NoError(t, integrationDB.QueryRowContext(ctx, "SELECT quota_used FROM api_keys WHERE id=$1", f.keyA).Scan(&quotaUsed))
+	require.Equal(t, 8.0, balance)
+	require.Equal(t, 2.0, quotaUsed)
+}

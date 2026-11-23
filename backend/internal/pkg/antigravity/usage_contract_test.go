@@ -64,3 +64,32 @@ func TestGeminiUsageMapping_MissingPromptTokenCountKeepsInputNonNegative(t *test
 		require.Equal(t, 30, usage.CacheReadInputTokens)
 	})
 }
+
+func TestGeminiImageInputForAccountStats(t *testing.T) {
+	for _, tc := range []struct {
+		name, cache string
+		want        int
+	}{
+		{"uncached", "", 8},
+		{"cached split", `,"cachedContentTokenCount":4,"cacheTokensDetails":[{"modality":"IMAGE","tokenCount":3},{"modality":"TEXT","tokenCount":1}]`, 5},
+		{"cache split unavailable", `,"cachedContentTokenCount":4`, 0},
+		{"malformed cache detail", `,"cachedContentTokenCount":3,"cacheTokensDetails":"unknown"`, 0},
+		{"missing cached total", `,"cacheTokensDetails":[{"modality":"IMAGE","tokenCount":3}]`, 0},
+		{"unspecified cached modality", `,"cachedContentTokenCount":3,"cacheTokensDetails":[{"tokenCount":3}]`, 0},
+		{"incomplete split", `,"cachedContentTokenCount":4,"cacheTokensDetails":[{"modality":"TEXT","tokenCount":1}]`, 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			body := `{"candidates":[{"content":{"parts":[{"text":"ok"}]}}],"usageMetadata":{"promptTokenCount":12,"promptTokensDetails":[{"modality":"IMAGE","tokenCount":8}]` + tc.cache + `}}`
+			wire, u, err := TransformGeminiToClaude([]byte(body), "gemini")
+			require.NoError(t, err)
+			require.Equal(t, tc.want, u.AccountStatsImageInputTokens)
+			require.NotContains(t, string(wire), "image_input_tokens")
+			stream := NewStreamingProcessor("gemini")
+			stream.ProcessLine("data: " + body)
+			stream.ProcessLine(`data: {"usageMetadata":{"candidatesTokenCount":4}}`)
+			wire, u = stream.Finish()
+			require.Equal(t, tc.want, u.AccountStatsImageInputTokens)
+			require.NotContains(t, string(wire), "image_input_tokens")
+		})
+	}
+}

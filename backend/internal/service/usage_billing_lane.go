@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"sync"
@@ -30,8 +31,9 @@ var errUsageBillingLaneBatchOutcomeMismatch = errors.New("usage billing batch ou
 // 批量生图的冻结/结算/释放直接调用底层仓储。
 // 通道只在本进程内合并同一用户的计费；结算的原子性与幂等性由底层仓储的事务提供。
 type UsageBillingLaneCombiner struct {
-	repo     UsageBillingBatchRepository
-	maxBatch int
+	repo           UsageBillingBatchRepository
+	maxBatch       int
+	attemptTimeout time.Duration
 
 	shards [usageBillingLaneShardCount]usageBillingLaneShard
 	wg     sync.WaitGroup
@@ -42,6 +44,7 @@ type UsageBillingLaneCombiner struct {
 	batchFallbacks  atomic.Uint64
 	maxBatchSeen    atomic.Uint64
 	lastFallbackLog atomic.Int64
+	drainDeadline   atomic.Pointer[time.Time]
 }
 
 // usageBillingLaneShard 保护一组用户的通道。通道在 lanes 中存在当且仅当它的结算 goroutine 在运行。
@@ -77,7 +80,7 @@ func NewUsageBillingLaneCombiner(repo UsageBillingBatchRepository) *UsageBilling
 }
 
 func newUsageBillingLaneCombiner(repo UsageBillingBatchRepository, maxBatch int) *UsageBillingLaneCombiner {
-	c := &UsageBillingLaneCombiner{repo: repo, maxBatch: maxBatch}
+	c := &UsageBillingLaneCombiner{repo: repo, maxBatch: maxBatch, attemptTimeout: postUsageBillingTimeout}
 	for i := range c.shards {
 		c.shards[i].lanes = make(map[int64]*usageBillingLane)
 	}
@@ -123,6 +126,8 @@ func (c *UsageBillingLaneCombiner) Stop() {
 	if c == nil {
 		return
 	}
+	deadline := time.Now().Add(c.attemptTimeout)
+	c.drainDeadline.CompareAndSwap(nil, &deadline)
 	for i := range c.shards {
 		shard := &c.shards[i]
 		shard.mu.Lock()
@@ -215,7 +220,7 @@ func (c *UsageBillingLaneCombiner) execute(batch []*usageBillingLaneRequest) {
 
 	if len(batch) == 1 {
 		c.singleApplies.Add(1)
-		c.applyOne(batch[0], time.Now().Add(postUsageBillingTimeout))
+		c.applyOne(batch[0], false)
 		return
 	}
 
@@ -236,19 +241,28 @@ func (c *UsageBillingLaneCombiner) execute(batch []*usageBillingLaneRequest) {
 	}
 
 	c.logBatchFallback(batch[0].cmd.UserID, len(batch), err)
-	// 整批逐条结算共用一个截止时间，数据库不可用时整批在一个超时内结束。
-	deadline := time.Now().Add(postUsageBillingTimeout)
 	for _, req := range batch {
-		c.applyOne(req, deadline)
+		c.applyOne(req, usageBillingCommitMayHaveSucceeded(err))
 	}
 }
 
-// applyOne 以单条 Apply 结算一个请求并交付结果。上下文保留请求上下文中的值，截止时间为 deadline；
-// panic 视同该请求返回 error。
-func (c *UsageBillingLaneCombiner) applyOne(req *usageBillingLaneRequest, deadline time.Time) {
-	ctx, cancel := context.WithDeadline(context.WithoutCancel(req.ctx), deadline)
-	defer cancel()
-	res, err := func() (res *UsageBillingApplyResult, err error) {
+// A queued charge gets its own database timeout when execution begins. During
+// shutdown every remaining attempt is also bounded by the same drain deadline.
+func (c *UsageBillingLaneCombiner) attemptContext(parent context.Context) (context.Context, context.CancelFunc) {
+	deadline := time.Now().Add(c.attemptTimeout)
+	if stop := c.drainDeadline.Load(); stop != nil && stop.Before(deadline) {
+		deadline = *stop
+	}
+	return context.WithDeadline(context.WithoutCancel(parent), deadline)
+}
+
+func (c *UsageBillingLaneCombiner) applyOne(req *usageBillingLaneRequest, priorUncertainCommit bool) {
+	apply := func() (res *UsageBillingApplyResult, err error) {
+		ctx, cancel := c.attemptContext(req.ctx)
+		defer cancel()
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		defer func() {
 			if r := recover(); r != nil {
 				logger.LegacyPrintf("service.usage_billing_lane", "[UsageBillingLane] ALERT: panic while applying user=%d request=%s: %v",
@@ -256,14 +270,48 @@ func (c *UsageBillingLaneCombiner) applyOne(req *usageBillingLaneRequest, deadli
 				res, err = nil, fmt.Errorf("usage billing apply panic: %v", r)
 			}
 		}()
-		return c.repo.Apply(ctx, req.cmd)
-	}()
+		res, err = c.repo.Apply(ctx, req.cmd)
+		return res, billingAttemptError(ctx, err)
+	}
+	res, err := apply()
+	// Retry the original idempotency key once for a timed-out attempt or a
+	// PostgreSQL lock/serialization failure. Business errors are final.
+	var pgErr interface{ SQLState() string }
+	retry := usageBillingCommitMayHaveSucceeded(err)
+	if errors.As(err, &pgErr) {
+		switch pgErr.SQLState() {
+		case "55P03", "40P01", "40001", "57014":
+			retry = true
+		}
+	}
+	if retry && c.drainDeadline.Load() == nil {
+		priorUncertainCommit = priorUncertainCommit || usageBillingCommitMayHaveSucceeded(err)
+		res, err = apply()
+	}
+	if priorUncertainCommit && err == nil && res != nil && !res.Applied {
+		copy := *res
+		copy.duplicateAfterUncertainCommit = true
+		res = &copy
+	}
 	deliverUsageBillingLaneResult(req, res, err)
+}
+
+func usageBillingCommitMayHaveSucceeded(err error) bool {
+	return errors.Is(err, ErrUsageBillingCommitUnknown) || errors.Is(err, context.DeadlineExceeded)
+}
+
+// database/sql can finish its timeout rollback before Commit observes the
+// deadline, leaving Commit to report ErrTxDone under an expired context.
+func billingAttemptError(ctx context.Context, err error) error {
+	if errors.Is(err, sql.ErrTxDone) && errors.Is(ctx.Err(), context.DeadlineExceeded) {
+		return errors.Join(err, context.DeadlineExceeded)
+	}
+	return err
 }
 
 // applyBatch 调用底层 ApplyBatch，panic 视同返回 error（事务已由底层回滚）。
 func (c *UsageBillingLaneCombiner) applyBatch(ctx context.Context, cmds []*UsageBillingCommand) (outcomes []UsageBillingBatchOutcome, err error) {
-	batchCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), postUsageBillingTimeout)
+	batchCtx, cancel := c.attemptContext(ctx)
 	defer cancel()
 	defer func() {
 		if r := recover(); r != nil {
@@ -272,7 +320,11 @@ func (c *UsageBillingLaneCombiner) applyBatch(ctx context.Context, cmds []*Usage
 			outcomes, err = nil, fmt.Errorf("usage billing batch panic: %v", r)
 		}
 	}()
-	return c.repo.ApplyBatch(batchCtx, cmds)
+	if err := batchCtx.Err(); err != nil {
+		return nil, err
+	}
+	outcomes, err = c.repo.ApplyBatch(batchCtx, cmds)
+	return outcomes, billingAttemptError(batchCtx, err)
 }
 
 // logBatchFallback 计数并记录一次整批回退；日志每分钟至多一条，带累计回退次数。

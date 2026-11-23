@@ -3,7 +3,10 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"database/sql/driver"
 	"errors"
+	"io"
+	"net"
 	"strings"
 
 	"github.com/shopspring/decimal"
@@ -61,7 +64,7 @@ func (r *usageBillingRepository) Apply(ctx context.Context, cmd *service.UsageBi
 		if err := completeSubscriptionSupplementHold(ctx, tx, cmd); err != nil {
 			return nil, err
 		}
-		if err := tx.Commit(); err != nil {
+		if err := commitUsageBilling(tx); err != nil {
 			return nil, err
 		}
 		tx = nil
@@ -76,11 +79,32 @@ func (r *usageBillingRepository) Apply(ctx context.Context, cmd *service.UsageBi
 		return nil, err
 	}
 
-	if err := tx.Commit(); err != nil {
+	if err := commitUsageBilling(tx); err != nil {
 		return nil, err
 	}
 	tx = nil
 	return result, nil
+}
+
+// Only an error while sending COMMIT or reading its acknowledgement makes the
+// persisted charge uncertain. A rejected constraint or fingerprint is final.
+func commitUsageBilling(tx *sql.Tx) error {
+	err := tx.Commit()
+	if err == nil {
+		return nil
+	}
+	var networkError net.Error
+	var postgresError interface{ SQLState() string }
+	unknown := errors.Is(err, driver.ErrBadConn) || errors.Is(err, io.EOF) ||
+		errors.Is(err, io.ErrUnexpectedEOF) || errors.As(err, &networkError)
+	if errors.As(err, &postgresError) {
+		code := postgresError.SQLState()
+		unknown = strings.HasPrefix(code, "08") || code == "40003"
+	}
+	if unknown {
+		return errors.Join(service.ErrUsageBillingCommitUnknown, err)
+	}
+	return err
 }
 
 func (r *usageBillingRepository) claimUsageBillingKey(ctx context.Context, tx *sql.Tx, cmd *service.UsageBillingCommand) (bool, error) {

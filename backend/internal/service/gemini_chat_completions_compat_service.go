@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Wei-Shaw/sub2api/internal/pkg/antigravity"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/apicompat"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/geminicli"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
@@ -553,6 +554,7 @@ func (s *GeminiMessagesCompatService) handleChatCompletionsStreamingResponseFrom
 	ccState.IncludeUsage = includeUsage
 
 	var usage ClaudeUsage
+	var statsMetadata antigravity.GeminiUsageMetadata
 	var firstTokenMs *int
 	firstChunk := true
 	finishReason := ""
@@ -660,7 +662,7 @@ func (s *GeminiMessagesCompatService) handleChatCompletionsStreamingResponseFrom
 						if fr := extractGeminiFinishReason(geminiResp); fr != "" {
 							finishReason = fr
 						}
-						if u := extractGeminiUsage(rawBytes); u != nil {
+						if u := extractGeminiUsageWithStats(rawBytes, &statsMetadata); u != nil {
 							usage = *u
 						}
 

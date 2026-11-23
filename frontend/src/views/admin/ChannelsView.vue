@@ -793,6 +793,10 @@ function formatDate(value: string): string {
 // ── Platform section helpers ──
 const activePlatforms = computed(() => form.platforms.filter(s => s.enabled).map(s => s.platform))
 
+function bedrockCompatEnabled(value: unknown): boolean {
+  return value === true || (value != null && typeof value === 'object' && 'anthropic' in value && value.anthropic === true)
+}
+
 function addPlatformSection(platform: GroupPlatform) {
   form.platforms.push({
     platform,
@@ -803,7 +807,7 @@ function addPlatformSection(platform: GroupPlatform) {
     model_pricing: [],
     web_search_emulation: false,
     codex_image_generation_bridge: false,
-    bedrock_cc_compat: false,
+    bedrock_cc_compat: platform === 'anthropic' && bedrockCompatEnabled(editingChannel.value?.features_config?.bedrock_cc_compat),
     account_stats_pricing_rules: [],
   })
 }
@@ -1199,10 +1203,10 @@ function formToAPI(): { group_ids: number[], model_pricing: ChannelModelPricing[
     delete featuresConfig.codex_image_generation_bridge
   }
 
-  // The backend reads a channel-level boolean; send false explicitly to clear it on update.
-  featuresConfig.bedrock_cc_compat = form.platforms.some(
-    section => section.enabled && section.platform === 'anthropic' && section.bedrock_cc_compat
-  )
+  const anthropic = form.platforms.find(section => section.platform === 'anthropic')
+  if (anthropic) {
+    featuresConfig.bedrock_cc_compat = anthropic.enabled && anthropic.bedrock_cc_compat
+  }
 
   return { group_ids: uniqueGroupIds, model_pricing, model_mapping, features_config: featuresConfig }
 }
@@ -1270,8 +1274,7 @@ function apiToForm(channel: Channel): PlatformSection[] {
     const webSearchEnabled = wsEmulation?.[platform] === true
     const codexImageGenerationBridge = fc?.codex_image_generation_bridge as Record<string, boolean> | undefined
     const codexImageGenerationBridgeEnabled = codexImageGenerationBridge?.[platform] === true
-    const bedrock = fc?.bedrock_cc_compat
-    const bedrockCCCompatEnabled = bedrock === true || (bedrock != null && typeof bedrock === 'object' && 'anthropic' in bedrock && bedrock.anthropic === true)
+    const bedrockCCCompatEnabled = bedrockCompatEnabled(fc?.bedrock_cc_compat)
 
     sections.push({
       platform,

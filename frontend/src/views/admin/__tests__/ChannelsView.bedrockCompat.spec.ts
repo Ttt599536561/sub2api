@@ -171,6 +171,18 @@ describe('ChannelsView Bedrock compatibility', () => {
     wrapper.unmount()
   })
 
+  it('preserves compatibility when renaming a channel without an Anthropic section', async () => {
+    stored = [{ ...makeChannel({ bedrock_cc_compat: true }), group_ids: [22] }]
+    const wrapper = mountView()
+    await flushPromises()
+    await clickButton(wrapper, 'common.edit')
+    await wrapper.get('input[required]').setValue('Renamed relay')
+    await wrapper.get('#channel-form').trigger('submit')
+    await flushPromises()
+    expect(updateChannel.mock.calls[0][1].features_config.bedrock_cc_compat).toBe(true)
+    wrapper.unmount()
+  })
+
   it('explicitly disables compatibility when the Anthropic section is removed', async () => {
     stored = [makeChannel({ bedrock_cc_compat: true, future_feature: { enabled: true } })]
     const wrapper = mountView()

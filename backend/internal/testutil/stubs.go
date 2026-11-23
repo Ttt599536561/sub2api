@@ -100,6 +100,10 @@ func (c StubGatewayCache) SetSessionAccountID(_ context.Context, _ int64, _ stri
 func (c StubGatewayCache) RefreshSessionTTL(_ context.Context, _ int64, _ string, _ time.Duration) error {
 	return nil
 }
+func (c StubGatewayCache) CompareAndDeleteSessionAccountID(ctx context.Context, groupID int64, sessionHash string, accountID int64) (bool, error) {
+	return false, nil
+}
+
 func (c StubGatewayCache) DeleteSessionAccountID(_ context.Context, _ int64, _ string) error {
 	return nil
 }

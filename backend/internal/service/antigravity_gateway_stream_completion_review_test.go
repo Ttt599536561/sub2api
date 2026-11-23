@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/antigravity"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 )
@@ -34,11 +35,11 @@ func TestAntigravityStreamReview_ImageUsageMatchesWireAndBilling(t *testing.T) {
 					c.Writer = &antigravityFailingWriter{ResponseWriter: c.Writer, failAfter: 0}
 				}
 				chunks := []string{
-					`{"candidates":[{"content":{"parts":[{"inlineData":{"mimeType":"image/png","data":"aGVsbG8="}}]},"finishReason":"STOP"}],"usageMetadata":{"promptTokenCount":10,"cachedContentTokenCount":3,"candidatesTokenCount":1000,"thoughtsTokenCount":2,"candidatesTokensDetails":[{"modality":"TEXT","tokenCount":8},{"modality":"IMAGE","tokenCount":992}]}}`,
+					`{"candidates":[{"content":{"parts":[{"inlineData":{"mimeType":"image/png","data":"aGVsbG8="}}]},"finishReason":"STOP"}],"usageMetadata":{"promptTokenCount":10,"cachedContentTokenCount":3,"promptTokensDetails":[{"modality":"IMAGE","tokenCount":5}],"cacheTokensDetails":[{"modality":"IMAGE","tokenCount":3}],"candidatesTokenCount":1000,"thoughtsTokenCount":2,"candidatesTokensDetails":[{"modality":"TEXT","tokenCount":8},{"modality":"IMAGE","tokenCount":992}]}}`,
 				}
 				if fragmented {
 					chunks = []string{
-						`{"candidates":[{"content":{"parts":[{"inlineData":{"mimeType":"image/png","data":"aGVsbG8="}}]}}],"usageMetadata":{"promptTokenCount":10,"cachedContentTokenCount":3,"candidatesTokenCount":1}}`,
+						`{"candidates":[{"content":{"parts":[{"inlineData":{"mimeType":"image/png","data":"aGVsbG8="}}]}}],"usageMetadata":{"promptTokenCount":10,"cachedContentTokenCount":3,"promptTokensDetails":[{"modality":"IMAGE","tokenCount":5}],"cacheTokensDetails":[{"modality":"IMAGE","tokenCount":3}],"candidatesTokenCount":1}}`,
 						`{"candidates":[{"finishReason":"STOP"}],"usageMetadata":{"candidatesTokenCount":1000,"candidatesTokensDetails":[{"modality":"TEXT","tokenCount":8},{"modality":"IMAGE","tokenCount":992}]}}`,
 						`{"usageMetadata":{"thoughtsTokenCount":2}}`,
 					}
@@ -54,6 +55,9 @@ func TestAntigravityStreamReview_ImageUsageMatchesWireAndBilling(t *testing.T) {
 				require.Equal(t, 7, result.usage.InputTokens)
 				require.Equal(t, 3, result.usage.CacheReadInputTokens)
 				require.Equal(t, 1002, result.usage.OutputTokens)
+				require.Equal(t, 2, result.usage.accountStatsUsageTokens().ImageInputTokens)
+				require.Zero(t, result.usage.billingUsageTokens().ImageInputTokens)
+				require.NotContains(t, rec.Body.String(), "image_input_tokens")
 				require.Equal(t, 992, result.usage.ImageOutputTokens, "billing must retain the same image token split sent in Claude usage")
 			})
 		}
@@ -191,4 +195,49 @@ func (b *antigravityStreamReviewOpenBody) Read(p []byte) (int, error) {
 func (b *antigravityStreamReviewOpenBody) Close() error {
 	b.closeOnce.Do(func() { close(b.closed) })
 	return nil
+}
+
+func TestGeminiAccountStatsFragmentedImageInput(t *testing.T) {
+	var meta antigravity.GeminiUsageMetadata
+	extractGeminiUsageWithStats([]byte(`{"usageMetadata":{"promptTokenCount":12,"promptTokensDetails":[{"modality":"IMAGE","tokenCount":8}]}}`), &meta)
+	u := extractGeminiUsageWithStats([]byte(`{"usageMetadata":{"cachedContentTokenCount":4}}`), &meta)
+	require.Zero(t, u.accountStatsUsageTokens().ImageInputTokens)
+	u = extractGeminiUsageWithStats([]byte(`{"usageMetadata":{"cacheTokensDetails":[{"modality":"IMAGE","tokenCount":3},{"modality":"TEXT","tokenCount":1}],"candidatesTokenCount":7}}`), &meta)
+	stats := u.accountStatsUsageTokens()
+	require.Equal(t, 5, stats.ImageInputTokens)
+	require.Equal(t, 8, stats.InputTokens)
+	require.Equal(t, 4, stats.CacheReadTokens)
+	require.Equal(t, 7, stats.OutputTokens)
+	require.Zero(t, u.billingUsageTokens().ImageInputTokens)
+	require.Zero(t, u.billingUsageTokens().InputTokens)
+	p := &ChannelModelPricing{InputPrice: testPtrFloat64(2), ImageInputPrice: testPtrFloat64(5)}
+	require.Equal(t, float64(31), *calculateStatsCost(p, stats, 1))
+}
+
+func TestGeminiAccountStatsFragmentedAllImagesCached(t *testing.T) {
+	for _, tc := range []struct{ name, details string }{
+		{"all images cached", `,"cacheTokensDetails":[{"modality":"IMAGE","tokenCount":4}]`},
+		{"missing cache split", ""},
+		{"incomplete cache split", `,"cacheTokensDetails":[{"modality":"TEXT","tokenCount":1}]`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var meta antigravity.GeminiUsageMetadata
+			extractGeminiUsageWithStats([]byte(`{"usageMetadata":{"promptTokenCount":12,"promptTokensDetails":[{"modality":"IMAGE","tokenCount":4},{"modality":"TEXT","tokenCount":8}]}}`), &meta)
+			extractGeminiUsageWithStats([]byte(`{"usageMetadata":{"cachedContentTokenCount":4`+tc.details+`}}`), &meta)
+			u := extractGeminiUsageWithStats([]byte(`{"usageMetadata":{"candidatesTokenCount":7}}`), &meta)
+			stats := u.accountStatsUsageTokens()
+			require.Equal(t, 8, stats.InputTokens)
+			require.Equal(t, 4, stats.CacheReadTokens)
+			require.Zero(t, stats.ImageInputTokens)
+			require.Equal(t, 7, stats.OutputTokens)
+			require.Equal(t, UsageTokens{OutputTokens: 7}, u.billingUsageTokens())
+			extractGeminiUsageWithStats([]byte(`{"usageMetadata":{"thoughtsTokenCount":2,"candidatesTokensDetails":[{"modality":"IMAGE","tokenCount":3}]}}`), &meta)
+			u = extractGeminiUsageWithStats([]byte(`{"usageMetadata":{"cachedContentTokenCount":4}}`), &meta)
+			stats = u.accountStatsUsageTokens()
+			require.Equal(t, 9, stats.OutputTokens)
+			require.Equal(t, 3, stats.ImageOutputTokens)
+			require.Equal(t, 8, stats.InputTokens)
+			require.Equal(t, UsageTokens{CacheReadTokens: 4}, u.billingUsageTokens())
+		})
+	}
 }

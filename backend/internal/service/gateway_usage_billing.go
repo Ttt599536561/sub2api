@@ -398,6 +398,11 @@ func applyUsageBilling(ctx context.Context, requestID string, usageLog *UsageLog
 	}
 
 	if result == nil || !result.Applied {
+		if result != nil && result.duplicateAfterUncertainCommit {
+			cacheCtx, cancel := detachedBillingContext(ctx)
+			invalidateBillingCachesAfterUncertainCommit(cacheCtx, p, deps, cmd)
+			cancel()
+		}
 		deps.deferredService.ScheduleLastUsedUpdate(p.Account.ID)
 		return false, nil
 	}
@@ -414,6 +419,27 @@ func applyUsageBilling(ctx context.Context, requestID string, usageLog *UsageLog
 
 	finalizePostUsageBilling(billingCtx, p, deps, result)
 	return true, nil
+}
+
+// A duplicate proves the charge exists, but cannot tell whether a previous
+// caller delivered its post-commit updates. Evict DB-backed snapshots only.
+func invalidateBillingCachesAfterUncertainCommit(ctx context.Context, p *postUsageBillingParams, deps *billingDeps, cmd *UsageBillingCommand) {
+	if cache := deps.billingCacheService; cache != nil {
+		if cmd.BalanceCost > 0 {
+			_ = cache.InvalidateUserBalance(ctx, cmd.UserID)
+		}
+		if cmd.SubscriptionCost > 0 && p.APIKey.GroupID != nil {
+			_ = cache.InvalidateSubscription(ctx, cmd.UserID, *p.APIKey.GroupID)
+		}
+		if cmd.APIKeyRateLimitCost > 0 {
+			_ = cache.InvalidateAPIKeyRateLimit(ctx, cmd.APIKeyID)
+		}
+	}
+	if cmd.APIKeyQuotaCost > 0 && p.APIKey.Key != "" {
+		if invalidator, ok := p.APIKeyService.(apiKeyAuthCacheInvalidator); ok {
+			invalidator.InvalidateAuthCacheByKey(ctx, p.APIKey.Key)
+		}
+	}
 }
 
 func finalizePostUsageBilling(ctx context.Context, p *postUsageBillingParams, deps *billingDeps, result *UsageBillingApplyResult) {
@@ -887,7 +913,7 @@ func (s *GatewayService) recordUsageCore(ctx context.Context, input *recordUsage
 			account.ID, *apiKey.GroupID, result.UpstreamModel, result.Model,
 			// Anthropic's input_tokens excludes cache_read and cache_creation (billed separately);
 			// OpenAI gateway uses actualInputTokens which also excludes cache_read for the same reason.
-			result.Usage.billingUsageTokens(),
+			result.Usage.accountStatsUsageTokens(),
 			cost.TotalCost-cacheStorageCost, pricingAt,
 			accountStatsLongContextPricingEnabled(nil), result.upstreamPriceFactor(),
 		)
@@ -1340,6 +1366,13 @@ func (s *GatewayService) calculateImageCost(
 	}
 
 	return s.billingService.CalculateImageCost(billingModel, sizeTier, result.ImageCount, groupConfig, multiplier)
+}
+
+func (usage ClaudeUsage) accountStatsUsageTokens() UsageTokens {
+	if usage.geminiAccountStats != nil {
+		return *usage.geminiAccountStats
+	}
+	return usage.billingUsageTokens()
 }
 
 func (usage ClaudeUsage) billingUsageTokens() UsageTokens {

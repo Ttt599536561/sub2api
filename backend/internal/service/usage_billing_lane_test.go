@@ -4,8 +4,11 @@ package service
 
 import (
 	"context"
+	"database/sql"
+	"database/sql/driver"
 	"errors"
 	"fmt"
+	"io"
 	"math/rand"
 	"sort"
 	"sync"
@@ -13,6 +16,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/lib/pq"
 	"github.com/stretchr/testify/require"
 )
 
@@ -31,11 +35,13 @@ type laneTestRepo struct {
 	// started 每条命令开始结算时写入其 requestID。
 	started chan string
 
-	batchErr    error
-	batchPanic  bool
-	applyPanic  map[string]bool
-	outcomeErrs map[string]error
-	holdCalls   atomic.Int32
+	batchErr       error
+	batchPanic     bool
+	applyPanic     map[string]bool
+	outcomeErrs    map[string]error
+	firstApplyErr  map[string]error
+	waitForTimeout string
+	holdCalls      atomic.Int32
 	// deadlines 记录每条单条 Apply 收到的上下文截止时间。
 	deadlines map[string]time.Time
 }
@@ -89,6 +95,9 @@ func (r *laneTestRepo) Apply(ctx context.Context, cmd *UsageBillingCommand) (*Us
 	defer r.leave(cmd.UserID)
 	r.started <- cmd.RequestID
 	r.wait(cmd.RequestID)
+	if r.waitForTimeout != "" && r.waitForTimeout == cmd.RequestID {
+		<-ctx.Done()
+	}
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -99,6 +108,10 @@ func (r *laneTestRepo) Apply(ctx context.Context, cmd *UsageBillingCommand) (*Us
 	}
 	panicNow := r.applyPanic[cmd.RequestID]
 	outcomeErr := r.outcomeErrs[cmd.RequestID]
+	if first := r.firstApplyErr[cmd.RequestID]; first != nil {
+		outcomeErr = first
+		delete(r.firstApplyErr, cmd.RequestID)
+	}
 	r.mu.Unlock()
 	if panicNow {
 		panic("apply boom")
@@ -569,29 +582,29 @@ func TestUsageBillingLane_QueuedRequestTimeoutStartsWhenSettlementStarts(t *test
 	require.Greater(t, time.Until(repo.deadlines["queued"]), postUsageBillingTimeout-5*time.Second)
 }
 
-func TestUsageBillingLane_FallbackSharesOneDeadline(t *testing.T) {
+func TestUsageBillingLane_FallbackStartsEachDeadlineAtExecution(t *testing.T) {
 	repo := newLaneTestRepo()
 	repo.batchErr = errors.New("batch failed")
+	repo.waitForTimeout = "slow"
 	c := newLaneTestCombiner(repo, 8)
-	out := make(chan laneTestResult, 8)
-
+	c.attemptTimeout = 100 * time.Millisecond
+	out := make(chan laneTestResult, 3)
 	release := repo.block("first")
 	applyAsync(c, laneTestCommand(7, "first", 1), out)
 	waitStarted(t, repo, "first")
-	for i := 0; i < 3; i++ {
-		applyAsync(c, laneTestCommand(7, fmt.Sprintf("q%d", i), 1), out)
+	for i, id := range []string{"slow", "healthy"} {
+		applyAsync(c, laneTestCommand(7, id, 1), out)
 		waitPending(t, c, 7, i+1)
 	}
 	close(release)
-
-	results := collectResults(t, out, 4)
-	for id, r := range results {
-		require.NoError(t, r.err, id)
-	}
-	require.Equal(t, repo.deadlines["q0"], repo.deadlines["q1"])
-	require.Equal(t, repo.deadlines["q0"], repo.deadlines["q2"])
+	results := collectResults(t, out, 3)
+	require.NoError(t, results["first"].err)
+	require.ErrorIs(t, results["slow"].err, context.DeadlineExceeded)
+	require.NoError(t, results["healthy"].err)
+	require.True(t, results["healthy"].res.Applied)
+	require.Equal(t, float64(-2), repo.balances[7])
+	c.Stop()
 }
-
 func TestUsageBillingLane_FallbackPanicOnlyFailsThatRequest(t *testing.T) {
 	repo := newLaneTestRepo()
 	repo.batchErr = errors.New("batch failed")
@@ -613,4 +626,181 @@ func TestUsageBillingLane_FallbackPanicOnlyFailsThatRequest(t *testing.T) {
 	require.Nil(t, results["q0"].res)
 	require.NoError(t, results["q1"].err)
 	require.True(t, results["q1"].res.Applied)
+}
+
+func TestUsageBillingLane_RetriesTimedOutRequestOnceWithOriginalKey(t *testing.T) {
+	repo := newLaneTestRepo()
+	repo.firstApplyErr = map[string]error{"transient": context.DeadlineExceeded, "lock": fmt.Errorf("settlement: %w", &pq.Error{Code: "55P03"})}
+	repo.outcomeErrs["persistent"] = context.DeadlineExceeded
+	repo.outcomeErrs["conflict"] = ErrUsageBillingRequestConflict
+	c := newLaneTestCombiner(repo, 8)
+	defer c.Stop()
+	for _, tc := range []struct {
+		id  string
+		err error
+	}{{"transient", nil}, {"lock", nil}, {"persistent", context.DeadlineExceeded}, {"conflict", ErrUsageBillingRequestConflict}} {
+		res, err := c.Apply(context.Background(), laneTestCommand(7, tc.id, 1))
+		require.ErrorIs(t, err, tc.err)
+		if err == nil {
+			require.True(t, res.Applied)
+		}
+	}
+	require.Equal(t, []string{"transient", "transient", "lock", "lock", "persistent", "persistent", "conflict"}, repo.applyCalls)
+	require.Equal(t, float64(-2), repo.balances[7])
+}
+
+func TestUsageBillingLane_StopCapsQueuedAttempts(t *testing.T) {
+	repo := newLaneTestRepo()
+	repo.batchErr = errors.New("batch failed")
+	c := newLaneTestCombiner(repo, 8)
+	out := make(chan laneTestResult, 3)
+	release := repo.block("first")
+	applyAsync(c, laneTestCommand(7, "first", 1), out)
+	waitStarted(t, repo, "first")
+	for i, id := range []string{"second", "third"} {
+		applyAsync(c, laneTestCommand(7, id, 1), out)
+		waitPending(t, c, 7, i+1)
+	}
+	stopped := make(chan struct{})
+	go func() { c.Stop(); close(stopped) }()
+	require.Eventually(t, func() bool { return c.drainDeadline.Load() != nil }, time.Second, time.Millisecond)
+	close(release)
+	for _, r := range collectResults(t, out, 3) {
+		require.NoError(t, r.err)
+	}
+	<-stopped
+	require.Equal(t, *c.drainDeadline.Load(), repo.deadlines["second"])
+	require.Equal(t, repo.deadlines["second"], repo.deadlines["third"])
+}
+
+// Simulate a lost commit acknowledgement while preserving the committed key.
+type lostBillingAckRepo struct {
+	*laneTestRepo
+	committed map[string]string
+	attempts  map[string]int
+}
+
+func (r *lostBillingAckRepo) Apply(ctx context.Context, cmd *UsageBillingCommand) (*UsageBillingApplyResult, error) {
+	key := fmt.Sprintf("%d/%s", cmd.APIKeyID, cmd.RequestID)
+	r.attempts[key]++
+	if cmd.RequestID == "live-tx-done" {
+		return nil, sql.ErrTxDone
+	}
+	if fingerprint, found := r.committed[key]; found {
+		if fingerprint != cmd.RequestFingerprint {
+			return nil, ErrUsageBillingRequestConflict
+		}
+		return &UsageBillingApplyResult{}, nil
+	}
+	r.committed[key] = cmd.RequestFingerprint
+	r.deduct(cmd)
+	if cmd.RequestID == "lost-eof" {
+		return nil, errors.Join(ErrUsageBillingCommitUnknown, io.EOF)
+	}
+	<-ctx.Done()
+	return nil, fmt.Errorf("commit: %w", sql.ErrTxDone)
+}
+
+type lostBillingAckCache struct {
+	BillingCache
+	balances, windows []int64
+	subscriptions     [][2]int64
+}
+
+func (c *lostBillingAckCache) InvalidateUserBalance(_ context.Context, id int64) error {
+	c.balances = append(c.balances, id)
+	return nil
+}
+func (c *lostBillingAckCache) InvalidateAPIKeyRateLimit(_ context.Context, id int64) error {
+	c.windows = append(c.windows, id)
+	return nil
+}
+
+func TestUsageBillingLaneLostCommitAcknowledgement(t *testing.T) {
+	repo := &lostBillingAckRepo{newLaneTestRepo(), map[string]string{}, map[string]int{}}
+	c := newLaneTestCombiner(repo, 8)
+	c.attemptTimeout = 50 * time.Millisecond
+	defer c.Stop()
+	cache := &lostBillingAckCache{}
+	writes := make(chan cacheWriteTask, 4)
+	deps := &billingDeps{deferredService: &DeferredService{}, billingCacheService: &BillingCacheService{cache: cache, cacheWriteChan: writes}}
+	p := &postUsageBillingParams{Cost: &CostBreakdown{ActualCost: 2, TotalCost: 2}, User: &User{ID: 7}, APIKey: &APIKey{ID: 13, RateLimit5h: 10}, Account: &Account{ID: 9}, APIKeyService: &apiKeyQuotaUpdaterStub{}}
+	for i := 0; i < 2; i++ {
+		applied, err := applyUsageBilling(context.Background(), "lost", nil, p, deps, c)
+		require.NoError(t, err)
+		require.False(t, applied)
+	}
+	require.Equal(t, 3, repo.attempts["13/lost"])
+	require.Equal(t, -2.0, repo.balances[7])
+	require.Equal(t, []int64{7}, cache.balances)
+	require.Equal(t, []int64{13}, cache.windows)
+	require.Empty(t, writes)
+	applied, err := applyUsageBilling(context.Background(), "lost-eof", nil, p, deps, c)
+	require.NoError(t, err)
+	require.False(t, applied)
+	require.Equal(t, 2, repo.attempts["13/lost-eof"])
+	require.Equal(t, -4.0, repo.balances[7])
+	require.Equal(t, []int64{7, 7}, cache.balances)
+	require.Equal(t, []int64{13, 13}, cache.windows)
+	require.Empty(t, writes)
+	_, err = c.Apply(context.Background(), laneTestCommand(7, "live-tx-done", 1))
+	require.ErrorIs(t, err, sql.ErrTxDone)
+	require.Equal(t, 1, repo.attempts["1/live-tx-done"])
+}
+
+func (c *lostBillingAckCache) InvalidateSubscriptionCache(_ context.Context, user, group int64) error {
+	c.subscriptions = append(c.subscriptions, [2]int64{user, group})
+	return nil
+}
+
+type lostAckAuthInvalidator struct {
+	apiKeyQuotaUpdaterStub
+	keys []string
+}
+
+func (c *lostAckAuthInvalidator) InvalidateAuthCacheByKey(_ context.Context, key string) {
+	c.keys = append(c.keys, key)
+}
+func TestLostBillingAckInvalidatesOnlyChargedSnapshots(t *testing.T) {
+	cache := &lostBillingAckCache{}
+	auth := &lostAckAuthInvalidator{}
+	group := int64(19)
+	p := &postUsageBillingParams{APIKey: &APIKey{ID: 13, GroupID: &group, Key: "k"}, APIKeyService: auth}
+	deps := &billingDeps{billingCacheService: &BillingCacheService{cache: cache}}
+	cmd := &UsageBillingCommand{UserID: 7, APIKeyID: 13, SubscriptionCost: 2, APIKeyQuotaCost: 2}
+	invalidateBillingCachesAfterUncertainCommit(context.Background(), p, deps, cmd)
+	require.Equal(t, [][2]int64{{7, 19}}, cache.subscriptions)
+	require.Equal(t, []string{"k"}, auth.keys)
+	require.Empty(t, cache.balances)
+	require.Empty(t, cache.windows)
+}
+
+func (r *lostBillingAckRepo) ApplyBatch(_ context.Context, cmds []*UsageBillingCommand) ([]UsageBillingBatchOutcome, error) {
+	for _, cmd := range cmds {
+		key := fmt.Sprintf("%d/%s", cmd.APIKeyID, cmd.RequestID)
+		r.committed[key] = cmd.RequestFingerprint
+		r.deduct(cmd)
+	}
+	return nil, errors.Join(ErrUsageBillingCommitUnknown, driver.ErrBadConn)
+}
+
+func TestUsageBillingLaneRecoversAfterBatchCommitConnectionLoss(t *testing.T) {
+	repo := &lostBillingAckRepo{newLaneTestRepo(), map[string]string{}, map[string]int{}}
+	c := newLaneTestCombiner(repo, 8)
+	defer c.Stop()
+	var batch []*usageBillingLaneRequest
+	for _, id := range []string{"a", "b"} {
+		cmd := laneTestCommand(7, id, 2)
+		cmd.Normalize()
+		batch = append(batch, &usageBillingLaneRequest{ctx: context.Background(), cmd: cmd, done: make(chan UsageBillingBatchOutcome, 1)})
+	}
+	c.execute(batch)
+	for _, req := range batch {
+		out := <-req.done
+		require.NoError(t, out.Err)
+		require.False(t, out.Result.Applied)
+		require.True(t, out.Result.duplicateAfterUncertainCommit)
+	}
+	require.Equal(t, map[string]int{"1/a": 1, "1/b": 1}, repo.attempts)
+	require.Equal(t, -4.0, repo.balances[7])
 }

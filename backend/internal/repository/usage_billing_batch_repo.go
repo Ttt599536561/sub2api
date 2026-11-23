@@ -99,7 +99,7 @@ func (r *usageBillingRepository) ApplyBatch(ctx context.Context, cmds []*service
 		}
 	}
 
-	if err := tx.Commit(); err != nil {
+	if err := commitUsageBilling(tx); err != nil {
 		return nil, err
 	}
 	tx = nil

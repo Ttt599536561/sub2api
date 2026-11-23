@@ -302,6 +302,7 @@ func (p *NonStreamingProcessor) buildResponse(geminiResp *GeminiResponse, respon
 		usage.InputTokens = max(geminiResp.UsageMetadata.PromptTokenCount-cached, 0)
 		usage.OutputTokens = geminiResp.UsageMetadata.CandidatesTokenCount + geminiResp.UsageMetadata.ThoughtsTokenCount
 		usage.CacheReadInputTokens = cached
+		usage.AccountStatsImageInputTokens = geminiResp.UsageMetadata.UncachedImageInputTokens()
 		usage.ImageOutputTokens = geminiResp.UsageMetadata.ImageOutputTokens()
 	}
 

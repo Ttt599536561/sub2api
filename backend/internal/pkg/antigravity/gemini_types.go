@@ -1,5 +1,7 @@
 package antigravity
 
+import "encoding/json"
+
 // Gemini v1internal 请求/响应类型定义
 
 // V1InternalRequest v1internal 请求包装
@@ -175,7 +177,44 @@ type GeminiUsageMetadata struct {
 	TotalTokenCount         int                 `json:"totalTokenCount,omitempty"`
 	ThoughtsTokenCount      int                 `json:"thoughtsTokenCount,omitempty"` // thinking tokens（按输出价格计费）
 	CandidatesTokensDetails []GeminiTokenDetail `json:"candidatesTokensDetails,omitempty"`
+	CacheTokensDetails      json.RawMessage     `json:"cacheTokensDetails,omitempty"`
 	PromptTokensDetails     []GeminiTokenDetail `json:"promptTokensDetails,omitempty"`
+}
+
+// UncachedImageInputTokens reports only the known image part of the noncached prompt.
+func (m *GeminiUsageMetadata) UncachedImageInputTokens() int {
+	image := 0
+	for _, detail := range m.PromptTokensDetails {
+		if detail.Modality == "IMAGE" {
+			image += max(detail.TokenCount, 0)
+		}
+	}
+	if image == 0 || m.CachedContentTokenCount < 0 {
+		return 0
+	}
+	if m.CachedContentTokenCount > 0 || len(m.CacheTokensDetails) > 0 {
+		total, cachedImage := 0, 0
+		// This optional statistics field must not invalidate client-visible usage.
+		var details []GeminiTokenDetail
+		if json.Unmarshal(m.CacheTokensDetails, &details) != nil {
+			return 0
+		}
+		for _, detail := range details {
+			if detail.TokenCount < 0 || detail.Modality == "" || detail.Modality == "MODALITY_UNSPECIFIED" {
+				return 0
+			}
+			total += detail.TokenCount
+			if detail.Modality == "IMAGE" {
+				cachedImage += detail.TokenCount
+			}
+		}
+		// Without a complete cache breakdown we cannot identify image cache hits.
+		if total != m.CachedContentTokenCount {
+			return 0
+		}
+		image -= cachedImage
+	}
+	return min(max(image, 0), max(m.PromptTokenCount-m.CachedContentTokenCount, 0))
 }
 
 // ImageOutputTokens 从 CandidatesTokensDetails 中提取 IMAGE 模态的 token 数

@@ -69,6 +69,7 @@ type OpenAIWSStateStore interface {
 	BindResponseAccount(ctx context.Context, groupID int64, responseID string, accountID int64, ttl time.Duration) error
 	GetResponseAccount(ctx context.Context, groupID int64, responseID string) (int64, error)
 	DeleteResponseAccount(ctx context.Context, groupID int64, responseID string) error
+	DeleteResponseAccountIfBound(ctx context.Context, groupID int64, responseID string, accountID int64) error
 	BindHTTPResponseOwner(ctx context.Context, groupID int64, responseID string, userID, apiKeyID int64, ttl time.Duration) error
 	GetHTTPResponseOwner(ctx context.Context, groupID int64, responseID string) (userID, apiKeyID int64, found bool, err error)
 
@@ -270,12 +271,26 @@ func (s *defaultOpenAIWSStateStore) GetResponseAccount(ctx context.Context, grou
 }
 
 func (s *defaultOpenAIWSStateStore) DeleteResponseAccount(ctx context.Context, groupID int64, responseID string) error {
+	return s.deleteResponseAccount(ctx, groupID, responseID, 0)
+}
+
+func (s *defaultOpenAIWSStateStore) DeleteResponseAccountIfBound(ctx context.Context, groupID int64, responseID string, accountID int64) error {
+	if accountID <= 0 {
+		return nil
+	}
+	return s.deleteResponseAccount(ctx, groupID, responseID, accountID)
+}
+
+func (s *defaultOpenAIWSStateStore) deleteResponseAccount(ctx context.Context, groupID int64, responseID string, expectedAccountID int64) error {
 	id := normalizeOpenAIWSResponseID(responseID)
 	if id == "" {
 		return nil
 	}
 	s.responseToAccountMu.Lock()
-	delete(s.responseToAccount, openAIWSResponseAccountMapKey(groupID, id))
+	mapKey := openAIWSResponseAccountMapKey(groupID, id)
+	if expectedAccountID == 0 || s.responseToAccount[mapKey].accountID == expectedAccountID {
+		delete(s.responseToAccount, mapKey)
+	}
 	s.responseToAccountMu.Unlock()
 
 	if s.cache == nil {
@@ -283,7 +298,12 @@ func (s *defaultOpenAIWSStateStore) DeleteResponseAccount(ctx context.Context, g
 	}
 	cacheCtx, cancel := withOpenAIWSStateStoreRedisTimeout(ctx)
 	defer cancel()
-	return s.cache.DeleteSessionAccountID(cacheCtx, groupID, openAIWSResponseAccountCacheKey(id))
+	key := openAIWSResponseAccountCacheKey(id)
+	if expectedAccountID == 0 {
+		return s.cache.DeleteSessionAccountID(cacheCtx, groupID, key)
+	}
+	_, err := s.cache.CompareAndDeleteSessionAccountID(cacheCtx, groupID, key, expectedAccountID)
+	return err
 }
 
 func (s *defaultOpenAIWSStateStore) BindResponseConn(responseID, connID string, ttl time.Duration) {

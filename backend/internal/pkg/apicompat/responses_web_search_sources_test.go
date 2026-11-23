@@ -128,3 +128,10 @@ func TestWebSearchCallsThatDidNotCompleteProduceNoBlocks(t *testing.T) {
 		})
 	}
 }
+
+func TestWebSearchOpenPageFallsBackAfterFilteringSources(t *testing.T) {
+	for _, sources := range []string{`[]`, `[{"url":""},{"title":"unknown"}]`} {
+		item := `{"type":"web_search_call","id":"ws_1","status":"completed","action":{"type":"open_page","url":"https://page","sources":` + sources + `}}`
+		require.JSONEq(t, `[{"type":"web_search_result","url":"https://page","title":"https://page"}]`, nonStreamingWebSearchResults(t, item)["srvtoolu_ws_1"])
+	}
+}

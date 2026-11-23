@@ -46,6 +46,10 @@ vi.mock("@/api/admin", () => ({
   },
 }));
 
+vi.mock("@/api/admin/channels", () => ({
+  default: { getModelDefaultPricing: vi.fn().mockResolvedValue({ found: false }) },
+}));
+
 vi.mock("@/stores/app", () => ({
   useAppStore: () => ({
     showError: vi.fn(),
@@ -187,7 +191,7 @@ const mountView = () =>
         GroupRPMOverridesModal: true,
         ReasoningEffortPolicyFields: ValidatingFieldStub,
         CodexManifestAccountsField: ValidatingFieldStub,
-        PricingEntryCard: true,
+        ModelTagInput: true,
         VueDraggable: true,
       },
     },
@@ -301,7 +305,37 @@ describe("GroupsView OpenAI forced service tier", () => {
       time_pricing: null,
     };
     const wrapper = await openEditDialog({ ...sourceGroup, model_pricing: [pricing] });
+    expect(wrapper.getComponent({ name: "PricingEntryCard" }).props("enableTierMultipliers")).toBe(true);
     expect(await submit(wrapper)).toMatchObject({ model_pricing: [pricing] });
+    wrapper.unmount();
+  });
+
+  it("rejects invalid group tier rates and saves edited or cleared rates", async () => {
+    const wrapper = await openEditDialog({ ...sourceGroup, model_pricing: [] });
+    const add = wrapper.findAll("button").find(button => button.text().includes("admin.groups.modelPricing.add"))!;
+    await add.trigger("click");
+    const card = wrapper.getComponent({ name: "PricingEntryCard" });
+    card.getComponent({ name: "ModelTagInput" }).vm.$emit("update:models", ["gpt-6.2-sol"]);
+    await flushPromises();
+    const input = (label: string) => card.findAll("label")
+      .find(el => el.text() === `admin.channels.form.${label}Multiplier`)!
+      .element.parentElement!.querySelector("input")!;
+    const setRate = async (label: string, value: string) => {
+      const field = input(label);
+      field.value = value;
+      field.dispatchEvent(new Event("input"));
+      await flushPromises();
+    };
+    await setRate("fast", "3");
+    await setRate("flex", "0.6");
+    await setRate("ultrafast", "0");
+    await wrapper.get("#edit-group-form").trigger("submit");
+    expect(updateGroup).not.toHaveBeenCalled();
+    await setRate("ultrafast", "5");
+    await setRate("flex", "");
+    expect(await submit(wrapper)).toMatchObject({
+      model_pricing: [{ fast_multiplier: 3, flex_multiplier: null, ultrafast_multiplier: 5 }],
+    });
     wrapper.unmount();
   });
 

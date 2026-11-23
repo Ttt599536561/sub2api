@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/antigravity"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/ctxkey"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/gemini"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/geminicli"
@@ -230,7 +231,7 @@ func (s *GeminiMessagesCompatService) tryStickySessionHit(
 	// 检查账号是否需要清理粘性会话
 	// Check if sticky session should be cleared
 	if shouldClearStickySession(account, requestedModel) {
-		_ = s.cache.DeleteSessionAccountID(ctx, derefGroupID(groupID), cacheKey)
+		_, _ = s.cache.CompareAndDeleteSessionAccountID(ctx, derefGroupID(groupID), cacheKey, accountID)
 		return nil
 	}
 
@@ -2194,6 +2195,7 @@ func (s *GeminiMessagesCompatService) handleStreamingResponse(c *gin.Context, re
 
 	var firstTokenMs *int
 	var usage ClaudeUsage
+	var statsMetadata antigravity.GeminiUsageMetadata
 	finishReason := ""
 	sawToolUse := false
 
@@ -2432,7 +2434,7 @@ func (s *GeminiMessagesCompatService) handleStreamingResponse(c *gin.Context, re
 			}
 		}
 
-		if u := extractGeminiUsage(unwrappedBytes); u != nil {
+		if u := extractGeminiUsageWithStats(unwrappedBytes, &statsMetadata); u != nil {
 			usage = *u
 		}
 
@@ -2961,6 +2963,7 @@ func (s *GeminiMessagesCompatService) handleNativeStreamingResponse(c *gin.Conte
 
 	reader := newBoundedSSELineReader(resp.Body, s.cfg)
 	usage := &ClaudeUsage{}
+	var statsMetadata antigravity.GeminiUsageMetadata
 	observer := upstreamResponseModelObserverFromContext(c)
 	if observer == nil {
 		observer = beginUpstreamResponseModelObservation(c)
@@ -3023,7 +3026,7 @@ func (s *GeminiMessagesCompatService) handleNativeStreamingResponse(c *gin.Conte
 					if sig, ok := detectGeminiResponseSignal(rawBytes); ok && sig.Kind > best.Kind {
 						best = sig
 					}
-					if u := extractGeminiUsage(rawBytes); u != nil {
+					if u := extractGeminiUsageWithStats(rawBytes, &statsMetadata); u != nil {
 						usage = u
 					}
 					observer.ObserveGemini(rawBytes)
@@ -3219,10 +3222,18 @@ func isValidBase64(data string) bool {
 }
 
 func extractGeminiUsage(data []byte) *ClaudeUsage {
+	var metadata antigravity.GeminiUsageMetadata
+	return extractGeminiUsageWithStats(data, &metadata)
+}
+
+// Keep partial prompt and cache metadata across streaming frames without changing
+// the existing frame-level usage reported to clients or used for customer billing.
+func extractGeminiUsageWithStats(data []byte, metadata *antigravity.GeminiUsageMetadata) *ClaudeUsage {
 	usage := gjson.GetBytes(data, "usageMetadata")
 	if !usage.Exists() {
 		return nil
 	}
+	validSnapshot := json.Unmarshal([]byte(usage.Raw), metadata) == nil
 	prompt := int(usage.Get("promptTokenCount").Int())
 	cand := int(usage.Get("candidatesTokenCount").Int())
 	cached := int(usage.Get("cachedContentTokenCount").Int())
@@ -3244,12 +3255,24 @@ func extractGeminiUsage(data []byte) *ClaudeUsage {
 	// 注意：Gemini 的 promptTokenCount 包含 cachedContentTokenCount，
 	// 但 Claude 的 input_tokens 不包含 cache_read_input_tokens，需要减去。
 	// prompt 被拦截时上游可能只报 cachedContentTokenCount，差值下限为 0。
-	return &ClaudeUsage{
+	result := &ClaudeUsage{
 		InputTokens:          max(prompt-cached, 0),
 		OutputTokens:         cand + thoughts,
 		CacheReadInputTokens: cached,
 		ImageOutputTokens:    imageTokens,
 	}
+	if validSnapshot && metadata.PromptTokensDetails != nil {
+		// An entirely cached image, or missing cache modality details, still leaves
+		// valid text, cache and output totals from earlier frames.
+		result.geminiAccountStats = &UsageTokens{
+			InputTokens:       max(metadata.PromptTokenCount-metadata.CachedContentTokenCount, 0),
+			CacheReadTokens:   metadata.CachedContentTokenCount,
+			ImageInputTokens:  metadata.UncachedImageInputTokens(),
+			OutputTokens:      metadata.CandidatesTokenCount + metadata.ThoughtsTokenCount,
+			ImageOutputTokens: metadata.ImageOutputTokens(),
+		}
+	}
+	return result
 }
 
 func asInt(v any) (int, bool) {

@@ -206,6 +206,14 @@ func (c *openAIWSStateStoreTimeoutProbeCache) RefreshSessionTTL(context.Context,
 	return nil
 }
 
+func (c *openAIWSStateStoreTimeoutProbeCache) CompareAndDeleteSessionAccountID(ctx context.Context, groupID int64, sessionHash string, accountID int64) (bool, error) {
+	if accountID != 123 {
+		return false, nil
+	}
+	err := c.DeleteSessionAccountID(ctx, groupID, sessionHash)
+	return err == nil, err
+}
+
 func (c *openAIWSStateStoreTimeoutProbeCache) DeleteSessionAccountID(ctx context.Context, _ int64, _ string) error {
 	if deadline, ok := ctx.Deadline(); ok {
 		c.deleteHasDeadline = true

@@ -60,6 +60,14 @@ func (s *stickyWritebackCache) RefreshSessionTTL(context.Context, int64, string,
 	return nil
 }
 
+func (s *stickyWritebackCache) CompareAndDeleteSessionAccountID(ctx context.Context, groupID int64, sessionHash string, accountID int64) (bool, error) {
+	if s.accountID != accountID {
+		return false, nil
+	}
+	err := s.DeleteSessionAccountID(ctx, groupID, sessionHash)
+	return err == nil, err
+}
+
 func (s *stickyWritebackCache) DeleteSessionAccountID(context.Context, int64, string) error {
 	s.accountID = 0
 	return nil

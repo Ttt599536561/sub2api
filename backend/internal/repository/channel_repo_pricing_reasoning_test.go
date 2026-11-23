@@ -142,13 +142,15 @@ func TestAccountStatsReasoningEffortMultipliersRoundTrip(t *testing.T) {
 		Platform: "anthropic", Models: []string{"custom-model"},
 		ReasoningEffortMultipliers: map[string]float64{"medium": 0.5, "high": 2},
 	}
+	imageInputPrice := 0.0000025
+	pricing.ImageInputPrice = &imageInputPrice
 	stored := &capturedReasoningMultipliersJSON{}
 	mock.ExpectBegin()
 	tx, err := repo.db.BeginTx(ctx, nil)
 	require.NoError(t, err)
 	mock.ExpectQuery(`INSERT INTO channel_account_stats_model_pricing .*reasoning_effort_multipliers`).
 		WithArgs(int64(9), "anthropic", []byte(`["custom-model"]`), service.BillingModeToken,
-			nil, nil, nil, nil, nil, nil, stored, nil, nil).
+			nil, nil, nil, nil, nil, nil, stored, imageInputPrice, nil, nil).
 		WillReturnRows(sqlmock.NewRows([]string{"id", "created_at", "updated_at"}).AddRow(int64(11), time.Time{}, time.Time{}))
 	require.NoError(t, createAccountStatsModelPricingTx(ctx, tx, 9, pricing))
 	mock.ExpectCommit()
@@ -158,18 +160,19 @@ func TestAccountStatsReasoningEffortMultipliersRoundTrip(t *testing.T) {
 	columns := []string{
 		"id", "rule_id", "platform", "models", "billing_mode", "input_price", "output_price",
 		"cache_write_price", "cache_write_1h_price", "cache_write_12h_price", "cache_read_price", "reasoning_effort_multipliers",
-		"image_output_price", "per_request_price", "created_at", "updated_at",
+		"image_input_price", "image_output_price", "per_request_price", "created_at", "updated_at",
 	}
 	mock.ExpectQuery(`(?s)SELECT .*reasoning_effort_multipliers.*FROM channel_account_stats_model_pricing`).
 		WithArgs(pq.Array([]int64{9})).WillReturnRows(sqlmock.NewRows(columns).AddRow(
 		int64(11), int64(9), "anthropic", `["custom-model"]`, service.BillingModeToken,
-		nil, nil, nil, nil, nil, nil, stored.value, nil, nil, time.Time{}, time.Time{},
+		nil, nil, nil, nil, nil, nil, stored.value, imageInputPrice, nil, nil, time.Time{}, time.Time{},
 	))
 	mock.ExpectQuery(`(?s)SELECT .*FROM channel_account_stats_pricing_intervals`).
 		WithArgs(pq.Array([]int64{11})).WillReturnRows(sqlmock.NewRows([]string{"id"}))
 	loaded, err := repo.batchLoadAccountStatsModelPricing(ctx, []int64{9})
 	require.NoError(t, err)
 	require.Len(t, loaded[9], 1)
+	require.Equal(t, pricing.ImageInputPrice, loaded[9][0].ImageInputPrice)
 	require.Equal(t, pricing.ReasoningEffortMultipliers, loaded[9][0].ReasoningEffortMultipliers)
 	require.NoError(t, mock.ExpectationsWereMet())
 }

@@ -297,6 +297,14 @@ func (m *mockGatewayCacheForGemini) RefreshSessionTTL(ctx context.Context, group
 	return nil
 }
 
+func (m *mockGatewayCacheForGemini) CompareAndDeleteSessionAccountID(ctx context.Context, groupID int64, sessionHash string, accountID int64) (bool, error) {
+	if m.sessionBindings[sessionHash] != accountID {
+		return false, nil
+	}
+	err := m.DeleteSessionAccountID(ctx, groupID, sessionHash)
+	return err == nil, err
+}
+
 func (m *mockGatewayCacheForGemini) DeleteSessionAccountID(ctx context.Context, groupID int64, sessionHash string) error {
 	if m.sessionBindings == nil {
 		return nil

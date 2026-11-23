@@ -46,6 +46,7 @@ func (s *stubAntigravityAccountRepo) UpdateExtra(_ context.Context, id int64, up
 }
 
 type defaultDeleteSessionCall struct {
+	accountID   int64
 	groupID     int64
 	sessionHash string
 }
@@ -55,7 +56,7 @@ type stubSmartRetryCache struct {
 	deleteCalls []defaultDeleteSessionCall
 }
 
-func (c *stubSmartRetryCache) DeleteSessionAccountID(_ context.Context, groupID int64, sessionHash string) error {
-	c.deleteCalls = append(c.deleteCalls, defaultDeleteSessionCall{groupID: groupID, sessionHash: sessionHash})
-	return nil
+func (c *stubSmartRetryCache) CompareAndDeleteSessionAccountID(_ context.Context, groupID int64, sessionHash string, accountID int64) (bool, error) {
+	c.deleteCalls = append(c.deleteCalls, defaultDeleteSessionCall{groupID: groupID, sessionHash: sessionHash, accountID: accountID})
+	return true, nil
 }

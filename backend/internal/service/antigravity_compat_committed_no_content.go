@@ -12,7 +12,8 @@ import (
 // retries; the handler releases the session's sticky account so that retry is
 // scheduled afresh instead of returning to the account that just failed.
 type antigravityCompatCommittedNoContentError struct {
-	msg string
+	msg   string
+	cause error
 }
 
 func newAntigravityCompatCommittedNoContentError(msg string) error {
@@ -20,6 +21,8 @@ func newAntigravityCompatCommittedNoContentError(msg string) error {
 }
 
 func (e *antigravityCompatCommittedNoContentError) Error() string { return e.msg }
+
+func (e *antigravityCompatCommittedNoContentError) Unwrap() error { return e.cause }
 
 // IsAntigravityCompatCommittedNoContent reports whether err is a compat stream
 // that committed its response and then produced no content.
@@ -37,12 +40,12 @@ func (s *GatewayService) ReleaseStickySessionAfterCommittedNoContent(ctx context
 		return false
 	}
 	gid := derefGroupID(groupID)
-	bound, getErr := s.cache.GetSessionAccountID(ctx, gid, sessionHash)
-	if getErr != nil || bound != accountID {
+	deleted, delErr := s.cache.CompareAndDeleteSessionAccountID(ctx, gid, sessionHash, accountID)
+	if delErr != nil {
+		slog.Warn("antigravity_compat_sticky_release_failed", "group_id", gid, "account_id", accountID, "error", delErr)
 		return false
 	}
-	if delErr := s.cache.DeleteSessionAccountID(ctx, gid, sessionHash); delErr != nil {
-		slog.Warn("antigravity_compat_sticky_release_failed", "group_id", gid, "account_id", accountID, "error", delErr)
+	if !deleted {
 		return false
 	}
 	slog.Info("antigravity_compat_sticky_released", "group_id", gid, "account_id", accountID, "reason", err.Error())

@@ -204,6 +204,10 @@ func (c *comboCacheAndStore) SetSessionAccountID(_ context.Context, _ int64, _ s
 func (c *comboCacheAndStore) RefreshSessionTTL(_ context.Context, _ int64, _ string, _ time.Duration) error {
 	return nil
 }
+func (c *comboCacheAndStore) CompareAndDeleteSessionAccountID(ctx context.Context, groupID int64, sessionHash string, accountID int64) (bool, error) {
+	return false, nil
+}
+
 func (c *comboCacheAndStore) DeleteSessionAccountID(_ context.Context, _ int64, _ string) error {
 	return nil
 }

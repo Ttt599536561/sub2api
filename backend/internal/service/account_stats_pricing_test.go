@@ -312,6 +312,33 @@ func TestTryCustomRules_CacheTTLAllocation(t *testing.T) {
 	}
 }
 
+func TestCalculateStatsCost_ImageInputIsPartOfInput(t *testing.T) {
+	for _, tc := range []struct {
+		name        string
+		imagePrice  *float64
+		imageTokens int
+		interval    bool
+		want        float64
+	}{
+		{"mixed", testPtrFloat64(5), 3, false, 7*2 + 3*5},
+		{"clamped", testPtrFloat64(5), 20, false, 10 * 5},
+		{"explicitly free image-only request", testPtrFloat64(0), 10, false, 0},
+		{"unset", nil, 3, false, 10 * 2},
+		{"interval text and model image price", testPtrFloat64(5), 3, true, 7*4 + 3*5},
+		{"interval fallback", nil, 3, true, 10 * 4},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			p := &ChannelModelPricing{InputPrice: testPtrFloat64(2), ImageInputPrice: tc.imagePrice}
+			if tc.interval {
+				p.Intervals = []PricingInterval{{MinTokens: 0, InputPrice: testPtrFloat64(4)}}
+			}
+			cost := calculateStatsCost(p, UsageTokens{InputTokens: 10, ImageInputTokens: tc.imageTokens}, 1)
+			require.NotNil(t, cost)
+			require.Equal(t, tc.want, *cost)
+		})
+	}
+}
+
 func TestCalculateStatsCost_TokenBilling_WithImageOutput(t *testing.T) {
 	pricing := &ChannelModelPricing{
 		BillingMode:      BillingModeToken,
@@ -326,8 +353,16 @@ func TestCalculateStatsCost_TokenBilling_WithImageOutput(t *testing.T) {
 	}
 	result := calculateStatsCost(pricing, tokens, 1)
 	require.NotNil(t, result)
-	// 100*0.001 + 50*0.002 + 10*0.01 = 0.1 + 0.1 + 0.1 = 0.3
-	require.InDelta(t, 0.3, *result, 1e-12)
+	// Image outputs are included in the total output count.
+	require.InDelta(t, 100*0.001+40*0.002+10*0.01, *result, 1e-12)
+	pricing.Intervals = []PricingInterval{{InputPrice: testPtrFloat64(0.004), OutputPrice: testPtrFloat64(0.003)}}
+	result = calculateStatsCost(pricing, tokens, 1)
+	require.NotNil(t, result)
+	require.InDelta(t, 100*0.004+40*0.003+10*0.01, *result, 1e-12)
+	pricing.ImageOutputPrice = testPtrFloat64(0)
+	result = calculateStatsCost(pricing, UsageTokens{OutputTokens: 10, ImageOutputTokens: 10}, 1)
+	require.NotNil(t, result)
+	require.Zero(t, *result)
 }
 
 func TestCalculateStatsCost_TokenBilling_PartialPricesNil(t *testing.T) {

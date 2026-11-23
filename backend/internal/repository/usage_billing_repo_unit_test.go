@@ -5,6 +5,8 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"database/sql/driver"
+	"io"
 	"regexp"
 	"strings"
 	"testing"
@@ -486,4 +488,37 @@ func TestReleaseUsageBillingBatchImageBalance_SkipsWhenHoldNeverReserved(t *test
 	require.Nil(t, result.FrozenBalance)
 	require.NoError(t, tx.Commit())
 	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestUsageBillingLostCommitAck(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		batch   bool
+		failure error
+	}{{"single_eof", false, io.EOF}, {"batch_bad_conn", true, driver.ErrBadConn}} {
+		t.Run(tc.name, func(t *testing.T) {
+			db, mock, err := sqlmock.New()
+			require.NoError(t, err)
+			t.Cleanup(func() { _ = db.Close() })
+			repo := NewUsageBillingRepository(nil, db)
+			cmd := &service.UsageBillingCommand{RequestID: "lost", APIKeyID: 1, UserID: 2}
+			mock.ExpectBegin()
+			if tc.batch {
+				mock.ExpectQuery("INSERT INTO usage_billing_dedup").WillReturnRows(sqlmock.NewRows([]string{"id", "request_id", "api_key_id"}).AddRow(1, "lost", 1))
+				mock.ExpectQuery("FROM usage_billing_dedup_archive").WillReturnRows(sqlmock.NewRows([]string{"request_id", "api_key_id", "request_fingerprint"}))
+			} else {
+				mock.ExpectQuery("INSERT INTO usage_billing_dedup").WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(1))
+				mock.ExpectQuery("FROM usage_billing_dedup_archive").WillReturnRows(sqlmock.NewRows([]string{"request_fingerprint"}))
+			}
+			mock.ExpectCommit().WillReturnError(tc.failure)
+			if tc.batch {
+				_, err = repo.ApplyBatch(context.Background(), []*service.UsageBillingCommand{cmd})
+			} else {
+				_, err = repo.Apply(context.Background(), cmd)
+			}
+			require.NoError(t, mock.ExpectationsWereMet())
+			require.ErrorIs(t, err, tc.failure)
+			require.ErrorIs(t, err, service.ErrUsageBillingCommitUnknown)
+		})
+	}
 }

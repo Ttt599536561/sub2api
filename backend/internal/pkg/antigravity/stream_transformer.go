@@ -176,10 +176,11 @@ func (p *StreamingProcessor) ProcessLine(line string) []byte {
 // 则不补发任何结束事件，防止客户端收到没有 message_start 的残缺流。
 func (p *StreamingProcessor) Finish() ([]byte, *ClaudeUsage) {
 	usage := &ClaudeUsage{
-		InputTokens:          p.inputTokens,
-		OutputTokens:         p.outputTokens,
-		CacheReadInputTokens: p.cacheReadTokens,
-		ImageOutputTokens:    p.imageOutputTokens,
+		InputTokens:                  p.inputTokens,
+		OutputTokens:                 p.outputTokens,
+		CacheReadInputTokens:         p.cacheReadTokens,
+		AccountStatsImageInputTokens: p.usageMetadata.UncachedImageInputTokens(),
+		ImageOutputTokens:            p.imageOutputTokens,
 	}
 
 	if !p.messageStartSent {

@@ -259,12 +259,27 @@ func calculateTokenStatsCost(pricing *ChannelModelPricing, tokens UsageTokens) *
 	if cost, ok := openAICacheCreationTTLCost(tokens, deref(p.CacheWritePrice), p.CacheWrite12hPrice); ok {
 		cacheCreationCost = cost
 	}
-	cost := float64(tokens.InputTokens)*deref(p.InputPrice) +
-		float64(tokens.OutputTokens)*deref(p.OutputPrice) +
-		cacheCreationCost +
-		float64(tokens.CacheReadTokens)*deref(p.CacheReadPrice) +
-		float64(tokens.ImageOutputTokens)*deref(p.ImageOutputPrice)
-	if cost <= 0 {
+	// The image counts are part of the reported totals. Intervals supply the
+	// text rates; a configured image rate belongs to the model across tiers.
+	imageInputTokens := min(max(tokens.ImageInputTokens, 0), max(tokens.InputTokens, 0))
+	imageOutputTokens := max(tokens.ImageOutputTokens, 0)
+	imageInputPrice, imageOutputPrice := deref(p.InputPrice), deref(p.OutputPrice)
+	if pricing.ImageInputPrice != nil {
+		imageInputPrice = *pricing.ImageInputPrice
+	}
+	if pricing.ImageOutputPrice != nil {
+		imageOutputPrice = *pricing.ImageOutputPrice
+	}
+	cost := float64(tokens.InputTokens-imageInputTokens)*deref(p.InputPrice) +
+		float64(imageInputTokens)*imageInputPrice +
+		float64(max(tokens.OutputTokens-imageOutputTokens, 0))*deref(p.OutputPrice) +
+		float64(imageOutputTokens)*imageOutputPrice +
+		cacheCreationCost + float64(tokens.CacheReadTokens)*deref(p.CacheReadPrice)
+	// An explicitly free image rate is an override, including for image-only
+	// requests. Returning nil here would fall through to another price source.
+	hasImageOverride := (imageInputTokens > 0 && pricing.ImageInputPrice != nil) ||
+		(imageOutputTokens > 0 && pricing.ImageOutputPrice != nil)
+	if cost <= 0 && !hasImageOverride {
 		return nil
 	}
 	return &cost

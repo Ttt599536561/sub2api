@@ -14,20 +14,21 @@ import (
 )
 
 // stubSmartRetryCache 用于 handleSmartRetry 测试的 GatewayCache mock
-// 仅关注 DeleteSessionAccountID 的调用记录
+// 仅关注 CompareAndDeleteSessionAccountID 的调用记录
 type stubSmartRetryCache struct {
 	GatewayCache // 嵌入接口，未实现的方法 panic（确保只调用预期方法）
 	deleteCalls  []deleteSessionCall
 }
 
 type deleteSessionCall struct {
+	accountID   int64
 	groupID     int64
 	sessionHash string
 }
 
-func (c *stubSmartRetryCache) DeleteSessionAccountID(_ context.Context, groupID int64, sessionHash string) error {
-	c.deleteCalls = append(c.deleteCalls, deleteSessionCall{groupID: groupID, sessionHash: sessionHash})
-	return nil
+func (c *stubSmartRetryCache) CompareAndDeleteSessionAccountID(_ context.Context, groupID int64, sessionHash string, accountID int64) (bool, error) {
+	c.deleteCalls = append(c.deleteCalls, deleteSessionCall{groupID: groupID, sessionHash: sessionHash, accountID: accountID})
+	return true, nil
 }
 
 // mockSmartRetryUpstream 用于 handleSmartRetry 测试的 mock upstream
@@ -789,7 +790,7 @@ func TestHandleSmartRetry_NoRetryDelay_UsesDefaultRateLimit(t *testing.T) {
 // ---------------------------------------------------------------------------
 // 以下测试覆盖本次改动：
 // 1. antigravitySmartRetryMaxAttempts = 1（仅重试 1 次）
-// 2. 智能重试失败后清除粘性会话绑定（DeleteSessionAccountID）
+// 2. 智能重试失败后清除粘性会话绑定（CompareAndDeleteSessionAccountID）
 // ---------------------------------------------------------------------------
 
 // TestSmartRetryMaxAttempts_VerifyConstant 验证常量值为 1
@@ -873,8 +874,8 @@ func TestHandleSmartRetry_ShortDelay_StickySession_FailedRetry_ClearsSession(t *
 	require.True(t, result.switchError.IsStickySession, "switchError should carry IsStickySession=true")
 	require.Equal(t, account.ID, result.switchError.OriginalAccountID)
 
-	// 核心断言：DeleteSessionAccountID 被调用，且参数正确
-	require.Len(t, cache.deleteCalls, 1, "should call DeleteSessionAccountID exactly once")
+	// 核心断言：CompareAndDeleteSessionAccountID 被调用，且参数正确
+	require.Len(t, cache.deleteCalls, 1, "should call CompareAndDeleteSessionAccountID exactly once")
 	require.Equal(t, int64(42), cache.deleteCalls[0].groupID)
 	require.Equal(t, "sticky-hash-abc", cache.deleteCalls[0].sessionHash)
 
@@ -887,7 +888,7 @@ func TestHandleSmartRetry_ShortDelay_StickySession_FailedRetry_ClearsSession(t *
 }
 
 // TestHandleSmartRetry_ShortDelay_NonStickySession_FailedRetry_NoDeleteSession
-// 非粘性会话 + 短延迟重试失败 → 不应调用 DeleteSessionAccountID（sessionHash 为空）
+// 非粘性会话 + 短延迟重试失败 → 不应调用 CompareAndDeleteSessionAccountID（sessionHash 为空）
 func TestHandleSmartRetry_ShortDelay_NonStickySession_FailedRetry_NoDeleteSession(t *testing.T) {
 	failRespBody := `{
 		"error": {
@@ -959,8 +960,8 @@ func TestHandleSmartRetry_ShortDelay_NonStickySession_FailedRetry_NoDeleteSessio
 	require.NotNil(t, result.switchError)
 	require.False(t, result.switchError.IsStickySession)
 
-	// 核心断言：sessionHash 为空时不应调用 DeleteSessionAccountID
-	require.Len(t, cache.deleteCalls, 0, "should NOT call DeleteSessionAccountID when sessionHash is empty")
+	// 核心断言：sessionHash 为空时不应调用 CompareAndDeleteSessionAccountID
+	require.Len(t, cache.deleteCalls, 0, "should NOT call CompareAndDeleteSessionAccountID when sessionHash is empty")
 }
 
 // TestHandleSmartRetry_ShortDelay_StickySession_FailedRetry_NilCache_NoPanic
@@ -1102,7 +1103,7 @@ func TestHandleSmartRetry_ShortDelay_StickySession_SuccessRetry_NoDeleteSession(
 	require.Nil(t, result.switchError, "should not return switchError on success")
 
 	// 核心断言：重试成功时不应清除粘性会话
-	require.Len(t, cache.deleteCalls, 0, "should NOT call DeleteSessionAccountID on successful retry")
+	require.Len(t, cache.deleteCalls, 0, "should NOT call CompareAndDeleteSessionAccountID on successful retry")
 }
 
 // TestHandleSmartRetry_LongDelay_StickySession_ClearsSession
@@ -1223,7 +1224,7 @@ func TestHandleSmartRetry_ShortDelay_NetworkError_StickySession_ClearsSession(t 
 	require.True(t, result.switchError.IsStickySession)
 
 	// 核心断言：网络错误耗尽重试后也应清除粘性绑定
-	require.Len(t, cache.deleteCalls, 1, "should call DeleteSessionAccountID after network error exhausts retry")
+	require.Len(t, cache.deleteCalls, 1, "should call CompareAndDeleteSessionAccountID after network error exhausts retry")
 	require.Equal(t, int64(99), cache.deleteCalls[0].groupID)
 	require.Equal(t, "sticky-net-error", cache.deleteCalls[0].sessionHash)
 

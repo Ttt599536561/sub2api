@@ -13,6 +13,7 @@ import (
 	"github.com/shopspring/decimal"
 )
 
+var ErrUsageBillingCommitUnknown = errors.New("usage billing commit outcome unknown")
 var ErrUsageBillingRequestIDRequired = errors.New("usage billing request_id is required")
 var ErrUsageBillingRequestConflict = errors.New("usage billing request fingerprint conflict")
 
@@ -173,13 +174,15 @@ type AccountQuotaState struct {
 }
 
 type UsageBillingApplyResult struct {
-	SubscriptionBaseCost       float64
-	SubscriptionSupplementCost float64
-	Applied                    bool
-	APIKeyQuotaExhausted       bool
-	NewBalance                 *float64           // post-deduction balance (nil = no balance deduction)
-	BalanceOverdrafted         bool               // true when the sufficient-balance guard missed and debt was still recorded
-	QuotaState                 *AccountQuotaState // post-increment quota state (nil = no quota increment)
+	// An earlier attempt may have committed before the retry found its key.
+	duplicateAfterUncertainCommit bool
+	SubscriptionBaseCost          float64
+	SubscriptionSupplementCost    float64
+	Applied                       bool
+	APIKeyQuotaExhausted          bool
+	NewBalance                    *float64           // post-deduction balance (nil = no balance deduction)
+	BalanceOverdrafted            bool               // true when the sufficient-balance guard missed and debt was still recorded
+	QuotaState                    *AccountQuotaState // post-increment quota state (nil = no quota increment)
 }
 
 // BatchImageBalanceHoldCommand describes an idempotent balance hold operation.

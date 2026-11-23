@@ -272,6 +272,14 @@ func mergeAntigravityCompatUsage(dst *ClaudeUsage, src *antigravity.ClaudeUsage)
 	dst.CacheCreationInputTokens = src.CacheCreationInputTokens
 	dst.CacheReadInputTokens = src.CacheReadInputTokens
 	dst.ImageOutputTokens = src.ImageOutputTokens
+	if src.AccountStatsImageInputTokens > 0 {
+		// The Claude transformer already accumulated its complete usage across frames.
+		stats := dst.billingUsageTokens()
+		stats.ImageInputTokens = src.AccountStatsImageInputTokens
+		dst.geminiAccountStats = &stats
+	} else {
+		dst.geminiAccountStats = nil
+	}
 }
 
 func (s *AntigravityGatewayService) handleAntigravityCompatStream(
@@ -553,7 +561,7 @@ func (s *AntigravityGatewayService) handleAntigravityCompatReadError(
 	if !session.hasMeaningfulData() && !session.writer.Disconnected() {
 		if session.preContentKeepaliveSent {
 			writeAntigravityCompatStreamError(c, session.adapter, session.writer, "stream_read_error")
-			return session.collectResult(false), fmt.Errorf("stream read error: %w", err)
+			return session.collectResult(false), &antigravityCompatCommittedNoContentError{msg: "stream read error: " + err.Error(), cause: err}
 		}
 		return nil, antigravityCompatEmptyStreamError()
 	}
