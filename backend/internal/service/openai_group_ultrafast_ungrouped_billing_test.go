@@ -80,7 +80,7 @@ func TestOpenAIGatewayServiceRecordUsage_NoResolverWithGroupPreservesLegacyBilli
 			apiKey := &APIKey{ID: 1882, GroupID: &group.ID, Group: group, User: user}
 			effort := "high"
 			tokens := UsageTokens{InputTokens: 1000, OutputTokens: 500}
-			legacy, err := svc.billingService.calculateCostWithServiceTierPolicy("gpt-5.4", tokens, group.RateMultiplier, "", false)
+			legacy, err := svc.billingService.CalculateCostUnified(CostInput{Model: "gpt-5.4", Tokens: tokens, RateMultiplier: group.RateMultiplier})
 			require.NoError(t, err)
 
 			err = svc.RecordUsage(context.Background(), &OpenAIRecordUsageInput{
@@ -116,7 +116,7 @@ func TestOpenAIGatewayServiceRecordUsage_GroupUltrafastWithoutResolverKeepsEight
 			apiKey := &APIKey{ID: 1883, GroupID: &group.ID, Group: group, User: user}
 			tier := OpenAIFastTierUltrafast
 			tokens := UsageTokens{InputTokens: 100, OutputTokens: 50, CacheReadTokens: 25, CacheCreationTokens: 10}
-			standard, err := svc.billingService.calculateCostWithServiceTierPolicy(model, tokens, group.RateMultiplier, "", false)
+			standard, err := svc.billingService.CalculateCostUnified(CostInput{Model: model, Tokens: tokens, RateMultiplier: group.RateMultiplier})
 			require.NoError(t, err)
 
 			err = svc.RecordUsage(context.Background(), &OpenAIRecordUsageInput{

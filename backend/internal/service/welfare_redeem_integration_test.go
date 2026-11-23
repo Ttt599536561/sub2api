@@ -178,7 +178,7 @@ func TestWelfareSupplementConcurrentCodesAndReceiptRollback(t *testing.T) {
 func TestWelfareSupplementGenerationDerivesAndSnapshotsCampaign(t *testing.T) {
 	f := newWelfareRedemptionFixture(t)
 	campaignID := prepareSupplementFixture(t, f)
-	admin := service.NewAdminService(nil, nil, repository.NewGroupRepository(f.client, f.db).(service.AdminGroupRepository), nil, nil, nil, f.codes, nil, nil, nil, nil, nil, nil, f.client, nil, nil, nil, nil, nil, nil, nil, nil, nil)
+	admin := service.NewAdminService(nil, nil, repository.NewGroupRepository(f.client, f.db).(service.AdminGroupRepository), nil, nil, nil, f.codes, nil, nil, nil, nil, nil, nil, f.client, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
 	amount := 25.5
 	input := &service.GenerateRedeemCodesInput{Count: 2, Type: service.RedeemTypeSubscription, SubscriptionEffect: "add_quota", WelfareCampaignID: &campaignID, QuotaAmountUSD: &amount}
 	codes, err := admin.GenerateRedeemCodes(f.ctx, input)
@@ -259,7 +259,7 @@ func TestWelfareSupplementGenerationRejectsStaleDraftCampaignGroup(t *testing.T)
 			draft, err = f.store.SaveCampaign(f.ctx, draft, f.userID)
 			require.NoError(t, err)
 			require.Greater(t, draft.Version, displayed.Version)
-			admin := service.NewAdminService(nil, nil, repository.NewGroupRepository(f.client, f.db).(service.AdminGroupRepository), nil, nil, nil, f.codes, nil, nil, nil, nil, nil, nil, f.client, nil, nil, nil, nil, nil, nil, nil, nil, nil)
+			admin := service.NewAdminService(nil, nil, repository.NewGroupRepository(f.client, f.db).(service.AdminGroupRepository), nil, nil, nil, f.codes, nil, nil, nil, nil, nil, nil, f.client, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
 			input := &service.GenerateRedeemCodesInput{Count: 2, Type: service.RedeemTypeSubscription,
 				SubscriptionEffect: effect, WelfareCampaignID: &displayed.ID, GroupID: &displayed.SubscriptionGroupID}
 			if effect == service.SubscriptionEffectAddQuota {

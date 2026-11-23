@@ -37,7 +37,7 @@ func TestGroupUltrafastCodexBridgePreservesImageOnlyChoice(t *testing.T) {
 				ModelPricing: []ChannelModelPricing{{Models: []string{tc.model}, BillingMode: BillingModePerRequest, PerRequestPrice: &price}}}
 			user := &User{ID: 9972}
 			key := &APIKey{ID: 9973, GroupID: &group.ID, Group: group, User: user}
-			account := &Account{ID: 9974, Platform: PlatformOpenAI, Type: AccountTypeAPIKey,
+			account := &Account{ID: 9974, Platform: PlatformOpenAI, Status: StatusActive, Schedulable: true, Type: AccountTypeAPIKey,
 				Credentials: map[string]any{"api_key": "sk-test", "base_url": "https://example.com"},
 				Extra:       map[string]any{"openai_responses_supported": true}}
 			response := `{"id":"text_response","output":[{"type":"message","content":[{"type":"output_text","text":"hello"}]}],"usage":{"input_tokens":1,"output_tokens":2}}`

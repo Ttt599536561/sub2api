@@ -13,7 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func welfareSpendFixture(t *testing.T) (service.UsageBillingRepository, int64, int64) {
+func welfareSpendFixture(t *testing.T) (service.UsageBillingBatchRepository, int64, int64) {
 	t.Helper()
 	ctx := context.Background()
 	client := testEntClient(t)
@@ -55,6 +55,28 @@ func TestWelfareSpendCrossesThresholdSynchronouslyAndDeduplicates(t *testing.T) 
 	replay, err = repo.Apply(ctx, second)
 	require.NoError(t, err)
 	require.False(t, replay.Applied)
+}
+
+func TestWelfareSpendBatchPreservesPerRequestTicketsAndDeduplication(t *testing.T) {
+	repo, userID, keyID := welfareSpendFixture(t)
+	cmds := []*service.UsageBillingCommand{
+		{RequestID: uuid.NewString(), UserID: userID, APIKeyID: keyID, BalanceCost: 49.99999999},
+		{RequestID: uuid.NewString(), UserID: userID, APIKeyID: keyID, BalanceCost: 0.00000001},
+	}
+	for attempt := 0; attempt < 2; attempt++ {
+		out, err := repo.ApplyBatch(context.Background(), cmds)
+		require.NoError(t, err)
+		for _, item := range out {
+			require.NoError(t, item.Err)
+			require.Equal(t, attempt == 0, item.Result.Applied)
+		}
+	}
+	var events int
+	var spend string
+	require.NoError(t, integrationDB.QueryRow("SELECT count(*) FROM welfare_spend_events WHERE user_id=$1", userID).Scan(&events))
+	require.Equal(t, 2, events)
+	require.NoError(t, integrationDB.QueryRow("SELECT eligible_spend::text FROM welfare_wallets WHERE user_id=$1", userID).Scan(&spend))
+	require.Equal(t, "50.00000000", spend)
 }
 
 func TestWelfareSpendRollbackAndDisabledAccrual(t *testing.T) {

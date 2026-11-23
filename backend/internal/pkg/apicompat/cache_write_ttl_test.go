@@ -61,3 +61,28 @@ func TestCacheWriteTTLUsageMixedDetailAliases(t *testing.T) {
 		})
 	}
 }
+
+func TestResponsesCacheWriteCountSurvivesChatBridge(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		input  string
+		prompt string
+		want   int
+	}{
+		{"explicit zero", `"cache_write_tokens":0,"cache_creation_tokens":50`, `"cached_tokens":1`, 0},
+		{"write from prompt alias", `"cache_creation_tokens":50`, `"cache_write_tokens":7`, 7},
+		{"negative write", `"cache_creation_tokens":50`, `"cache_write_tokens":-1`, 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			raw := `{"input_tokens_details":{` + tc.input + `},"prompt_tokens_details":{` + tc.prompt + `}}`
+			var usage ResponsesUsage
+			require.NoError(t, json.Unmarshal([]byte(raw), &usage))
+			require.Equal(t, tc.want, usage.CacheCreationInputTokens)
+			body, err := json.Marshal(chatUsageFromResponsesUsage(&usage))
+			require.NoError(t, err)
+			var chat ChatUsage
+			require.NoError(t, json.Unmarshal(body, &chat))
+			require.Equal(t, tc.want, ChatUsageToResponsesUsage(&chat).CacheCreationInputTokens)
+		})
+	}
+}

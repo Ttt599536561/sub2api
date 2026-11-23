@@ -59,8 +59,8 @@ func TestReviewInflightOpenAICompositeMappingUsesTargetPlatform(t *testing.T) {
 	groupID := int64(705)
 	gateway := newInflightEstimateGateway(t, nil)
 	snap := &inflightSnapshotCacheStub{byBucket: map[string][]Account{
-		inflightBucketKey(groupID, PlatformGrok):   {{ID: 7, Platform: PlatformGrok, Credentials: map[string]any{"model_mapping": map[string]any{"route-target": "grok-4.3"}}}},
-		inflightBucketKey(groupID, PlatformOpenAI): {{ID: 8, Platform: PlatformOpenAI, Credentials: map[string]any{"model_mapping": map[string]any{"route-target": "gpt-5.4-pro"}}}},
+		inflightBucketKey(groupID, PlatformGrok):   {{ID: 7, Platform: PlatformGrok, Status: StatusActive, Schedulable: true, Credentials: map[string]any{"model_mapping": map[string]any{"route-target": "grok-4.3"}}}},
+		inflightBucketKey(groupID, PlatformOpenAI): {{ID: 8, Platform: PlatformOpenAI, Status: StatusActive, Schedulable: true, Credentials: map[string]any{"model_mapping": map[string]any{"route-target": "gpt-5.4-pro"}}}},
 	}}
 	attachInflightSnapshot(gateway, snap)
 	openai := &OpenAIGatewayService{cfg: gateway.cfg, billingService: gateway.billingService, resolver: gateway.resolver, schedulerSnapshot: gateway.schedulerSnapshot}

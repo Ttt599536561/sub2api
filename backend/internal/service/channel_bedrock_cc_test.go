@@ -63,6 +63,15 @@ func TestChannel_IsBedrockCCCompatEnabled_OldMapFormat(t *testing.T) {
 	require.False(t, c.IsBedrockCCCompatEnabled("bedrock"))
 }
 
+func TestChannel_IsBedrockCCCompatEnabled_LegacyEditorFlag(t *testing.T) {
+	for _, enabled := range []bool{false, true} {
+		channel := &Channel{FeaturesConfig: map[string]any{
+			featureKeyBedrockCCCompat: map[string]any{"anthropic": enabled},
+		}}
+		require.Equal(t, enabled, channel.IsBedrockCCCompatEnabled("anthropic"))
+	}
+}
+
 func TestChannel_IsBedrockCCCompatEnabled_MissingKey(t *testing.T) {
 	c := &Channel{
 		FeaturesConfig: map[string]any{

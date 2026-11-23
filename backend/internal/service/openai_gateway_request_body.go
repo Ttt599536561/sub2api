@@ -653,19 +653,43 @@ func normalizeOpenAIParallelToolCallsWithoutTools(body []byte, responsesLite boo
 }
 
 // openAIRequestBodyHasTools 同时识别顶层 tools 和 input[].additional_tools。
+// additional_tools 类型字符串只有在字面出现、或被能拼出可见 ASCII 的 \u 转义
+// 拼出时才可能匹配，其余请求体跳过对 input 的结构扫描。
 func openAIRequestBodyHasTools(body []byte) bool {
-	if tools := gjson.GetBytes(body, "tools"); tools.IsArray() && len(tools.Array()) > 0 {
+	root := parseRawJSONView(body)
+	if gjsonArrayHasElements(root.Get("tools")) {
 		return true
 	}
-	for _, item := range gjson.GetBytes(body, "input").Array() {
-		if strings.TrimSpace(item.Get("type").String()) != "additional_tools" {
-			continue
-		}
-		if tools := item.Get("tools"); tools.IsArray() && len(tools.Array()) > 0 {
-			return true
-		}
+	if !bytes.Contains(body, []byte("additional_tools")) && !JSONMayEscapePlainASCII(body) {
+		return false
 	}
-	return false
+	found := false
+	isAdditionalToolsWithTools := func(item gjson.Result) bool {
+		return strings.TrimSpace(item.Get("type").String()) == "additional_tools" && gjsonArrayHasElements(item.Get("tools"))
+	}
+	input := root.Get("input")
+	if !input.IsArray() {
+		// gjson 把非数组的值当作只含它自身的数组。
+		return input.Type != gjson.Null && isAdditionalToolsWithTools(input)
+	}
+	input.ForEach(func(_, item gjson.Result) bool {
+		found = isAdditionalToolsWithTools(item)
+		return !found
+	})
+	return found
+}
+
+// gjsonArrayHasElements 不分配结果切片地判断数组是否非空。
+func gjsonArrayHasElements(value gjson.Result) bool {
+	if !value.IsArray() {
+		return false
+	}
+	nonEmpty := false
+	value.ForEach(func(_, _ gjson.Result) bool {
+		nonEmpty = true
+		return false
+	})
+	return nonEmpty
 }
 
 // normalizeOpenAIResponsesReasoningContentReplay removes non-portable
@@ -1084,12 +1108,17 @@ func newOpenAIRequestView(body []byte) openAIRequestView {
 
 	view := openAIRequestView{body: body}
 	var seen uint8
-	// parseRawJSONView reads body without copying; view keeps body alive for extracted strings.
+	// parseRawJSONView reads body without copying, so extracted strings alias the
+	// body. They flow into usage logs and async tasks that outlive the request, so
+	// clone them; otherwise a multi-MB body stays alive after its budget is freed.
+	field := func(value gjson.Result) string {
+		return strings.Clone(strings.TrimSpace(value.String()))
+	}
 	parseRawJSONView(body).ForEach(func(key, value gjson.Result) bool {
 		switch key.Str {
 		case "model":
 			if seen&modelField == 0 {
-				view.Model = strings.TrimSpace(value.String())
+				view.Model = field(value)
 				seen |= modelField
 			}
 		case "stream":
@@ -1099,22 +1128,22 @@ func newOpenAIRequestView(body []byte) openAIRequestView {
 			}
 		case "prompt_cache_key":
 			if seen&promptCacheKeyField == 0 {
-				view.PromptCacheKey = strings.TrimSpace(value.String())
+				view.PromptCacheKey = field(value)
 				seen |= promptCacheKeyField
 			}
 		case "previous_response_id":
 			if seen&previousResponseIDField == 0 {
-				view.PreviousResponseID = strings.TrimSpace(value.String())
+				view.PreviousResponseID = field(value)
 				seen |= previousResponseIDField
 			}
 		case "service_tier":
 			if seen&serviceTierField == 0 {
-				view.ServiceTier = strings.TrimSpace(value.String())
+				view.ServiceTier = field(value)
 				seen |= serviceTierField
 			}
 		case "reasoning":
 			if seen&reasoningField == 0 {
-				view.ReasoningEffort = strings.TrimSpace(value.Get("effort").String())
+				view.ReasoningEffort = field(value.Get("effort"))
 				seen |= reasoningField
 			}
 		}
@@ -1452,9 +1481,9 @@ func normalizeOpenAIOAuthResponsesCompatibilityBody(body []byte) ([]byte, bool, 
 	}
 	normalized := body
 	changed := false
-	prompt := gjson.GetBytes(normalized, "prompt")
+	prompt := parseRawJSONView(normalized).Get("prompt")
 	if prompt.Exists() {
-		input := gjson.GetBytes(normalized, "input")
+		input := parseRawJSONView(normalized).Get("input")
 		if prompt.Type != gjson.Null && (!input.Exists() || input.Type == gjson.Null) {
 			next, err := sjson.SetRawBytes(normalized, "input", []byte(prompt.Raw))
 			if err != nil {
@@ -1469,7 +1498,7 @@ func normalizeOpenAIOAuthResponsesCompatibilityBody(body []byte) ([]byte, bool, 
 		normalized = next
 		changed = true
 	}
-	if gjson.GetBytes(normalized, "commands").Exists() {
+	if parseRawJSONView(normalized).Get("commands").Exists() {
 		next, err := sjson.DeleteBytes(normalized, "commands")
 		if err != nil {
 			return body, false, fmt.Errorf("normalize oauth responses delete commands: %w", err)
@@ -1478,26 +1507,43 @@ func normalizeOpenAIOAuthResponsesCompatibilityBody(body []byte) ([]byte, bool, 
 		changed = true
 	}
 	// Only remove the input-item field, never same-named user content.
-	input := gjson.GetBytes(normalized, "input")
+	input := parseRawJSONView(normalized).Get("input")
 	if !input.IsArray() {
 		return normalized, changed, nil
 	}
-	for i, item := range input.Array() {
-		if !item.IsObject() || !item.Get("internal_chat_message_metadata_passthrough").Exists() {
-			continue
-		}
-		next, err := sjson.DeleteBytes(normalized, fmt.Sprintf("input.%d.internal_chat_message_metadata_passthrough", i))
-		if err != nil {
-			return body, false, fmt.Errorf("normalize oauth input metadata: %w", err)
-		}
-		normalized = next
-		changed = true
+	const field = "internal_chat_message_metadata_passthrough"
+	hasMetadata := false
+	input.ForEach(func(_, item gjson.Result) bool {
+		hasMetadata = item.IsObject() && item.Get(field).Exists()
+		return !hasMetadata
+	})
+	if !hasMetadata {
+		return normalized, changed, nil
 	}
-	return normalized, changed, nil
+
+	// Clean each item locally, then rebuild the request once. Deleting by
+	// input.N on the full body copies the entire history for every message.
+	var items []string
+	var normalizeErr error
+	input.ForEach(func(_, item gjson.Result) bool {
+		raw := item.Raw
+		if item.IsObject() && item.Get(field).Exists() {
+			raw, normalizeErr = sjson.Delete(raw, field)
+			if normalizeErr != nil {
+				return false
+			}
+		}
+		items = append(items, raw)
+		return true
+	})
+	if normalizeErr != nil {
+		return body, false, fmt.Errorf("normalize oauth input metadata: %w", normalizeErr)
+	}
+	return replaceOpenAIRawInput(normalized, input, items), true, nil
 }
 
 func normalizeGPT6ResponsesSampling(body []byte, model string) ([]byte, bool, error) {
-	if (!openai.IsGPT6SolOrLunaModelSpelling(model) && !openai.IsGPT61SolModelSpelling(model)) || gjson.GetBytes(body, "reasoning.effort").String() == "none" {
+	if (!openai.IsGPT6SolOrLunaModelSpelling(model) && !openai.IsGPT61SolModelSpelling(model) && openai.GPT62ModelID(model) == "") || gjson.GetBytes(body, "reasoning.effort").String() == "none" {
 		return body, false, nil
 	}
 	out := body
@@ -1621,6 +1667,12 @@ func normalizeOpenAIResponsesCompatibilityBodyWithOptions(body []byte, account *
 		normalized, changed, err = normalizeOpenAIResponsesLegacyIngressWithConfig(opts.Config, body)
 		if err != nil {
 			return body, false, err
+		}
+		if next, idsChanged, err := normalizeCodexAdditionalToolsIDsBody(normalized); err != nil {
+			return body, false, err
+		} else if idsChanged {
+			normalized = next
+			changed = true
 		}
 	}
 	if next, normalizedReasoningContent, err := normalizeOpenAIResponsesReasoningContentReplay(normalized); err != nil {
@@ -1884,7 +1936,34 @@ func extractOpenAIReasoningEffortFromBody(body []byte, modelCandidates ...string
 	return &value
 }
 
+const responsesConfigurationUpdate = "configuration_update"
+
+// Responses clients can keep the top-level effort fixed for prompt caching.
+// Each input update takes effect from its position until another sets effort.
+func latestResponsesInputEffort(body []byte) string {
+	if !bytes.Contains(body, []byte(responsesConfigurationUpdate)) && !JSONMayEscapePlainASCII(body) {
+		return ""
+	}
+	input := parseRawJSONView(body).Get("input")
+	if !input.IsArray() {
+		return ""
+	}
+	var latest string
+	input.ForEach(func(_, item gjson.Result) bool {
+		if item.Get("type").Str == responsesConfigurationUpdate {
+			if effort := strings.TrimSpace(item.Get("reasoning.effort").Str); effort != "" {
+				latest = effort
+			}
+		}
+		return true
+	})
+	return latest
+}
+
 func explicitRequestedReasoningEffortFromBody(body []byte) string {
+	if latest := latestResponsesInputEffort(body); latest != "" {
+		return latest
+	}
 	raw := strings.TrimSpace(gjson.GetBytes(body, "reasoning.effort").String())
 	if raw == "" {
 		raw = strings.TrimSpace(gjson.GetBytes(body, "reasoning_effort").String())
@@ -1901,11 +1980,7 @@ func explicitRequestedReasoningEffortFromBody(body []byte) string {
 // later persist "xhigh".
 func CanonicalRequestedReasoningEffort(body []byte, modelCandidates ...string) *string {
 	if raw := explicitRequestedReasoningEffortFromBody(body); raw != "" {
-		canonical := NormalizeMaxReasoningEffort(raw)
-		if canonical == "" {
-			return nil
-		}
-		return &canonical
+		return optionalTrimmedStringPtr(normalizeReasoningEffortMappingSource(raw))
 	}
 	for _, model := range modelCandidates {
 		if value := canonicalReasoningEffortFromModelSuffix(model); value != "" {
@@ -2188,6 +2263,12 @@ func openAIFastPolicySettingsFromContext(ctx context.Context) *OpenAIFastPolicyS
 	return nil
 }
 
+// openAIModelSupportsUltrafast identifies models with a published Ultrafast price.
+func openAIModelSupportsUltrafast(model string) bool {
+	normalized := normalizeKnownOpenAICodexModel(model)
+	return isOpenAIGPT6AstraModel(normalized) || normalized == "gpt-6.1-sol" || normalized == "gpt-6.2-sol" || normalized == "gpt-6.2-astra"
+}
+
 func openAIGroupForcesFast(ctx context.Context, account *Account) bool {
 	if ctx == nil || account == nil || account.Platform != PlatformOpenAI {
 		return false
@@ -2327,7 +2408,8 @@ func writeOpenAIFastPolicyBlockedResponse(c *gin.Context, err *OpenAIFastBlocked
 //   - filter: returns a copy with top-level service_tier removed
 //   - force_priority: keeps service_tier and rewrites it to "priority"
 //   - block: returns (frame, *OpenAIFastBlockedError)
-//   - Group ForceOpenAIFast: sets priority first, then applies the global rule
+//   - Forced group tiers are applied before the global policy. A global block
+//     still rejects a forced Ultrafast request.
 //
 // Only frames whose "type" field strictly equals "response.create" are
 // inspected/mutated. Any other frame type — including the empty string —
@@ -2521,7 +2603,7 @@ func openAIRequestBodyMayContainEmptyBase64InputImage(body []byte) bool {
 	if len(body) == 0 || !openAIRequestBodyMayContainInputImageToken(body) {
 		return false
 	}
-	input := gjson.GetBytes(body, "input")
+	input := parseRawJSONView(body).Get("input")
 	if !input.Exists() {
 		return false
 	}
@@ -2532,8 +2614,9 @@ func openAIRequestBodyMayContainInputImageToken(body []byte) bool {
 	if bytes.Contains(body, []byte("input_image")) {
 		return true
 	}
-	// JSON 字符串任意字符都可能被 unicode escape，遇到 \u 时交给 gjson 解码后的结构扫描兜底。
-	return bytes.Contains(body, []byte("\\u"))
+	// JSON 字符串任意字符都可能被 unicode escape；只有能拼出可见 ASCII 字符的 \u
+	// 才可能藏住 input_image，此时交给 gjson 解码后的结构扫描兜底。
+	return JSONMayEscapePlainASCII(body)
 }
 
 func openAIJSONValueMayContainEmptyBase64InputImage(value gjson.Result) bool {
@@ -2716,12 +2799,19 @@ func CanonicalRequestedReasoningEffortFromReqBody(reqBody map[string]any, modelC
 			raw = strings.TrimSpace(effort)
 		}
 	}
-	if raw != "" {
-		canonical := NormalizeMaxReasoningEffort(raw)
-		if canonical == "" {
-			return nil
+	items, _ := reqBody["input"].([]any)
+	for i := len(items) - 1; i >= 0; i-- {
+		item, _ := items[i].(map[string]any)
+		if item["type"] == responsesConfigurationUpdate {
+			reasoning, _ := item["reasoning"].(map[string]any)
+			if effort, _ := reasoning["effort"].(string); strings.TrimSpace(effort) != "" {
+				raw = effort
+				break
+			}
 		}
-		return &canonical
+	}
+	if raw != "" {
+		return optionalTrimmedStringPtr(normalizeReasoningEffortMappingSource(raw))
 	}
 	return CanonicalRequestedReasoningEffort(nil, modelCandidates...)
 }
@@ -2793,7 +2883,7 @@ func validateGPT61CompatRequest(body []byte, model string) error {
 }
 
 func validateGPT61RawEffort(body []byte, model string) error {
-	if !openai.IsGPT61SolModelSpelling(model) && !openai.IsGPT61TerraModelSpelling(model) {
+	if !openai.IsGPT61SolModelSpelling(model) && !openai.IsGPT61TerraModelSpelling(model) && openai.GPT62ModelID(model) == "" {
 		return nil
 	}
 	for _, path := range []string{"reasoning.effort", "reasoning_effort", "output_config.effort"} {

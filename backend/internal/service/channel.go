@@ -101,6 +101,7 @@ type ChannelModelPricing struct {
 	CacheReadPrice             *float64            `json:"cache_read_price"`
 	FastMultiplier             *float64            `json:"fast_multiplier"`
 	FlexMultiplier             *float64            `json:"flex_multiplier"`
+	UltrafastMultiplier        *float64            `json:"ultrafast_multiplier"`
 	ReasoningEffortMultipliers map[string]float64  `json:"reasoning_effort_multipliers,omitempty"`
 	ImageInputPrice            *float64            `json:"image_input_price"`
 	ImageOutputPrice           *float64            `json:"image_output_price"`
@@ -306,9 +307,16 @@ func (c *Channel) IsBedrockCCCompatEnabled(platform string) bool {
 	if c == nil || c.FeaturesConfig == nil {
 		return false
 	}
-	// 直接检查 bedrock_cc_compat 开关，不再检查 platform 子字段
-	enabled, ok := c.FeaturesConfig[featureKeyBedrockCCCompat].(bool)
-	return ok && enabled
+	switch enabled := c.FeaturesConfig[featureKeyBedrockCCCompat].(type) {
+	case bool:
+		return enabled
+	case map[string]any:
+		// The old channel editor stored its single Bedrock toggle under anthropic.
+		legacy, _ := enabled[PlatformAnthropic].(bool)
+		return legacy
+	default:
+		return false
+	}
 }
 
 // deepCopyFeaturesConfig creates a deep copy of FeaturesConfig to prevent cache pollution.

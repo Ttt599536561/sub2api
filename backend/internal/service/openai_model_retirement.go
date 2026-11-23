@@ -95,7 +95,8 @@ func supportsOpenAIRequestModel(account *Account, requestedModel string, require
 }
 
 func supportsOpenAIRequestModelWithContext(ctx context.Context, account *Account, requestedModel string, requireCompact bool) bool {
-	if isRetiredOpenAISubscriptionModel(account, resolveOpenAIRequestModelWithContext(ctx, account, requestedModel, requireCompact)) {
+	upstreamModel := resolveOpenAIRequestModelWithContext(ctx, account, requestedModel, requireCompact)
+	if isRetiredOpenAISubscriptionModel(account, upstreamModel) {
 		return false
 	}
 	if ctx != nil {
@@ -106,7 +107,7 @@ func supportsOpenAIRequestModelWithContext(ctx context.Context, account *Account
 			}
 		}
 	}
-	return account.isModelMappingSupported(requestedModel)
+	return account.isModelMappingSupported(requestedModel, upstreamModel)
 }
 
 // ErrOpenAIRetiredSubscriptionModel is a local routing rejection, not an

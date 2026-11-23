@@ -639,3 +639,18 @@ func TestApplyOpenAIFastPolicyToBody_GroupForceUltrafastStillHonorsBlock(t *test
 	require.Contains(t, blocked.Message, "ultrafast blocked")
 	require.Equal(t, OpenAIFastTierUltrafast, gjson.GetBytes(updated, "service_tier").String())
 }
+
+func TestOpenAIModelSupportsUltrafast(t *testing.T) {
+	for _, model := range []string{
+		"gpt-6-astra", "gpt-6", "GPT-6-Astra", "openai/gpt-6-astra",
+		"gpt-6.1-sol", "gpt-6.1-sol-high", "openai/gpt-6.1-sol", "gpt-6.1-sol-openai-compact",
+	} {
+		require.True(t, openAIModelSupportsUltrafast(model), model)
+	}
+	for _, model := range []string{
+		"", "gpt-6.1-terra", "gpt-6-sol", "gpt-6-luna", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.5", "gpt-5.4-mini",
+		"gpt-6.1-solar", "grok-4", "claude-opus-5-5",
+	} {
+		require.False(t, openAIModelSupportsUltrafast(model), model)
+	}
+}

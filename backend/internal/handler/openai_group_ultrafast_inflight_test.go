@@ -146,7 +146,7 @@ func newUltrafastImageAdmissionFixture(t *testing.T, cache service.BillingCache)
 	t.Cleanup(billingCache.Stop)
 	billing := service.NewBillingService(cfg, nil)
 	concurrency := service.NewConcurrencyService(&fakeConcurrencyCache{})
-	account := &service.Account{ID: 8824, Platform: service.PlatformOpenAI, Type: service.AccountTypeAPIKey,
+	account := &service.Account{ID: 8824, Platform: service.PlatformOpenAI, Status: service.StatusActive, Schedulable: true, Type: service.AccountTypeAPIKey,
 		Credentials: map[string]any{"api_key": "sk-test", "base_url": "https://example.com"}, Extra: map[string]any{"openai_responses_supported": true}}
 	snapshot := service.NewSchedulerSnapshotService(&fakeSchedulerCache{accounts: []*service.Account{account}}, nil, nil, nil, cfg)
 	gateway := service.NewOpenAIGatewayService(nil, nil, nil, nil, nil, nil, nil, cfg, snapshot, concurrency, billing,

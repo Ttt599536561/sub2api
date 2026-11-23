@@ -25,7 +25,7 @@ func TestGroupUltrafastImageReservationMatchesSettlementAndAdmission(t *testing.
 		ModelPricing: []ChannelModelPricing{{Models: []string{"gpt-image-2"}, BillingMode: BillingModePerRequest, PerRequestPrice: &price}}}
 	user := &User{ID: 9892}
 	key := &APIKey{ID: 9893, GroupID: &group.ID, Group: group, User: user}
-	account := &Account{ID: 9894, Platform: PlatformOpenAI, Type: AccountTypeAPIKey,
+	account := &Account{ID: 9894, Platform: PlatformOpenAI, Status: StatusActive, Schedulable: true, Type: AccountTypeAPIKey,
 		Credentials: map[string]any{"api_key": "sk-test", "base_url": "https://example.com"}, Extra: map[string]any{"openai_responses_supported": true}}
 	snap := &inflightSnapshotCacheStub{byBucket: map[string][]Account{inflightBucketKey(group.ID, PlatformOpenAI): {*account}}}
 	svc.schedulerSnapshot = NewSchedulerSnapshotService(snap, nil, &inflightCountingAccountRepo{}, nil, svc.cfg)
@@ -146,7 +146,7 @@ func TestGroupUltrafastImageReservationMappedSettlement(t *testing.T) {
 			svc.resolver = NewModelPricingResolver(svc.channelService, svc.billingService)
 			user := &User{ID: 9962}
 			key := &APIKey{ID: 9963, GroupID: &group.ID, Group: group, User: user}
-			account := &Account{ID: 9964, Platform: PlatformOpenAI, Type: AccountTypeAPIKey,
+			account := &Account{ID: 9964, Platform: PlatformOpenAI, Status: StatusActive, Schedulable: true, Type: AccountTypeAPIKey,
 				Credentials: map[string]any{"api_key": "sk-test", "base_url": "https://example.com", "model_mapping": map[string]any{mapping.MappedModel: accountModel}},
 				Extra:       map[string]any{"openai_responses_supported": true}}
 			snap := &inflightSnapshotCacheStub{byBucket: map[string][]Account{inflightBucketKey(group.ID, PlatformOpenAI): {*account}}}

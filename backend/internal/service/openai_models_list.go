@@ -190,7 +190,8 @@ func openAIModelsChannelMapper(ctx context.Context, channels *ChannelService, gr
 // projectAccountModelAliases retains the source entry's metadata, never changes
 // the shared response, and never synthesizes models absent from this account.
 func projectAccountModelAliases(body []byte, account *Account, group *Group, codex bool, channelMappings ...func(string) string) ([]byte, error) {
-	if account.IsOpenAIPassthroughEnabled() || len(account.GetModelMapping()) == 0 {
+	passthrough := account.IsOpenAIPassthroughEnabled()
+	if (passthrough && !account.IsOpenAIPassthroughModelFilterEnabled()) || len(account.GetModelMapping()) == 0 {
 		return body, nil
 	}
 	field, idField := "data", "id"
@@ -254,6 +255,10 @@ func projectAccountModelAliases(body []byte, account *Account, group *Group, cod
 			requestModel = channelMappings[0](id)
 		}
 		target, matched := account.ResolveMappedModel(requestModel)
+		if passthrough {
+			// Filtering changes eligibility, never the upstream/public model name.
+			target, matched = requestModel, account.IsModelSupported(requestModel)
+		}
 		raw, available := byID[strings.TrimSpace(target)]
 		if !matched || !available {
 			continue

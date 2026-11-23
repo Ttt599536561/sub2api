@@ -33,6 +33,44 @@ func TestChatCompletionsToResponses_BasicText(t *testing.T) {
 	assert.Equal(t, "user", items[0].Role)
 }
 
+func TestUsageConversionsMergeMixedInputDetails(t *testing.T) {
+	for _, tc := range []struct {
+		name          string
+		fields        string
+		cached, audio int
+	}{
+		{"fallback", "", 4, 2},
+		{"canonical counts", `,"cached_tokens":3,"audio_tokens":1`, 3, 1},
+		{"explicit zero", `,"cached_tokens":0,"audio_tokens":0`, 0, 0},
+		{"explicit null", `,"cached_tokens":null,"audio_tokens":null`, 0, 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			body := fmt.Sprintf(`{"input_tokens_details":{"cache_write_tokens":10%s},"prompt_tokens_details":{"cached_tokens":4,"audio_tokens":2}}`, tc.fields)
+			var usage ResponsesUsage
+			require.NoError(t, json.Unmarshal([]byte(body), &usage))
+			details := ChatUsageToResponsesUsage(chatUsageFromResponsesUsage(&usage)).InputTokensDetails
+			require.NotNil(t, details)
+			require.Equal(t, tc.cached, details.CachedTokens)
+			require.Equal(t, tc.audio, details.AudioTokens)
+			require.Equal(t, 10, details.CacheWriteTokens)
+		})
+	}
+}
+
+func TestChatUsageToResponsesUsagePreservesDetailedTokenCounts(t *testing.T) {
+	want := &ChatUsage{
+		PromptTokens: 6, CompletionTokens: 9, TotalTokens: 15,
+		PromptTokensDetails: &ChatTokenDetails{AudioTokens: 5},
+		CompletionTokensDetails: &ChatTokenDetails{
+			ReasoningTokens: 2, AudioTokens: 3, AcceptedPredictionTokens: 1, RejectedPredictionTokens: 4,
+		},
+	}
+	require.Equal(t, want, chatUsageFromResponsesUsage(ChatUsageToResponsesUsage(want)))
+	empty := ChatUsageToResponsesUsage(&ChatUsage{PromptTokensDetails: &ChatTokenDetails{}, CompletionTokensDetails: &ChatTokenDetails{}})
+	require.Nil(t, empty.InputTokensDetails)
+	require.Nil(t, empty.OutputTokensDetails)
+}
+
 func TestUsageConversionsPreserveCacheWriteTokens(t *testing.T) {
 	var responsesUsage ResponsesUsage
 	require.NoError(t, json.Unmarshal([]byte(`{
@@ -442,6 +480,38 @@ func TestChatCompletionsToResponses_ResponseFormatJsonSchema(t *testing.T) {
 			"additionalProperties":false
 		},
 		"strict":true
+	}`, string(resp.Text.Format))
+}
+
+func TestChatCompletionsToResponses_ResponseFormatJsonSchemaDefaultsStrictFalse(t *testing.T) {
+	req := &ChatCompletionsRequest{
+		Model:    "gpt-4o",
+		Messages: []ChatMessage{{Role: "user", Content: json.RawMessage(`"Return structured JSON"`)}},
+		ResponseFormat: json.RawMessage(`{
+			"type":"json_schema",
+			"json_schema":{
+				"name":"answer",
+				"schema":{
+					"type":"object",
+					"properties":{"ok":{"type":"boolean"}},
+					"required":["ok"]
+				}
+			}
+		}`),
+	}
+
+	resp, err := ChatCompletionsToResponses(req)
+	require.NoError(t, err)
+	require.NotNil(t, resp.Text)
+	assert.JSONEq(t, `{
+		"type":"json_schema",
+		"name":"answer",
+		"schema":{
+			"type":"object",
+			"properties":{"ok":{"type":"boolean"}},
+			"required":["ok"]
+		},
+		"strict":false
 	}`, string(resp.Text.Format))
 }
 

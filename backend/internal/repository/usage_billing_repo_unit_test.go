@@ -141,7 +141,7 @@ func TestApplyUsageBillingEffects_DeletedAPIKeyStillBillsBalance(t *testing.T) {
 		WithArgs(10.0, int64(7), service.StatusAPIKeyActive, service.StatusAPIKeyQuotaExhausted).
 		WillReturnError(sql.ErrNoRows)
 	mock.ExpectExec(apiKeyRateLimitIncrementSQL).
-		WithArgs(10.0, int64(7)).
+		WithArgs("10", int64(7)).
 		WillReturnResult(sqlmock.NewResult(0, 0))
 	mock.ExpectCommit()
 
@@ -213,7 +213,7 @@ func TestApplyUsageBillingEffects_APIKeyCounterErrorStillFails(t *testing.T) {
 	tx, err := db.BeginTx(ctx, nil)
 	require.NoError(t, err)
 	mock.ExpectExec(apiKeyRateLimitIncrementSQL).
-		WithArgs(10.0, int64(7)).
+		WithArgs("10", int64(7)).
 		WillReturnError(sql.ErrConnDone)
 	mock.ExpectRollback()
 

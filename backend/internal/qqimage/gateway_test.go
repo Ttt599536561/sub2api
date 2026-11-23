@@ -479,11 +479,10 @@ func TestGatewayQueueFullResumesAndJoinsInFlightDispatch(t *testing.T) {
 	next := make(chan int64, 1)
 	hold := make(chan struct{})
 	_, cancel, _ := gatewayFake(t, func(c *websocket.Conn, n int) {
-		auth := gatewayHello(t, c, 20)
+		// Exercise queue overflow independently of heartbeat scheduling.
+		auth := gatewayHello(t, c, 10000)
 		if n == 1 {
 			gatewaySend(t, c, `{"op":0,"t":"READY","s":1,"d":{"session_id":"session"}}`)
-			gatewayRead(c)
-			gatewaySend(t, c, `{"op":11}`)
 			gatewaySend(t, c, `{"op":0,"t":"GROUP_AT_MESSAGE_CREATE","s":2,"d":{}}`)
 			<-entered
 			gatewaySend(t, c, `{"op":0,"t":"C2C_MESSAGE_CREATE","s":3,"d":{}}`)

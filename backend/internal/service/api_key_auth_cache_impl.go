@@ -14,7 +14,7 @@ import (
 	"github.com/dgraph-io/ristretto"
 )
 
-const apiKeyAuthSnapshotVersion = 28 // v28: merge custom image-count/Ultrafast policies with upstream RPM provenance and privacy gate; invalidate divergent v26/v27 snapshots
+const apiKeyAuthSnapshotVersion = 29 // Invalidate divergent upstream and custom v28 snapshots.
 
 type apiKeyAuthCacheConfig struct {
 	l1Size        int

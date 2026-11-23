@@ -4512,6 +4512,9 @@ const groupPricingFromAPI = (
     cache_write_1h_price: perTokenToMTok(entry.cache_write_1h_price),
     cache_write_12h_price: perTokenToMTok(entry.cache_write_12h_price),
     cache_read_price: perTokenToMTok(entry.cache_read_price),
+    fast_multiplier: entry.fast_multiplier,
+    flex_multiplier: entry.flex_multiplier,
+    ultrafast_multiplier: entry.ultrafast_multiplier,
     reasoning_effort_multipliers: entry.reasoning_effort_multipliers
       ? { ...entry.reasoning_effort_multipliers }
       : null,
@@ -4538,6 +4541,9 @@ const groupPricingToAPI = (
       cache_write_1h_price: mTokToPerToken(entry.cache_write_1h_price),
       cache_write_12h_price: mTokToPerToken(entry.cache_write_12h_price),
       cache_read_price: mTokToPerToken(entry.cache_read_price),
+      fast_multiplier: toNullableNumber(entry.fast_multiplier),
+      flex_multiplier: toNullableNumber(entry.flex_multiplier),
+      ultrafast_multiplier: toNullableNumber(entry.ultrafast_multiplier),
       reasoning_effort_multipliers: formReasoningEffortMultipliersToAPI(
         entry.reasoning_effort_multipliers,
       ),
@@ -6203,6 +6209,7 @@ const handleEdit = async (group: AdminGroup) => {
     group.long_context_pricing_enabled ?? true;
   editForm.force_openai_fast = group.force_openai_fast ?? false;
   editForm.force_openai_ultrafast = group.force_openai_ultrafast ?? false;
+  normalizeGroupOpenAIUltrafastState(group.platform, editForm);
   editForm.free_openai_fast = group.free_openai_fast ?? false;
   editForm.model_pricing = groupPricingFromAPI(group.model_pricing);
   editForm.allow_image_generation = group.allow_image_generation ?? false;

@@ -191,7 +191,7 @@ func TestGroupHandlerUpdateOpenAIFastPolicyPartialUpdates(t *testing.T) {
 				invalidator := &ultrafastPartialUpdateAuthInvalidator{repo: repo}
 				adminService := service.NewAdminService(
 					nil, nil, repo, nil, nil, nil, nil, nil, nil, nil, nil, nil,
-					invalidator, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
+					invalidator, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
 				)
 				handler := NewGroupHandler(adminService, nil, nil)
 				router := gin.New()

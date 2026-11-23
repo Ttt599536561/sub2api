@@ -71,13 +71,13 @@ func runOpenAIWSPassthroughTTFTModeCase(t *testing.T, mode string) {
 
 	const reasoningDelay = 600 * time.Millisecond
 	const tolerance = 250 * time.Millisecond
-	// The second turn's events wait so its response.create is accepted first.
+	// Delay each turn's events relative to its own upstream request write.
 	turns := [][]openAIWSTTFTModeTestEvent{
 		openAIWSTTFTModeTestTurn("resp_ttft_1", 0, reasoningDelay),
 		openAIWSTTFTModeTestTurn("resp_ttft_2", 200*time.Millisecond, reasoningDelay),
 	}
 
-	upstreamConn := &openAIWSCaptureConn{}
+	upstreamConn := &openAIWSCaptureConn{turnWrites: make(chan struct{}, len(turns))}
 	for _, turn := range turns {
 		for _, event := range turn {
 			upstreamConn.events = append(upstreamConn.events, []byte(event.payload))

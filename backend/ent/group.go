@@ -130,7 +130,7 @@ type Group struct {
 	AllowLive bool `json:"allow_live,omitempty"`
 	// 是否强制此 OpenAI/Composite 分组请求使用 service_tier=priority
 	ForceOpenaiFast bool `json:"force_openai_fast,omitempty"`
-	// 是否强制此 OpenAI 分组的 GPT-6.1 Sol/Astra 请求使用 service_tier=ultrafast
+	// 是否强制此 OpenAI 分组请求使用 service_tier=ultrafast（与强制 Fast 互斥）
 	ForceOpenaiUltrafast bool `json:"force_openai_ultrafast,omitempty"`
 	// 是否让此 OpenAI/Composite 分组的 Fast 请求按 Standard 价格计费
 	FreeOpenaiFast bool `json:"free_openai_fast,omitempty"`

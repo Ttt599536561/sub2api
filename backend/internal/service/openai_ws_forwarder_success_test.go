@@ -1952,6 +1952,7 @@ func (d *openAIWSCaptureDialer) DialCount() int {
 type openAIWSCaptureConn struct {
 	mu         sync.Mutex
 	readDelays []time.Duration
+	turnWrites chan struct{} // optional gate for fixtures replaying multiple independent turns
 	events     [][]byte
 	lastWrite  map[string]any
 	writes     []map[string]any
@@ -1982,6 +1983,13 @@ func (c *openAIWSCaptureConn) WriteJSON(ctx context.Context, value any) error {
 			c.writes = append(c.writes, cloneMapStringAny(parsed))
 		}
 	}
+	if c.turnWrites != nil && c.lastWrite["type"] == "response.create" {
+		select {
+		case c.turnWrites <- struct{}{}:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
 	return nil
 }
 
@@ -2006,6 +2014,13 @@ func (c *openAIWSCaptureConn) ReadMessage(ctx context.Context) ([]byte, error) {
 	event := c.events[0]
 	c.events = c.events[1:]
 	c.mu.Unlock()
+	if c.turnWrites != nil && gjson.GetBytes(event, "type").String() == "response.created" {
+		select {
+		case <-c.turnWrites:
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
+	}
 	if delay > 0 {
 		timer := time.NewTimer(delay)
 		defer timer.Stop()

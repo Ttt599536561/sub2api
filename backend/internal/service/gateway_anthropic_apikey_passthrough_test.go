@@ -1287,7 +1287,7 @@ func TestExtractAnthropicSSEDataLine(t *testing.T) {
 
 func TestGatewayService_ParseSSEUsagePassthrough_MessageStartFallbacks(t *testing.T) {
 	usage := &ClaudeUsage{}
-	data := `{"type":"message_start","message":{"usage":{"input_tokens":12,"cache_creation_input_tokens":0,"cache_read_input_tokens":0,"cached_tokens":9,"cache_creation":{"ephemeral_5m_input_tokens":3,"ephemeral_1h_input_tokens":4}}}}`
+	data := `{"type":"message_start","message":{"usage":{"input_tokens":12,"cache_read_input_tokens":0,"cached_tokens":9,"cache_creation_input_tokens":0,"cache_creation":{"ephemeral_5m_input_tokens":3,"ephemeral_1h_input_tokens":4}}}}`
 
 	parseSSEUsagePassthrough(data, usage)
 
@@ -1341,6 +1341,75 @@ func TestGatewayService_ParseSSEUsagePassthrough_FallbackFromUsageNode(t *testin
 	require.Equal(t, 3, usage.CacheCreationInputTokens)
 }
 
+func TestGatewayService_ParseSSEUsagePassthrough_OtherEventCacheCreation(t *testing.T) {
+	tests := []struct {
+		name          string
+		start         string
+		snapshots     []string
+		wantAggregate int
+	}{
+		{
+			name:          "omitted aggregate merges partial TTL snapshots",
+			snapshots:     []string{`{"cache_creation":{"ephemeral_5m_input_tokens":2}}`, `{"cache_creation":{"ephemeral_5m_input_tokens":null,"ephemeral_1h_input_tokens":1}}`},
+			wantAggregate: 3,
+		},
+		{
+			name:          "null aggregate falls back to TTL",
+			snapshots:     []string{`{"cache_creation_input_tokens":null,"cache_creation":{"ephemeral_5m_input_tokens":2,"ephemeral_1h_input_tokens":1}}`},
+			wantAggregate: 3,
+		},
+		{
+			name:          "explicit zero retains raw TTL",
+			snapshots:     []string{`{"cache_creation_input_tokens":0,"cache_creation":{"ephemeral_5m_input_tokens":2,"ephemeral_1h_input_tokens":1}}`},
+			wantAggregate: 3,
+		},
+		{
+			name:          "previous explicit aggregate survives null",
+			start:         `{"cache_creation_input_tokens":9}`,
+			snapshots:     []string{`{"cache_creation_input_tokens":null,"cache_creation":{"ephemeral_5m_input_tokens":2,"ephemeral_1h_input_tokens":1}}`},
+			wantAggregate: 9,
+		},
+		{
+			name:          "previous explicit zero survives omitted aggregate",
+			start:         `{"cache_creation_input_tokens":0}`,
+			snapshots:     []string{`{"cache_creation":{"ephemeral_5m_input_tokens":2,"ephemeral_1h_input_tokens":1}}`},
+			wantAggregate: 3,
+		},
+		{
+			name:          "explicit zero preserves previous aggregate",
+			start:         `{"cache_creation_input_tokens":9}`,
+			snapshots:     []string{`{"cache_creation_input_tokens":0,"cache_creation":{"ephemeral_5m_input_tokens":2,"ephemeral_1h_input_tokens":1}}`},
+			wantAggregate: 9,
+		},
+	}
+	for _, test := range tests {
+		for _, location := range []string{"usage", "message.usage", "null usage with message.usage"} {
+			t.Run(test.name+"/"+location, func(t *testing.T) {
+				usage := &ClaudeUsage{}
+				if test.start != "" {
+					parseSSEUsagePassthrough(`{"type":"message_start","message":{"usage":`+test.start+`}}`, usage)
+				}
+				for _, snapshot := range test.snapshots {
+					data := `{"type":"content_block_delta","usage":` + snapshot + `}`
+					switch location {
+					case "message.usage":
+						data = `{"type":"content_block_delta","message":{"usage":` + snapshot + `}}`
+					case "null usage with message.usage":
+						data = `{"type":"content_block_delta","usage":null,"message":{"usage":` + snapshot + `}}`
+					}
+					parseSSEUsagePassthrough(data, usage)
+					previous := *usage
+					parseSSEUsagePassthrough(data, usage)
+					require.Equal(t, previous, *usage, "repeated cumulative snapshots must be idempotent")
+				}
+				require.Equal(t, test.wantAggregate, usage.CacheCreationInputTokens)
+				require.Equal(t, 2, usage.CacheCreation5mTokens)
+				require.Equal(t, 1, usage.CacheCreation1hTokens)
+			})
+		}
+	}
+}
+
 func TestParseClaudeUsageFromResponseBody(t *testing.T) {
 	t.Run("empty or missing usage", func(t *testing.T) {
 		got := parseClaudeUsageFromResponseBody(nil)
@@ -1353,7 +1422,7 @@ func TestParseClaudeUsageFromResponseBody(t *testing.T) {
 	})
 
 	t.Run("parse all usage fields and fallback", func(t *testing.T) {
-		body := []byte(`{"usage":{"input_tokens":21,"output_tokens":34,"cache_creation_input_tokens":0,"cache_read_input_tokens":0,"cached_tokens":13,"cache_creation":{"ephemeral_5m_input_tokens":5,"ephemeral_1h_input_tokens":8}}}`)
+		body := []byte(`{"usage":{"input_tokens":21,"output_tokens":34,"cache_read_input_tokens":0,"cached_tokens":13,"cache_creation_input_tokens":0,"cache_creation":{"ephemeral_5m_input_tokens":5,"ephemeral_1h_input_tokens":8}}}`)
 		got := parseClaudeUsageFromResponseBody(body)
 		require.Equal(t, 21, got.InputTokens)
 		require.Equal(t, 34, got.OutputTokens)
@@ -1898,7 +1967,7 @@ func TestSonnet55BedrockCCCompatTransformsBeforeValidation(t *testing.T) {
 			rec := httptest.NewRecorder()
 			c, _ := gin.CreateTestContext(rec)
 			c.Request = httptest.NewRequest(http.MethodPost, "/v1/messages", nil)
-			converted := svc.ApplyBedrockCCCompat(c, body, "claude-sonnet-5-5", account, &groupID)
+			converted, _ := svc.ApplyBedrockCCCompat(c.Request, body, "claude-sonnet-5-5", account, &groupID)
 			require.Equal(t, tc.expectedType, gjson.GetBytes(converted, "thinking.type").String())
 			if tc.name == "enabled" {
 				require.False(t, gjson.GetBytes(converted, "thinking.budget_tokens").Exists())
@@ -1916,4 +1985,31 @@ func TestSonnet55BedrockCCCompatTransformsBeforeValidation(t *testing.T) {
 			require.Equal(t, "low", gjson.GetBytes(prepared, "output_config.effort").String())
 		})
 	}
+}
+
+func TestBedrockCCCompatRetryKeepsOriginalBetaHeader(t *testing.T) {
+	groupID, fallbackGroupID := int64(55), int64(56)
+	channels := &ChannelService{}
+	channels.cache.Store(&channelCache{loadedAt: time.Now(), channelByGroupID: map[int64]*Channel{
+		groupID:         {Status: StatusActive, FeaturesConfig: map[string]any{featureKeyBedrockCCCompat: true}},
+		fallbackGroupID: {Status: StatusActive},
+	}})
+	svc := &GatewayService{channelService: channels}
+	request := httptest.NewRequest(http.MethodPost, "/v1/messages", nil)
+	request.Header.Add("Anthropic-Beta", "context-1m-2025-08-07")
+	request.Header.Add("Anthropic-Beta", "client-only-beta")
+	body := []byte(`{"model":"alias","tools":[{"type":"tool_search_tool_regex_20251119","name":"search"}],"messages":[]}`)
+	account := func(model string) *Account {
+		return &Account{Platform: PlatformAnthropic, Type: AccountTypeBedrock, Credentials: map[string]any{
+			"model_mapping": map[string]any{"alias": model},
+		}}
+	}
+	_, first := svc.ApplyBedrockCCCompat(request, body, "alias", account("claude-sonnet-4-5"), &groupID)
+	require.Contains(t, first.Header.Get("Anthropic-Beta"), "tool-search-tool-2025-10-19")
+	require.NotContains(t, first.Header.Get("Anthropic-Beta"), "client-only-beta")
+	_, second := svc.ApplyBedrockCCCompat(request, body, "alias", account("claude-haiku-4-5"), &groupID)
+	require.Equal(t, "context-1m-2025-08-07", second.Header.Get("Anthropic-Beta"))
+	direct := &Account{Platform: PlatformAnthropic, Type: AccountTypeAPIKey}
+	_, retry := svc.ApplyBedrockCCCompat(request, body, "claude-opus-4-6", direct, &fallbackGroupID)
+	require.Equal(t, []string{"context-1m-2025-08-07", "client-only-beta"}, retry.Header.Values("Anthropic-Beta"))
 }

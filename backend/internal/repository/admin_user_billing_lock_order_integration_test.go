@@ -39,7 +39,7 @@ func (r *adminDeletionPausedKeyRepository) DeleteWithAudit(ctx context.Context, 
 }
 func adminDeletionTestService(client *dbent.Client, userRepo service.UserRepository, keyRepo service.APIKeyRepository) service.AdminService {
 	return service.NewAdminService(nil, userRepo, nil, nil, nil, keyRepo,
-		nil, nil, nil, nil, nil, nil, nil, client, nil, nil, nil, nil, nil, nil, nil, nil, nil)
+		nil, nil, nil, nil, nil, nil, nil, client, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
 }
 
 func TestAdminDeleteUserSerializesWithBalanceBilling(t *testing.T) {

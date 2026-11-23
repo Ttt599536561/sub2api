@@ -18,12 +18,12 @@ import (
 )
 
 func TestGroupUltrafastImageReservationRequiresKnownSafeSnapshot(t *testing.T) {
-	imageAccount := Account{ID: 9911, Platform: PlatformOpenAI, Type: AccountTypeAPIKey}
-	imageMapped := Account{ID: 9912, Platform: PlatformOpenAI, Type: AccountTypeAPIKey,
+	imageAccount := Account{ID: 9911, Platform: PlatformOpenAI, Status: StatusActive, Schedulable: true, Type: AccountTypeAPIKey}
+	imageMapped := Account{ID: 9912, Platform: PlatformOpenAI, Status: StatusActive, Schedulable: true, Type: AccountTypeAPIKey,
 		Credentials: map[string]any{"model_mapping": map[string]any{"gpt-image-2": "gpt-image-1"}}}
-	rawChat := Account{Platform: PlatformOpenAI, Type: AccountTypeAPIKey, Extra: map[string]any{"openai_responses_supported": false}}
-	passthrough := Account{Platform: PlatformOpenAI, Type: AccountTypeAPIKey, Extra: map[string]any{"openai_passthrough": true}}
-	textMapped := Account{ID: 9913, Platform: PlatformOpenAI, Type: AccountTypeAPIKey,
+	rawChat := Account{Platform: PlatformOpenAI, Status: StatusActive, Schedulable: true, Type: AccountTypeAPIKey, Extra: map[string]any{"openai_responses_supported": false}}
+	passthrough := Account{Platform: PlatformOpenAI, Status: StatusActive, Schedulable: true, Type: AccountTypeAPIKey, Extra: map[string]any{"openai_passthrough": true}}
+	textMapped := Account{ID: 9913, Platform: PlatformOpenAI, Status: StatusActive, Schedulable: true, Type: AccountTypeAPIKey,
 		Credentials: map[string]any{"model_mapping": map[string]any{"gpt-image-*": "gpt-5.4"}}}
 	for _, tc := range []struct {
 		name                           string
@@ -99,7 +99,7 @@ func TestGroupUltrafastImageReservationStrippedOrRemapped(t *testing.T) {
 			group := &Group{ID: 9991, Platform: PlatformOpenAI, Hydrated: true, Status: StatusActive, RateMultiplier: 0.5, ForceOpenAIUltrafast: true, AllowImageGeneration: true, ModelPricing: []ChannelModelPricing{{Models: []string{tc.model, "gpt-5.4"}, BillingMode: BillingModePerRequest, PerRequestPrice: &price}}}
 			user := &User{ID: 9992}
 			key := &APIKey{ID: 9993, GroupID: &group.ID, Group: group, User: user}
-			account := &Account{ID: 9994, Platform: PlatformOpenAI, Type: AccountTypeAPIKey, Credentials: map[string]any{"api_key": "sk-test", "base_url": "https://example.com"}, Extra: map[string]any{"openai_responses_supported": true}}
+			account := &Account{ID: 9994, Platform: PlatformOpenAI, Status: StatusActive, Schedulable: true, Type: AccountTypeAPIKey, Credentials: map[string]any{"api_key": "sk-test", "base_url": "https://example.com"}, Extra: map[string]any{"openai_responses_supported": true}}
 			if tc.strip {
 				account.Extra[featureKeyCodexImageGenerationExplicitToolPolicy] = codexImageGenerationExplicitToolPolicyStrip
 			}
@@ -162,7 +162,7 @@ func TestGroupUltrafastImageReservationChoiceAndStrip(t *testing.T) {
 			}
 			user := &User{ID: 9992}
 			key := &APIKey{ID: 9993, GroupID: &group.ID, Group: group, User: user}
-			account := &Account{ID: 9994, Platform: PlatformOpenAI, Type: AccountTypeAPIKey, Credentials: map[string]any{"api_key": "sk-test", "base_url": "https://example.com"}, Extra: map[string]any{"openai_responses_supported": true}}
+			account := &Account{ID: 9994, Platform: PlatformOpenAI, Status: StatusActive, Schedulable: true, Type: AccountTypeAPIKey, Credentials: map[string]any{"api_key": "sk-test", "base_url": "https://example.com"}, Extra: map[string]any{"openai_responses_supported": true}}
 			if tc.strip {
 				account.Extra[featureKeyCodexImageGenerationExplicitToolPolicy] = codexImageGenerationExplicitToolPolicyStrip
 			}
@@ -226,7 +226,7 @@ func TestGroupUltrafastImageReservationCandidatePrices(t *testing.T) {
 			key := &APIKey{GroupID: &group.ID, Group: group, User: &User{ID: 9967}}
 			var accounts []Account
 			for i, model := range tc.models {
-				accounts = append(accounts, Account{ID: int64(i + 1), Platform: PlatformOpenAI, Type: AccountTypeAPIKey, Credentials: map[string]any{"model_mapping": map[string]any{requestModel: model}}})
+				accounts = append(accounts, Account{ID: int64(i + 1), Platform: PlatformOpenAI, Status: StatusActive, Schedulable: true, Type: AccountTypeAPIKey, Credentials: map[string]any{"model_mapping": map[string]any{requestModel: model}}})
 			}
 			svc := newInflightEstimateGateway(t, nil)
 			snap := &inflightSnapshotCacheStub{byBucket: map[string][]Account{inflightBucketKey(group.ID, PlatformOpenAI): accounts}}
@@ -269,7 +269,7 @@ func TestGroupUltrafastImageReservationPricePrecedence(t *testing.T) {
 			}
 			cs := newTestChannelService(makeStandardRepo(channel, map[int64]string{group.ID: PlatformOpenAI}))
 			svc := newInflightEstimateGateway(t, cs)
-			snap := &inflightSnapshotCacheStub{byBucket: map[string][]Account{inflightBucketKey(group.ID, PlatformOpenAI): {{ID: 9972, Platform: PlatformOpenAI, Type: AccountTypeAPIKey}}}}
+			snap := &inflightSnapshotCacheStub{byBucket: map[string][]Account{inflightBucketKey(group.ID, PlatformOpenAI): {{ID: 9972, Platform: PlatformOpenAI, Status: StatusActive, Schedulable: true, Type: AccountTypeAPIKey}}}}
 			attachInflightSnapshot(svc, snap)
 			key := &APIKey{GroupID: &group.ID, Group: group, User: &User{ID: 9973}}
 			estimate, priced := svc.EstimateInflightReservation(context.Background(), key, InflightEstimateRequest{Model: model, ImageOnlyRequest: true})

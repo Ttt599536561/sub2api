@@ -61,6 +61,7 @@ func ResponsesToChatCompletionsRequestWithOptions(req *ResponsesRequest, opts *R
 		Stream:              req.Stream,
 		ServiceTier:         req.ServiceTier,
 		ParallelToolCalls:   req.ParallelToolCalls,
+		Stop:                req.Stop,
 	}
 	if req.Reasoning != nil {
 		out.ReasoningEffort = req.Reasoning.Effort
@@ -1537,25 +1538,37 @@ func ChatUsageToResponsesUsage(usage *ChatUsage) *ResponsesUsage {
 		return nil
 	}
 	out := &ResponsesUsage{
-		InputTokens:  usage.PromptTokens,
-		OutputTokens: usage.CompletionTokens,
-		TotalTokens:  usage.TotalTokens,
+		InputTokens:              usage.PromptTokens,
+		OutputTokens:             usage.CompletionTokens,
+		TotalTokens:              usage.TotalTokens,
+		CacheCreationInputTokens: usage.PromptTokensDetails.cacheCreationInputTokens(),
 	}
 	if out.TotalTokens == 0 {
 		out.TotalTokens = out.InputTokens + out.OutputTokens
 	}
-	if usage.PromptTokensDetails != nil && (usage.PromptTokensDetails.CachedTokens > 0 ||
-		usage.PromptTokensDetails.CacheCreationTokens > 0 || usage.PromptTokensDetails.CacheWriteTokens > 0 || len(usage.PromptTokensDetails.CacheWriteTokensDetails) > 0) {
+	if detail := usage.PromptTokensDetails; detail != nil && (detail.CachedTokens > 0 || detail.AudioTokens > 0 ||
+		detail.CacheCreationTokens > 0 || detail.CacheWriteTokens > 0 || len(detail.CacheWriteTokensDetails) > 0) {
 		out.InputTokensDetails = &ResponsesInputTokensDetails{
-			CachedTokens:            usage.PromptTokensDetails.CachedTokens,
-			CacheCreationTokens:     usage.PromptTokensDetails.CacheCreationTokens,
-			CacheWriteTokens:        usage.PromptTokensDetails.CacheWriteTokens,
-			CacheWriteTokensDetails: usage.PromptTokensDetails.CacheWriteTokensDetails,
+			CachedTokens:            detail.CachedTokens,
+			AudioTokens:             detail.AudioTokens,
+			CacheCreationTokens:     detail.CacheCreationTokens,
+			CacheWriteTokens:        detail.CacheWriteTokens,
+			CacheWriteTokensDetails: detail.CacheWriteTokensDetails,
 		}
-		if usage.PromptTokensDetails.CacheWriteTokens > 0 {
-			out.CacheCreationInputTokens = usage.PromptTokensDetails.CacheWriteTokens
-		} else {
-			out.CacheCreationInputTokens = usage.PromptTokensDetails.CacheCreationTokens
+		if out.CacheCreationInputTokens == 0 {
+			out.InputTokensDetails.CacheCreationTokens = 0
+			out.InputTokensDetails.CacheWriteTokens = 0
+		}
+	}
+	if detail := usage.CompletionTokensDetails; detail != nil {
+		converted := ResponsesOutputTokensDetails{
+			ReasoningTokens:          detail.ReasoningTokens,
+			AudioTokens:              detail.AudioTokens,
+			AcceptedPredictionTokens: detail.AcceptedPredictionTokens,
+			RejectedPredictionTokens: detail.RejectedPredictionTokens,
+		}
+		if converted != (ResponsesOutputTokensDetails{}) {
+			out.OutputTokensDetails = &converted
 		}
 	}
 	return out

@@ -86,6 +86,37 @@ func TestSubscriptionSupplementBillingSplitsAndDeduplicates(t *testing.T) {
 	require.Equal(t, 1, count)
 }
 
+func TestSubscriptionSupplementBatchAllocatesAndReleasesHolds(t *testing.T) {
+	db, start := supplementBillingDB(t)
+	ctx := context.Background()
+	repo := &usageBillingRepository{db: db}
+	client := dbent.NewClient(dbent.Driver(entsql.OpenDB(dialect.Postgres, db)))
+	reservations := &userSubscriptionRepository{client: client}
+	id := int64(3)
+	first := &service.UsageBillingCommand{RequestID: "batch-first", UserID: 1, APIKeyID: 7, SubscriptionID: &id, SubscriptionTermStartsAt: &start, SubscriptionCost: 3, SubscriptionReservationID: "hold"}
+	second := &service.UsageBillingCommand{RequestID: "batch-second", UserID: 1, APIKeyID: 7, SubscriptionID: &id, SubscriptionTermStartsAt: &start, SubscriptionCost: 2}
+	hold := &service.SubscriptionSupplementReservation{ID: "hold", SubscriptionID: id, UserID: 1, GroupID: 2, TermStartsAt: start, AmountUSD: 1, TTL: time.Minute}
+	require.NoError(t, reservations.ReserveSubscriptionSupplement(ctx, hold))
+	out, err := repo.ApplyBatch(ctx, []*service.UsageBillingCommand{first, second})
+	require.NoError(t, err)
+	require.Equal(t, 1.0, out[0].Result.SubscriptionBaseCost)
+	require.Equal(t, 2.0, out[0].Result.SubscriptionSupplementCost)
+	require.Equal(t, 0.0, out[1].Result.SubscriptionBaseCost)
+	require.Equal(t, 2.0, out[1].Result.SubscriptionSupplementCost)
+	// An idempotent retry carries a fresh pre-authorization without a new charge.
+	hold.ID = "retry"
+	require.NoError(t, reservations.ReserveSubscriptionSupplement(ctx, hold))
+	first.SubscriptionReservationID = hold.ID
+	out, err = repo.ApplyBatch(ctx, []*service.UsageBillingCommand{first, second})
+	require.NoError(t, err)
+	require.False(t, out[0].Result.Applied)
+	var open, receipts int
+	require.NoError(t, db.QueryRow("SELECT count(*) FROM user_subscription_supplement_reservations WHERE released_at IS NULL").Scan(&open))
+	require.Zero(t, open)
+	require.NoError(t, db.QueryRow("SELECT count(*) FROM user_subscription_supplement_consumptions").Scan(&receipts))
+	require.Equal(t, 2, receipts)
+}
+
 func TestSubscriptionSupplementBillingLateTermLeavesNewEntitlementUntouched(t *testing.T) {
 	db, start := supplementBillingDB(t)
 	newStart := start.Add(31 * 24 * time.Hour)

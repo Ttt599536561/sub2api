@@ -21,9 +21,9 @@ import (
 // ApplyBedrockCCCompat 应用 Bedrock CC 兼容转换（渠道级模型映射后调用）
 // 清理 body 中 Anthropic API 专有字段、修复 thinking/tool_use ID、过滤 beta token，
 // 同时过滤 HTTP header 中的 anthropic-beta（防止 Passthrough 路径透传不支持的 token）。
-func (s *GatewayService) ApplyBedrockCCCompat(c *gin.Context, body []byte, model string, account *Account, groupID *int64) []byte {
-	if !s.isBedrockCCCompatEnabled(c.Request.Context(), account, groupID) {
-		return body
+func (s *GatewayService) ApplyBedrockCCCompat(request *http.Request, body []byte, model string, account *Account, groupID *int64) ([]byte, *http.Request) {
+	if !s.isBedrockCCCompatEnabled(request.Context(), account, groupID) {
+		return body, request
 	}
 	if resolved, ok := ResolveBedrockModelID(account, model); ok {
 		model = resolved
@@ -33,14 +33,17 @@ func (s *GatewayService) ApplyBedrockCCCompat(c *gin.Context, body []byte, model
 	body = sanitizeBedrockToolUseIDs(body)
 	body = sanitizeBedrockCCBetaTokens(body, model)
 	// 过滤 HTTP header 中的 anthropic-beta，只保留 Bedrock 支持的 token
-	if betaHeader := c.GetHeader("anthropic-beta"); betaHeader != "" {
+	if betaHeader := strings.Join(request.Header.Values("Anthropic-Beta"), ","); betaHeader != "" {
+		// The next account may use a different model or an ordinary Anthropic endpoint.
+		request = request.WithContext(request.Context())
+		request.Header = request.Header.Clone()
 		if filtered := ResolveBedrockBetaTokens(betaHeader, body, model); len(filtered) > 0 {
-			c.Request.Header.Set("anthropic-beta", strings.Join(filtered, ", "))
+			request.Header.Set("anthropic-beta", strings.Join(filtered, ", "))
 		} else {
-			c.Request.Header.Del("anthropic-beta")
+			request.Header.Del("anthropic-beta")
 		}
 	}
-	return body
+	return body, request
 }
 
 // isBedrockCCCompatEnabled 检查渠道是否启用了 Bedrock CC 兼容模式
@@ -130,9 +133,7 @@ func (s *GatewayService) forwardBedrock(
 
 	// 错误/failover 处理
 	if resp.StatusCode >= 400 {
-		// 账号状态按模型隔离时用调度器的模型键（账号映射后的模型名），不是发往上游的 Bedrock 模型 ID；
-		// 两者不一致会让模型级冷却写到调度器不会读取的键上。
-		return s.handleBedrockUpstreamErrors(ctx, resp, c, account, account.GetMappedModel(reqModel))
+		return s.handleBedrockUpstreamErrors(ctx, resp, c, account, bedrockSchedulingModelKey(ctx, account, reqModel))
 	}
 
 	// Bedrock 分支绕过通用 Forward 成功路径，这里保持上游接受回调语义一致。
@@ -147,6 +148,10 @@ func (s *GatewayService) forwardBedrock(
 	if reqStream {
 		streamResult, err := s.handleBedrockStreamingResponse(ctx, resp, c, account, startTime, reqModel)
 		if err != nil {
+			// 流中断时保留已观测到的 usage 与错误一起返回，handler 照常提交 usage 记录。
+			if partial := partialStreamUsageResult(c, resp, streamResult, reqModel, mappedModel, startTime, err); partial != nil {
+				return partial, err
+			}
 			return nil, err
 		}
 		usage = streamResult.usage
@@ -274,6 +279,16 @@ func (s *GatewayService) handleBedrockUpstreamErrors(
 	account *Account,
 	modelKey string,
 ) (*ForwardResult, error) {
+	// 内容过滤由请求内容决定，换号结果相同：不换号，按普通错误返回客户端。
+	if resp.StatusCode >= http.StatusInternalServerError {
+		respBody, _ := s.readUpstreamErrorBody(resp)
+		_ = resp.Body.Close()
+		resp.Body = io.NopCloser(bytes.NewReader(respBody))
+		if isBedrockContentFilterError(resp.StatusCode, respBody) {
+			return s.handleErrorResponse(ctx, resp, c, account, modelKey)
+		}
+	}
+
 	// retry exhausted + failover
 	if s.shouldRetryUpstreamError(account, resp.StatusCode) {
 		if s.shouldFailoverUpstreamError(resp.StatusCode) {

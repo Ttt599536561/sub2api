@@ -162,7 +162,7 @@ func TestSubscriptionSupplementRejectsInvalidTargetWithoutConsumption(t *testing
 func TestSubscriptionSupplementGenerationWithoutCampaign(t *testing.T) {
 	f := newWelfareRedemptionFixture(t)
 	prepareSupplementFixture(t, f)
-	admin := service.NewAdminService(nil, nil, repository.NewGroupRepository(f.client, f.db).(service.AdminGroupRepository), nil, nil, nil, f.codes, nil, nil, nil, nil, nil, nil, f.client, nil, nil, nil, nil, nil, nil, nil, nil, nil)
+	admin := service.NewAdminService(nil, nil, repository.NewGroupRepository(f.client, f.db).(service.AdminGroupRepository), nil, nil, nil, f.codes, nil, nil, nil, nil, nil, nil, f.client, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
 	amount := 10.0
 	input := &service.GenerateRedeemCodesInput{Count: 2, Type: service.RedeemTypeSubscription, GroupID: &f.group.ID, SubscriptionEffect: service.SubscriptionEffectAddBalance, QuotaAmountUSD: &amount}
 	codes, err := admin.GenerateRedeemCodes(f.ctx, input)

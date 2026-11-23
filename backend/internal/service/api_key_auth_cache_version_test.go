@@ -80,8 +80,9 @@ func TestAPIKeyService_RejectsV25AuthSnapshotBeforeMergedGroupPolicies(t *testin
 
 // v26 also existed independently upstream. v27 includes upstream privacy gates,
 // but neither upstream snapshot carries this fork's Ultrafast policy.
-func TestAPIKeyService_RejectsDivergentV26V27AuthSnapshots(t *testing.T) {
-	for _, version := range []int{26, 27} {
+// v28 existed in both the custom r7 and the upstream 0.2.24 release.
+func TestAPIKeyService_RejectsDivergentV26ThroughV28AuthSnapshots(t *testing.T) {
+	for _, version := range []int{26, 27, 28} {
 		t.Run(fmt.Sprintf("v%d", version), func(t *testing.T) {
 			svc := &APIKeyService{}
 			key, used, err := svc.applyAuthCacheEntry("k-before-v0220-merge", &APIKeyAuthCacheEntry{
