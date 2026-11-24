@@ -66,10 +66,7 @@ func (i Identity) Key() string {
 	return hex.EncodeToString(h[:])
 }
 
-const (
-	ReceiveModeWebhook   = "webhook"
-	ReceiveModeWebSocket = "websocket"
-)
+const ReceiveModeWebhook = "webhook"
 
 func receiveMode(mode string) string {
 	if mode == "" {

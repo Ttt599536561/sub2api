@@ -20,21 +20,11 @@ const flows = [
   () => qqImageAPI.sendEmailCode(), () => qqImageAPI.verifyEmail('123456'), () => qqImageAPI.revoke('1'),
   () => qqImageAPI.orders(), () => qqImageAPI.order('1'), () => qqImageAPI.image('1'), () => qqImageAPI.cancel('1'),
   () => adminQQImageAPI.config(), () => adminQQImageAPI.orders(), () => adminQQImageAPI.grants(),
-  () => adminQQImageAPI.connection(),
   () => adminQQImageAPI.audit(), () => adminQQImageAPI.refund('1', 'approved'), () => adminQQImageAPI.reconcile('1'),
   () => adminQQImageAPI.discovery(), () => adminQQImageAPI.startDiscovery(), () => adminQQImageAPI.closeDiscovery('1'), () => adminQQImageAPI.confirmDiscovery('1'),
   () => adminQQImageAPI.revoke('1', 'approved'), () => adminQQImageAPI.image('1'), () => adminQQImageAPI.release('1', 'confirmed failure')
 ]
 describe('QQ private requests', () => {
-  it('reads connection status through an authenticated cancellable GET with no payload', async () => {
-    const signal = new AbortController().signal
-    await adminQQImageAPI.connection(signal)
-    expect(requests[0].url).toBe('/admin/qq-image/connection')
-    expect(requests[0].method).toBe('get')
-    expect(requests[0].signal).toBe(signal)
-    expect(requests[0].data).toBeUndefined()
-    expect(requests[0].headers.get('Authorization')).toBe('Bearer fixture-token')
-  })
   it.each(flows.map((start, i) => ({ start, i })))('rejects operation $i before dispatch after a login change', async ({ start }) => {
     const result = start(); const rejected = expect(result).rejects.toSatisfy(axios.isCancel)
     login(2, 'B'); await rejected; expect(requests).toHaveLength(0)
@@ -61,7 +51,7 @@ describe('QQ private requests', () => {
     expect(requests[0].responseType).toBe('blob')
     expect(requests[0].headers.get('Authorization')).toBe('Bearer fixture-token')
   })
-  it.each([() => qqImageAPI.orders(), () => adminQQImageAPI.connection(), () => adminQQImageAPI.discovery(), () => adminQQImageAPI.startDiscovery(), () => adminQQImageAPI.confirmDiscovery('1')])('rejects late private data from a replaced session %#', async start => {
+  it.each([() => qqImageAPI.orders(), () => adminQQImageAPI.discovery(), () => adminQQImageAPI.startDiscovery(), () => adminQQImageAPI.confirmDiscovery('1')])('rejects late private data from a replaced session %#', async start => {
     let finish!: () => void, dispatched!: () => void
     const ready = new Promise<void>(resolve => { dispatched = resolve })
     apiClient.defaults.adapter = config => { dispatched(); return new Promise(resolve => { finish = () => resolve({ data: [], status: 200, statusText: 'OK', headers: {}, config }) }) }

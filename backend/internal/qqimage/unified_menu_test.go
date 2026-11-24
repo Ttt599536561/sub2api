@@ -13,10 +13,9 @@ func TestExternalGeneralHelpLeavesOneMenuOwner(t *testing.T) {
 	for _, command := range []string{"", "   ", "/帮助", "/菜单", "/智商 月卡分组"} {
 		t.Run(command, func(t *testing.T) {
 			s := &commandStore{config: qqConfig()}
-			s.config.ReceiveMode = ReceiveModeWebSocket
 			sender := &commandSender{}
 			h := NewQQCommandHandlerWithOptions(s, sender, QQCommandOptions{ExternalGeneralHelp: true})
-			if e := h.HandleGatewayEvent(context.Background(), s.config.ID, s.config.AppID, commandPayload(command)); e != nil {
+			if e := handleSignedTestWebhook(t, h, "secret", commandPayload(command)); e != nil {
 				t.Fatal(e)
 			}
 			if len(sender.messages) != 0 || len(s.hashes) != 0 || s.orders+s.binding+s.confirm+s.redelivery != 0 {
@@ -28,12 +27,11 @@ func TestExternalGeneralHelpLeavesOneMenuOwner(t *testing.T) {
 func TestImageHelpDoesNotNeedProviderCredentials(t *testing.T) {
 	s := &discoveryCommandStore{commandStore: commandStore{config: qqConfig()}}
 	s.config.Enabled = false
-	s.config.ReceiveMode = ReceiveModeWebSocket
 	sender := &commandSender{result: QQSendResult{Status: "unknown"}}
 	h := NewQQCommandHandlerWithOptions(s, sender, QQCommandOptions{ExternalGeneralHelp: true})
 	raw := commandPayload("/生图帮助")
 	for i := 0; i < 2; i++ {
-		if e := h.HandleGatewayEvent(context.Background(), s.config.ID, s.config.AppID, raw); e != nil {
+		if e := handleSignedTestWebhook(t, h, "secret", raw); e != nil {
 			t.Fatal(e)
 		}
 	}
@@ -58,17 +56,16 @@ func TestStandaloneGeneralHelpRemainsCompatible(t *testing.T) {
 }
 func TestExternalHelpDoesNotRelaxImageCommandAdmission(t *testing.T) {
 	s := &discoveryCommandStore{commandStore: commandStore{config: qqConfig()}}
-	s.config.ReceiveMode = ReceiveModeWebSocket
 	sender := &commandSender{}
 	h := NewQQCommandHandlerWithOptions(s, sender, QQCommandOptions{ExternalGeneralHelp: true})
-	if e := h.HandleGatewayEvent(context.Background(), s.config.ID, s.config.AppID, commandPayload("/生图 cat")); !errors.Is(e, ErrEncryptionUnavailable) {
+	if e := handleSignedTestWebhook(t, h, "secret", commandPayload("/生图 cat")); !errors.Is(e, ErrEncryptionUnavailable) {
 		t.Fatalf("generation credential gate removed: %v", e)
 	}
 	if s.runtimeCalls != 1 || s.orders != 0 || len(sender.messages) != 0 {
 		t.Fatal("generation escaped original gate")
 	}
 	s.config.AllowedGroups = nil
-	if e := h.HandleGatewayEvent(context.Background(), s.config.ID, s.config.AppID, commandPayload("/生图帮助")); !errors.Is(e, ErrForbidden) {
+	if e := handleSignedTestWebhook(t, h, "secret", commandPayload("/生图帮助")); !errors.Is(e, ErrForbidden) {
 		t.Fatalf("unapproved group replied: %v", e)
 	}
 	if len(sender.messages) != 0 {
@@ -81,10 +78,9 @@ func TestImageHelpOmitsUnsetModelAndPrice(t *testing.T) {
 	s.config.Size = ""
 	s.config.Price = ""
 	s.config.Enabled = false
-	s.config.ReceiveMode = ReceiveModeWebSocket
 	sender := &commandSender{}
 	h := NewQQCommandHandlerWithOptions(s, sender, QQCommandOptions{ExternalGeneralHelp: true})
-	if e := h.HandleGatewayEvent(context.Background(), s.config.ID, s.config.AppID, commandPayload("/生图帮助")); e != nil {
+	if e := handleSignedTestWebhook(t, h, "secret", commandPayload("/生图帮助")); e != nil {
 		t.Fatal(e)
 	}
 	if len(sender.messages) != 1 || strings.Contains(sender.messages[0], "US$") || strings.Contains(sender.messages[0], "固定模型 ") {

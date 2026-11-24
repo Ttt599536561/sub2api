@@ -158,11 +158,6 @@ func (s *Store) RecordDiscovery(ctx context.Context, configID int64, event *QQEv
 		return ErrInvalid
 	}
 	return s.transaction(ctx, func(tx *sql.Tx, now time.Time) error {
-		guarded := context.WithValue(ctx, storeTxKey{}, storeTransaction{store: s, tx: tx})
-		if err := checkGatewayGuard(guarded); err != nil {
-			return err
-		}
-
 		if age := now.Sub(event.CreatedAt); age < -time.Minute || age >= 5*time.Minute {
 			return ErrExpired
 		}

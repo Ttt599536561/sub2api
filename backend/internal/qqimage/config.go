@@ -101,7 +101,12 @@ func (s *Store) configFrom(row interface{ Scan(...any) error }) (*Config, []byte
 	if e := json.Unmarshal(b, &c); e != nil {
 		return nil, nil, nil, e
 	}
-	c.ReceiveMode = receiveMode(c.ReceiveMode)
+	// Historical WebSocket configurations use signed HTTP callbacks on read.
+	if c.ReceiveMode == "websocket" {
+		c.ReceiveMode = ReceiveModeWebhook
+	} else {
+		c.ReceiveMode = receiveMode(c.ReceiveMode)
+	}
 	c.ID = id
 	c.BotSecret = ""
 	c.APIKey = ""
@@ -170,7 +175,7 @@ func (s *Store) DeliveryConfig(ctx context.Context, id int64) (*RuntimeConfig, e
 
 func (s *Store) SaveConfig(ctx context.Context, c Config, actorID int64) (*Config, error) {
 	c.ReceiveMode = receiveMode(c.ReceiveMode)
-	if c.ReceiveMode != ReceiveModeWebhook && c.ReceiveMode != ReceiveModeWebSocket {
+	if c.ReceiveMode != ReceiveModeWebhook {
 		return nil, invalidConfig("receive_mode", "invalid_format")
 	}
 	c.AppID = strings.TrimSpace(c.AppID)

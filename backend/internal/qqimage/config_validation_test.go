@@ -45,6 +45,7 @@ func TestConfigValidationStaticFields(t *testing.T) {
 		change       func(*Config)
 	}{
 		{"receive_mode", "invalid_format", func(c *Config) { c.ReceiveMode = "wrong" }},
+		{"receive_mode", "invalid_format", func(c *Config) { c.ReceiveMode = "websocket" }},
 		{"app_id", "invalid_format", func(c *Config) { c.AppID = "two words" }},
 		{"app_id", "invalid_format", func(c *Config) { c.AppID = strings.Repeat("界", 86) }},
 		{"bot_secret", "invalid_format", func(c *Config) { c.BotSecret = strings.Repeat("x", 4097) }},

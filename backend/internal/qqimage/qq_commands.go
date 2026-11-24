@@ -68,62 +68,20 @@ func (h *QQCommandHandler) HandleWebhook(ctx context.Context, headers http.Heade
 		return challenge, nil
 	}
 	id, appID := runtime.ID, runtime.AppID
-	return h.handleEvent(ctx, runtime, event, func(ctx context.Context) error { return h.currentConnectionConfig(ctx, id, appID, ReceiveModeWebhook) })
+	return h.handleEvent(ctx, runtime, event, func(ctx context.Context) error { return h.currentConnectionConfig(ctx, id, appID) })
 }
 
-// HandleGatewayEvent accepts frames only from our authenticated official WSS
-// receiver. It is never exposed as an HTTP endpoint or signature bypass.
-func (h *QQCommandHandler) HandleGatewayEvent(ctx context.Context, configID int64, appID string, raw []byte) error {
-	if err := checkGatewayGuard(ctx); err != nil {
-		return err
-	}
-	runtime, err := h.store.BotRuntimeConfig(ctx)
-	if err != nil {
-		return err
-	}
-	if receiveMode(runtime.ReceiveMode) != ReceiveModeWebSocket {
-		return ErrDisabled
-	}
-	if runtime.ID != configID || runtime.AppID != appID {
-		return ErrConflict
-	}
-	event, err := parseQQGroupEvent(appID, raw, true)
-	if err != nil {
-		return err
-	}
-	_, err = h.handleEvent(ctx, runtime, event, func(ctx context.Context) error {
-		if err := h.currentConnectionConfig(ctx, configID, appID, ReceiveModeWebSocket); err != nil {
-			return err
-		}
-		return checkGatewayGuard(ctx)
-	})
-	return err
-}
-func (h *QQCommandHandler) currentConnectionConfig(ctx context.Context, id int64, appID, mode string) error {
+func (h *QQCommandHandler) currentConnectionConfig(ctx context.Context, id int64, appID string) error {
 	current, err := h.store.BotRuntimeConfig(ctx)
 	if err != nil {
 		return err
 	}
-	if current.ID != id || current.AppID != appID || receiveMode(current.ReceiveMode) != mode {
+	if current.ID != id || current.AppID != appID || receiveMode(current.ReceiveMode) != ReceiveModeWebhook {
 		return ErrConflict
 	}
 	return nil
 }
 
-type gatewayGuardKey struct{}
-
-func withGatewayGuard(ctx context.Context, guard func(context.Context) error) context.Context {
-	return context.WithValue(ctx, gatewayGuardKey{}, guard)
-}
-func checkGatewayGuard(ctx context.Context) error {
-	if err := ctx.Err(); err != nil {
-		return err
-	}
-	if guard, ok := ctx.Value(gatewayGuardKey{}).(func(context.Context) error); ok {
-		return guard(ctx)
-	}
-	return nil
-}
 func (h *QQCommandHandler) handleEvent(ctx context.Context, runtime *RuntimeConfig, event *QQEvent, admission func(context.Context) error) (*QQChallenge, error) {
 	age := time.Since(event.CreatedAt)
 	if age < -time.Minute || age >= 5*time.Minute {

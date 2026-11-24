@@ -82,6 +82,12 @@ func (s *commandSender) SendText(_ context.Context, c *RuntimeConfig, e *QQEvent
 	}
 	return QQSendResult{Status: "sent"}
 }
+func handleSignedTestWebhook(t *testing.T, handler *QQCommandHandler, secret string, payload []byte) error {
+	t.Helper()
+	_, err := handler.HandleWebhook(context.Background(), signQQ(t, secret, strconv.FormatInt(time.Now().Unix(), 10), payload), payload)
+	return err
+}
+
 func commandPayload(command string) []byte {
 	return []byte(fmt.Sprintf(`{"op":0,"id":"event1","t":"GROUP_AT_MESSAGE_CREATE","d":{"id":"message1","group_openid":"group-1","author":{"member_openid":"member1","user_id":"victim"},"content":%q,"timestamp":%q}}`, command, time.Now().Format(time.RFC3339)))
 }

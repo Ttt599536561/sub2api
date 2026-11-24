@@ -14,17 +14,12 @@ export interface QQOrder {
   website_status?: 'available' | 'pending' | 'expired'
   currency?: 'USD'; provider_cost?: string | null; provider_currency?: string | null; provider_cost_status?: 'unknown'
 }
-export type QQReceiveMode = 'webhook' | 'websocket'
-export interface QQConnection {
-  state: string; last_connected_at?: string; last_heartbeat_at?: string; last_event_at?: string; error_code?: string
-}
 export interface QQConfig {
   enabled: boolean; app_id: string; api_url: string; model: string; size: string; price: string; allowed_groups: string[]
   public_base_url: string; user_daily_limit: number; user_daily_amount: string; group_concurrency: number
   global_concurrency: number; queue_limit: number; queue_timeout_seconds: number; deadline_seconds: number
   retention_days: number; prompt_max_chars: number; bot_secret_configured: boolean; api_key_configured: boolean; encryption_available: boolean
   image_hosts?: string[]
-  receive_mode?: QQReceiveMode
 }
 export type QQConfigInput = Omit<QQConfig, 'bot_secret_configured' | 'api_key_configured' | 'encryption_available'> & { bot_secret?: string; api_key?: string; clear_bot_secret?: boolean; clear_api_key?: boolean }
 export interface QQDiscoveryCandidate { group_openid: string; event_id: string; received_at: string }
@@ -92,7 +87,6 @@ export const adminQQImageAPI = {
   replyTemplateRevisions: (signal?: AbortSignal) => request<QQReplyRevision[]>('get', `${admin}/reply-templates/revisions`, undefined, signal),
   replyTemplateRevision: (revision: number, signal?: AbortSignal) => request<QQReplyRevisionDetail>('get', `${admin}/reply-templates/revisions/${id(String(revision))}`, undefined, signal),
   rollbackReplyTemplates: (data: { expected_revision: number; revision: number }, signal?: AbortSignal) => request<QQReplyTemplates>('post', `${admin}/reply-templates/rollback`, data, signal),
-  connection: (signal?: AbortSignal) => request<QQConnection>('get', `${admin}/connection`, undefined, signal),
   discovery: (signal?: AbortSignal) => request<QQDiscovery | null>('get', `${admin}/discovery`, undefined, signal),
   startDiscovery: (signal?: AbortSignal) => request<QQDiscoveryStart>('post', `${admin}/discovery/start`, {}, signal),
   closeDiscovery: (value: string, signal?: AbortSignal) => request<QQDiscovery>('post', `${admin}/discovery/${id(value)}/close`, {}, signal),

@@ -49,12 +49,11 @@ type qqImageEmail interface {
 	VerifyOAuthEmailCode(context.Context, string, string) error
 }
 type QQImageHandler struct {
-	connection func() qqimage.GatewayStatus
-	store      qqImageStore
-	email      qqImageEmail
-	settings   *service.SettingService
-	cfg        *config.Config
-	webhook    func(context.Context, http.Header, []byte) (any, error)
+	store    qqImageStore
+	email    qqImageEmail
+	settings *service.SettingService
+	cfg      *config.Config
+	webhook  func(context.Context, http.Header, []byte) (any, error)
 }
 
 func (h *QQImageHandler) user(c *gin.Context) (int64, bool) {
@@ -319,18 +318,6 @@ func (h *QQImageHandler) Image(c *gin.Context) {
 	qqImageArtifact(c, result, err)
 }
 
-// AdminConnection returns only controlled operational state; credentials and
-// gateway session identifiers never cross this authenticated admin endpoint.
-func (h *QQImageHandler) AdminConnection(c *gin.Context) {
-	if _, ok := h.admin(c); !ok {
-		return
-	}
-	status := qqimage.GatewayStatus{State: "disabled"}
-	if h.connection != nil {
-		status = h.connection()
-	}
-	response.Success(c, status)
-}
 func (h *QQImageHandler) AdminConfig(c *gin.Context) {
 	if _, ok := h.admin(c); !ok {
 		return

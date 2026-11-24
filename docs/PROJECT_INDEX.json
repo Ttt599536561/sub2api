@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "purpose": "AI task routing; identities and boundaries, not live deployment state",
-  "verified_local_on": "2026-10-27",
+  "verified_local_on": "2026-11-24",
   "timezone": "Asia/Shanghai",
   "canonical_file": "E:/sub2二次开发项目/docs/PROJECT_INDEX.json",
   "startup_rules": "E:/sub2二次开发项目/docs/AI_START_HERE.md",
@@ -125,7 +125,7 @@
         "生图订单",
         "调用生图上游",
         "图片保存/投递/重发",
-        "生图侧QQ连接",
+        "生图侧 QQ 签名 HTTP 回调 POST /api/v1/qq-image/events 与 HTTP 发件",
         "回复模板管理与发布"
       ],
       "deployment_unit": "same Sub2 application; not an independent repository or Cloudflare Worker",
@@ -286,7 +286,7 @@
         "qq-menu-iq",
         "qq-image"
       ],
-      "meaning": "共享用户可见机器人，两套独立接收与处理程序；一个在线不证明另一个在线"
+      "meaning": "共享用户可见机器人；qq-image 接收签名 HTTP 回调，qq-menu-iq 独立维护菜单侧连接"
     },
     {
       "from": "qq-menu-iq",

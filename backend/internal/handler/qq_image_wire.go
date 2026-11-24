@@ -29,20 +29,11 @@ func ProvideQQImageRuntime(db *sql.DB, balance *service.BillingCacheService, key
 	store := qqimage.NewStore(db, key, qqimage.StoreOptions{DisableNewAdmissions: cfg != nil && cfg.RunMode == config.RunModeSimple})
 	client := qqimage.NewQQClient()
 	runtime := &QQImageRuntime{core: store, commands: qqimage.NewQQCommandHandlerWithOptions(store, client, qqimage.QQCommandOptions{ExternalGeneralHelp: externalHelp}), worker: qqimage.NewWorker(store, qqimage.NewImageProvider(), client), outbox: store, balance: balance, auth: keys}
-	if cfg == nil || cfg.RunMode != config.RunModeSimple {
-		runtime.gateway = qqimage.NewGatewaySupervisor(store, client, runtime.commands)
-	}
 	runtime.Start()
 	return runtime
 }
 func ProvideQQImageHandler(runtime *QQImageRuntime, auth *service.AuthService, settings *service.SettingService, cfg *config.Config) *QQImageHandler {
 	h := &QQImageHandler{store: runtime.core, email: auth, settings: settings, cfg: cfg}
-	h.connection = func() qqimage.GatewayStatus {
-		if runtime.gateway == nil {
-			return qqimage.GatewayStatus{State: "disabled"}
-		}
-		return runtime.gateway.Status()
-	}
 	h.webhook = func(ctx context.Context, headers http.Header, raw []byte) (any, error) {
 		challenge, err := runtime.commands.HandleWebhook(ctx, headers, raw)
 		if errors.Is(err, qqimage.ErrQQUnsupportedEvent) {

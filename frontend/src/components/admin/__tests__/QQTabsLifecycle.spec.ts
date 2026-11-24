@@ -10,7 +10,7 @@ vi.mock('@/components/layout/AppLayout.vue', () => ({ default: { template: '<div
 vi.mock('@/components/admin/welfare/WelfareStatisticsPanel.vue', () => ({ default: { template: '<div />' } }))
 const locale = ref('zh')
 vi.mock('vue-i18n', () => ({ useI18n: () => ({ locale, t: (key: string) => key, te: () => true }) }))
-vi.mock('@/api/qqImage', () => ({ adminQQImageAPI: { connection: vi.fn(), config: vi.fn(), saveConfig: vi.fn(), orders: vi.fn(), grants: vi.fn(), audit: vi.fn(), discovery: vi.fn(), replyTemplates: vi.fn(), previewReplyTemplate: vi.fn(), saveReplyTemplates: vi.fn() } }))
+vi.mock('@/api/qqImage', () => ({ adminQQImageAPI: { config: vi.fn(), saveConfig: vi.fn(), orders: vi.fn(), grants: vi.fn(), audit: vi.fn(), discovery: vi.fn(), replyTemplates: vi.fn(), previewReplyTemplate: vi.fn(), saveReplyTemplates: vi.fn() } }))
 const auth = reactive({ user: { id: 1, role: 'admin', email: 'fixture@example.test' }, sessionRevision: 'A', isAuthenticated: true })
 vi.mock('@/stores/auth', () => ({ useAuthStore: () => auth }))
 const config = { enabled: false, app_id: 'app1', api_url: 'https://images.example.test/v1', model: 'image-1', size: '1024x1024', price: '0.12000000', allowed_groups: ['group1'], public_base_url: 'https://site.example.test', user_daily_limit: 20, user_daily_amount: '10.00000000', group_concurrency: 2, global_concurrency: 5, queue_limit: 50, queue_timeout_seconds: 300, deadline_seconds: 7200, retention_days: 7, prompt_max_chars: 2000, bot_secret_configured: true, api_key_configured: true, encryption_available: true }
@@ -20,7 +20,6 @@ beforeEach(() => {
   vi.clearAllMocks(); localStorage.clear(); sessionStorage.clear()
   auth.user = { id: 1, role: 'admin', email: 'fixture@example.test' }; auth.sessionRevision = 'A'; auth.isAuthenticated = true
   localStorage.setItem('auth_user', JSON.stringify(auth.user)); localStorage.setItem('auth_session_id', 'A')
-  vi.mocked(adminQQImageAPI.connection).mockResolvedValue({ state: 'webhook' })
   vi.mocked(adminQQImageAPI.discovery).mockResolvedValue(null)
   vi.mocked(adminQQImageAPI.config).mockResolvedValue(structuredClone(config))
   vi.mocked(adminQQImageAPI.orders).mockResolvedValue([])

@@ -6,7 +6,7 @@ export const qqConfigNumberLimits = {
 } as const
 
 const fieldIssues = {
-  request: ['invalid_request'], receive_mode: ['invalid_format'], app_id: ['invalid_format', 'required'],
+  request: ['invalid_request'], app_id: ['invalid_format', 'required'],
   bot_secret: ['invalid_format', 'conflicting_clear', 'missing_credential'], api_key: ['conflicting_clear', 'missing_credential'],
   api_url: ['generation_endpoint', 'invalid_url', 'required'], public_base_url: ['invalid_url', 'required'],
   model: ['required'], size: ['required'], price: ['invalid_amount', 'required'], user_daily_amount: ['invalid_amount', 'required'],
@@ -80,7 +80,6 @@ function validImageHost(host: string): boolean {
 export function validateQQConfigInput(input: QQConfigInput, saved: Pick<QQConfig, 'bot_secret_configured' | 'api_key_configured' | 'encryption_available'>): QQConfigProblem | null {
   const invalid = (field: QQConfigField, issue: QQConfigIssue): QQConfigProblem => ({ field, issue })
   const enabled = input.enabled && !input.clear_bot_secret && !input.clear_api_key
-  if (input.receive_mode && !['webhook', 'websocket'].includes(input.receive_mode)) return invalid('receive_mode', 'invalid_format')
   if (byteLength(input.app_id) > 256 || /[ \t\r\n]/.test(input.app_id)) return invalid('app_id', 'invalid_format')
   if (byteLength(input.bot_secret || '') > 4096) return invalid('bot_secret', 'invalid_format')
   if ((input.image_hosts || []).length > 20) return invalid('image_hosts', 'too_many')

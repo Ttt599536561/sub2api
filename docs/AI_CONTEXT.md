@@ -1,6 +1,6 @@
 # AI上下文卡：sub2api / qq-image
 
-本仓文档核对日期：2026-10-27（外部服务状态未在本次在线核验）。先读 [跨项目路由](AI_START_HERE.md) / [机器索引](PROJECT_INDEX.json)。本卡是定位资料，不是在线状态检查。
+本仓文档核对日期：2026-11-24（外部服务状态未在本次在线核验）。先读 [跨项目路由](AI_START_HERE.md) / [机器索引](PROJECT_INDEX.json)。本卡是定位资料，不是在线状态检查。
 
 ## Identity
 
@@ -25,7 +25,7 @@
 | 任务 | 最短源码入口 |
 | --- | --- |
 | QQ命令、识别、绑定、授权、订单/计费、图片存取与发送 | `backend/internal/qqimage/`，先看 `qq_commands.go` |
-| 生图侧QQ WebSocket、心跳、恢复 | `backend/internal/qqimage/gateway_supervisor.go`、`gateway_client.go`、`gateway.go`；HTTP入口 `backend/internal/handler/qq_image_runtime.go` |
+| 生图侧 QQ 事件接收与验签 | 腾讯向 `POST /api/v1/qq-image/events` 投递；入口在 `backend/internal/handler/qq_image_handler.go`，验签在 `backend/internal/qqimage/qq_verifier.go` |
 | QQ管理/API/媒体 | `backend/internal/server/routes/qq_image.go`；`backend/internal/handler/qq_image*.go` |
 | QQ后台配置、文案编辑 | `frontend/src/views/admin/WelfareSettingsView.vue`；`frontend/src/components/admin/QQImagePanel.vue`、`QQReplyTemplatesPanel.vue`；`frontend/src/api/qqImage.ts` |
 | 用户绑定/作品图库 | `frontend/src/views/user/QQBindView.vue`、`QQOrdersView.vue`；`frontend/src/components/user/QQGalleryCard.vue`、`QQGalleryDetail.vue`；`frontend/src/composables/useQQGalleryMedia.ts` |
@@ -38,7 +38,7 @@
 
 - 当前联合模式下，CF `oneapi-observer-qq` 处理裸@、通用菜单和智商截图；Sub2处理 `/识别群 /绑定 /确认绑定 /生图帮助 /生图 /任务 /重发`。`/生图一个黑洞` 也有专门边界规则，改动时核对两侧。
 - 联合模式以 `QQ_IMAGE_EXTERNAL_HELP=true` 将通用帮助交给 CF，独立部署默认 false。2026-10-27 接管记录已确认正式站配置此开关及独立加密密钥，测试收费接收停止；后续升级保留原值与原密钥，不双开收费接收器。实际连接状态须另行只读核查。
-- CF对生图命令静默，不把收费请求代理到Go；两套独立QQ连接，一个online不代表另一个online。
+- Sub2 的生图指令由腾讯签名 HTTP 回调送达。检测仓的 CF 连接继续处理菜单与智商查询；排查时分别核对回调投递与 CF 连接状态。
 - Sub2发布回复模板，CF从固定测试站读取六类菜单/智商文案。编辑内容先查后台发布版本；更改同步契约要审两仓。
 - 用户/授权/余额/订单/生图图片属于选中的Sub2实例；当前图片保存在PostgreSQL，未启用检测站R2方案。QQ生成图片与检测站生成HTML不是同一执行器；该模块扣本实例 users.balance，不扣月卡/福利钱包。测试域名也不等于QQ平台sandbox。取消/解绑是网站能力，不杜撰 `/取消` 或 `/解绑` QQ命令。
 - CF源码位于 `E:/CodexData/sites/ai-check-20261011/cloudflare-qq`；其部署、管理令牌和DO状态由独立仓交接，不随本镜像更新。

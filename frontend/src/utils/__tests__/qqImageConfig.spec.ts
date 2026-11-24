@@ -4,7 +4,7 @@ import { qqConfigNumberLimits, qqConfigSaveProblem, validateQQConfigInput } from
 
 const saved = { bot_secret_configured: true, api_key_configured: true, encryption_available: true }
 function valid(overrides: Partial<QQConfigInput> = {}): QQConfigInput {
-  return { enabled: true, receive_mode: 'websocket', app_id: 'app1', api_url: 'https://images.example.test/v1', model: 'image-1', size: '1024x1024', price: '0.04000000', allowed_groups: ['group1'], public_base_url: 'https://site.example.test', user_daily_limit: 20, user_daily_amount: '10.00000000', group_concurrency: 2, global_concurrency: 5, queue_limit: 50, queue_timeout_seconds: 300, deadline_seconds: 7200, retention_days: 7, prompt_max_chars: 2000, ...overrides }
+  return { enabled: true, app_id: 'app1', api_url: 'https://images.example.test/v1', model: 'image-1', size: '1024x1024', price: '0.04000000', allowed_groups: ['group1'], public_base_url: 'https://site.example.test', user_daily_limit: 20, user_daily_amount: '10.00000000', group_concurrency: 2, global_concurrency: 5, queue_limit: 50, queue_timeout_seconds: 300, deadline_seconds: 7200, retention_days: 7, prompt_max_chars: 2000, ...overrides }
 }
 
 describe('QQ configuration preflight', () => {

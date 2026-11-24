@@ -18,11 +18,12 @@ func TestQQImageRoutesRegisterCompleteUserAdminAndPlatformSurface(t *testing.T) 
 	for _, route := range r.Routes() {
 		found[route.Method+" "+route.Path] = true
 	}
+	require.NotContains(t, found, "GET /api/v1/admin/qq-image/connection")
 	for _, route := range []string{
 		"GET /api/v1/user/qq-image/status", "POST /api/v1/user/qq-image/email/send-code", "POST /api/v1/user/qq-image/email/verify",
 		"GET /api/v1/user/qq-image/requests/:id", "POST /api/v1/user/qq-image/requests/:id/authorize", "DELETE /api/v1/user/qq-image/grants/:id",
 		"GET /api/v1/user/qq-image/orders", "GET /api/v1/user/qq-image/orders/:id", "POST /api/v1/user/qq-image/orders/:id/cancel", "GET /api/v1/user/qq-image/orders/:id/image",
-		"GET /api/v1/admin/qq-image/connection", "GET /api/v1/admin/qq-image/config", "PUT /api/v1/admin/qq-image/config", "GET /api/v1/admin/qq-image/orders", "GET /api/v1/admin/qq-image/grants", "GET /api/v1/admin/qq-image/audit",
+		"GET /api/v1/admin/qq-image/config", "PUT /api/v1/admin/qq-image/config", "GET /api/v1/admin/qq-image/orders", "GET /api/v1/admin/qq-image/grants", "GET /api/v1/admin/qq-image/audit",
 		"DELETE /api/v1/admin/qq-image/grants/:id", "POST /api/v1/admin/qq-image/orders/:id/refund", "POST /api/v1/admin/qq-image/orders/:id/release", "POST /api/v1/admin/qq-image/orders/:id/reconcile", "GET /api/v1/admin/qq-image/orders/:id/image",
 		"POST /api/v1/qq-image/events", "GET /api/v1/qq-image/media",
 		"GET /api/v1/qq-image/reply-templates/published",

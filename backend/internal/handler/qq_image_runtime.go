@@ -23,23 +23,16 @@ type qqImageAuthInvalidator interface {
 
 // QQImageRuntime owns the worker and the durable wallet-cache outbox. Database
 // money changes are authoritative; a cache outage cannot acknowledge an event.
-type qqImageGateway interface {
-	Run(context.Context)
-	Status() qqimage.GatewayStatus
-}
-
 type QQImageRuntime struct {
-	gateway     qqImageGateway
-	gatewayDone chan struct{}
-	core        *qqimage.Store
-	commands    *qqimage.QQCommandHandler
-	worker      *qqimage.Worker
-	outbox      qqImageOutbox
-	balance     qqImageBalanceInvalidator
-	auth        qqImageAuthInvalidator
-	start       sync.Once
-	cancel      context.CancelFunc
-	done        chan struct{}
+	core     *qqimage.Store
+	commands *qqimage.QQCommandHandler
+	worker   *qqimage.Worker
+	outbox   qqImageOutbox
+	balance  qqImageBalanceInvalidator
+	auth     qqImageAuthInvalidator
+	start    sync.Once
+	cancel   context.CancelFunc
+	done     chan struct{}
 }
 
 func (r *QQImageRuntime) Start() {
@@ -47,10 +40,6 @@ func (r *QQImageRuntime) Start() {
 		ctx, cancel := context.WithCancel(context.Background())
 		r.cancel = cancel
 		r.done = make(chan struct{})
-		if r.gateway != nil {
-			r.gatewayDone = make(chan struct{})
-			go func() { defer close(r.gatewayDone); r.gateway.Run(ctx) }()
-		}
 		if r.worker != nil {
 			r.worker.Start()
 		}
@@ -88,13 +77,6 @@ func (r *QQImageRuntime) Stop(ctx context.Context) error {
 	if r.done != nil {
 		select {
 		case <-r.done:
-		case <-ctx.Done():
-			return ctx.Err()
-		}
-	}
-	if r.gatewayDone != nil {
-		select {
-		case <-r.gatewayDone:
 		case <-ctx.Done():
 			return ctx.Err()
 		}

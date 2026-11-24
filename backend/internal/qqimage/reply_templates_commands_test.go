@@ -37,18 +37,17 @@ func (s *templateCommandStore) ProcessEvent(ctx context.Context, key, hash strin
 }
 func TestReplyTemplateCommandsSnapshotAndReplay(t *testing.T) {
 	s := &templateCommandStore{commandStore: commandStore{config: qqConfig()}, snapshot: newReplyTemplateSnapshot(1, map[string]string{"order.accepted": "自定义 {{order_id}} US${{price}} {{settlement_rules}} {{order_url}}"}, nil)}
-	s.config.ReceiveMode = ReceiveModeWebSocket
 	sender := &commandSender{}
 	h := NewQQCommandHandler(s, sender)
 	raw := commandPayload("/生图 private prompt")
-	if err := h.HandleGatewayEvent(context.Background(), s.config.ID, s.config.AppID, raw); err != nil {
+	if err := handleSignedTestWebhook(t, h, "secret", raw); err != nil {
 		t.Fatal(err)
 	}
 	if len(sender.messages) != 1 || !strings.HasPrefix(sender.messages[0], "自定义 order1 US$1.00000000") || s.committedReply != sender.messages[0] {
 		t.Fatalf("snapshot not committed: %+v %+v", s, sender)
 	}
 	s.snapshot.Overrides["order.accepted"] = "{{order_id}}已改 {{price}}{{settlement_rules}}{{order_url}}"
-	if err := h.HandleGatewayEvent(context.Background(), s.config.ID, s.config.AppID, raw); err != nil {
+	if err := handleSignedTestWebhook(t, h, "secret", raw); err != nil {
 		t.Fatal(err)
 	}
 	if len(sender.messages) != 1 || s.orders != 1 || s.readsTemplates != 2 {
@@ -57,18 +56,17 @@ func TestReplyTemplateCommandsSnapshotAndReplay(t *testing.T) {
 }
 func TestReplyTemplateCommandsReadFailureAndBusinessFailure(t *testing.T) {
 	s := &templateCommandStore{commandStore: commandStore{config: qqConfig(), err: errors.New("business DB down")}, templateError: errors.New("template DB down")}
-	s.config.ReceiveMode = ReceiveModeWebSocket
 	sender := &commandSender{}
 	h := NewQQCommandHandler(s, sender)
 	raw := commandPayload("/生图 private")
-	if err := h.HandleGatewayEvent(context.Background(), s.config.ID, s.config.AppID, raw); err == nil {
+	if err := handleSignedTestWebhook(t, h, "secret", raw); err == nil {
 		t.Fatal("template fallback consumed failed business transaction")
 	}
 	if len(sender.messages) != 0 || len(s.hashes) != 0 {
 		t.Fatal("failed business accepted")
 	}
 	s.err = nil
-	if err := h.HandleGatewayEvent(context.Background(), s.config.ID, s.config.AppID, raw); err != nil {
+	if err := handleSignedTestWebhook(t, h, "secret", raw); err != nil {
 		t.Fatal(err)
 	}
 	if len(sender.messages) != 1 || !strings.Contains(sender.messages[0], "已预留 US$1.00000000") {
@@ -77,11 +75,10 @@ func TestReplyTemplateCommandsReadFailureAndBusinessFailure(t *testing.T) {
 }
 func TestReplyTemplateBindingManualAndLongLegacyConfig(t *testing.T) {
 	s := &templateCommandStore{commandStore: commandStore{config: qqConfig()}, snapshot: newReplyTemplateSnapshot(1, map[string]string{"binding.manual": "备用 {{request_id}} {{binding_rules}}"}, nil)}
-	s.config.ReceiveMode = ReceiveModeWebSocket
 	s.config.PublicBaseURL = "https://example.test/" + strings.Repeat("x", 3000)
 	sender := &commandSender{result: QQSendResult{Status: "failed"}}
 	h := NewQQCommandHandler(s, sender)
-	if err := h.HandleGatewayEvent(context.Background(), s.config.ID, s.config.AppID, commandPayload("/绑定")); err != nil {
+	if err := handleSignedTestWebhook(t, h, "secret", commandPayload("/绑定")); err != nil {
 		t.Fatal(err)
 	}
 	if len(sender.messages) != 2 || !strings.HasPrefix(sender.messages[1], "备用 request1") || s.committedManual != sender.messages[1] {
@@ -96,10 +93,9 @@ func TestReplyTemplateBindingManualAndLongLegacyConfig(t *testing.T) {
 
 func TestReplyTemplateGenerateUsagePointsToImageHelp(t *testing.T) {
 	s := &commandStore{config: qqConfig()}
-	s.config.ReceiveMode = ReceiveModeWebSocket
 	sender := &commandSender{}
 	h := NewQQCommandHandlerWithOptions(s, sender, QQCommandOptions{ExternalGeneralHelp: true})
-	if err := h.HandleGatewayEvent(context.Background(), s.config.ID, s.config.AppID, commandPayload("/生图")); err != nil {
+	if err := handleSignedTestWebhook(t, h, "secret", commandPayload("/生图")); err != nil {
 		t.Fatal(err)
 	}
 	if len(sender.messages) != 1 || !strings.Contains(sender.messages[0], "/生图帮助 查看固定价格") {

@@ -44,7 +44,7 @@ export default {
         conflict: '配置未保存：服务器上的配置已发生变化。请先保留当前草稿，再重新读取配置并核对。',
         uncertain: '未能确认配置是否保存成功。当前输入仍保留；请先保留草稿，再重新读取配置核对，不要连续重复保存。',
         rate: '保存操作过于频繁，请稍后重试。当前输入仍保留。', unauthorized: '登录状态已失效，请先保留草稿，再重新登录。',
-        formats: { receive_mode: '请选择 WebSocket 或 HTTP 回调。', app_id: 'App ID 不能包含空格或换行，长度最多 256 字节。', bot_secret: 'App Secret 长度不能超过 4096 字节，请核对是否误粘贴了其他内容。', image_hosts: '请填写精确的公网域名，不含协议、路径、端口、IP 或通配符。', allowed_groups: '每行填写一个官方 group_openid，每个最多 256 字节；不是普通 QQ 群号。' },
+        formats: { app_id: 'App ID 不能包含空格或换行，长度最多 256 字节。', bot_secret: 'App Secret 长度不能超过 4096 字节，请核对是否误粘贴了其他内容。', image_hosts: '请填写精确的公网域名，不含协议、路径、端口、IP 或通配符。', allowed_groups: '每行填写一个官方 group_openid，每个最多 256 字节；不是普通 QQ 群号。' },
         urls: { api_url: '请填写有效的公网 HTTPS API 基础地址，不含账号密码、查询参数或片段；启用生图时只支持 443 端口。', public_base_url: '只填写网站 HTTPS 地址，例如 https://qq-test.tangguo.xin，不加 /admin 或其他路径、参数；启用生图时只支持 443 端口。' }
       },
       templates: {
@@ -101,15 +101,8 @@ export default {
         history: '版本历史', historyHint: '最多显示最近 50 个版本。查看历史不会改动草稿；回滚需再次确认，并生成新版本。', historyFailed: '无法读取历史版本，请重试。', emptyHistory: '暂无已保存的历史版本。', viewRevision: '查看文案',
         restoredFrom: '从版本 {revision} 恢复', revisionDetails: '版本 {revision} 的自定义文案', revisionDefaults: '未列出的场景使用默认文案。', allDefault: '全部场景使用默认文案。',
         rollback: '回滚到此版本', rollbackConfirm: '确认将版本 {revision} 的全部文案应用为新版本？此操作会替换本页未保存的草稿，价格、权限和资金规则仍由系统控制。', confirmRollback: '确认回滚并生效'
-      },      receiveMode: 'QQ 事件接收方式', receiveModes: { webhook: 'HTTP 回调（Webhook）', websocket: 'WebSocket 长连接' },
-      receiveModeHint: 'WebSocket 由服务器主动连接 QQ 接收事件，无需配置公网 HTTP 回调；HTTP 回调模式需在 QQ 开放平台配置回调地址。保存后生效，不会自动开启生图。',
-      connection: {
-        title: 'QQ 接收连接状态', refresh: '刷新连接状态', hint: '显示已保存配置的接收状态，可手动刷新。生图关闭时仍可通过已配置的连接识别测试群。',
-        saveFirst: '当前配置尚未保存。请先保存，再查看该配置的连接状态。', loading: '正在读取连接状态…', failed: '暂时无法读取连接状态，请刷新重试；这不代表已连接。',
-        last_connected_at: '最近连接时间', last_heartbeat_at: '最近心跳时间', last_event_at: '最近事件时间',
-        states: { webhook: '使用 HTTP 回调接收事件', waiting_config: '等待完整的 QQ 连接配置', standby: '待机，等待接收任务', connecting: '正在连接 QQ', connected: '已连接 QQ', reconnecting: '正在重新连接 QQ', error: '连接异常', stopped: '连接已停止', disabled: '连接已禁用', unknown: '连接状态待确认' },
-        errors: { unknown: 'QQ 连接暂时异常。请检查已保存的机器人配置，稍后刷新状态。' }
       },
+      callbackPathHint: '在 QQ 开放平台填写 HTTP 回调地址：使用本站公网 HTTPS 域名，并在域名后加上此路径。',
       discovery: {
         title: '识别测试群', hint: '仅在明确开启后的 5 分钟内识别。只需先保存 QQ App ID 和 App Secret；生图可以保持关闭，无需生图 API Key。',
         saveFirst: '请先保存 QQ App ID、App Secret 和当前配置，再开启识别。配置变化后旧口令与候选失效。',

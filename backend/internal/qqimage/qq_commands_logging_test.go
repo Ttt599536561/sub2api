@@ -2,7 +2,6 @@ package qqimage
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"log/slog"
 	"strings"
@@ -38,12 +37,11 @@ func TestQQCommandReplyFailureLogsArePrivateAndDoNotRepeatBusiness(t *testing.T)
 			slog.SetDefault(slog.New(slog.NewJSONHandler(&output, nil)))
 			t.Cleanup(func() { slog.SetDefault(prior) })
 			s := &commandStore{config: qqConfig()}
-			s.config.ReceiveMode = ReceiveModeWebSocket
 			sender := &commandSender{result: QQSendResult{Status: tt.status, Reason: tt.reason}}
 			handler := NewQQCommandHandler(s, sender)
 			body := commandPayload(tt.command)
 			for i := 0; i < 2; i++ {
-				if err := handler.HandleGatewayEvent(context.Background(), s.config.ID, s.config.AppID, body); err != nil {
+				if err := handleSignedTestWebhook(t, handler, "secret", body); err != nil {
 					t.Fatal(err)
 				}
 			}

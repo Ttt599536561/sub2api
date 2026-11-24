@@ -28,7 +28,6 @@ func registerQQImageAdminRoutes(admin *gin.RouterGroup, h *handler.QQImageHandle
 		return
 	}
 	q := admin.Group("/qq-image")
-	q.GET("/connection", h.AdminConnection)
 	q.GET("/config", h.AdminConfig)
 	q.PUT("/config", h.SaveAdminConfig)
 	q.GET("/reply-templates", h.AdminReplyTemplates)

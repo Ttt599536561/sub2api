@@ -6,7 +6,6 @@ import { useQQSession } from '@/composables/useQQSession'
 import { qqErrorKey } from '@/utils/qqImage'
 import { qqConfigNumberLimits, qqConfigSaveProblem, validateQQConfigInput, type QQConfigField, type QQConfigProblem } from '@/utils/qqImageConfig'
 import QQDiscoveryPanel from './QQDiscoveryPanel.vue'
-import QQConnectionPanel from './QQConnectionPanel.vue'
 import QQReplyTemplatesPanel from './QQReplyTemplatesPanel.vue'
 import QQOrderCard from '@/components/user/QQOrderCard.vue'
 import '@/components/user/qqImage.css'
@@ -32,7 +31,6 @@ const session = useQQSession(() => { sequence++; config.value = null; configProb
 const configProblemLabel = computed(() => {
   const field = configProblem.value?.field
   if (!field || field === 'request') return ''
-  if (field === 'receive_mode') return t('qqImage.admin.receiveMode')
   if (field === 'image_hosts') return t('qqImage.admin.imageHostsLabel')
   if (field === 'model' || field === 'size') return t(`qqImage.${field}`)
   return t(`qqImage.admin.fields.${field}`)
@@ -59,7 +57,7 @@ function accept(value: QQConfig) {
   clearBotSecret.value = false; clearAPIKey.value = false
   // Copy only public fields; never bind an unexpected credential response to a form.
   config.value = {
-    enabled: value.enabled, receive_mode: value.receive_mode === 'websocket' ? 'websocket' : 'webhook', app_id: value.app_id, api_url: value.api_url, model: value.model, size: value.size,
+    enabled: value.enabled, app_id: value.app_id, api_url: value.api_url, model: value.model, size: value.size,
     price: value.price, allowed_groups: value.allowed_groups || [], public_base_url: value.public_base_url,
     user_daily_limit: value.user_daily_limit, user_daily_amount: value.user_daily_amount,
     group_concurrency: value.group_concurrency, global_concurrency: value.global_concurrency, queue_limit: value.queue_limit,
@@ -94,7 +92,7 @@ async function save() {
   error.value = ''; notice.value = ''; configProblem.value = null
   const hosts = [...new Set(imageHosts.value.split(/[\n,]/).map(host => host.trim().toLowerCase()).filter(Boolean))]
   const body: QQConfigInput = {
-    enabled: value.enabled && !clearBotSecret.value && !clearAPIKey.value, receive_mode: value.receive_mode || 'webhook', app_id: value.app_id.trim(), api_url: value.api_url.trim(), model: value.model.trim(), size: value.size.trim(), price: value.price.trim(),
+    enabled: value.enabled && !clearBotSecret.value && !clearAPIKey.value, app_id: value.app_id.trim(), api_url: value.api_url.trim(), model: value.model.trim(), size: value.size.trim(), price: value.price.trim(),
     public_base_url: value.public_base_url.trim(), allowed_groups: [...new Set(groups.value.split(/[\n,]/).map(group => group.trim()).filter(Boolean))],
     image_hosts: hosts,
     user_daily_limit: value.user_daily_limit, user_daily_amount: value.user_daily_amount.trim(), group_concurrency: value.group_concurrency, global_concurrency: value.global_concurrency,
@@ -170,7 +168,7 @@ onMounted(refresh)
           <div class="qq-panel space-y-4"><label class="flex items-start gap-3 text-sm"><input v-model="config.enabled" name="enabled" type="checkbox" class="mt-1" :disabled="busy || discoveryBusy || loading || clearBotSecret || clearAPIKey || (!config.encryption_available && !config.enabled)" /><span><strong>{{ t('qqImage.admin.enabled') }}</strong><span class="qq-muted mt-1 block">{{ t('qqImage.admin.enabledHint') }}</span></span></label><p v-if="!config.encryption_available" class="qq-notice">{{ t('qqImage.admin.encryptionMissing') }}</p></div>
           <div class="grid gap-5 lg:grid-cols-2">
             <fieldset class="qq-panel space-y-4" :disabled="busy || discoveryBusy || loading"><legend class="px-2 text-base font-semibold">{{ t('qqImage.admin.qqCredentials') }}</legend>
-              <label class="qq-label">{{ t('qqImage.admin.receiveMode') }}<select v-model="config.receive_mode" name="receive_mode" v-bind="fieldState('receive_mode')" class="qq-input"><option value="webhook">{{ t('qqImage.admin.receiveModes.webhook') }}</option><option value="websocket">{{ t('qqImage.admin.receiveModes.websocket') }}</option></select><span class="qq-muted">{{ t('qqImage.admin.receiveModeHint') }}</span></label>
+              <p class="qq-muted">{{ t('qqImage.admin.callbackPathHint') }} <code>/api/v1/qq-image/events</code></p>
               <label class="qq-label">{{ t('qqImage.admin.fields.app_id') }}<input v-model="config.app_id" class="qq-input" name="app_id" v-bind="fieldState('app_id')" :required="config.enabled" autocomplete="off" /></label>
               <label class="qq-label">{{ t('qqImage.admin.fields.bot_secret') }}<input v-model="botSecret" class="qq-input" name="bot_secret" v-bind="fieldState('bot_secret')" type="password" autocomplete="new-password" :disabled="!config.encryption_available || clearBotSecret" :placeholder="t('qqImage.admin.secretPlaceholder')" /><span class="qq-muted">{{ config.bot_secret_configured ? t('qqImage.admin.configured') : t('qqImage.admin.notConfigured') }}</span></label>
               <label class="flex items-start gap-2 text-sm"><input v-model="clearBotSecret" name="clear_bot_secret" type="checkbox" class="mt-1" /><span>{{ t('qqImage.admin.clearBotSecret') }}</span></label><p v-if="clearBotSecret" class="qq-notice">{{ t('qqImage.admin.clearSecretHint') }}</p><label class="qq-label">{{ t('qqImage.admin.fields.public_base_url') }}<input v-model="config.public_base_url" class="qq-input" type="url" name="public_base_url" v-bind="fieldState('public_base_url')" :required="config.enabled" placeholder="https://" /></label><p class="qq-muted">{{ t('qqImage.admin.officialHint') }}</p>
@@ -181,7 +179,6 @@ onMounted(refresh)
               <label class="flex items-start gap-2 text-sm"><input v-model="clearAPIKey" name="clear_api_key" type="checkbox" class="mt-1" /><span>{{ t('qqImage.admin.clearAPIKey') }}</span></label><p v-if="clearAPIKey" class="qq-notice">{{ t('qqImage.admin.clearSecretHint') }}</p><div class="grid gap-4 sm:grid-cols-2"><label class="qq-label">{{ t('qqImage.model') }}<input v-model="config.model" class="qq-input" name="model" v-bind="fieldState('model')" :required="config.enabled" /></label><label class="qq-label">{{ t('qqImage.size') }}<input v-model="config.size" class="qq-input" name="size" v-bind="fieldState('size')" :required="config.enabled" /></label></div><p class="qq-muted">{{ t('qqImage.admin.providerHint') }}</p>
             </fieldset>
           </div>
-          <QQConnectionPanel :dirty="configDirty" :version="configVersion" :loading="loading" :disabled="busy || discoveryBusy" />
           <fieldset class="qq-panel space-y-3" :disabled="busy || discoveryBusy || loading"><legend class="px-2 text-base font-semibold">{{ t('qqImage.admin.imageHosts') }}</legend><label class="qq-label">{{ t('qqImage.admin.imageHostsLabel') }}<textarea v-model="imageHosts" name="image_hosts" v-bind="fieldState('image_hosts')" class="qq-input min-h-24" placeholder="cdn.example.com" /></label><p class="qq-muted">{{ t('qqImage.admin.imageHostsHint') }}</p></fieldset>
           <fieldset class="qq-panel space-y-4" :disabled="busy || discoveryBusy || loading"><legend class="px-2 text-base font-semibold">{{ t('qqImage.admin.limits') }}</legend><div class="grid gap-4 sm:grid-cols-2">
             <label class="qq-label">{{ t('qqImage.admin.fields.price') }}<input v-model="config.price" class="qq-input" name="price" v-bind="fieldState('price')" inputmode="decimal" pattern="[0-9]{1,12}(\.[0-9]{1,8})?" :required="config.enabled" /></label>

@@ -6,7 +6,7 @@ import { adminQQImageAPI } from '@/api/qqImage'
 import zhQQImage from '@/i18n/locales/zh/qqImage'
 import enQQImage from '@/i18n/locales/en/qqImage'
 vi.mock('vue-i18n', () => ({ useI18n: () => ({ t: (key: string) => key, te: () => true }) }))
-vi.mock('@/api/qqImage', () => ({ adminQQImageAPI: { connection: vi.fn(), config: vi.fn(), saveConfig: vi.fn(), orders: vi.fn(), grants: vi.fn(), audit: vi.fn(), refund: vi.fn(), reconcile: vi.fn(), release: vi.fn(), revoke: vi.fn(), image: vi.fn(), discovery: vi.fn(), startDiscovery: vi.fn(), closeDiscovery: vi.fn(), confirmDiscovery: vi.fn() } }))
+vi.mock('@/api/qqImage', () => ({ adminQQImageAPI: { config: vi.fn(), saveConfig: vi.fn(), orders: vi.fn(), grants: vi.fn(), audit: vi.fn(), refund: vi.fn(), reconcile: vi.fn(), release: vi.fn(), revoke: vi.fn(), image: vi.fn(), discovery: vi.fn(), startDiscovery: vi.fn(), closeDiscovery: vi.fn(), confirmDiscovery: vi.fn() } }))
 const auth = reactive({ user: { id: 1, role: 'admin', email: 'admin@example.test' }, sessionRevision: 'A', isAuthenticated: true })
 vi.mock('@/stores/auth', () => ({ useAuthStore: () => auth }))
 const config = { enabled: false, app_id: 'app1', api_url: 'https://images.example.test/v1', model: 'image-1', size: '1024x1024', price: '0.12000000', allowed_groups: ['group1'], public_base_url: 'https://site.example.test', user_daily_limit: 20, user_daily_amount: '10.00000000', group_concurrency: 2, global_concurrency: 5, queue_limit: 50, queue_timeout_seconds: 300, deadline_seconds: 7200, retention_days: 7, prompt_max_chars: 2000, bot_secret_configured: true, api_key_configured: true, encryption_available: true }
@@ -15,7 +15,6 @@ beforeEach(() => {
   vi.clearAllMocks(); localStorage.clear(); sessionStorage.clear()
   auth.user = { id: 1, role: 'admin', email: 'admin@example.test' }; auth.sessionRevision = 'A'; auth.isAuthenticated = true
   localStorage.setItem('auth_user', JSON.stringify(auth.user)); localStorage.setItem('auth_session_id', 'A')
-  vi.mocked(adminQQImageAPI.connection).mockResolvedValue({ state: 'webhook' })
   vi.mocked(adminQQImageAPI.discovery).mockResolvedValue(null)
   vi.mocked(adminQQImageAPI.startDiscovery).mockResolvedValue({ id: 'discovery1', app_id: 'app1', status: 'waiting', expires_at: '2099-01-01T00:00:00Z', command: '@机器人 /识别群 SECRET-ONCE' })
   vi.mocked(adminQQImageAPI.closeDiscovery).mockResolvedValue({ id: 'discovery1', app_id: 'app1', status: 'closed', expires_at: '2099-01-01T00:00:00Z' })
@@ -27,110 +26,19 @@ beforeEach(() => {
 })
 afterEach(() => { wrapper?.unmount(); vi.useRealTimers() })
 async function start() { wrapper = mount(QQImagePanel, { global: { stubs: { QQReplyTemplatesPanel: true, RouterLink: { template: '<a><slot /></a>' } } } }); await flushPromises() }
-describe('QQ transport configuration and connection status', () => {
-  it('defaults absent receive mode to HTTP callbacks and saves it explicitly', async () => {
+describe('QQ HTTP callback configuration', () => {
+  it('shows the public callback path and omits retired settings when saving legacy configuration', async () => {
+    const legacy = { ...config, receive_mode: 'websocket' }
+    vi.mocked(adminQQImageAPI.config).mockResolvedValue(legacy)
     await start()
-    expect((wrapper.get('[name="receive_mode"]').element as HTMLSelectElement).value).toBe('webhook')
-    await wrapper.get('[data-test="qq-config"]').trigger('submit'); await flushPromises()
-    expect(vi.mocked(adminQQImageAPI.saveConfig).mock.calls[0][0].receive_mode).toBe('webhook')
-  })
-  it('saves WebSocket with existing settings and credentials preserved while generation stays off', async () => {
-    vi.mocked(adminQQImageAPI.saveConfig).mockResolvedValue({ ...config, receive_mode: 'websocket' })
-    await start(); await wrapper.get('[name="receive_mode"]').setValue('websocket')
-    expect(wrapper.text()).toContain('qqImage.admin.connection.saveFirst')
-    expect(wrapper.get('[data-test="connection-refresh"]').attributes('disabled')).toBeDefined()
-    await wrapper.get('[data-test="qq-config"]').trigger('submit'); await flushPromises()
-    expect(vi.mocked(adminQQImageAPI.saveConfig).mock.calls[0][0]).toMatchObject({
-      receive_mode: 'websocket', enabled: false, app_id: config.app_id, api_url: config.api_url,
-      model: config.model, price: config.price, allowed_groups: config.allowed_groups, user_daily_amount: config.user_daily_amount
-    })
-    expect(vi.mocked(adminQQImageAPI.saveConfig).mock.calls[0][0].bot_secret).toBeUndefined()
-    expect(vi.mocked(adminQQImageAPI.saveConfig).mock.calls[0][0].api_key).toBeUndefined()
-    expect((wrapper.get('[name="receive_mode"]').element as HTMLSelectElement).value).toBe('websocket')
-    expect((wrapper.get('[name="enabled"]').element as HTMLInputElement).checked).toBe(false)
-  })
-  it('shows saved WebSocket connection and safe timestamps while generation is disabled', async () => {
-    vi.mocked(adminQQImageAPI.config).mockResolvedValue({ ...config, receive_mode: 'websocket' })
-    vi.mocked(adminQQImageAPI.connection).mockResolvedValue({ state: 'connected', last_connected_at: '2026-10-23T01:00:00Z', last_heartbeat_at: '2026-10-23T01:00:10Z', last_event_at: '2026-10-23T01:00:05Z', session_id: 'NEVER-EXPOSE-SESSION' } as Awaited<ReturnType<typeof adminQQImageAPI.connection>>)
-    await start()
-    expect(wrapper.get('[data-test="connection-state"]').text()).toBe('qqImage.admin.connection.states.connected')
-    expect(wrapper.findAll('[data-test="qq-connection"] time').map(time => time.attributes('datetime'))).toEqual(['2026-10-23T01:00:00Z', '2026-10-23T01:00:10Z', '2026-10-23T01:00:05Z'])
-    expect(wrapper.text()).not.toContain('NEVER-EXPOSE-SESSION')
-    expect(wrapper.get('[data-test="discovery-start"]').attributes('disabled')).toBeUndefined()
-    for (const storage of [localStorage, sessionStorage]) expect(Array.from({ length: storage.length }, (_, i) => storage.getItem(storage.key(i)!)).join()).not.toContain('connected')
-  })
-  it('replaces a previous success with loading and failure, without blocking configuration', async () => {
-    vi.mocked(adminQQImageAPI.config).mockResolvedValue({ ...config, receive_mode: 'websocket' })
-    vi.mocked(adminQQImageAPI.connection).mockResolvedValue({ state: 'connected' })
-    await start()
-    let fail!: (value: unknown) => void
-    vi.mocked(adminQQImageAPI.connection).mockReturnValue(new Promise((_, reject) => { fail = reject }))
-    await wrapper.get('[data-test="connection-refresh"]').trigger('click')
-    expect(wrapper.text()).not.toContain('qqImage.admin.connection.states.connected')
-    expect(wrapper.get('[data-test="connection-state"]').text()).toBe('qqImage.admin.connection.loading')
-    fail({ status: 503, message: 'PRIVATE-UPSTREAM-ERROR' }); await flushPromises()
-    expect(wrapper.text()).toContain('qqImage.admin.connection.failed')
-    expect(wrapper.text()).not.toContain('PRIVATE-UPSTREAM-ERROR')
-    expect(wrapper.find('[data-test="qq-config"]').exists()).toBe(true)
-    expect(wrapper.text()).not.toContain('qqImage.admin.connection.states.connected')
-  })
-  it('clears a displayed connection while the main configuration refresh is pending', async () => {
-    vi.mocked(adminQQImageAPI.connection).mockResolvedValue({ state: 'connected' })
-    await start()
-    let finish!: (value: typeof config) => void
-    vi.mocked(adminQQImageAPI.config).mockReturnValue(new Promise(resolve => { finish = resolve }))
-    await wrapper.get('button').trigger('click')
-    expect(wrapper.text()).not.toContain('qqImage.admin.connection.states.connected')
-    expect(wrapper.get('[data-test="connection-refresh"]').attributes('disabled')).toBeDefined()
-    finish(config); await flushPromises()
-    expect(adminQQImageAPI.connection).toHaveBeenCalledTimes(2)
-    expect(wrapper.get('[data-test="connection-state"]').text()).toBe('qqImage.admin.connection.states.connected')
-  })
-  it('discards a pending connection response after mode changes until configuration is saved', async () => {
-    vi.mocked(adminQQImageAPI.config).mockResolvedValue({ ...config, receive_mode: 'websocket' })
-    let finish!: (value: { state: string }) => void
-    vi.mocked(adminQQImageAPI.connection).mockReturnValue(new Promise(resolve => { finish = resolve }))
-    await start(); await wrapper.get('[name="receive_mode"]').setValue('webhook')
-    const signal = vi.mocked(adminQQImageAPI.connection).mock.calls[0][0]
-    expect(signal?.aborted).toBe(true)
-    finish({ state: 'connected' }); await flushPromises()
-    expect(wrapper.text()).not.toContain('qqImage.admin.connection.states.connected')
-    expect(wrapper.text()).toContain('qqImage.admin.connection.saveFirst')
-  })
-  it.each(['logout', 'account', 'role', 'same-user-login'])('aborts and ignores a late connection response after %s', async change => {
-    let finish!: (value: { state: string }) => void
-    vi.mocked(adminQQImageAPI.connection).mockReturnValue(new Promise(resolve => { finish = resolve }))
-    await start()
-    const signal = vi.mocked(adminQQImageAPI.connection).mock.calls[0][0]
-    if (change === 'logout') auth.isAuthenticated = false
-    if (change === 'account') auth.user.id = 2
-    if (change === 'role') auth.user.role = 'user'
-    if (change === 'same-user-login') auth.sessionRevision = 'B'
-    await flushPromises()
-    expect(signal?.aborted).toBe(true)
-    finish({ state: 'connected' }); await flushPromises()
+    expect(wrapper.text()).toContain('/api/v1/qq-image/events')
+    expect(wrapper.find('[name="receive_mode"]').exists()).toBe(false)
     expect(wrapper.find('[data-test="qq-connection"]').exists()).toBe(false)
-    expect(wrapper.text()).not.toContain('qqImage.admin.connection.states.connected')
-  })
-  it('aborts a pending status read when unmounted', async () => {
-    vi.mocked(adminQQImageAPI.connection).mockReturnValue(new Promise(() => {}))
-    await start()
-    const signal = vi.mocked(adminQQImageAPI.connection).mock.calls[0][0]
-    wrapper.unmount(); expect(signal?.aborted).toBe(true)
-  })
-  it('uses generic translations for unknown states and errors and ignores invalid timestamps', async () => {
-    vi.mocked(adminQQImageAPI.connection).mockResolvedValue({ state: 'PRIVATE-STATE', error_code: 'PRIVATE-ERROR', last_event_at: 'PRIVATE-TIME' })
-    await start()
-    expect(wrapper.get('[data-test="connection-state"]').text()).toBe('qqImage.admin.connection.states.unknown')
-    expect(wrapper.text()).toContain('qqImage.admin.connection.errors.unknown')
-    expect(wrapper.text()).not.toContain('PRIVATE-')
-    expect(wrapper.find('[data-test="qq-connection"] time').exists()).toBe(false)
-  })
-  it('explains outbound WebSocket and HTTP callbacks in both languages', () => {
-    expect(zhQQImage.qqImage.admin.receiveModeHint).toContain('主动')
-    expect(zhQQImage.qqImage.admin.receiveModeHint).toContain('HTTP')
-    expect(enQQImage.qqImage.admin.receiveModeHint).toContain('outbound')
-    expect(enQQImage.qqImage.admin.receiveModeHint).toContain('HTTP')
+    await wrapper.get('[data-test="qq-config"]').trigger('submit')
+    await flushPromises()
+    const body = vi.mocked(adminQQImageAPI.saveConfig).mock.calls[0][0]
+    expect(body).not.toHaveProperty('receive_mode')
+    expect(body).toMatchObject({ enabled: false, app_id: config.app_id })
   })
 })
 describe('QQ admin configuration and recovery', () => {

@@ -1,13 +1,10 @@
 package qqimage
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
-	"strconv"
 	"strings"
 	"testing"
-	"time"
 )
 
 func TestQQCompactImageCommandsUseExistingBalanceAndDedupe(t *testing.T) {
@@ -22,34 +19,25 @@ func TestQQCompactImageCommandsUseExistingBalanceAndDedupe(t *testing.T) {
 		{"outer whitespace", "\u3000/生图一个黑洞\u3000", "一个黑洞"},
 		{"existing BOM in prompt", "/生图 \ufeff一个黑洞", "\ufeff一个黑洞"},
 	}
-	for _, transport := range []string{"websocket", "webhook"} {
-		for _, tc := range cases {
-			t.Run(transport+"/"+tc.name, func(t *testing.T) {
-				store := &commandStore{config: qqConfig(), err: ErrInsufficientBalance}
-				sender := &commandSender{}
-				handler := NewQQCommandHandler(store, sender)
-				raw := compactCommandPayload(t, tc.input)
-				for i := 0; i < 2; i++ {
-					var err error
-					if transport == "websocket" {
-						store.config.ReceiveMode = ReceiveModeWebSocket
-						err = handler.HandleGatewayEvent(context.Background(), store.config.ID, store.config.AppID, raw)
-					} else {
-						store.config.ReceiveMode = ReceiveModeWebhook
-						_, err = handler.HandleWebhook(context.Background(), signQQ(t, "secret", strconv.FormatInt(time.Now().Unix(), 10), raw), raw)
-					}
-					if err != nil {
-						t.Fatal(err)
-					}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			store := &commandStore{config: qqConfig(), err: ErrInsufficientBalance}
+			sender := &commandSender{}
+			handler := NewQQCommandHandler(store, sender)
+			raw := compactCommandPayload(t, tc.input)
+			for i := 0; i < 2; i++ {
+				err := handleSignedTestWebhook(t, handler, "secret", raw)
+				if err != nil {
+					t.Fatal(err)
 				}
-				if store.orders != 1 || store.prompt != tc.prompt || len(store.hashes) != 1 || len(sender.messages) != 1 {
-					t.Fatalf("order attempts=%d prompt=%q events=%d replies=%d", store.orders, store.prompt, len(store.hashes), len(sender.messages))
-				}
-				if sender.messages[0] != "可用余额不足，本次未生成；请登录原网站检查余额。" {
-					t.Fatalf("unexpected insufficient-balance reply: %q", sender.messages[0])
-				}
-			})
-		}
+			}
+			if store.orders != 1 || store.prompt != tc.prompt || len(store.hashes) != 1 || len(sender.messages) != 1 {
+				t.Fatalf("order attempts=%d prompt=%q events=%d replies=%d", store.orders, store.prompt, len(store.hashes), len(sender.messages))
+			}
+			if sender.messages[0] != "可用余额不足，本次未生成；请登录原网站检查余额。" {
+				t.Fatalf("unexpected insufficient-balance reply: %q", sender.messages[0])
+			}
+		})
 	}
 }
 
@@ -78,10 +66,9 @@ func TestQQCompactImageCommandsPreserveHelpAndUnknownOwnership(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			store := &commandStore{config: qqConfig()}
-			store.config.ReceiveMode = ReceiveModeWebSocket
 			sender := &commandSender{}
 			handler := NewQQCommandHandler(store, sender)
-			if err := handler.HandleGatewayEvent(context.Background(), store.config.ID, store.config.AppID, compactCommandPayload(t, tc.input)); err != nil {
+			if err := handleSignedTestWebhook(t, handler, "secret", compactCommandPayload(t, tc.input)); err != nil {
 				t.Fatal(err)
 			}
 			if store.orders+store.binding+store.confirm+store.redelivery != 0 {
@@ -100,11 +87,10 @@ func TestQQCompactImageCommandsPreserveHelpAndUnknownOwnership(t *testing.T) {
 
 func TestQQCompactImageCommandsKeepGroupAuthorization(t *testing.T) {
 	store := &commandStore{config: qqConfig()}
-	store.config.ReceiveMode = ReceiveModeWebSocket
 	store.config.AllowedGroups = nil
 	sender := &commandSender{}
 	handler := NewQQCommandHandler(store, sender)
-	err := handler.HandleGatewayEvent(context.Background(), store.config.ID, store.config.AppID, compactCommandPayload(t, "/生图一个黑洞"))
+	err := handleSignedTestWebhook(t, handler, "secret", compactCommandPayload(t, "/生图一个黑洞"))
 	if !errors.Is(err, ErrForbidden) || store.orders != 0 || len(store.hashes) != 0 || len(sender.messages) != 0 {
 		t.Fatalf("unauthorized group admitted: %v", err)
 	}

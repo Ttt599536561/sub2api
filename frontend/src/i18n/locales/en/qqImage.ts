@@ -44,7 +44,7 @@ export default {
         conflict: 'Configuration was not saved because the server configuration changed. Keep a copy of your draft before reloading and comparing settings.',
         uncertain: 'The save result could not be confirmed. Your inputs are retained. Keep your draft before reloading the configuration to check; do not repeatedly save.',
         rate: 'Too many save attempts. Try again later. Your inputs are retained.', unauthorized: 'Your login has expired. Keep your draft before signing in again.',
-        formats: { receive_mode: 'Select WebSocket or HTTP callbacks.', app_id: 'App ID must not contain spaces or line breaks and must be at most 256 bytes.', bot_secret: 'App Secret must be at most 4096 bytes. Check whether unrelated content was pasted.', image_hosts: 'Enter exact public hostnames without a scheme, path, port, IP address or wildcard.', allowed_groups: 'Enter one official group_openid per line, at most 256 bytes each, not ordinary QQ group numbers.' },
+        formats: { app_id: 'App ID must not contain spaces or line breaks and must be at most 256 bytes.', bot_secret: 'App Secret must be at most 4096 bytes. Check whether unrelated content was pasted.', image_hosts: 'Enter exact public hostnames without a scheme, path, port, IP address or wildcard.', allowed_groups: 'Enter one official group_openid per line, at most 256 bytes each, not ordinary QQ group numbers.' },
         urls: { api_url: 'Enter a valid public HTTPS API base URL without credentials, query parameters or fragments. Enabling generation requires port 443.', public_base_url: 'Enter only the website HTTPS origin, such as https://qq-test.tangguo.xin, without /admin, other paths or parameters. Enabling generation requires port 443.' }
       },
       templates: {
@@ -101,15 +101,8 @@ export default {
         history: 'Revision history', historyHint: 'Shows up to 50 recent revisions. Viewing history leaves drafts intact. Rollback needs confirmation and creates a new revision.', historyFailed: 'Revision history could not be loaded. Please retry.', emptyHistory: 'No saved revisions yet.', viewRevision: 'View text',
         restoredFrom: 'Restored from revision {revision}', revisionDetails: 'Custom text in revision {revision}', revisionDefaults: 'Scenarios not listed use their default text.', allDefault: 'All scenarios use default text.',
         rollback: 'Roll back to this revision', rollbackConfirm: 'Apply all text from revision {revision} as a new revision? This replaces unsaved drafts on this page. Pricing, permissions and fund rules remain controlled by the system.', confirmRollback: 'Confirm and apply rollback'
-      },      receiveMode: 'QQ event receive mode', receiveModes: { webhook: 'HTTP callback (Webhook)', websocket: 'WebSocket connection' },
-      receiveModeHint: 'WebSocket opens an outbound connection from the server to QQ and needs no public HTTP callback. HTTP callback mode requires a callback URL in the QQ developer platform. Save to apply; image generation is not enabled automatically.',
-      connection: {
-        title: 'QQ receive connection', refresh: 'Refresh connection status', hint: 'Shows the saved configuration’s receive status. Refresh manually to check again. A configured connection can identify a test group while image generation is disabled.',
-        saveFirst: 'This configuration has not been saved. Save it before checking its connection status.', loading: 'Reading connection status…', failed: 'Connection status is temporarily unavailable. Refresh to try again; this does not confirm a connection.',
-        last_connected_at: 'Last connected', last_heartbeat_at: 'Last heartbeat', last_event_at: 'Last event',
-        states: { webhook: 'Receiving through HTTP callbacks', waiting_config: 'Waiting for complete QQ connection settings', standby: 'Standing by for receive work', connecting: 'Connecting to QQ', connected: 'Connected to QQ', reconnecting: 'Reconnecting to QQ', error: 'Connection error', stopped: 'Connection stopped', disabled: 'Connection disabled', unknown: 'Connection status unconfirmed' },
-        errors: { unknown: 'The QQ connection is temporarily unavailable. Check the saved bot configuration and refresh the status later.' }
       },
+      callbackPathHint: 'In the QQ developer platform, use your public HTTPS site address with this callback path:',
       discovery: {
         title: 'Identify test group', hint: 'Identification runs only for 5 minutes after you explicitly start it. Save the QQ App ID and App Secret first. Image generation can remain disabled; no image API key is needed.',
         saveFirst: 'Save the QQ App ID, App Secret and current configuration before starting. Configuration changes invalidate the previous command and candidate.',

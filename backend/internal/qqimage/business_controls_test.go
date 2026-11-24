@@ -144,7 +144,7 @@ func TestQQControlsReconcileAndReleaseContinueAfterClosure(t *testing.T) {
 	checkWallet(t, s, user, "2.00000000", "0.00000000")
 }
 
-func TestQQControlsGatewayCannotBypassClosureAndReplaysOldEvent(t *testing.T) {
+func TestQQControlsWebhookCannotBypassClosureAndReplaysOldEvent(t *testing.T) {
 	s := testStore(t)
 	ctx := context.Background()
 	u := fixtureUser(t, s, "one@example.com", "3")
@@ -152,9 +152,12 @@ func TestQQControlsGatewayCannotBypassClosureAndReplaysOldEvent(t *testing.T) {
 	fixtureGrant(t, s, u, i)
 	c, err := s.GetConfig(ctx)
 	require.NoError(t, err)
-	c.ReceiveMode = ReceiveModeWebSocket
-	c, err = s.SaveConfig(ctx, *c, 1)
+	// Simulate an installation that previously received events over a WebSocket.
+	_, err = s.db.Exec(`UPDATE qq_image_configs SET config=jsonb_set(config,'{receive_mode}','"websocket"') WHERE id=$1`, c.ID)
 	require.NoError(t, err)
+	c, err = s.GetConfig(ctx)
+	require.NoError(t, err)
+	require.Equal(t, ReceiveModeWebhook, c.ReceiveMode)
 	sender := &commandSender{}
 	h := NewQQCommandHandler(s, sender)
 	payload := func(id, content string) []byte {
@@ -163,12 +166,12 @@ func TestQQControlsGatewayCannotBypassClosureAndReplaysOldEvent(t *testing.T) {
 		return raw
 	}
 	old := payload("old", "/生图 cat")
-	require.NoError(t, h.HandleGatewayEvent(ctx, c.ID, c.AppID, old))
+	require.NoError(t, handleSignedTestWebhook(t, h, "qq-secret", old))
 	setBusinessControls(t, s, false, false)
-	require.NoError(t, h.HandleGatewayEvent(ctx, c.ID, c.AppID, old))
+	require.NoError(t, handleSignedTestWebhook(t, h, "qq-secret", old))
 	require.Len(t, sender.messages, 1, "old event cannot send or freeze again")
 	for n, command := range []string{"/绑定", "/确认绑定 ABCD1234", "/生图new cat"} {
-		require.NoError(t, h.HandleGatewayEvent(ctx, c.ID, c.AppID, payload(strconv.Itoa(n), command)))
+		require.NoError(t, handleSignedTestWebhook(t, h, "qq-secret", payload(strconv.Itoa(n), command)))
 		require.Contains(t, sender.messages[len(sender.messages)-1], "未开放")
 	}
 	var orders, requests, grants, holds int
@@ -180,9 +183,9 @@ func TestQQControlsGatewayCannotBypassClosureAndReplaysOldEvent(t *testing.T) {
 	checkWallet(t, s, u, "2.00000000", "1.00000000")
 	_, err = s.db.Exec(`ALTER TABLE settings RENAME TO settings_unavailable`)
 	require.NoError(t, err)
-	require.NoError(t, h.HandleGatewayEvent(ctx, c.ID, c.AppID, old))
+	require.NoError(t, handleSignedTestWebhook(t, h, "qq-secret", old))
 	failed := payload("database-failure", "/生图 cat")
-	require.Error(t, h.HandleGatewayEvent(ctx, c.ID, c.AppID, failed))
+	require.Error(t, handleSignedTestWebhook(t, h, "qq-secret", failed))
 	var events int
 	require.NoError(t, s.db.QueryRow(`SELECT count(*) FROM qq_image_events`).Scan(&events))
 	require.Equal(t, 4, events, "database error must not commit event")

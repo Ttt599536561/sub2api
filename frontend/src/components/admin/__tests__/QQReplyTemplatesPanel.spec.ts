@@ -9,7 +9,7 @@ import en from '@/i18n/locales/en/qqImage'
 const locale = ref('zh')
 vi.mock('vue-i18n', () => ({ useI18n: () => ({ locale, t: (key: string, values?: Record<string, unknown>) => key + (values ? JSON.stringify(values) : '') }) }))
 vi.mock('@/api/qqImage', () => ({ adminQQImageAPI: {
-  replyTemplates: vi.fn(), saveReplyTemplates: vi.fn(), previewReplyTemplate: vi.fn(), replyTemplateRevisions: vi.fn(), replyTemplateRevision: vi.fn(), rollbackReplyTemplates: vi.fn(), saveConfig: vi.fn(), connection: vi.fn()
+  replyTemplates: vi.fn(), saveReplyTemplates: vi.fn(), previewReplyTemplate: vi.fn(), replyTemplateRevisions: vi.fn(), replyTemplateRevision: vi.fn(), rollbackReplyTemplates: vi.fn(), saveConfig: vi.fn()
 } }))
 const auth = reactive({ user: { id: 1, role: 'admin', email: 'admin@example.test' }, sessionRevision: 'A', isAuthenticated: true })
 vi.mock('@/stores/auth', () => ({ useAuthStore: () => auth }))
@@ -100,7 +100,7 @@ describe('QQ reply templates', () => {
     expect(panel.get('pre[data-test="template-preview"]').text()).toBe(preview.text)
     expect(panel.find('svg').exists()).toBe(false)
     expect(panel.text()).toContain('qqImage.admin.templates.livePreviewHint')
-    expect(adminQQImageAPI.saveConfig).not.toHaveBeenCalled(); expect(adminQQImageAPI.connection).not.toHaveBeenCalled()
+    expect(adminQQImageAPI.saveConfig).not.toHaveBeenCalled()
   })
   it('saves only overrides and revision, preserving other templates and separate QQ settings', async () => {
     const panel = await start(); await panel.get('textarea').setValue('新菜单 😀\n{{rules}}')
@@ -270,7 +270,7 @@ describe('QQ reply live editor', () => {
     expect(adminQQImageAPI.previewReplyTemplate).toHaveBeenCalledTimes(2)
     expect(adminQQImageAPI.previewReplyTemplate).toHaveBeenLastCalledWith({ key: 'common.menu', text: '第二 {{rules}}' }, expect.any(AbortSignal))
     expect(adminQQImageAPI.saveReplyTemplates).not.toHaveBeenCalled()
-    expect(adminQQImageAPI.saveConfig).not.toHaveBeenCalled(); expect(adminQQImageAPI.connection).not.toHaveBeenCalled()
+    expect(adminQQImageAPI.saveConfig).not.toHaveBeenCalled()
   })
   it('shows localized placeholders, inserts readable names and serializes only canonical variables', async () => {
     localizedCatalog(); const panel = await start(); const editor = panel.get('textarea')
@@ -373,7 +373,6 @@ describe('QQ free reply editing', () => {
     await panel.get('[data-test="save-templates"]').trigger('click'); await flushPromises()
     expect(adminQQImageAPI.saveReplyTemplates).toHaveBeenCalledWith({ expected_revision: 3, overrides }, expect.any(AbortSignal))
     expect(adminQQImageAPI.saveConfig).not.toHaveBeenCalled()
-    expect(adminQQImageAPI.connection).not.toHaveBeenCalled()
   })
   it('explains that all automatic content is optional and ordinary text is freely editable', async () => {
     const panel = await start()

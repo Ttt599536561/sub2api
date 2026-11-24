@@ -135,13 +135,12 @@ func (v *QQVerifier) Verify(headers http.Header, raw []byte) (*QQEvent, *QQChall
 	if !v.validSignature(headers, raw, key, now) {
 		return nil, nil, ErrQQAuthentication
 	}
-	event, err := parseQQGroupEvent(v.appID, raw, false)
+	event, err := parseQQGroupEvent(v.appID, raw)
 	return event, nil, err
 }
 
-// parseQQGroupEvent is called only after authenticating the transport. The
-// gateway can omit its envelope ID; the platform message ID is then stable.
-func parseQQGroupEvent(appID string, raw []byte, gateway bool) (*QQEvent, error) {
+// parseQQGroupEvent parses a signed group callback.
+func parseQQGroupEvent(appID string, raw []byte) (*QQEvent, error) {
 	if len(raw) == 0 || len(raw) > maxQQEventBytes || appID == "" {
 		return nil, ErrQQAuthentication
 	}
@@ -170,10 +169,7 @@ func parseQQGroupEvent(appID string, raw []byte, gateway bool) (*QQEvent, error)
 		return nil, ErrQQAuthentication
 	}
 	if envelope.ID == "" {
-		if !gateway {
-			return nil, ErrQQAuthentication
-		}
-		envelope.ID = data.ID
+		return nil, ErrQQAuthentication
 	}
 	identity := Identity{Platform: "qq", AppID: appID, SubjectType: "group_member", SubjectID: data.Author.MemberID, ScopeType: "group", ScopeID: data.GroupID, GroupID: data.GroupID}
 	if identity.Validate() != nil {
