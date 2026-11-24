@@ -16,7 +16,7 @@ env:
   IMAGE: ghcr.io/ttt599536561/sub2api-custom
   VERSION: 0.2.24-r2
   # Build the exact application commit requested for this release, independent of the workflow commit.
-  SOURCE_COMMIT: 60e9a8cd30705e2b3c667c3268189ed9185f6843
+  SOURCE_COMMIT: 279c4ede399600c1bb81852f69a136a0a7074a17
 
 jobs:
   gate:
@@ -69,6 +69,10 @@ jobs:
           test ! -e backend/internal/napcat/client.go
           test ! -e backend/internal/server/routes/qq_invite.go
           test -s backend/internal/server/routes/qq_image.go
+          test -s backend/internal/qqimage/qq_verifier.go
+          test ! -e backend/internal/qqimage/gateway_supervisor.go
+          test ! -e backend/internal/qqimage/gateway_client.go
+          test ! -e frontend/src/components/admin/QQConnectionPanel.vue
           test -s backend/internal/server/qq_invite_retirement_test.go
           test -s backend/migrations/253_qq_invite_rewards.sql
           test ! -e frontend/src/components/admin/NapCatWelfarePanel.vue
@@ -168,11 +172,12 @@ jobs:
           grep -Eq '^.*: go1[.]27[.]4$' go-build-info.txt
           grep -Eq '^[[:space:]]+mod[[:space:]]+github[.]com/Wei-Shaw/sub2api[[:space:]]' go-build-info.txt
           grep -Eq '^[[:space:]]+dep[[:space:]]+golang[.]org/x/image[[:space:]]+v0[.]45[.]0[[:space:]]' go-build-info.txt
-          # The release retains historical invitation data and the official QQ image module.
+          grep -Eq '^[[:space:]]+dep[[:space:]]+github[.]com/gorilla/websocket[[:space:]]+v1[.]5[.]4-0[.]20240701034025-d67f41855da4[[:space:]]' go-build-info.txt
+          # The release retains the QQ image webhook and historical invitation data.
           grep -aFq 'qq_invite_config_versions' ./sub2api-release
           grep -aFq 'qq_invite_redeem_code_guard' ./sub2api-release
           grep -aFq 'github.com/Wei-Shaw/sub2api/internal/qqimage.' ./sub2api-release
-          for retired in 'github.com/Wei-Shaw/sub2api/internal/qqinvite.' 'github.com/Wei-Shaw/sub2api/internal/napcat.' 'NapCatWelfarePanel'; do
+          for retired in 'github.com/Wei-Shaw/sub2api/internal/qqinvite.' 'github.com/Wei-Shaw/sub2api/internal/napcat.' 'NapCatWelfarePanel' 'internal/qqimage.(*GatewaySupervisor)' 'QQConnectionPanel'; do
             if grep -aFq "$retired" ./sub2api-release; then
               echo "Unexpected retired component in the published binary: $retired" >&2
               exit 1
